@@ -1,5 +1,7 @@
 package com.dypiu.nba.controller;
 
+import com.dypiu.nba.dto.DirectorSetupProgressDto;
+import com.dypiu.nba.dto.DirectorSchoolSummaryDto;
 import com.dypiu.nba.dto.ApiResponse;
 import com.dypiu.nba.entity.*;
 import com.dypiu.nba.service.AcademicService;
@@ -16,6 +18,37 @@ public class AcademicController {
 
     private final AcademicService academicService;
 
+    // --- Director School Summary ---
+    @GetMapping("/director/school-summary")
+    public ResponseEntity<ApiResponse<DirectorSchoolSummaryDto>> getDirectorSchoolSummary(
+            @RequestParam(required = false) String schoolId) {
+        return ResponseEntity.ok(ApiResponse.<DirectorSchoolSummaryDto>builder()
+                .success(true)
+                .data(academicService.getDirectorSchoolSummary(schoolId))
+                .build());
+    }
+
+    // --- Director Setup Progress ---
+    @GetMapping("/director/setup-progress")
+    public ResponseEntity<ApiResponse<DirectorSetupProgressDto>> getDirectorSetupProgress(
+            @RequestParam(required = false) String schoolId) {
+        return ResponseEntity.ok(ApiResponse.<DirectorSetupProgressDto>builder()
+                .success(true)
+                .data(academicService.getDirectorSetupProgress(schoolId))
+                .build());
+    }
+
+    @PostMapping("/director/setup-progress")
+    public ResponseEntity<ApiResponse<DirectorSetupProgressDto>> updateDirectorSetupProgress(
+            @RequestParam(required = false) String schoolId,
+            @RequestParam(required = false, defaultValue = "1") Integer currentStep) {
+        return ResponseEntity.ok(ApiResponse.<DirectorSetupProgressDto>builder()
+                .success(true)
+                .message("Director setup progress updated successfully")
+                .data(academicService.updateDirectorSetupProgress(schoolId, currentStep))
+                .build());
+    }
+
     // --- Schools ---
     @GetMapping("/schools")
     public ResponseEntity<ApiResponse<List<School>>> getSchools() {
@@ -25,12 +58,29 @@ public class AcademicController {
                 .build());
     }
 
+    @GetMapping("/schools/{id}")
+    public ResponseEntity<ApiResponse<School>> getSchoolById(@PathVariable String id) {
+        return ResponseEntity.ok(ApiResponse.<School>builder()
+                .success(true)
+                .data(academicService.getSchoolById(id))
+                .build());
+    }
+
     @PostMapping("/schools")
     public ResponseEntity<ApiResponse<School>> saveSchool(@RequestBody School school) {
         return ResponseEntity.ok(ApiResponse.<School>builder()
                 .success(true)
                 .message("School saved successfully")
                 .data(academicService.saveSchool(school))
+                .build());
+    }
+
+    @PutMapping("/schools/{id}")
+    public ResponseEntity<ApiResponse<School>> updateSchool(@PathVariable String id, @RequestBody School school) {
+        return ResponseEntity.ok(ApiResponse.<School>builder()
+                .success(true)
+                .message("School updated successfully")
+                .data(academicService.updateSchool(id, school))
                 .build());
     }
 
