@@ -27,7 +27,5 @@ public class AuthResponse {
         private String email;
         private String username;
         private String role;
-        private String department;
-        private String programme;
     }
 }

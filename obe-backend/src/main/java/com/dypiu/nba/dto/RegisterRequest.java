@@ -18,6 +18,4 @@ public class RegisterRequest {
 
     private String name;
     private String role; // IQAC, DIRECTOR, HOD, PROGRAMME_COORDINATOR, FACULTY
-    private String department;
-    private String programme;
 }

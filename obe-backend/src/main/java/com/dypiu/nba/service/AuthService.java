@@ -18,32 +18,34 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider tokenProvider;
 
-    @Transactional
+    @Transactional(readOnly = true)
     public AuthResponse login(LoginRequest request) {
-        String identifier = request.getUsername() != null ? request.getUsername() : request.getEmail();
-        if (identifier == null || identifier.isBlank()) {
+        String rawIdentifier = request.getUsername() != null ? request.getUsername() : request.getEmail();
+        if (rawIdentifier == null || rawIdentifier.isBlank()) {
             throw new BadRequestException("Username or email is required");
         }
 
-        User user = userRepository.findByUsernameOrEmail(identifier, identifier)
-                .orElseGet(() -> {
-                    // Create dynamic user for seamless login if demo mode
-                    String role = "FACULTY";
-                    if (identifier.contains("director")) role = "DIRECTOR";
-                    else if (identifier.contains("hod")) role = "HOD";
-                    else if (identifier.contains("coord") || identifier.contains("pc")) role = "PROGRAMME_COORDINATOR";
+        String rawPassword = request.getPassword();
+        if (rawPassword == null || rawPassword.isBlank()) {
+            throw new BadRequestException("Password is required");
+        }
 
-                    return userRepository.save(User.builder()
-                            .username(identifier)
-                            .email(identifier.contains("@") ? identifier : identifier + "@dypiu.ac.in")
-                            .passwordHash(passwordEncoder.encode(request.getPassword() != null ? request.getPassword() : "password123"))
-                            .name(identifier.contains("@") ? identifier.split("@")[0] : identifier)
-                            .role(role)
-                            .department("Computer Science & Engineering")
-                            .programme("B.Tech CSE")
-                            .isActive(true)
-                            .build());
-                });
+        // Clean & trim email or username input
+        String identifier = rawIdentifier.trim();
+
+        // 1. Check if user exists by email or username
+        User user = userRepository.findByUsernameIgnoreCaseOrEmailIgnoreCase(identifier, identifier)
+                .orElseGet(() -> userRepository.findByUsernameOrEmail(identifier, identifier)
+                .orElseThrow(() -> new BadRequestException("Invalid email/username or password")));
+
+        if (user.getIsActive() != null && !user.getIsActive()) {
+            throw new BadRequestException("User account is deactivated");
+        }
+
+        // 2. Verify hashed password against database passwordHash
+        if (!passwordEncoder.matches(rawPassword.trim(), user.getPasswordHash())) {
+            throw new BadRequestException("Invalid email/username or password");
+        }
 
         return buildAuthResponse(user);
     }
@@ -63,8 +65,6 @@ public class AuthService {
                 .passwordHash(passwordEncoder.encode(request.getPassword()))
                 .name(request.getName() != null ? request.getName() : request.getUsername())
                 .role(request.getRole() != null ? request.getRole() : "FACULTY")
-                .department(request.getDepartment() != null ? request.getDepartment() : "Computer Science & Engineering")
-                .programme(request.getProgramme() != null ? request.getProgramme() : "B.Tech CSE")
                 .isActive(true)
                 .build();
 
@@ -101,8 +101,6 @@ public class AuthService {
                 .email("user@dypiu.ac.in")
                 .username("verified_user")
                 .role("FACULTY")
-                .department("Computer Science & Engineering")
-                .programme("B.Tech CSE")
                 .build();
 
         return buildAuthResponse(defaultUser);
@@ -124,8 +122,6 @@ public class AuthService {
                         .email(user.getEmail())
                         .username(user.getUsername())
                         .role(user.getRole())
-                        .department(user.getDepartment())
-                        .programme(user.getProgramme())
                         .build())
                 .build();
     }
