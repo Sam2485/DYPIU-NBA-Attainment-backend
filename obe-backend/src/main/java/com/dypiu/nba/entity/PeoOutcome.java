@@ -1,0 +1,34 @@
+package com.dypiu.nba.entity;
+
+import jakarta.persistence.*;
+import lombok.*;
+import java.time.ZonedDateTime;
+
+@Entity
+@Table(name = "peo_outcomes")
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class PeoOutcome {
+
+    @Id
+    private String id;
+
+    @Column(name = "programme_id", nullable = false)
+    private String programmeId;
+
+    @Column(nullable = false, length = 20)
+    private String code;
+
+    @Column(nullable = false, columnDefinition = "TEXT")
+    private String statement;
+
+    @Column(name = "academic_year", nullable = false)
+    @Builder.Default
+    private String academicYear = "2025-26";
+
+    @Column(name = "created_at", insertable = false, updatable = false)
+    private ZonedDateTime createdAt;
+}

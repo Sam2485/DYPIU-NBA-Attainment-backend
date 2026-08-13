@@ -1,0 +1,5089 @@
+=== Documentation.pdf (Pages: 58) ===
+
+--- Page 1 ---
+1
+Documentation v3
+Revised Academic-Year / Batch Tracking Model
+1. Academic Management
+■■■ School
+■■■ Department
+■■■ Programme
+■■■ Academic Year
+■■■ Batch
+■■■ Semester
+■■■ Course
+■■■ Student
+2. User & Access Management
+■■■ User
+■■■ Role / Assignment
+3. Outcome Management
+■■■ Programme Outcome (PO)
+■■■ PO Competency
+■■■ Programme Specific Outcome (PSO)
+■■■ PSO Competency
+■■■ Course Outcome (CO)
+4. CO Mapping Management
+■■■ CO-PO Competency Mapping
+■■■ CO-PSO Competency Mapping
+5. Assessment Data Management
+■■■ End Semester Marks Upload
+■■■ Uploaded Student Marks
+■■■ Student CO Marks
+■■■ Course End Survey
+■■■ Survey Response
+■■■ Survey Response Details
+■■■ Programme Exit Survey
+6. Configuration Management
+■■■ Attainment Configuration
+■■■ Attainment Level Configuration
+■■■ Excel Template Configuration
+7. CO Attainment Engine
+■■■ Calculation Run
+■■■ Direct CO Attainment
+■■■ Indirect CO Attainment
+■■■ Overall CO Attainment
+8. PO & PSO Attainment Engine
+■■■ PO Competency Attainment
+■■■ PO Attainment
+■■■ PSO Competency Attainment
+■■■ PSO Attainment
+■■■ Programme Aggregation
+9. ATR & Approval Management
+■■■ Course ATR
+■■■ Programme ATR
+■■■ Approval Request
+■■■ Approval History
+10. Reports
+■■■ Report Generation
+
+--- Page 2 ---
+2
+System Architecture
+Academic Structure
+School
+■
+■■■ Department (Optional)
+■
+■■■ Programme
+■
+■■■ Batch
+■■■ Semester
+■ ■■■ Course
+■ ■■■ Course Outcome (CO)
+■■■ Students
+Academic Year is the primary user-facing selector. Batch is maintained in the background for batch-wise tracking, student records, ATR
+continuity and longitudinal reports.
+Programme defines duration and total semesters. Semester year is derived from semester number: 1–2 = Year 1, 3–4 = Year 2, 5–6 =
+Year 3, 7–8 = Year 4.
+
+--- Page 3 ---
+3
+Module 1: Academic Management
+Module Structure
+Academic Management
+■■■ School
+■■■ Department
+■■■ Programme
+■■■ Academic Year
+■■■ Batch
+■■■ Semester
+■■■ Course
+■■■ Student
+
+--- Page 4 ---
+4
+Module: Academic Management
+Entity: School
+1. Entity Definition
+Field
+Data Type
+Nullable
+Unique
+Default
+Remarks
+id
+BIGINT
+No
+PK
+Auto Generated
+Primary Key
+code
+VARCHAR(20)
+No
+Yes
+-
+School Code
+name
+VARCHAR(150)
+No
+Yes
+-
+School Name
+status
+ENUM(ACTIVE, INACTIVE)
+No
+No
+ACTIVE
+Soft Delete Status
+createdAt
+TIMESTAMP
+No
+No
+Current Timestamp
+Audit
+updatedAt
+TIMESTAMP
+No
+No
+Current Timestamp
+Audit
+2. Relationships
+Relationship
+Entity
+Type
+Nullable
+School → Department
+Department
+One-to-Many
+Yes
+School → Programme
+Programme
+One-to-Many
+Yes
+3. API Contract
+API
+Method
+Endpoint
+Description
+Create School
+POST
+/api/v1/schools
+Create new school
+Update School
+PUT
+/api/v1/schools/{id}
+Update school
+Get School
+GET
+/api/v1/schools/{id}
+Get school
+Get All Schools
+GET
+/api/v1/schools
+Get all schools
+Get Active Schools
+GET
+/api/v1/schools/active
+Get active schools
+Delete School
+DELETE
+/api/v1/schools/{id}
+Delete/Deactivate school
+4. Validation
+· code is required and unique.
+· name is required and unique.
+· status must be ACTIVE or INACTIVE.
+5. Business Rules
+Rule No.
+Rule
+BR-01
+School code must be unique.
+BR-02
+School name must be unique.
+BR-03
+A School may contain multiple Departments and Programmes.
+BR-04
+A School cannot be hard deleted when referenced.
+
+--- Page 5 ---
+5
+Module: Academic Management
+Entity: Department
+1. Entity Definition
+Field
+Data Type
+Nullable
+Unique
+Default
+Remarks
+id
+BIGINT
+No
+PK
+Auto Generated
+Primary Key
+schoolId
+BIGINT
+Yes
+FK
+NULL
+References School
+code
+VARCHAR(20)
+No
+Yes*
+-
+Department Code
+name
+VARCHAR(100)
+No
+Yes*
+-
+Department Name
+status
+ENUM(ACTIVE, INACTIVE)
+No
+No
+ACTIVE
+Soft Delete Status
+createdAt
+TIMESTAMP
+No
+No
+Current Timestamp
+Audit
+updatedAt
+TIMESTAMP
+No
+No
+Current Timestamp
+Audit
+2. Relationships
+Relationship
+Entity
+Type
+Nullable
+Department → School
+School
+Many-to-One
+Yes
+Department → Programme
+Programme
+One-to-Many
+Yes
+3. API Contract
+API
+Method
+Endpoint
+Description
+Create Department
+POST
+/api/v1/departments
+Create department
+Update Department
+PUT
+/api/v1/departments/{id}
+Update department
+Get Department
+GET
+/api/v1/departments/{id}
+Get department
+Get All Departments
+GET
+/api/v1/departments
+Get all departments
+Get by School
+GET
+/api/v1/schools/{schoolId}/departments
+Get departments by school
+Delete Department
+DELETE
+/api/v1/departments/{id}
+Delete/Deactivate department
+4. Validation
+· code is required and unique in its School when applicable.
+· name is required and unique in its School when applicable.
+· schoolId is optional.
+· status must be ACTIVE or INACTIVE.
+5. Business Rules
+Rule No.
+Rule
+BR-01
+Department is optional.
+BR-02
+A Programme may or may not belong to a Department.
+BR-03
+Department cannot be hard deleted if referenced by a Programme.
+
+--- Page 6 ---
+6
+Module: Academic Management
+Entity: Programme
+1. Entity Definition
+Field
+Data Type
+Nullable
+Unique
+Default
+Remarks
+id
+BIGINT
+No
+PK
+Auto Generated
+Primary Key
+departmentId
+BIGINT
+Yes
+FK
+NULL
+References Department
+code
+VARCHAR(20)
+No
+Yes
+-
+Programme Code
+name
+VARCHAR(150)
+No
+Yes
+-
+Programme Name
+shortName
+VARCHAR(20)
+Yes
+No
+NULL
+Abbreviation
+durationYears
+INTEGER
+No
+No
+-
+Programme Duration
+totalSemesters
+INTEGER
+No
+No
+-
+Total Semesters
+status
+ENUM(ACTIVE, INACTIVE)
+No
+No
+ACTIVE
+Soft Delete Status
+createdAt
+TIMESTAMP
+No
+No
+Current Timestamp
+Audit
+updatedAt
+TIMESTAMP
+No
+No
+Current Timestamp
+Audit
+2. Relationships
+Relationship
+Entity
+Type
+Nullable
+Programme → Department
+Department
+Many-to-One
+Yes
+Programme → Batch
+Batch
+One-to-Many
+No
+Programme → PO
+PO
+One-to-Many
+No
+Programme → PSO
+PSO
+One-to-Many
+No
+3. API Contract
+API
+Method
+Endpoint
+Description
+Create Programme
+POST
+/api/v1/programmes
+Create programme
+Update Programme
+PUT
+/api/v1/programmes/{id}
+Update programme
+Get Programme
+GET
+/api/v1/programmes/{id}
+Get programme
+Get All Programmes
+GET
+/api/v1/programmes
+Get programmes
+Get by Department
+GET
+/api/v1/departments/{departmentId}/programmes
+Get department programmes
+Delete Programme
+DELETE
+/api/v1/programmes/{id}
+Delete/Deactivate programme
+4. Validation
+· code and name are required and unique.
+· durationYears > 0.
+· totalSemesters > 0.
+· departmentId is optional.
+5. Business Rules
+Rule No.
+Rule
+BR-01
+Programme defines duration and total number of semesters.
+BR-02
+Semester year is derived: 1–2 Year 1, 3–4 Year 2, 5–6 Year 3, 7–8 Year 4.
+BR-03
+Programme cannot be hard deleted when referenced.
+
+--- Page 7 ---
+7
+Module: Academic Management
+Entity: Academic Year
+1. Entity Definition
+Field
+Data Type
+Nullable
+Unique
+Default
+Remarks
+id
+BIGINT
+No
+PK
+Auto Generated
+Primary Key
+name
+VARCHAR(20)
+No
+Yes
+-
+YYYY-YY
+startDate
+DATE
+No
+No
+-
+Start Date
+endDate
+DATE
+No
+No
+-
+End Date
+status
+ENUM(ACTIVE, INACTIVE)
+No
+No
+ACTIVE
+Status
+createdAt
+TIMESTAMP
+No
+No
+Current Timestamp
+Audit
+updatedAt
+TIMESTAMP
+No
+No
+Current Timestamp
+Audit
+2. Relationships
+Relationship
+Entity
+Type
+Nullable
+Academic Year → Batch
+Batch
+One-to-Many
+No
+Academic Year → Semester
+Semester
+One-to-Many
+No
+3. API Contract
+API
+Method
+Endpoint
+Description
+Create Academic Year
+POST
+/api/v1/academic-years
+Create academic year
+Update Academic Year
+PUT
+/api/v1/academic-years/{id}
+Update academic year
+Get Academic Year
+GET
+/api/v1/academic-years/{id}
+Get academic year
+Get All Academic Years
+GET
+/api/v1/academic-years
+Get academic years
+Get Active Academic Years
+GET
+/api/v1/academic-years/active
+Get active academic years
+Delete Academic Year
+DELETE
+/api/v1/academic-years/{id}
+Delete/Deactivate academic year
+4. Validation
+· name must follow YYYY-YY.
+· startDate required.
+· endDate > startDate.
+5. Business Rules
+Rule No.
+Rule
+BR-01
+Academic Year name must be unique.
+BR-02
+Only one Academic Year can be ACTIVE at a time.
+BR-03
+Academic Year periods must not overlap.
+BR-04
+Academic Year is the primary user-facing selector.
+BR-05
+Batch is resolved in the background from Programme + Academic Year + semester progression.
+
+--- Page 8 ---
+8
+Module: Academic Management
+Entity: Batch
+1. Entity Definition
+Field
+Data Type
+Nullable
+Unique
+Default
+Remarks
+id
+BIGINT
+No
+PK
+Auto Generated
+Primary Key
+programmeId
+BIGINT
+No
+FK
+-
+References Programme
+code
+VARCHAR(30)
+No
+Yes
+-
+Batch Identifier
+startYear
+INTEGER
+No
+No
+-
+Start Year
+endYear
+INTEGER
+No
+No
+-
+End Year
+status
+ENUM(ACTIVE,
+COMPLETED, ARCHIVED)
+No
+No
+ACTIVE
+Lifecycle Status
+createdAt
+TIMESTAMP
+No
+No
+Current Timestamp
+Audit
+updatedAt
+TIMESTAMP
+No
+No
+Current Timestamp
+Audit
+2. Relationships
+Relationship
+Entity
+Type
+Nullable
+Batch → Programme
+Programme
+Many-to-One
+No
+Batch → Academic Year
+Academic Year
+Many-to-One
+No
+Batch → Semester
+Semester
+One-to-Many
+No
+Batch → Student
+Student
+One-to-Many
+No
+Batch → Course
+Course
+One-to-Many
+No
+3. API Contract
+API
+Method
+Endpoint
+Description
+Create Batch
+POST
+/api/v1/batches
+Create batch
+Update Batch
+PUT
+/api/v1/batches/{id}
+Update batch
+Get Batch
+GET
+/api/v1/batches/{id}
+Get batch
+Get Programme Batches
+GET
+/api/v1/programmes/{programmeId}/batches
+Get programme batches
+Update Batch Status
+PUT
+/api/v1/batches/{id}/status
+Change batch lifecycle
+4. Validation
+· programmeId must exist.
+· code unique within Programme.
+· endYear > startYear.
+· status must be ACTIVE, COMPLETED or ARCHIVED.
+5. Business Rules
+Rule No.
+Rule
+BR-01
+HOD controls batch lifecycle.
+BR-02
+Completed batches remain available for history and reports.
+BR-03
+Archived batches are read-only for normal academic operations.
+BR-04
+Batch is maintained even when users work through Academic Year.
+
+--- Page 9 ---
+9
+Module: Academic Management
+Entity: Semester
+1. Entity Definition
+Field
+Data Type
+Nullable
+Unique
+Default
+Remarks
+id
+BIGINT
+No
+PK
+Auto Generated
+Primary Key
+batchId
+BIGINT
+No
+FK
+-
+References Batch
+academicYearId
+BIGINT
+No
+FK
+-
+References Academic Year
+semesterNumber
+INTEGER
+No
+No
+-
+Semester Number
+startDate
+DATE
+No
+No
+-
+Start Date
+endDate
+DATE
+No
+No
+-
+End Date
+status
+ENUM(ACTIVE, INACTIVE)
+No
+No
+ACTIVE
+Status
+createdAt
+TIMESTAMP
+No
+No
+Current Timestamp
+Audit
+updatedAt
+TIMESTAMP
+No
+No
+Current Timestamp
+Audit
+2. Relationships
+Relationship
+Entity
+Type
+Nullable
+Semester → Batch
+Batch
+Many-to-One
+No
+Semester → Academic Year
+Academic Year
+Many-to-One
+No
+Semester → Course
+Course
+One-to-Many
+No
+3. API Contract
+API
+Method
+Endpoint
+Description
+Create Semester
+POST
+/api/v1/semesters
+Create semester
+Update Semester
+PUT
+/api/v1/semesters/{id}
+Update semester
+Get Semester
+GET
+/api/v1/semesters/{id}
+Get semester
+Get Batch Semesters
+GET
+/api/v1/batches/{batchId}/semesters
+Get batch semesters
+Delete Semester
+DELETE
+/api/v1/semesters/{id}
+Delete/Deactivate semester
+4. Validation
+· batchId and academicYearId must exist.
+· semesterNumber must be positive and within Programme totalSemesters.
+· endDate > startDate.
+5. Business Rules
+Rule No.
+Rule
+BR-01
+Semester belongs to Batch and Academic Year.
+BR-02
+Semester number is unique within a Batch.
+BR-03
+Semester year is derived from semester number.
+BR-04
+Semester cannot be hard deleted when Course or assessment data exist.
+
+--- Page 10 ---
+10
+Module: Academic Management
+Entity: Course
+1. Entity Definition
+Field
+Data Type
+Nullable
+Unique
+Default
+Remarks
+id
+BIGINT
+No
+PK
+Auto Generated
+Primary Key
+batchId
+BIGINT
+No
+FK
+-
+References Batch
+semesterId
+BIGINT
+No
+FK
+-
+References Semester
+code
+VARCHAR(20)
+No
+Yes*
+-
+Course Code
+name
+VARCHAR(200)
+No
+No
+-
+Course Name
+credits
+DECIMAL(3,1)
+No
+No
+-
+Credits
+type
+ENUM(THEORY,
+PRACTICAL,
+THEORY_PRACTICAL,
+PROJECT, AUDIT)
+No
+No
+-
+Course Type
+courseCoordinatorId
+BIGINT
+Yes
+FK
+NULL
+References User
+status
+ENUM(ACTIVE, INACTIVE)
+No
+No
+ACTIVE
+Status
+createdAt
+TIMESTAMP
+No
+No
+Current Timestamp
+Audit
+updatedAt
+TIMESTAMP
+No
+No
+Current Timestamp
+Audit
+2. Relationships
+Relationship
+Entity
+Type
+Nullable
+Course → Batch
+Batch
+Many-to-One
+No
+Course → Semester
+Semester
+Many-to-One
+No
+Course → CO
+Course Outcome
+One-to-Many
+No
+Course → User
+User
+Many-to-One
+Yes
+3. API Contract
+API
+Method
+Endpoint
+Description
+Create Course
+POST
+/api/v1/courses
+Create course
+Update Course
+PUT
+/api/v1/courses/{id}
+Update course
+Get Course
+GET
+/api/v1/courses/{id}
+Get course
+Get Batch Courses
+GET
+/api/v1/batches/{batchId}/courses
+Get batch courses
+Get Semester Courses
+GET
+/api/v1/semesters/{semesterId}/courses
+Get semester courses
+Delete Course
+DELETE
+/api/v1/courses/{id}
+Delete/Deactivate course
+4. Validation
+· batchId and semesterId must exist.
+· name and code required.
+· credits > 0.
+· semester must belong to selected Batch.
+5. Business Rules
+Rule No.
+Rule
+BR-01
+HOD creates and manages Courses with name, code, semester and credits.
+BR-02
+Course code is unique in the applicable Batch/Programme context.
+BR-03
+Course cannot be hard deleted when CO, assessment or attainment data exist.
+
+--- Page 11 ---
+11
+Module: Academic Management
+Entity: Student
+1. Entity Definition
+Field
+Data Type
+Nullable
+Unique
+Default
+Remarks
+id
+BIGINT
+No
+PK
+Auto Generated
+Primary Key
+batchId
+BIGINT
+No
+FK
+-
+References Batch
+prn
+VARCHAR(30)
+No
+Yes
+-
+Permanent Registration Number
+name
+VARCHAR(150)
+No
+No
+-
+Student Name
+status
+ENUM(ACTIVE, INACTIVE,
+PASSED, ARCHIVED)
+No
+No
+ACTIVE
+Student Status
+createdAt
+TIMESTAMP
+No
+No
+Current Timestamp
+Audit
+updatedAt
+TIMESTAMP
+No
+No
+Current Timestamp
+Audit
+2. Relationships
+Relationship
+Entity
+Type
+Nullable
+Student → Batch
+Batch
+Many-to-One
+No
+Student → Uploaded Student Marks
+Uploaded Student Marks
+One-to-Many
+No
+3. API Contract
+API
+Method
+Endpoint
+Description
+Create Student
+POST
+/api/v1/students
+Create student
+Update Student
+PUT
+/api/v1/students/{id}
+Update student
+Get Student
+GET
+/api/v1/students/{id}
+Get student
+Get Students by Batch
+GET
+/api/v1/batches/{batchId}/students
+Get batch students
+Get Student by PRN
+GET
+/api/v1/students/prn/{prn}
+Get student by PRN
+4. Validation
+· prn required and unique.
+· name required.
+· batchId must exist.
+5. Business Rules
+Rule No.
+Rule
+BR-01
+Student records are resolved from direct-assessment uploads when PRN is not already present.
+BR-02
+Existing PRN records are reused.
+BR-03
+Student remains linked to Batch for longitudinal reports and ATR continuity.
+BR-04
+Historical student assessment data is not deleted.
+
+--- Page 12 ---
+12
+Module 2: User & Access Management
+Module Structure
+User & Access Management
+■■■ User
+■■■ Role / Assignment
+
+--- Page 13 ---
+13
+Module: User & Access Management
+Entity: User
+1. Entity Definition
+Field
+Data Type
+Nullable
+Unique
+Default
+Remarks
+id
+BIGINT
+No
+PK
+Auto Generated
+Primary Key
+username
+VARCHAR(100)
+No
+Yes
+-
+Login Identifier
+email
+VARCHAR(150)
+No
+Yes
+-
+Email
+passwordHash
+VARCHAR(255)
+No
+No
+-
+Password Hash
+role
+ENUM(IQAC, DIRECTOR,
+HOD, PROGRAMME_COORD
+INATOR,
+COURSE_COORDINATOR,
+FACULTY)
+No
+No
+-
+Portal Role
+programmeId
+BIGINT
+Yes
+FK
+NULL
+Optional Programme Scope
+departmentId
+BIGINT
+Yes
+FK
+NULL
+Optional Department Scope
+status
+ENUM(ACTIVE, INACTIVE)
+No
+No
+ACTIVE
+User Status
+createdAt
+TIMESTAMP
+No
+No
+Current Timestamp
+Audit
+updatedAt
+TIMESTAMP
+No
+No
+Current Timestamp
+Audit
+2. Relationships
+Relationship
+Entity
+Type
+Nullable
+User → Programme
+Programme
+Many-to-One
+Yes
+User → Department
+Department
+Many-to-One
+Yes
+3. API Contract
+API
+Method
+Endpoint
+Description
+Login
+POST
+/api/v1/auth/login
+Login using username or email
+Logout
+POST
+/api/v1/auth/logout
+Logout
+Create User
+POST
+/api/v1/users
+Create user
+Update User
+PUT
+/api/v1/users/{id}
+Update user
+Get User
+GET
+/api/v1/users/{id}
+Get user
+Get Users
+GET
+/api/v1/users
+Get users
+4. Validation
+· Username/email and password required.
+· Role must be supported.
+· Referenced Programme/Department must exist when supplied.
+5. Business Rules
+Rule No.
+Rule
+BR-01
+Login supports username or email.
+BR-02
+JWT authentication is used.
+BR-03
+Authorization is role based.
+BR-04
+Department scope remains optional.
+
+--- Page 14 ---
+14
+Module: User & Access Management
+Entity: Role / Assignment
+1. Entity Definition
+Field
+Data Type
+Nullable
+Unique
+Default
+Remarks
+id
+BIGINT
+No
+PK
+Auto Generated
+Primary Key
+userId
+BIGINT
+No
+FK
+-
+References User
+scopeType
+ENUM(DEPARTMENT,
+PROGRAMME, BATCH,
+COURSE)
+No
+No
+-
+Assignment Scope
+scopeId
+BIGINT
+No
+No
+-
+Scope ID
+assignmentType
+ENUM(HOD, PROGRAMME_
+COORDINATOR,
+COURSE_COORDINATOR)
+No
+No
+-
+Responsibility
+status
+ENUM(ACTIVE, INACTIVE)
+No
+No
+ACTIVE
+Assignment Status
+createdAt
+TIMESTAMP
+No
+No
+Current Timestamp
+Audit
+updatedAt
+TIMESTAMP
+No
+No
+Current Timestamp
+Audit
+2. Relationships
+Relationship
+Entity
+Type
+Nullable
+Assignment → User
+User
+Many-to-One
+No
+Assignment → Scope
+Department / Programme / Batch /
+Course
+Many-to-One
+No
+3. API Contract
+API
+Method
+Endpoint
+Description
+Create Assignment
+POST
+/api/v1/user-assignments
+Assign responsibility
+Update Assignment
+PUT
+/api/v1/user-assignments/{id}
+Update assignment
+Get User Assignments
+GET
+/api/v1/users/{userId}/assignments
+Get assignments
+Deactivate Assignment
+DELETE
+/api/v1/user-assignments/{id}
+Deactivate assignment
+4. Validation
+· userId and scope must exist.
+· assignmentType must be compatible with scope.
+5. Business Rules
+Rule No.
+Rule
+BR-01
+HOD responsibility is Department scoped.
+BR-02
+Programme Coordinator responsibility is Programme scoped.
+BR-03
+Course Coordinator responsibility is Course scoped.
+BR-04
+Historical assignments are retained.
+
+--- Page 15 ---
+15
+Module 3: Outcome Management
+Module Structure
+Outcome Management
+■■■ Programme Outcome (PO)
+■■■ PO Competency
+■■■ Programme Specific Outcome (PSO)
+■■■ PSO Competency
+■■■ Course Outcome (CO)
+
+--- Page 16 ---
+16
+Module: Outcome Management
+Entity: Programme Outcome (PO)
+1. Entity Definition
+Field
+Data Type
+Nullable
+Unique
+Default
+Remarks
+id
+BIGINT
+No
+PK
+Auto Generated
+Primary Key
+programmeId
+BIGINT
+No
+FK
+-
+References Programme
+code
+VARCHAR(20)
+No
+No
+-
+PO Code
+statement
+TEXT
+No
+No
+-
+PO Statement
+status
+ENUM(ACTIVE, INACTIVE)
+No
+No
+ACTIVE
+Status
+createdAt
+TIMESTAMP
+No
+No
+Current Timestamp
+Audit
+updatedAt
+TIMESTAMP
+No
+No
+Current Timestamp
+Audit
+2. Relationships
+Relationship
+Entity
+Type
+Nullable
+PO → Programme
+Programme
+Many-to-One
+No
+PO → PO Competency
+PO Competency
+One-to-Many
+No
+3. API Contract
+API
+Method
+Endpoint
+Description
+Create PO
+POST
+/api/v1/pos
+Create PO
+Update PO
+PUT
+/api/v1/pos/{id}
+Update PO
+Get PO
+GET
+/api/v1/pos/{id}
+Get PO
+Get Programme POs
+GET
+/api/v1/programmes/{programmeId}/pos
+Get POs
+Delete PO
+DELETE
+/api/v1/pos/{id}
+Delete/Deactivate PO
+4. Validation
+· programmeId, code and statement required.
+· Code unique within Programme.
+5. Business Rules
+Rule No.
+Rule
+BR-01
+Every PO belongs to a Programme.
+BR-02
+PO count is dynamic.
+BR-03
+PO cannot be hard deleted when referenced.
+
+--- Page 17 ---
+17
+Module: Outcome Management
+Entity: PO Competency
+1. Entity Definition
+Field
+Data Type
+Nullable
+Unique
+Default
+Remarks
+id
+BIGINT
+No
+PK
+Auto Generated
+Primary Key
+poId
+BIGINT
+No
+FK
+-
+References PO
+statement
+TEXT
+No
+No
+-
+Competency Statement
+displayOrder
+INTEGER
+No
+No
+-
+Display Sequence
+status
+ENUM(ACTIVE, INACTIVE)
+No
+No
+ACTIVE
+Status
+createdAt
+TIMESTAMP
+No
+No
+Current Timestamp
+Audit
+updatedAt
+TIMESTAMP
+No
+No
+Current Timestamp
+Audit
+2. Relationships
+Relationship
+Entity
+Type
+Nullable
+PO Competency → PO
+PO
+Many-to-One
+No
+PO Competency → CO-PO Mapping
+CO-PO Mapping
+One-to-Many
+No
+3. API Contract
+API
+Method
+Endpoint
+Description
+Create PO Competency
+POST
+/api/v1/po-competencies
+Create competency
+Update PO Competency
+PUT
+/api/v1/po-competencies/{id}
+Update competency
+Get by PO
+GET
+/api/v1/pos/{poId}/competencies
+Get PO competencies
+Delete
+DELETE
+/api/v1/po-competencies/{id}
+Delete/deactivate
+4. Validation
+· poId and statement required.
+· displayOrder must be positive.
+5. Business Rules
+Rule No.
+Rule
+BR-01
+Competencies are dynamic.
+BR-02
+displayOrder is unique within a PO.
+BR-03
+Competency cannot be hard deleted when mapped.
+
+--- Page 18 ---
+18
+Module: Outcome Management
+Entity: Programme Specific Outcome (PSO)
+1. Entity Definition
+Field
+Data Type
+Nullable
+Unique
+Default
+Remarks
+id
+BIGINT
+No
+PK
+Auto Generated
+Primary Key
+programmeId
+BIGINT
+No
+FK
+-
+References Programme
+code
+VARCHAR(20)
+No
+No
+-
+PSO Code
+statement
+TEXT
+No
+No
+-
+PSO Statement
+status
+ENUM(ACTIVE, INACTIVE)
+No
+No
+ACTIVE
+Status
+createdAt
+TIMESTAMP
+No
+No
+Current Timestamp
+Audit
+updatedAt
+TIMESTAMP
+No
+No
+Current Timestamp
+Audit
+2. Relationships
+Relationship
+Entity
+Type
+Nullable
+PSO → Programme
+Programme
+Many-to-One
+No
+PSO → PSO Competency
+PSO Competency
+One-to-Many
+No
+3. API Contract
+API
+Method
+Endpoint
+Description
+Create PSO
+POST
+/api/v1/psos
+Create PSO
+Update PSO
+PUT
+/api/v1/psos/{id}
+Update PSO
+Get PSO
+GET
+/api/v1/psos/{id}
+Get PSO
+Get Programme PSOs
+GET
+/api/v1/programmes/{programmeId}/psos
+Get PSOs
+Delete PSO
+DELETE
+/api/v1/psos/{id}
+Delete/Deactivate PSO
+4. Validation
+· programmeId, code and statement required.
+· Code unique within Programme.
+5. Business Rules
+Rule No.
+Rule
+BR-01
+Every PSO belongs to a Programme.
+BR-02
+PSO count is dynamic.
+BR-03
+PSO cannot be hard deleted when referenced.
+
+--- Page 19 ---
+19
+Module: Outcome Management
+Entity: PSO Competency
+1. Entity Definition
+Field
+Data Type
+Nullable
+Unique
+Default
+Remarks
+id
+BIGINT
+No
+PK
+Auto Generated
+Primary Key
+psoId
+BIGINT
+No
+FK
+-
+References PSO
+statement
+TEXT
+No
+No
+-
+Competency Statement
+displayOrder
+INTEGER
+No
+No
+-
+Display Sequence
+status
+ENUM(ACTIVE, INACTIVE)
+No
+No
+ACTIVE
+Status
+createdAt
+TIMESTAMP
+No
+No
+Current Timestamp
+Audit
+updatedAt
+TIMESTAMP
+No
+No
+Current Timestamp
+Audit
+2. Relationships
+Relationship
+Entity
+Type
+Nullable
+PSO Competency → PSO
+PSO
+Many-to-One
+No
+PSO Competency → CO-PSO Mapping
+CO-PSO Mapping
+One-to-Many
+No
+3. API Contract
+API
+Method
+Endpoint
+Description
+Create PSO Competency
+POST
+/api/v1/pso-competencies
+Create competency
+Update PSO Competency
+PUT
+/api/v1/pso-competencies/{id}
+Update competency
+Get by PSO
+GET
+/api/v1/psos/{psoId}/competencies
+Get PSO competencies
+Delete
+DELETE
+/api/v1/pso-competencies/{id}
+Delete/deactivate
+4. Validation
+· psoId and statement required.
+· displayOrder must be positive.
+5. Business Rules
+Rule No.
+Rule
+BR-01
+Competencies are dynamic.
+BR-02
+displayOrder is unique within a PSO.
+BR-03
+Competency cannot be hard deleted when mapped.
+
+--- Page 20 ---
+20
+Module: Outcome Management
+Entity: Course Outcome (CO)
+1. Entity Definition
+Field
+Data Type
+Nullable
+Unique
+Default
+Remarks
+id
+BIGINT
+No
+PK
+Auto Generated
+Primary Key
+courseId
+BIGINT
+No
+FK
+-
+References Course
+code
+VARCHAR(20)
+No
+No
+-
+CO Code
+statement
+TEXT
+No
+No
+-
+CO Statement
+status
+ENUM(ACTIVE, INACTIVE)
+No
+No
+ACTIVE
+Status
+createdAt
+TIMESTAMP
+No
+No
+Current Timestamp
+Audit
+updatedAt
+TIMESTAMP
+No
+No
+Current Timestamp
+Audit
+2. Relationships
+Relationship
+Entity
+Type
+Nullable
+CO → Course
+Course
+Many-to-One
+No
+CO → CO-PO Mapping
+CO-PO Mapping
+One-to-Many
+No
+CO → CO-PSO Mapping
+CO-PSO Mapping
+One-to-Many
+No
+3. API Contract
+API
+Method
+Endpoint
+Description
+Create CO
+POST
+/api/v1/courses/{courseId}/cos
+Create CO
+Update CO
+PUT
+/api/v1/cos/{id}
+Update CO
+Get CO
+GET
+/api/v1/cos/{id}
+Get CO
+Get Course COs
+GET
+/api/v1/courses/{courseId}/cos
+Get COs
+Delete CO
+DELETE
+/api/v1/cos/{id}
+Delete/Deactivate CO
+4. Validation
+· courseId, code and statement required.
+· CO code unique within Course.
+5. Business Rules
+Rule No.
+Rule
+BR-01
+CO count is dynamic.
+BR-02
+CO cannot be hard deleted when mapping, assessment or attainment data exist.
+
+--- Page 21 ---
+21
+Module 4: CO Mapping Management
+Module Structure
+CO Mapping Management
+■■■ CO-PO Competency Mapping
+■■■ CO-PSO Competency Mapping
+
+--- Page 22 ---
+22
+Module: CO Mapping Management
+Entity: CO-PO Competency Mapping
+1. Entity Definition
+Field
+Data Type
+Nullable
+Unique
+Default
+Remarks
+id
+BIGINT
+No
+PK
+Auto Generated
+Primary Key
+courseOutcomeId
+BIGINT
+No
+FK
+-
+References CO
+programmeOutcome
+CompetencyId
+BIGINT
+No
+FK
+-
+References PO Competency
+mappingLevel
+DECIMAL(3,2)
+No
+No
+0
+Mapping Strength
+status
+ENUM(ACTIVE, INACTIVE)
+No
+No
+ACTIVE
+Status
+createdAt
+TIMESTAMP
+No
+No
+Current Timestamp
+Audit
+updatedAt
+TIMESTAMP
+No
+No
+Current Timestamp
+Audit
+2. Relationships
+Relationship
+Entity
+Type
+Nullable
+Mapping → CO
+CO
+Many-to-One
+No
+Mapping → PO Competency
+PO Competency
+Many-to-One
+No
+3. API Contract
+API
+Method
+Endpoint
+Description
+Create Mapping
+POST
+/api/v1/mappings/co-po
+Create CO-PO mapping
+Update Mapping
+PUT
+/api/v1/mappings/co-po/{id}
+Update mapping
+Get Course Mappings
+GET
+/api/v1/mappings/co-po/course/{courseId}
+Get course mappings
+Delete Mapping
+DELETE
+/api/v1/mappings/co-po/{id}
+Delete mapping
+4. Validation
+· CO and PO Competency must exist.
+· Duplicate mapping is not allowed.
+· Mapping level must be within allowed range.
+5. Business Rules
+Rule No.
+Rule
+BR-01
+A CO may map to multiple PO competencies.
+BR-02
+Mappings may be created manually or imported from Excel.
+
+--- Page 23 ---
+23
+Module: CO Mapping Management
+Entity: CO-PSO Competency Mapping
+1. Entity Definition
+Field
+Data Type
+Nullable
+Unique
+Default
+Remarks
+id
+BIGINT
+No
+PK
+Auto Generated
+Primary Key
+courseOutcomeId
+BIGINT
+No
+FK
+-
+References CO
+programmeSpecific
+OutcomeCompetenc
+yId
+BIGINT
+No
+FK
+-
+References PSO Competency
+mappingLevel
+DECIMAL(3,2)
+No
+No
+0
+Mapping Strength
+status
+ENUM(ACTIVE, INACTIVE)
+No
+No
+ACTIVE
+Status
+createdAt
+TIMESTAMP
+No
+No
+Current Timestamp
+Audit
+updatedAt
+TIMESTAMP
+No
+No
+Current Timestamp
+Audit
+2. Relationships
+Relationship
+Entity
+Type
+Nullable
+Mapping → CO
+CO
+Many-to-One
+No
+Mapping → PSO Competency
+PSO Competency
+Many-to-One
+No
+3. API Contract
+API
+Method
+Endpoint
+Description
+Create Mapping
+POST
+/api/v1/mappings/co-pso
+Create CO-PSO mapping
+Update Mapping
+PUT
+/api/v1/mappings/co-pso/{id}
+Update mapping
+Get Course Mappings
+GET
+/api/v1/mappings/co-pso/course/{courseId}
+Get course mappings
+Delete Mapping
+DELETE
+/api/v1/mappings/co-pso/{id}
+Delete mapping
+4. Validation
+· CO and PSO Competency must exist.
+· Duplicate mapping is not allowed.
+· Mapping level must be within allowed range.
+5. Business Rules
+Rule No.
+Rule
+BR-01
+A CO may map to multiple PSO competencies.
+BR-02
+Mappings may be created manually or imported from Excel.
+
+--- Page 24 ---
+24
+Module 5: Assessment Data Management
+Module Structure
+Assessment Data Management
+■■■ End Semester Marks Upload
+■■■ Uploaded Student Marks
+■■■ Student CO Marks
+■■■ Course End Survey
+■■■ Survey Response
+■■■ Survey Response Details
+■■■ Programme Exit Survey
+
+--- Page 25 ---
+25
+Module: Assessment Data Management
+Entity: End Semester Marks Upload
+1. Entity Definition
+Field
+Data Type
+Nullable
+Unique
+Default
+Remarks
+id
+BIGINT
+No
+PK
+Auto Generated
+Primary Key
+courseId
+BIGINT
+No
+FK
+-
+Course
+batchId
+BIGINT
+No
+FK
+-
+Batch
+semesterId
+BIGINT
+No
+FK
+-
+Semester
+academicYearId
+BIGINT
+No
+FK
+-
+Academic Year
+uploadedBy
+BIGINT
+No
+FK
+-
+User
+originalFileName
+VARCHAR(255)
+No
+No
+-
+Excel File
+uploadStatus
+ENUM(SUCCESS, FAILED,
+PROCESSING)
+No
+No
+PROCESSING
+Status
+totalStudents
+INTEGER
+No
+No
+0
+Students Processed
+fileSize
+BIGINT
+No
+No
+-
+File Size
+processingTime
+INTEGER
+Yes
+No
+NULL
+Processing Time
+errorMessage
+VARCHAR(255)
+Yes
+No
+NULL
+Error Message
+createdAt
+TIMESTAMP
+No
+No
+Current Timestamp
+Audit
+updatedAt
+TIMESTAMP
+No
+No
+Current Timestamp
+Audit
+2. Relationships
+Relationship
+Entity
+Type
+Nullable
+Upload → Course
+Course
+Many-to-One
+No
+Upload → Batch
+Batch
+Many-to-One
+No
+Upload → Semester
+Semester
+Many-to-One
+No
+Upload → Academic Year
+Academic Year
+Many-to-One
+No
+Upload → User
+User
+Many-to-One
+No
+Upload → Uploaded Student Marks
+Uploaded Student Marks
+One-to-Many
+No
+3. API Contract
+API
+Method
+Endpoint
+Description
+Upload Marks
+POST
+/api/v1/marks/end-semester/upload
+Upload End Semester Marks Excel
+Get Uploads
+GET
+/api/v1/marks/end-semester/uploads
+Get uploads
+Get Upload
+GET
+/api/v1/marks/end-semester/uploads/{id}
+Get upload details
+Delete Upload
+DELETE
+/api/v1/marks/end-semester/uploads/{id}
+Delete upload
+4. Validation
+· Course, Batch, Semester and Academic Year must exist.
+· Excel must be valid and match active template.
+· Total students > 0.
+5. Business Rules
+Rule No.
+Rule
+BR-01
+Students are resolved by PRN and linked to Batch.
+BR-02
+Upload status changes PROCESSING → SUCCESS/FAILED.
+BR-03
+Upload metadata is retained for audit and recalculation.
+
+--- Page 26 ---
+26
+Module: Assessment Data Management
+Entity: Uploaded Student Marks
+1. Entity Definition
+Field
+Data Type
+Nullable
+Unique
+Default
+Remarks
+id
+BIGINT
+No
+PK
+Auto Generated
+Primary Key
+marksUploadId
+BIGINT
+No
+FK
+-
+Upload
+studentId
+BIGINT
+No
+FK
+-
+Student
+prn
+VARCHAR(30)
+No
+No
+-
+PRN Snapshot
+studentName
+VARCHAR(150)
+No
+No
+-
+Name Snapshot
+totalMarks
+DECIMAL(6,2)
+Yes
+No
+NULL
+Total Marks
+maxMarks
+DECIMAL(6,2)
+Yes
+No
+NULL
+Maximum Marks
+createdAt
+TIMESTAMP
+No
+No
+Current Timestamp
+Audit
+2. Relationships
+Relationship
+Entity
+Type
+Nullable
+Uploaded Student Marks → Upload
+Marks Upload
+Many-to-One
+No
+Uploaded Student Marks → Student
+Student
+Many-to-One
+No
+Uploaded Student Marks → Student CO Marks
+Student CO Marks
+One-to-Many
+No
+3. API Contract
+API
+Method
+Endpoint
+Description
+Get Student Marks
+GET
+/api/v1/marks/end-semester/uploads/{uploadId}/students/{stud
+entId}
+Get student marks
+Get CO Marks
+GET
+/api/v1/marks/end-semester/uploads/{uploadId}/co-marks
+Get CO marks
+4. Validation
+· Upload and Student must exist.
+· PRN required.
+5. Business Rules
+Rule No.
+Rule
+BR-01
+Created internally during upload processing.
+BR-02
+Existing Student is reused by PRN.
+
+--- Page 27 ---
+27
+Module: Assessment Data Management
+Entity: Student CO Marks
+1. Entity Definition
+Field
+Data Type
+Nullable
+Unique
+Default
+Remarks
+id
+BIGINT
+No
+PK
+Auto Generated
+Primary Key
+uploadedStudentMar
+ksId
+BIGINT
+No
+FK
+-
+Uploaded Student Marks
+courseOutcomeId
+BIGINT
+No
+FK
+-
+CO
+obtainedMarks
+DECIMAL(6,2)
+No
+No
+0
+Obtained Marks
+maximumMarks
+DECIMAL(6,2)
+No
+No
+0
+Maximum Marks
+createdAt
+TIMESTAMP
+No
+No
+Current Timestamp
+Audit
+2. Relationships
+Relationship
+Entity
+Type
+Nullable
+Student CO Marks → Uploaded Student Marks
+Uploaded Student Marks
+Many-to-One
+No
+Student CO Marks → CO
+CO
+Many-to-One
+No
+3. API Contract
+API
+Method
+Endpoint
+Description
+Get Student CO Marks
+GET
+/api/v1/marks/end-semester/students/{studentId}/co-marks
+Get student CO marks
+Get Course CO Marks
+GET
+/api/v1/marks/end-semester/courses/{courseId}/co-marks
+Get course CO marks
+4. Validation
+· CO must belong to selected Course.
+· Obtained >= 0.
+· Obtained <= Maximum.
+· Maximum > 0.
+5. Business Rules
+Rule No.
+Rule
+BR-01
+Each record represents one student for one CO.
+BR-02
+Source data for Direct CO Attainment.
+
+--- Page 28 ---
+28
+Module: Assessment Data Management
+Entity: Course End Survey
+1. Entity Definition
+Field
+Data Type
+Nullable
+Unique
+Default
+Remarks
+id
+BIGINT
+No
+PK
+Auto Generated
+Primary Key
+courseId
+BIGINT
+No
+FK
+-
+Course
+batchId
+BIGINT
+No
+FK
+-
+Batch
+semesterId
+BIGINT
+No
+FK
+-
+Semester
+academicYearId
+BIGINT
+No
+FK
+-
+Academic Year
+uploadedBy
+BIGINT
+No
+FK
+-
+User
+originalFileName
+VARCHAR(255)
+No
+No
+-
+Excel File
+uploadStatus
+ENUM(SUCCESS, FAILED,
+PROCESSING)
+No
+No
+PROCESSING
+Status
+totalResponses
+INTEGER
+No
+No
+0
+Responses
+errorMessage
+VARCHAR(255)
+Yes
+No
+NULL
+Error Message
+fileSize
+BIGINT
+No
+No
+-
+File Size
+processingTime
+INTEGER
+Yes
+No
+NULL
+Processing Time
+createdAt
+TIMESTAMP
+No
+No
+Current Timestamp
+Audit
+2. Relationships
+Relationship
+Entity
+Type
+Nullable
+Survey → Course
+Course
+Many-to-One
+No
+Survey → Batch
+Batch
+Many-to-One
+No
+Survey → Semester
+Semester
+Many-to-One
+No
+Survey → Academic Year
+Academic Year
+Many-to-One
+No
+Survey → Survey Response
+Survey Response
+One-to-Many
+No
+3. API Contract
+API
+Method
+Endpoint
+Description
+Upload Survey
+POST
+/api/v1/surveys/course-end/upload
+Upload Course End Survey
+Get Surveys
+GET
+/api/v1/surveys/course-end
+Get uploads
+Get Survey
+GET
+/api/v1/surveys/course-end/{id}
+Get survey
+Delete Survey
+DELETE
+/api/v1/surveys/course-end/{id}
+Delete survey
+4. Validation
+· Course, Batch, Semester and Academic Year must exist.
+· Excel must match active template.
+· Responses > 0.
+5. Business Rules
+Rule No.
+Rule
+BR-01
+Used for Indirect CO Attainment.
+BR-02
+Upload status changes PROCESSING → SUCCESS/FAILED.
+BR-03
+Historical upload metadata is retained.
+
+--- Page 29 ---
+29
+Module: Assessment Data Management
+Entity: Survey Response
+1. Entity Definition
+Field
+Data Type
+Nullable
+Unique
+Default
+Remarks
+id
+BIGINT
+No
+PK
+Auto Generated
+Primary Key
+surveyId
+BIGINT
+No
+FK
+-
+Course End Survey
+studentId
+BIGINT
+Yes
+FK
+NULL
+Optional Student
+responseCode
+VARCHAR(50)
+No
+No
+-
+Response Identifier
+createdAt
+TIMESTAMP
+No
+No
+Current Timestamp
+Audit
+2. Relationships
+Relationship
+Entity
+Type
+Nullable
+Response → Survey
+Course End Survey
+Many-to-One
+No
+Response → Student
+Student
+Many-to-One
+Yes
+Response → Details
+Survey Response Details
+One-to-Many
+No
+3. API Contract
+API
+Method
+Endpoint
+Description
+Get Responses
+GET
+/api/v1/surveys/course-end/{surveyId}/responses
+Get responses
+4. Validation
+· surveyId and responseCode required.
+5. Business Rules
+Rule No.
+Rule
+BR-01
+Responses are created from survey upload.
+BR-02
+Anonymous responses are supported when the template has no identity field.
+
+--- Page 30 ---
+30
+Module: Assessment Data Management
+Entity: Survey Response Details
+1. Entity Definition
+Field
+Data Type
+Nullable
+Unique
+Default
+Remarks
+id
+BIGINT
+No
+PK
+Auto Generated
+Primary Key
+surveyResponseId
+BIGINT
+No
+FK
+-
+Survey Response
+courseOutcomeId
+BIGINT
+Yes
+FK
+NULL
+CO
+responseCategory
+ENUM(SLIGHT, MODERATE,
+SUBSTANTIAL)
+No
+No
+-
+Category
+responseWeight
+DECIMAL(5,2)
+No
+No
+-
+Configured Weight
+createdAt
+TIMESTAMP
+No
+No
+Current Timestamp
+Audit
+2. Relationships
+Relationship
+Entity
+Type
+Nullable
+Detail → Response
+Survey Response
+Many-to-One
+No
+Detail → CO
+CO
+Many-to-One
+Yes
+3. API Contract
+API
+Method
+Endpoint
+Description
+Get Response Details
+GET
+/api/v1/surveys/responses/{responseId}/details
+Get details
+4. Validation
+· response must exist.
+· Category must be supported.
+· Weight resolved from active configuration.
+5. Business Rules
+Rule No.
+Rule
+BR-01
+Weights are configuration-driven.
+BR-02
+Details are used for Indirect CO Attainment.
+
+--- Page 31 ---
+31
+Module: Assessment Data Management
+Entity: Programme Exit Survey
+1. Entity Definition
+Field
+Data Type
+Nullable
+Unique
+Default
+Remarks
+id
+BIGINT
+No
+PK
+Auto Generated
+Primary Key
+programmeId
+BIGINT
+No
+FK
+-
+Programme
+batchId
+BIGINT
+No
+FK
+-
+Batch
+academicYearId
+BIGINT
+No
+FK
+-
+Academic Year
+uploadedBy
+BIGINT
+No
+FK
+-
+User
+originalFileName
+VARCHAR(255)
+No
+No
+-
+Excel File
+uploadStatus
+ENUM(SUCCESS, FAILED,
+PROCESSING)
+No
+No
+PROCESSING
+Status
+totalResponses
+INTEGER
+No
+No
+0
+Responses
+errorMessage
+VARCHAR(255)
+Yes
+No
+NULL
+Error Message
+createdAt
+TIMESTAMP
+No
+No
+Current Timestamp
+Audit
+2. Relationships
+Relationship
+Entity
+Type
+Nullable
+Exit Survey → Programme
+Programme
+Many-to-One
+No
+Exit Survey → Batch
+Batch
+Many-to-One
+No
+Exit Survey → Academic Year
+Academic Year
+Many-to-One
+No
+3. API Contract
+API
+Method
+Endpoint
+Description
+Upload Exit Survey
+POST
+/api/v1/surveys/programme-exit/upload
+Upload Programme Exit Survey
+Get Exit Surveys
+GET
+/api/v1/surveys/programme-exit
+Get surveys
+Get Exit Survey
+GET
+/api/v1/surveys/programme-exit/{id}
+Get survey
+Delete Exit Survey
+DELETE
+/api/v1/surveys/programme-exit/{id}
+Delete survey
+4. Validation
+· Programme, Batch and Academic Year must exist.
+· Excel must be valid.
+· Responses > 0.
+5. Business Rules
+Rule No.
+Rule
+BR-01
+Separate from Course End Survey.
+BR-02
+Associated with the completing Batch.
+BR-03
+Used for indirect Programme PO/PSO attainment.
+
+--- Page 32 ---
+32
+Module 6: Configuration Management
+Module Structure
+Configuration Management
+■■■ Attainment Configuration
+■■■ Attainment Level Configuration
+■■■ Excel Template Configuration
+
+--- Page 33 ---
+33
+Module: Configuration Management
+Entity: Attainment Configuration
+1. Entity Definition
+Field
+Data Type
+Nullable
+Unique
+Default
+Remarks
+id
+BIGINT
+No
+PK
+Auto Generated
+Primary Key
+directAttainmentWei
+ght
+DECIMAL(5,2)
+No
+No
+80.00
+Direct Weight %
+indirectAttainment
+Weight
+DECIMAL(5,2)
+No
+No
+20.00
+Indirect Weight %
+directAttainmentThr
+eshold
+DECIMAL(5,2)
+No
+No
+60.00
+Student Threshold %
+slightResponseWeig
+ht
+DECIMAL(5,2)
+No
+No
+0.33
+Slight Weight
+moderateResponse
+Weight
+DECIMAL(5,2)
+No
+No
+0.66
+Moderate Weight
+substantialResponse
+Weight
+DECIMAL(5,2)
+No
+No
+1.00
+Substantial Weight
+status
+ENUM(ACTIVE, INACTIVE)
+No
+No
+ACTIVE
+Status
+createdAt
+TIMESTAMP
+No
+No
+Current Timestamp
+Audit
+2. Relationships
+Relationship
+Entity
+Type
+Nullable
+Configuration → Calculation Engines
+CO / PO / PSO Engines
+Used By
+No
+3. API Contract
+API
+Method
+Endpoint
+Description
+Create
+POST
+/api/v1/configurations/attainment
+Create configuration
+Update
+PUT
+/api/v1/configurations/attainment/{id}
+Update configuration
+Get Active
+GET
+/api/v1/configurations/attainment
+Get active configuration
+Get
+GET
+/api/v1/configurations/attainment/{id}
+Get configuration
+4. Validation
+· Direct + Indirect weight = 100.
+· Threshold 0–100.
+· Response weights >= 0.
+· Only one ACTIVE configuration.
+5. Business Rules
+Rule No.
+Rule
+BR-01
+Active configuration applies to future calculations.
+BR-02
+Historical configurations are retained.
+BR-03
+Only authorized administrators modify configuration.
+
+--- Page 34 ---
+34
+Module: Configuration Management
+Entity: Attainment Level Configuration
+1. Entity Definition
+Field
+Data Type
+Nullable
+Unique
+Default
+Remarks
+id
+BIGINT
+No
+PK
+Auto Generated
+Primary Key
+level
+INTEGER
+No
+Yes
+-
+Attainment Level
+minimumPercentage
+DECIMAL(5,2)
+No
+No
+-
+Minimum %
+maximumPercentage
+DECIMAL(5,2)
+No
+No
+-
+Maximum %
+status
+ENUM(ACTIVE, INACTIVE)
+No
+No
+ACTIVE
+Status
+createdAt
+TIMESTAMP
+No
+No
+Current Timestamp
+Audit
+2. Relationships
+Relationship
+Entity
+Type
+Nullable
+Level Configuration → CO Engine
+CO Attainment Engine
+Used By
+No
+Level Configuration → PO/PSO Engine
+PO/PSO Engine
+Used By
+No
+3. API Contract
+API
+Method
+Endpoint
+Description
+Create Level
+POST
+/api/v1/configurations/attainment-levels
+Create level
+Update Level
+PUT
+/api/v1/configurations/attainment-levels/{id}
+Update level
+Get Levels
+GET
+/api/v1/configurations/attainment-levels
+Get levels
+Delete Level
+DELETE
+/api/v1/configurations/attainment-levels/{id}
+Delete level
+4. Validation
+· Level > 0.
+· 0 <= min <= max <= 100.
+· Active ranges must not overlap.
+5. Business Rules
+Rule No.
+Rule
+BR-01
+Example configuration: <50 = 1, 50–70 = 2, >70 = 3.
+BR-02
+Historical configurations are retained.
+
+--- Page 35 ---
+35
+Module: Configuration Management
+Entity: Excel Template Configuration
+1. Entity Definition
+Field
+Data Type
+Nullable
+Unique
+Default
+Remarks
+id
+BIGINT
+No
+PK
+Auto Generated
+Primary Key
+templateName
+VARCHAR(100)
+No
+Yes
+-
+Template Name
+templateType
+ENUM(END_SEMESTER_MA
+RKS,
+COURSE_END_SURVEY, PR
+OGRAMME_EXIT_SURVEY)
+No
+No
+-
+Template Type
+sheetName
+VARCHAR(100)
+No
+No
+-
+Sheet
+headerRowNumber
+INTEGER
+No
+No
+1
+Header Row
+configuration
+JSON
+No
+No
+-
+Column Mapping
+status
+ENUM(ACTIVE, INACTIVE)
+No
+No
+ACTIVE
+Status
+createdAt
+TIMESTAMP
+No
+No
+Current Timestamp
+Audit
+2. Relationships
+Relationship
+Entity
+Type
+Nullable
+Template → Upload Process
+Marks / Survey Uploads
+Used By
+No
+3. API Contract
+API
+Method
+Endpoint
+Description
+Create Template
+POST
+/api/v1/configurations/excel-templates
+Create template
+Update Template
+PUT
+/api/v1/configurations/excel-templates/{id}
+Update template
+Get Templates
+GET
+/api/v1/configurations/excel-templates
+Get templates
+Get Active
+GET
+/api/v1/configurations/excel-templates/type/{templateType}
+Get active template
+Delete Template
+DELETE
+/api/v1/configurations/excel-templates/{id}
+Delete/deactivate
+4. Validation
+· Template name unique.
+· Supported type required.
+· Sheet name nonblank.
+· Header row > 0.
+· Configuration JSON valid.
+· One ACTIVE template per type.
+5. Business Rules
+Rule No.
+Rule
+BR-01
+Changes affect future uploads only.
+BR-02
+Historical templates retained for audit and rollback.
+
+--- Page 36 ---
+36
+Module 7: CO Attainment Engine
+Module Structure
+CO Attainment Engine
+■■■ Calculation Run
+■■■ Direct CO Attainment
+■■■ Indirect CO Attainment
+■■■ Overall CO Attainment
+
+--- Page 37 ---
+37
+Module: CO Attainment Engine
+Entity: Calculation Run
+1. Entity Definition
+Field
+Data Type
+Nullable
+Unique
+Default
+Remarks
+id
+BIGINT
+No
+PK
+Auto Generated
+Primary Key
+courseId
+BIGINT
+No
+FK
+-
+Course
+batchId
+BIGINT
+No
+FK
+-
+Batch
+semesterId
+BIGINT
+No
+FK
+-
+Semester
+academicYearId
+BIGINT
+No
+FK
+-
+Academic Year
+triggeredBy
+BIGINT
+No
+FK
+-
+User
+status
+ENUM(PENDING, RUNNING,
+SUCCESS, FAILED)
+No
+No
+PENDING
+Status
+startedAt
+TIMESTAMP
+No
+No
+Current Timestamp
+Start
+completedAt
+TIMESTAMP
+Yes
+No
+NULL
+Completion
+remarks
+TEXT
+Yes
+No
+NULL
+Failure / Notes
+2. Relationships
+Relationship
+Entity
+Type
+Nullable
+Run → Course
+Course
+Many-to-One
+No
+Run → Batch
+Batch
+Many-to-One
+No
+Run → Semester
+Semester
+Many-to-One
+No
+Run → Academic Year
+Academic Year
+Many-to-One
+No
+Run → User
+User
+Many-to-One
+No
+3. API Contract
+API
+Method
+Endpoint
+Description
+Start Calculation
+POST
+/api/v1/attainments/calculate
+Start calculation
+Get Runs
+GET
+/api/v1/attainments/calculation-runs
+Get calculation runs
+Get Run
+GET
+/api/v1/attainments/calculation-runs/{id}
+Get details
+4. Validation
+· Course, Batch, Semester, Academic Year and User must exist.
+· Only one run for same Course + Batch + Semester + Academic Year may execute at a time.
+5. Business Rules
+Rule No.
+Rule
+BR-01
+Every execution creates a new run.
+BR-02
+Status PENDING → RUNNING → SUCCESS/FAILED.
+BR-03
+All generated records reference the run.
+BR-04
+Previous runs remain available for audit.
+
+--- Page 38 ---
+38
+Module: CO Attainment Engine
+Entity: Direct CO Attainment
+1. Entity Definition
+Field
+Data Type
+Nullable
+Unique
+Default
+Remarks
+id
+BIGINT
+No
+PK
+Auto Generated
+Primary Key
+calculationRunId
+BIGINT
+No
+FK
+-
+Calculation Run
+configurationId
+BIGINT
+No
+FK
+-
+Attainment Configuration
+courseOutcomeId
+BIGINT
+No
+FK
+-
+CO
+courseId
+BIGINT
+No
+FK
+-
+Course
+batchId
+BIGINT
+No
+FK
+-
+Batch
+semesterId
+BIGINT
+No
+FK
+-
+Semester
+academicYearId
+BIGINT
+No
+FK
+-
+Academic Year
+attainedStudents
+INTEGER
+No
+No
+0
+Attained Students
+totalStudents
+INTEGER
+No
+No
+0
+Total Students
+attainmentPercentag
+e
+DECIMAL(5,2)
+No
+No
+0
+Percentage
+attainmentLevel
+INTEGER
+No
+No
+-
+Level
+calculatedAt
+TIMESTAMP
+No
+No
+Current Timestamp
+Calculation Time
+2. Relationships
+Relationship
+Entity
+Type
+Nullable
+Direct CO → Student CO Marks
+Student CO Marks
+Calculated From
+No
+Direct CO → Calculation Run
+Calculation Run
+Many-to-One
+No
+Direct CO → CO
+CO
+Many-to-One
+No
+3. API Contract
+API
+Method
+Endpoint
+Description
+Get Direct
+GET
+/api/v1/attainments/direct
+Get direct results
+Get Course Direct
+GET
+/api/v1/attainments/direct/course/{courseId}
+Get course results
+Get Direct
+GET
+/api/v1/attainments/direct/{id}
+Get result
+4. Validation
+· CO and configuration must exist.
+· Total Students > 0.
+5. Business Rules
+Rule No.
+Rule
+BR-01
+Student attained when marks >= configured threshold.
+BR-02
+Percentage is converted to configured level.
+BR-03
+Level, not raw percentage, is used in Overall CO.
+
+--- Page 39 ---
+39
+Module: CO Attainment Engine
+Entity: Indirect CO Attainment
+1. Entity Definition
+Field
+Data Type
+Nullable
+Unique
+Default
+Remarks
+id
+BIGINT
+No
+PK
+Auto Generated
+Primary Key
+calculationRunId
+BIGINT
+No
+FK
+-
+Calculation Run
+configurationId
+BIGINT
+No
+FK
+-
+Attainment Configuration
+courseOutcomeId
+BIGINT
+No
+FK
+-
+CO
+courseId
+BIGINT
+No
+FK
+-
+Course
+batchId
+BIGINT
+No
+FK
+-
+Batch
+semesterId
+BIGINT
+No
+FK
+-
+Semester
+academicYearId
+BIGINT
+No
+FK
+-
+Academic Year
+weightedScore
+DECIMAL(8,2)
+No
+No
+0
+Weighted Score
+attainmentPercentag
+e
+DECIMAL(5,2)
+No
+No
+0
+Percentage
+attainmentLevel
+INTEGER
+No
+No
+-
+Level
+2. Relationships
+Relationship
+Entity
+Type
+Nullable
+Indirect CO → Course End Survey
+Course End Survey
+Calculated From
+No
+Indirect CO → Calculation Run
+Calculation Run
+Many-to-One
+No
+Indirect CO → CO
+CO
+Many-to-One
+No
+3. API Contract
+API
+Method
+Endpoint
+Description
+Get Indirect
+GET
+/api/v1/attainments/indirect
+Get indirect results
+Get Course Indirect
+GET
+/api/v1/attainments/indirect/course/{courseId}
+Get course results
+Get Indirect
+GET
+/api/v1/attainments/indirect/{id}
+Get result
+4. Validation
+· Survey and CO must exist.
+· Response weights must be configured.
+5. Business Rules
+Rule No.
+Rule
+BR-01
+Weighted Score uses Slight/Moderate/Substantial weights.
+BR-02
+Percentage is converted to level.
+BR-03
+Level is used in Overall CO.
+
+--- Page 40 ---
+40
+Module: CO Attainment Engine
+Entity: Overall CO Attainment
+1. Entity Definition
+Field
+Data Type
+Nullable
+Unique
+Default
+Remarks
+id
+BIGINT
+No
+PK
+Auto Generated
+Primary Key
+calculationRunId
+BIGINT
+No
+FK
+-
+Calculation Run
+configurationId
+BIGINT
+No
+FK
+-
+Attainment Configuration
+courseOutcomeId
+BIGINT
+No
+FK
+-
+CO
+courseId
+BIGINT
+No
+FK
+-
+Course
+batchId
+BIGINT
+No
+FK
+-
+Batch
+semesterId
+BIGINT
+No
+FK
+-
+Semester
+academicYearId
+BIGINT
+No
+FK
+-
+Academic Year
+directAttainmentLev
+el
+DECIMAL(5,2)
+No
+No
+0
+Direct Level
+indirectAttainmentL
+evel
+DECIMAL(5,2)
+No
+No
+0
+Indirect Level
+overallAttainment
+DECIMAL(5,2)
+No
+No
+0
+Final Overall CO
+2. Relationships
+Relationship
+Entity
+Type
+Nullable
+Overall CO → Direct CO
+Direct CO Attainment
+Many-to-One
+No
+Overall CO → Indirect CO
+Indirect CO Attainment
+Many-to-One
+No
+Overall CO → Calculation Run
+Calculation Run
+Many-to-One
+No
+3. API Contract
+API
+Method
+Endpoint
+Description
+Get Overall CO
+GET
+/api/v1/attainments/overall-co
+Get overall CO results
+Get Course Overall CO
+GET
+/api/v1/attainments/overall-co/course/{courseId}
+Get course results
+Get Overall CO
+GET
+/api/v1/attainments/overall-co/{id}
+Get result
+4. Validation
+· Direct and Indirect records must exist.
+· Configured weights must total 100.
+5. Business Rules
+Rule No.
+Rule
+BR-01
+Overall CO = Direct Level × Direct Weight + Indirect Level × Indirect Weight.
+BR-02
+Calculation uses attainment levels, not percentages.
+
+--- Page 41 ---
+41
+Module 8: PO & PSO Attainment Engine
+Module Structure
+PO & PSO Attainment Engine
+■■■ PO Competency Attainment
+■■■ PO Attainment
+■■■ PSO Competency Attainment
+■■■ PSO Attainment
+■■■ Programme Aggregation
+
+--- Page 42 ---
+42
+Module: PO & PSO Attainment Engine
+Entity: PO Competency Attainment
+1. Entity Definition
+Field
+Data Type
+Nullable
+Unique
+Default
+Remarks
+id
+BIGINT
+No
+PK
+Auto Generated
+Primary Key
+calculationRunId
+BIGINT
+No
+FK
+-
+Calculation Run
+programmeOutcome
+CompetencyId
+BIGINT
+No
+FK
+-
+PO Competency
+programmeId
+BIGINT
+No
+FK
+-
+Programme
+batchId
+BIGINT
+No
+FK
+-
+Batch
+academicYearId
+BIGINT
+No
+FK
+-
+Academic Year
+attainmentValue
+DECIMAL(5,2)
+No
+No
+0
+Average Overall CO
+mappedCourseOutco
+mes
+INTEGER
+No
+No
+0
+Mapped CO Count
+calculatedAt
+TIMESTAMP
+No
+No
+Current Timestamp
+Calculation Time
+2. Relationships
+Relationship
+Entity
+Type
+Nullable
+PO Competency Attainment → PO Competency
+PO Competency
+Many-to-One
+No
+PO Competency Attainment → Overall CO
+Overall CO
+Calculated From
+No
+3. API Contract
+API
+Method
+Endpoint
+Description
+Get PO Competencies
+GET
+/api/v1/attainments/po-competencies
+Get results
+Get PO Competency
+GET
+/api/v1/attainments/po-competencies/{id}
+Get result
+Get Programme
+GET
+/api/v1/attainments/po-competencies/programme/{programmeI
+d}
+Get programme results
+4. Validation
+· PO Competency must exist.
+· At least one mapped CO required.
+5. Business Rules
+Rule No.
+Rule
+BR-01
+Average of mapped Overall CO Attainments.
+BR-02
+Uses same Calculation Run.
+BR-03
+Historical calculations remain unchanged.
+
+--- Page 43 ---
+43
+Module: PO & PSO Attainment Engine
+Entity: PO Attainment
+1. Entity Definition
+Field
+Data Type
+Nullable
+Unique
+Default
+Remarks
+id
+BIGINT
+No
+PK
+Auto Generated
+Primary Key
+calculationRunId
+BIGINT
+No
+FK
+-
+Calculation Run
+programmeOutcome
+Id
+BIGINT
+No
+FK
+-
+PO
+programmeId
+BIGINT
+No
+FK
+-
+Programme
+batchId
+BIGINT
+No
+FK
+-
+Batch
+academicYearId
+BIGINT
+No
+FK
+-
+Academic Year
+attainmentValue
+DECIMAL(5,2)
+No
+No
+0
+PO Attainment
+totalCompetencies
+INTEGER
+No
+No
+0
+Competencies
+calculatedAt
+TIMESTAMP
+No
+No
+Current Timestamp
+Calculation Time
+2. Relationships
+Relationship
+Entity
+Type
+Nullable
+PO Attainment → PO
+PO
+Many-to-One
+No
+PO Attainment → PO Competency Attainment
+PO Competency Attainment
+Calculated From
+No
+PO Attainment → Batch
+Batch
+Many-to-One
+No
+3. API Contract
+API
+Method
+Endpoint
+Description
+Get PO Results
+GET
+/api/v1/attainments/pos
+Get results
+Get PO
+GET
+/api/v1/attainments/pos/{id}
+Get result
+Get Batch PO
+GET
+/api/v1/attainments/pos/batch/{batchId}
+Get batch results
+4. Validation
+· PO must exist.
+· Competency results must exist.
+5. Business Rules
+Rule No.
+Rule
+BR-01
+Calculated from PO Competency Attainment.
+BR-02
+Batch and Academic Year are retained.
+BR-03
+Historical results are preserved.
+
+--- Page 44 ---
+44
+Module: PO & PSO Attainment Engine
+Entity: PSO Competency Attainment
+1. Entity Definition
+Field
+Data Type
+Nullable
+Unique
+Default
+Remarks
+id
+BIGINT
+No
+PK
+Auto Generated
+Primary Key
+calculationRunId
+BIGINT
+No
+FK
+-
+Calculation Run
+programmeSpecific
+OutcomeCompetenc
+yId
+BIGINT
+No
+FK
+-
+PSO Competency
+programmeId
+BIGINT
+No
+FK
+-
+Programme
+batchId
+BIGINT
+No
+FK
+-
+Batch
+academicYearId
+BIGINT
+No
+FK
+-
+Academic Year
+attainmentValue
+DECIMAL(5,2)
+No
+No
+0
+Average Overall CO
+mappedCourseOutco
+mes
+INTEGER
+No
+No
+0
+Mapped CO Count
+calculatedAt
+TIMESTAMP
+No
+No
+Current Timestamp
+Calculation Time
+2. Relationships
+Relationship
+Entity
+Type
+Nullable
+PSO Competency Attainment → PSO Competency
+PSO Competency
+Many-to-One
+No
+PSO Competency Attainment → Overall CO
+Overall CO
+Calculated From
+No
+3. API Contract
+API
+Method
+Endpoint
+Description
+Get PSO Competencies
+GET
+/api/v1/attainments/pso-competencies
+Get results
+Get PSO Competency
+GET
+/api/v1/attainments/pso-competencies/{id}
+Get result
+Get Programme
+GET
+/api/v1/attainments/pso-competencies/programme/{programme
+Id}
+Get programme results
+4. Validation
+· PSO Competency must exist.
+· At least one mapped CO required.
+5. Business Rules
+Rule No.
+Rule
+BR-01
+Average of mapped Overall CO Attainments.
+BR-02
+Uses same Calculation Run.
+
+--- Page 45 ---
+45
+Module: PO & PSO Attainment Engine
+Entity: PSO Attainment
+1. Entity Definition
+Field
+Data Type
+Nullable
+Unique
+Default
+Remarks
+id
+BIGINT
+No
+PK
+Auto Generated
+Primary Key
+calculationRunId
+BIGINT
+No
+FK
+-
+Calculation Run
+programmeSpecific
+OutcomeId
+BIGINT
+No
+FK
+-
+PSO
+programmeId
+BIGINT
+No
+FK
+-
+Programme
+batchId
+BIGINT
+No
+FK
+-
+Batch
+academicYearId
+BIGINT
+No
+FK
+-
+Academic Year
+attainmentValue
+DECIMAL(5,2)
+No
+No
+0
+PSO Attainment
+totalCompetencies
+INTEGER
+No
+No
+0
+Competencies
+calculatedAt
+TIMESTAMP
+No
+No
+Current Timestamp
+Calculation Time
+2. Relationships
+Relationship
+Entity
+Type
+Nullable
+PSO Attainment → PSO
+PSO
+Many-to-One
+No
+PSO Attainment → PSO Competency Attainment
+PSO Competency Attainment
+Calculated From
+No
+PSO Attainment → Batch
+Batch
+Many-to-One
+No
+3. API Contract
+API
+Method
+Endpoint
+Description
+Get PSO Results
+GET
+/api/v1/attainments/psos
+Get results
+Get PSO
+GET
+/api/v1/attainments/psos/{id}
+Get result
+Get Batch PSO
+GET
+/api/v1/attainments/psos/batch/{batchId}
+Get batch results
+4. Validation
+· PSO must exist.
+· Competency results must exist.
+5. Business Rules
+Rule No.
+Rule
+BR-01
+Calculated from PSO Competency Attainment.
+BR-02
+Batch and Academic Year are retained.
+BR-03
+Historical results are preserved.
+
+--- Page 46 ---
+46
+Module: PO & PSO Attainment Engine
+Entity: Programme Aggregation
+1. Entity Definition
+Field
+Data Type
+Nullable
+Unique
+Default
+Remarks
+id
+BIGINT
+No
+PK
+Auto Generated
+Primary Key
+programmeId
+BIGINT
+No
+FK
+-
+Programme
+batchId
+BIGINT
+No
+FK
+-
+Batch
+academicYearId
+BIGINT
+No
+FK
+-
+Academic Year
+directPOAttainment
+DECIMAL(5,2)
+No
+No
+0
+Programme Direct PO
+indirectPOAttainme
+nt
+DECIMAL(5,2)
+No
+No
+0
+Programme Indirect PO
+finalPOAttainment
+DECIMAL(5,2)
+No
+No
+0
+Final PO
+directPSOAttainmen
+t
+DECIMAL(5,2)
+No
+No
+0
+Programme Direct PSO
+indirectPSOAttainm
+ent
+DECIMAL(5,2)
+No
+No
+0
+Programme Indirect PSO
+finalPSOAttainment
+DECIMAL(5,2)
+No
+No
+0
+Final PSO
+calculatedAt
+TIMESTAMP
+No
+No
+Current Timestamp
+Calculation Time
+2. Relationships
+Relationship
+Entity
+Type
+Nullable
+Aggregation → Programme
+Programme
+Many-to-One
+No
+Aggregation → Batch
+Batch
+Many-to-One
+No
+Aggregation → PO/PSO
+PO / PSO Attainment
+Aggregates
+No
+Aggregation → Exit Survey
+Programme Exit Survey
+Uses
+No
+3. API Contract
+API
+Method
+Endpoint
+Description
+Calculate Programme Attainment
+POST
+/api/v1/programme-attainment/calculate
+Calculate programme attainment
+Get Programme Attainment
+GET
+/api/v1/programme-attainment/{id}
+Get programme result
+Get Batch Result
+GET
+/api/v1/programme-attainment/batch/{batchId}
+Get batch result
+4. Validation
+· Programme and Batch must exist.
+· Required course-level PO/PSO results must exist.
+· Programme Exit Survey must exist for indirect results.
+5. Business Rules
+Rule No.
+Rule
+BR-01
+Programme direct PO/PSO attainment is aggregated from course-level results.
+BR-02
+Programme Exit Survey provides indirect evidence.
+BR-03
+Final programme result uses configured direct/indirect weights.
+BR-04
+Batch history is retained for longitudinal reporting and ATR continuity.
+
+--- Page 47 ---
+47
+Module 9: ATR & Approval Management
+Module Structure
+ATR & Approval Management
+■■■ Course ATR
+■■■ Programme ATR
+■■■ Approval Request
+■■■ Approval History
+
+--- Page 48 ---
+48
+Module: ATR & Approval Management
+Entity: Course ATR
+1. Entity Definition
+Field
+Data Type
+Nullable
+Unique
+Default
+Remarks
+id
+BIGINT
+No
+PK
+Auto Generated
+Primary Key
+courseId
+BIGINT
+No
+FK
+-
+Course
+batchId
+BIGINT
+No
+FK
+-
+Batch
+semesterId
+BIGINT
+No
+FK
+-
+Semester
+academicYearId
+BIGINT
+No
+FK
+-
+Academic Year
+attainmentValue
+DECIMAL(5,2)
+No
+No
+0
+Attainment
+targetValue
+DECIMAL(5,2)
+No
+No
+0
+Target
+status
+ENUM(DRAFT, SUBMITTED,
+REVISION_REQUIRED,
+APPROVED)
+No
+No
+DRAFT
+ATR Status
+observation
+TEXT
+Yes
+No
+NULL
+Observation
+actionPlan
+TEXT
+Yes
+No
+NULL
+Action Plan
+createdBy
+BIGINT
+No
+FK
+-
+User
+createdAt
+TIMESTAMP
+No
+No
+Current Timestamp
+Audit
+2. Relationships
+Relationship
+Entity
+Type
+Nullable
+Course ATR → Course
+Course
+Many-to-One
+No
+Course ATR → Batch
+Batch
+Many-to-One
+No
+Course ATR → Semester
+Semester
+Many-to-One
+No
+3. API Contract
+API
+Method
+Endpoint
+Description
+Create Course ATR
+POST
+/api/v1/atr/course
+Create Course ATR
+Get Course ATR
+GET
+/api/v1/atr/course/{id}
+Get ATR
+Update Course ATR
+PUT
+/api/v1/atr/course/{id}
+Update ATR
+Submit Course ATR
+PUT
+/api/v1/atr/course/{id}/submit
+Submit ATR
+4. Validation
+· Course attainment and target must exist.
+· Approved ATR cannot be edited directly.
+5. Business Rules
+Rule No.
+Rule
+BR-01
+ATR compares attainment with target.
+BR-02
+Observation and action plan are retained.
+BR-03
+Approval creates an audit trail.
+
+--- Page 49 ---
+49
+Module: ATR & Approval Management
+Entity: Programme ATR
+1. Entity Definition
+Field
+Data Type
+Nullable
+Unique
+Default
+Remarks
+id
+BIGINT
+No
+PK
+Auto Generated
+Primary Key
+programmeId
+BIGINT
+No
+FK
+-
+Programme
+batchId
+BIGINT
+No
+FK
+-
+Batch
+academicYearId
+BIGINT
+No
+FK
+-
+Academic Year
+finalPOAttainment
+DECIMAL(5,2)
+No
+No
+0
+Final PO
+finalPSOAttainment
+DECIMAL(5,2)
+No
+No
+0
+Final PSO
+targetPO
+DECIMAL(5,2)
+No
+No
+0
+PO Target
+targetPSO
+DECIMAL(5,2)
+No
+No
+0
+PSO Target
+status
+ENUM(DRAFT, SUBMITTED,
+REVISION_REQUIRED,
+APPROVED)
+No
+No
+DRAFT
+ATR Status
+observation
+TEXT
+Yes
+No
+NULL
+Observation
+actionPlan
+TEXT
+Yes
+No
+NULL
+Action Plan
+createdBy
+BIGINT
+No
+FK
+-
+User
+createdAt
+TIMESTAMP
+No
+No
+Current Timestamp
+Audit
+2. Relationships
+Relationship
+Entity
+Type
+Nullable
+Programme ATR → Programme
+Programme
+Many-to-One
+No
+Programme ATR → Batch
+Batch
+Many-to-One
+No
+Programme ATR → Programme Aggregation
+Programme Aggregation
+Uses
+No
+Programme ATR → Approval Request
+Approval Request
+One-to-Many
+No
+3. API Contract
+API
+Method
+Endpoint
+Description
+Create Programme ATR
+POST
+/api/v1/atr/programme
+Create Programme ATR
+Get Programme ATR
+GET
+/api/v1/atr/programme/{id}
+Get ATR
+Submit Programme ATR
+PUT
+/api/v1/atr/programme/{id}/submit
+Submit ATR
+Batch ATR History
+GET
+/api/v1/atr/programme/batch/{batchId}
+Get ATR history
+4. Validation
+· Programme, Batch and Academic Year must exist.
+· Programme attainment must exist.
+· Targets must be available.
+5. Business Rules
+Rule No.
+Rule
+BR-01
+Programme ATR is batch scoped.
+BR-02
+Uses final Programme PO/PSO attainment.
+BR-03
+Action-plan continuity is retained across Academic Years.
+BR-04
+HOD reviews submitted Programme ATR.
+BR-05
+Approved ATR is an immutable historical snapshot.
+
+--- Page 50 ---
+50
+Module: ATR & Approval Management
+Entity: Approval Request
+1. Entity Definition
+Field
+Data Type
+Nullable
+Unique
+Default
+Remarks
+id
+BIGINT
+No
+PK
+Auto Generated
+Primary Key
+entityType
+ENUM(COURSE_ATR,
+PROGRAMME_ATR)
+No
+No
+-
+Entity Type
+entityId
+BIGINT
+No
+No
+-
+Entity ID
+submittedBy
+BIGINT
+No
+FK
+-
+Submitter
+reviewedBy
+BIGINT
+Yes
+FK
+NULL
+Reviewer
+status
+ENUM(PENDING,
+APPROVED,
+REVISION_REQUIRED,
+REJECTED)
+No
+No
+PENDING
+Approval Status
+comments
+TEXT
+Yes
+No
+NULL
+Comments
+submittedAt
+TIMESTAMP
+No
+No
+Current Timestamp
+Submission Time
+reviewedAt
+TIMESTAMP
+Yes
+No
+NULL
+Review Time
+2. Relationships
+Relationship
+Entity
+Type
+Nullable
+Approval Request → User
+User
+Many-to-One
+No
+Approval Request → ATR
+Course ATR / Programme ATR
+Many-to-One
+No
+3. API Contract
+API
+Method
+Endpoint
+Description
+Get Pending Approvals
+GET
+/api/v1/approvals/pending
+Get pending approvals
+Review Approval
+PUT
+/api/v1/approvals/{id}/review
+Approve or request revision
+Get Approval
+GET
+/api/v1/approvals/{id}
+Get approval
+4. Validation
+· Submitted entity must exist.
+· Reviewer must have authority.
+5. Business Rules
+Rule No.
+Rule
+BR-01
+HOD reviews Programme ATR.
+BR-02
+Revision returns ATR to responsible coordinator.
+BR-03
+Status transitions are recorded in history.
+
+--- Page 51 ---
+51
+Module: ATR & Approval Management
+Entity: Approval History
+1. Entity Definition
+Field
+Data Type
+Nullable
+Unique
+Default
+Remarks
+id
+BIGINT
+No
+PK
+Auto Generated
+Primary Key
+approvalRequestId
+BIGINT
+No
+FK
+-
+Approval Request
+fromStatus
+VARCHAR(50)
+No
+No
+-
+Previous Status
+toStatus
+VARCHAR(50)
+No
+No
+-
+New Status
+actionBy
+BIGINT
+No
+FK
+-
+User
+comments
+TEXT
+Yes
+No
+NULL
+Comments
+actionAt
+TIMESTAMP
+No
+No
+Current Timestamp
+Action Time
+2. Relationships
+Relationship
+Entity
+Type
+Nullable
+History → Approval Request
+Approval Request
+Many-to-One
+No
+History → User
+User
+Many-to-One
+No
+3. API Contract
+API
+Method
+Endpoint
+Description
+Get Approval History
+GET
+/api/v1/approvals/{id}/history
+Get approval history
+4. Validation
+· approvalRequestId and actionBy must exist.
+5. Business Rules
+Rule No.
+Rule
+BR-01
+Every status transition is recorded.
+BR-02
+History is append-only.
+BR-03
+History supports audit and ATR traceability.
+
+--- Page 52 ---
+52
+Module 10: Reports
+Module Structure
+Reports
+■■■ Report Generation
+
+--- Page 53 ---
+53
+Module: Reports
+Entity: Report Generation
+1. Entity Definition
+Field
+Data Type
+Nullable
+Unique
+Default
+Remarks
+id
+BIGINT
+No
+PK
+Auto Generated
+Primary Key
+calculationRunId
+BIGINT
+Yes
+FK
+NULL
+Calculation Run
+generatedBy
+BIGINT
+No
+FK
+-
+User
+programmeId
+BIGINT
+No
+FK
+-
+Programme
+batchId
+BIGINT
+Yes
+FK
+NULL
+Batch
+semesterId
+BIGINT
+Yes
+FK
+NULL
+Semester
+academicYearId
+BIGINT
+No
+FK
+-
+Academic Year
+reportType
+ENUM(CO_ATTAINMENT,
+PO_ATTAINMENT,
+PSO_ATTAINMENT, PROGR
+AMME_ATTAINMENT,
+COURSE_ATR,
+PROGRAMME_ATR,
+CONSOLIDATED)
+No
+No
+-
+Report Type
+version
+INTEGER
+No
+No
+1
+Report Version
+fileName
+VARCHAR(255)
+No
+No
+-
+Generated File
+filePath
+VARCHAR(500)
+No
+No
+-
+Storage Path
+fileFormat
+ENUM(PDF, EXCEL)
+No
+No
+PDF
+Format
+generatedParameters
+JSON
+JSON
+No
+No
+-
+Generation Filters
+generatedAt
+TIMESTAMP
+No
+No
+Current Timestamp
+Generation Time
+2. Relationships
+Relationship
+Entity
+Type
+Nullable
+Report → Calculation Run
+Calculation Run
+Many-to-One
+Yes
+Report → User
+User
+Many-to-One
+No
+Report → Programme
+Programme
+Many-to-One
+No
+Report → Batch
+Batch
+Many-to-One
+Yes
+Report → Semester
+Semester
+Many-to-One
+Yes
+Report → Academic Year
+Academic Year
+Many-to-One
+No
+3. API Contract
+API
+Method
+Endpoint
+Description
+Generate Report
+POST
+/api/v1/reports/generate
+Generate report
+Get Reports
+GET
+/api/v1/reports
+Get generated reports
+Get Report
+GET
+/api/v1/reports/{id}
+Get report details
+Download Report
+GET
+/api/v1/reports/download/{id}
+Download report
+Delete Report
+DELETE
+/api/v1/reports/{id}
+Delete report record
+4. Validation
+· Programme and Academic Year must exist.
+· Batch required for batch-scoped reports.
+· Report Type and File Format must be valid.
+5. Business Rules
+Rule No.
+Rule
+BR-01
+Academic Year is the primary report filter.
+BR-02
+Batch is included for historical and longitudinal views.
+BR-03
+Multiple versions are allowed.
+
+--- Page 54 ---
+54
+Rule No.
+Rule
+BR-04
+Parameters are stored for reproducibility.
+BR-05
+Generated reports are snapshots and do not change after new calculations.
+
+--- Page 55 ---
+55
+Attainment Calculation Methodology
+Direct CO Attainment
+· Direct CO Percentage = (Students attaining the configured threshold / Total students) × 100.
+· The percentage is converted to a configured attainment level.
+· The stored Direct CO Attainment used in the final calculation is the attainment level, not the raw percentage.
+Indirect CO Attainment
+· Weighted Score = (Slight × 0.33) + (Moderate × 0.66) + (Substantial × 1.00), using the active configuration.
+· The weighted result is converted to a percentage and then to an attainment level.
+· The stored Indirect CO Attainment used in the final calculation is the attainment level.
+Overall CO Attainment
+· Overall CO = (Direct Level × Direct Weight) + (Indirect Level × Indirect Weight).
+· Default example: Direct 80%, Indirect 20%.
+· Example: Direct Level 3 and Indirect Level 2 → 2.8.
+· Overall Course CO Attainment = average of Overall CO values for all COs of the course.
+PO / PSO Attainment
+· PO Competency Attainment = average of mapped Overall CO Attainment values.
+· PO Attainment = aggregation of PO competency attainments.
+· PSO Competency Attainment follows the same mapped-CO logic.
+· PSO Attainment = aggregation of PSO competency attainments.
+Programme Attainment
+· Programme Direct PO/PSO Attainment is aggregated from course-level results for the Programme and Batch.
+· Programme Exit Survey provides indirect PO/PSO evidence.
+· Final Programme Attainment = Direct × configured Direct Weight + Indirect × configured Indirect Weight.
+· Final programme results are compared with configured targets for ATR.
+
+--- Page 56 ---
+56
+Complete Business Workflows
+Academic Structure Flow
+Select Academic Year.
+System resolves Programme, Batch and applicable Semester.
+HOD manages active, completed and archived Batches.
+HOD creates Courses with name, code, semester and credits.
+Students are resolved from assessment uploads by PRN and linked to Batch.
+Reports use Academic Year as the primary selector and Batch for history.
+Course Attainment Flow
+Upload End Semester Marks.
+Upload Course End Survey.
+Validate both files against active Excel templates.
+Create Calculation Run.
+Calculate Direct CO Attainment.
+Calculate Indirect CO Attainment.
+Calculate Overall CO Attainment.
+Calculate PO/PSO Competency Attainment.
+Calculate PO/PSO Attainment.
+Store results against the Calculation Run.
+Programme Attainment Flow
+Collect course-level PO/PSO results.
+Aggregate to Programme Direct PO/PSO Attainment.
+Upload Programme Exit Survey.
+Calculate Programme Indirect PO/PSO Attainment.
+Calculate final Programme PO/PSO Attainment.
+Compare against targets.
+Generate Programme ATR.
+ATR Approval Flow
+Programme Coordinator prepares ATR.
+ATR is submitted for review.
+HOD reviews.
+HOD approves or requests revision.
+Revision returns to the responsible coordinator.
+Approval History records every status transition.
+Approved ATR becomes a historical snapshot.
+Complete System Flow
+Academic Year Selection
+↓
+Programme / Batch / Semester Resolution
+↓
+Course Management
+↓
+Student Resolution from Assessment Upload
+↓
+CO / PO / PSO Mapping
+↓
+End Semester Marks + Course End Survey
+↓
+Calculation Run
+↓
+Direct + Indirect CO Attainment
+↓
+Overall CO Attainment
+↓
+PO/PSO Competency + PO/PSO Attainment
+↓
+Programme Aggregation + Programme Exit Survey
+
+--- Page 57 ---
+57
+↓
+Final Programme PO/PSO Attainment
+↓
+Target Comparison
+↓
+Course / Programme ATR
+↓
+HOD Review / Approval
+↓
+PDF / Excel Reports
+
+--- Page 58 ---
+58
+Key Design Rules
+· Academic Year is the main selector shown to users.
+· Batch is maintained in the background for historical tracking, student records, reports and ATR continuity.
+· Department remains optional.
+· Programme defines duration and total semesters.
+· Semester year is derived from semester number.
+· HOD manages active, completed and archived Batches.
+· HOD creates Courses with name, code, semester and credits.
+· Students are resolved by PRN during direct-assessment upload and linked to Batch.
+· Course End Survey is used for Indirect CO Attainment.
+· Programme Exit Survey is used for Indirect Programme PO/PSO Attainment.
+· Attainment calculations are versioned by Calculation Run.
+· Historical calculations and approved ATR snapshots are not modified by later calculations.
+· Reports are snapshots and retain their generation parameters.
+Documentation Status
+This revised Documentation v3 follows the supplied PDF format: module structure, entity definition, relationships, API contract,
+validation and business rules. Existing v3 attainment methodology is retained where applicable; the finalized academic-year-driven
+batch tracking, student continuity, programme aggregation, ATR and approval workflow are incorporated.

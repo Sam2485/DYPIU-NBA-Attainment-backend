@@ -1,0 +1,184 @@
+=== Workflow.pdf (Pages: 6) ===
+
+--- Page 1 ---
+New System Workflow | Page 1
+ New System Workflow
+DYPIU NBA Attainment System — Academic Year + Batch-Centred Architecture
+Core principle: Academic Year is the main user-facing selector, while Batch is the central historical and
+calculation scope maintained by the system.
+1. Overall Hierarchy
+ IQAC
+ ↓
+ School
+ ↓
+ Director
+ ↓
+ Department
+ ↓
+ HOD
+ ↓
+ Programme
+ ↓
+ Batch (e.g. BE Computer Engineering 2025–29)
+ ↓
+ Semester
+ ↓
+ Course
+ ↓
+ Course Coordinator
+ ↓
+ Course Outcomes (CO) + CO Targets + CO–PO/PSO Mapping
+
+--- Page 2 ---
+New System Workflow | Page 2
+2. Role-Based Operational Workflow
+IQAC
+ Has access to all Schools and their academic records.
+ Views consolidated academic, attainment, ATR and approval records.
+ Acts as the top-level institutional oversight layer.
+Director
+ Works within the assigned School.
+ Creates Departments under the School.
+ Assigns the HOD for each Department.
+ Creates/oversees Programmes under the Department.
+HOD
+ Manages the Department's Programmes.
+ Assigns Programme Coordinators to the relevant Programmes.
+ Initializes and manages Batches, e.g. BE Computer Engineering 2025–29.
+ Creates and maintains PO, PSO and PEO for the Programme.
+ Creates/manages Courses for the applicable Batch/Semester.
+ Reviews and approves Programme ATR.
+Programme Coordinator
+ Works only within the assigned Programme.
+ Manages Programme-level setup.
+ Sets PO/PSO targets.
+ Receives/uses course-level attainment results across the Programme.
+ Creates the final Programme ATR for the completing Batch.
+ Submits Programme ATR to HOD for verification.
+Course Coordinator
+ Works within the assigned Course and Batch/Semester scope.
+ Defines Course Outcomes (CO).
+ Sets target for each CO.
+ Creates CO–PO/PSO competency mappings.
+ Uploads End Semester Marks.
+ Uploads Course End Survey.
+ Runs/initiates CO attainment calculation.
+ Completes Course ATR using actual attainment versus CO target.
+3. Batch-Centred Data Workflow
+ Academic Year selected by user
+ ↓
+
+--- Page 3 ---
+New System Workflow | Page 3
+ System resolves the applicable Programme + Batch + Semester
+ ↓
+ All courses, students, marks, surveys and attainment records are scoped to that Batch
+ ↓
+ Historical Batch records remain available even after the Batch is completed
+ ↓
+ Programme-level calculations aggregate all relevant course results for that Batch
+ ↓
+ Programme ATR is generated for that specific completing Batch
+
+--- Page 4 ---
+New System Workflow | Page 4
+4. Course-Level Attainment Workflow
+ Course Coordinator selects Academic Year → Batch → Semester → Course
+ ↓
+ Create / maintain COs
+ ↓
+ Set target for every CO
+ ↓
+ Map CO with PO/PSO competencies
+ ↓
+ Upload End Semester Marks
+ ↓
+ System resolves students by PRN and stores Student CO Marks
+ ↓
+ Upload Course End Survey
+ ↓
+ Calculate Direct CO Attainment
+ ↓
+ Calculate Indirect CO Attainment
+ ↓
+ Overall CO Attainment = Direct 80% + Indirect 20% (default configuration)
+ ↓
+ Compare Overall CO Attainment with CO Target
+ ↓
+ Prepare Course ATR
+ ↓
+
+--- Page 5 ---
+New System Workflow | Page 5
+ Submit / review / approve according to configured approval workflow
+5. Programme Attainment Workflow
+ Programme Coordinator selects the completing Programme + Batch
+ ↓
+ Collect CO → PO/PSO attainment from every applicable Course and Semester
+ ↓
+ Aggregate course-level results across the Programme
+ ↓
+ Calculate Programme Direct PO/PSO Attainment
+ ↓
+ Collect Programme Exit Survey from the completing Batch
+ ↓
+ Calculate Programme Indirect PO/PSO Attainment
+ ↓
+ Final Programme Attainment = Direct 80% + Indirect 20% (default configuration)
+ ↓
+ Compare Final Programme PO/PSO Attainment with targets set by Programme Coordinator
+ ↓
+ Generate Programme ATR
+ ↓
+ Programme Coordinator submits Programme ATR
+ ↓
+ HOD verifies / approves or requests revision
+ ↓
+ Approved Programme ATR becomes historical record for that Batch
+
+--- Page 6 ---
+New System Workflow | Page 6
+6. Attainment Data Lineage
+Level
+Source
+Calculation / Use
+Direct CO
+End Semester Marks → Student CO Marks
+Students meeting configured CO threshold → Direct CO %
+→ Attainment Level
+Indirect CO
+Course End Survey
+Survey response weights → Indirect CO % → Attainment
+Level
+Overall CO
+Direct CO + Indirect CO
+Direct Level × 80% + Indirect Level × 20%
+PO/PSO Competency
+Overall CO + CO–PO/PSO Mapping
+Average/aggregation of mapped Overall CO results
+PO/PSO
+PO/PSO Competencies
+Aggregation of competency attainment
+Programme Direct
+Course-level PO/PSO results
+Aggregate all applicable courses/semesters for the Batch
+Programme Indirect
+Programme Exit Survey
+Indirect Programme PO/PSO evidence
+Final Programme
+Direct + Indirect Programme Attainment
+Direct 80% + Indirect 20%
+Programme ATR
+Final Programme Attainment + Target
+Compare result with target and record observation/action
+plan
+7. Approval Workflow
+Course ATR: Course Coordinator → Submission → configured reviewer → Approved / Revision Required.
+Programme ATR: Programme Coordinator → HOD → Approved / Revision Required. Every status transition is
+stored in Approval History.
+Approved ATRs are treated as historical snapshots and should not be silently overwritten by later calculations.
+8. Core Design Rules
+ Academic Year is the primary UI filter.  Batch is the central historical scope.  Every assessment/attainment
+record must retain Batch context.  Completed Batches remain queryable.  Calculation Runs preserve historical
+results.  Programme ATR is created only when required programme-level attainment and target data are
+available.
