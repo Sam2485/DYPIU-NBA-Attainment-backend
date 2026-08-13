@@ -8,4 +8,5 @@ import java.util.List;
 @Repository
 public interface ProgrammeRepository extends JpaRepository<Programme, String> {
     List<Programme> findByDepartmentId(String departmentId);
+    List<Programme> findByDepartmentIdIn(List<String> departmentIds);
 }

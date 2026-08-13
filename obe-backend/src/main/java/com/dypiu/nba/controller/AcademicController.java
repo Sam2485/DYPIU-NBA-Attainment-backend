@@ -42,10 +42,11 @@ public class AcademicController {
     // --- Director Setup Progress ---
     @GetMapping("/director/setup-progress")
     public ResponseEntity<ApiResponse<DirectorSetupProgressDto>> getDirectorSetupProgress(
-            @RequestParam(required = false) String schoolId) {
+            @RequestParam(required = false) String schoolId,
+            @RequestParam(required = false) String directorEmail) {
         return ResponseEntity.ok(ApiResponse.<DirectorSetupProgressDto>builder()
                 .success(true)
-                .data(academicService.getDirectorSetupProgress(schoolId))
+                .data(academicService.getDirectorSetupProgress(schoolId, directorEmail))
                 .build());
     }
 
@@ -97,10 +98,13 @@ public class AcademicController {
 
     // --- Departments ---
     @GetMapping("/departments")
-    public ResponseEntity<ApiResponse<List<Department>>> getDepartments() {
+    public ResponseEntity<ApiResponse<List<Department>>> getDepartments(@RequestParam(required = false) String schoolId) {
+        List<Department> list = (schoolId != null && !schoolId.isBlank())
+                ? academicService.getDepartmentsBySchool(schoolId)
+                : academicService.getAllDepartments();
         return ResponseEntity.ok(ApiResponse.<List<Department>>builder()
                 .success(true)
-                .data(academicService.getAllDepartments())
+                .data(list)
                 .build());
     }
 
@@ -121,10 +125,13 @@ public class AcademicController {
 
     // --- Programmes ---
     @GetMapping("/programmes")
-    public ResponseEntity<ApiResponse<List<Programme>>> getProgrammes() {
+    public ResponseEntity<ApiResponse<List<Programme>>> getProgrammes(@RequestParam(required = false) String schoolId) {
+        List<Programme> list = (schoolId != null && !schoolId.isBlank())
+                ? academicService.getProgrammesBySchool(schoolId)
+                : academicService.getAllProgrammes();
         return ResponseEntity.ok(ApiResponse.<List<Programme>>builder()
                 .success(true)
-                .data(academicService.getAllProgrammes())
+                .data(list)
                 .build());
     }
 
