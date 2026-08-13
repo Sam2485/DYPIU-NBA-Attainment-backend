@@ -2,6 +2,7 @@ package com.dypiu.nba.controller;
 
 import com.dypiu.nba.dto.DirectorSetupProgressDto;
 import com.dypiu.nba.dto.DirectorSchoolSummaryDto;
+import com.dypiu.nba.dto.DepartmentSummaryDto;
 import com.dypiu.nba.dto.ApiResponse;
 import com.dypiu.nba.entity.*;
 import com.dypiu.nba.service.AcademicService;
@@ -21,10 +22,20 @@ public class AcademicController {
     // --- Director School Summary ---
     @GetMapping("/director/school-summary")
     public ResponseEntity<ApiResponse<DirectorSchoolSummaryDto>> getDirectorSchoolSummary(
-            @RequestParam(required = false) String schoolId) {
+            @RequestParam(required = false) String directorEmail) {
         return ResponseEntity.ok(ApiResponse.<DirectorSchoolSummaryDto>builder()
                 .success(true)
-                .data(academicService.getDirectorSchoolSummary(schoolId))
+                .data(academicService.getDirectorSchoolSummary(directorEmail))
+                .build());
+    }
+
+    // --- Director Department Summary ---
+    @GetMapping("/director/department-summary")
+    public ResponseEntity<ApiResponse<List<DepartmentSummaryDto>>> getDepartmentSummary(
+            @RequestParam(required = false) String schoolId) {
+        return ResponseEntity.ok(ApiResponse.<List<DepartmentSummaryDto>>builder()
+                .success(true)
+                .data(academicService.getDepartmentSummary(schoolId))
                 .build());
     }
 

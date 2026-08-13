@@ -22,9 +22,14 @@ public class School {
     @Column(nullable = false, length = 255)
     private String name;
 
-    private String dean;
+    @Column(name = "director")
+    private String director;
+
+    @Column(name = "director_email")
+    private String directorEmail;
+
+    @Column(name = "est_year")
     private String estYear;
-    private String email;
 
     @Column(name = "created_at", insertable = false, updatable = false)
     private ZonedDateTime createdAt;

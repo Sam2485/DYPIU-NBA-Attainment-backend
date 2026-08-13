@@ -9,6 +9,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.dypiu.nba.dto.DirectorSetupProgressDto;
 import com.dypiu.nba.dto.DirectorSchoolSummaryDto;
+import com.dypiu.nba.dto.DepartmentSummaryDto;
 import java.time.ZonedDateTime;
 import java.util.*;
 
@@ -26,23 +27,38 @@ public class AcademicService {
 
     // --- Director School Summary ---
     @Transactional(readOnly = true)
-    public DirectorSchoolSummaryDto getDirectorSchoolSummary(String schoolId) {
-        String targetSchoolId = (schoolId != null && !schoolId.isBlank()) ? schoolId : "sch-1";
-        School school = schoolRepository.findById(targetSchoolId)
-                .orElseGet(() -> schoolRepository.findAll().stream().findFirst().orElse(
-                        School.builder().id("sch-1").name("School of Engineering & Technology").code("SET").dean("Dr. R. K. Deshmukh").estYear("2019").build()
-                ));
+    public DirectorSchoolSummaryDto getDirectorSchoolSummary(String directorEmail) {
+        System.out.println("[AcademicService] Starting school summary fetch for directorEmail: " + directorEmail );
+        Optional<School> schoolOpt = Optional.empty();
 
-        List<Department> departments = departmentRepository.findBySchoolId(targetSchoolId);
-        if (departments.isEmpty()) {
-            departments = departmentRepository.findAll();
+        // 1. Fetch school having director email as our director email
+        if (directorEmail != null && !directorEmail.isBlank()) {
+            schoolOpt = schoolRepository.findByDirectorEmailIgnoreCase(directorEmail);
         }
 
+
+        if (schoolOpt.isEmpty()) {
+            System.out.println("[AcademicService] No school found under Director email: " + directorEmail);
+            return DirectorSchoolSummaryDto.builder()
+                    .schoolId(null)
+                    .schoolName(null)
+                    .schoolCode(null)
+                    .directorName(null)
+                    .directorEmail(null)
+                    .estYear(null)
+                    .totalDepartments(0)
+                    .assignedHODsCount(0)
+                    .unassignedHODsCount(0)
+                    .totalProgrammes(0)
+                    .build();
+        }
+
+        School school = schoolOpt.get();
+        List<Department> departments = departmentRepository.findBySchoolId(school.getId());
         List<Programme> allProgrammes = programmeRepository.findAll();
 
         int assignedHodCount = 0;
         int unassignedHodCount = 0;
-        List<DirectorSchoolSummaryDto.DepartmentSummaryDto> deptSummaries = new ArrayList<>();
 
         for (Department dept : departments) {
             boolean isHodAssigned = dept.getHod() != null && !dept.getHod().isBlank() && !dept.getHod().equalsIgnoreCase("Unassigned");
@@ -51,24 +67,49 @@ public class AcademicService {
             } else {
                 unassignedHodCount++;
             }
-
-            long progCount = allProgrammes.stream()
-                    .filter(p -> dept.getId().equals(p.getDepartmentId()))
-                    .count();
-
         }
 
-        return DirectorSchoolSummaryDto.builder()
+        DirectorSchoolSummaryDto summary = DirectorSchoolSummaryDto.builder()
                 .schoolId(school.getId())
                 .schoolName(school.getName())
                 .schoolCode(school.getCode())
-                .deanName(school.getDean())
+                .directorName(school.getDirector())
+                .directorEmail(school.getDirectorEmail())
                 .estYear(school.getEstYear())
                 .totalDepartments(departments.size())
                 .assignedHODsCount(assignedHodCount)
                 .unassignedHODsCount(unassignedHodCount)
                 .totalProgrammes(allProgrammes.size())
                 .build();
+
+        System.out.println("[AcademicService] Fetched director school summary for school: " + school.getName() + " (ID: " + school.getId() + ")");
+        return summary;
+    }
+
+    // --- Director Department Summary ---
+    @Transactional(readOnly = true)
+    public List<DepartmentSummaryDto> getDepartmentSummary(String schoolId) {
+        String targetSchoolId = (schoolId != null && !schoolId.isBlank()) ? schoolId : "sch-1";
+        List<Department> departments = departmentRepository.findBySchoolId(targetSchoolId);
+        if (departments.isEmpty()) {
+            departments = departmentRepository.findAll();
+        }
+
+        List<DepartmentSummaryDto> list = new ArrayList<>();
+        for (Department dept : departments) {
+            boolean isHodAssigned = dept.getHod() != null && !dept.getHod().isBlank() && !dept.getHod().equalsIgnoreCase("Unassigned");
+            list.add(DepartmentSummaryDto.builder()
+                    .deptId(dept.getId())
+                    .deptCode(dept.getCode())
+                    .deptName(dept.getName())
+                    .deptHodName(dept.getHod())
+                    .deptHodEmail(dept.getHodEmail())
+                    .hodAssignedStatus(isHodAssigned)
+                    .build());
+        }
+
+        System.out.println("[AcademicService] Fetched department summary list (" + list.size() + " items) for schoolId: " + targetSchoolId);
+        return list;
     }
 
     // --- Director Setup Progress ---
@@ -87,7 +128,9 @@ public class AcademicService {
                         .updatedAt(ZonedDateTime.now())
                         .build());
 
-        return buildSetupProgressDto(progress);
+        DirectorSetupProgressDto dto = buildSetupProgressDto(progress);
+        System.out.println("[AcademicService] Fetched director setup progress for schoolId: " + targetSchoolId + " at step: " + progress.getCurrentStep());
+        return dto;
     }
 
     @Transactional
@@ -136,7 +179,9 @@ public class AcademicService {
         progress.setUpdatedAt(ZonedDateTime.now());
 
         directorSetupProgressRepository.save(progress);
-        return buildSetupProgressDto(progress);
+        DirectorSetupProgressDto dto = buildSetupProgressDto(progress);
+        System.out.println("[AcademicService] Updated director setup progress for schoolId: " + targetSchoolId + " to step: " + progress.getCurrentStep() + " (" + progress.getOverallStatus() + ")");
+        return dto;
     }
 
     private DirectorSetupProgressDto buildSetupProgressDto(DirectorSetupProgress progress) {
@@ -170,28 +215,32 @@ public class AcademicService {
     // --- Schools ---
     @Transactional(readOnly = true)
     public List<School> getAllSchools() {
-        return schoolRepository.findAll();
+        List<School> schools = schoolRepository.findAll();
+        System.out.println("[AcademicService] Fetched all schools list (" + schools.size() + " items)");
+        return schools;
     }
 
     @Transactional(readOnly = true)
     public School getSchoolById(String id) {
-        System.out.println("loaded school data");
-        return schoolRepository.findById(id)
+        School school = schoolRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("School not found with id: " + id));
+        System.out.println("[AcademicService] Fetched school by id: " + id);
+        return school;
     }
 
     @Transactional
     public School saveSchool(School school) {
         if (school.getId() == null) school.setId("sch-" + UUID.randomUUID().toString().substring(0, 8));
-        return schoolRepository.save(school);
+        School saved = schoolRepository.save(school);
+        System.out.println("[AcademicService] Saved new school with id: " + saved.getId());
+        return saved;
     }
 
     @Transactional
     public School updateSchool(String id, School schoolDetails) {
-        System.out.println("Updated school info");
         School school = schoolRepository.findById(id)
                 .orElseGet(() -> schoolRepository.findAll().stream().findFirst().orElse(
-                        School.builder().id(id).code("SET").name("School of Engineering & Technology").build()
+                        School.builder().id(id).build()
                 ));
 
         if (schoolDetails.getName() != null && !schoolDetails.getName().isBlank()) {
@@ -200,112 +249,143 @@ public class AcademicService {
         if (schoolDetails.getCode() != null && !schoolDetails.getCode().isBlank()) {
             school.setCode(schoolDetails.getCode());
         }
-        if (schoolDetails.getDean() != null) {
-            school.setDean(schoolDetails.getDean());
+        if (schoolDetails.getDirector() != null) {
+            school.setDirector(schoolDetails.getDirector());
+        }
+        if (schoolDetails.getDirectorEmail() != null) {
+            school.setDirectorEmail(schoolDetails.getDirectorEmail());
         }
         if (schoolDetails.getEstYear() != null) {
             school.setEstYear(schoolDetails.getEstYear());
         }
-        if (schoolDetails.getEmail() != null) {
-            school.setEmail(schoolDetails.getEmail());
-        }
 
         if (school.getId() == null) school.setId(id);
-        return schoolRepository.save(school);
+        School updated = schoolRepository.save(school);
+        System.out.println("[AcademicService] Updated school info for id: " + updated.getId());
+        return updated;
     }
 
     // --- Departments ---
     @Transactional(readOnly = true)
     public List<Department> getAllDepartments() {
-        return departmentRepository.findAll();
+        List<Department> list = departmentRepository.findAll();
+        System.out.println("[AcademicService] Fetched all departments (" + list.size() + " items)");
+        return list;
     }
 
     @Transactional
     public Department saveDepartment(Department department) {
         if (department.getId() == null) department.setId("dept-" + UUID.randomUUID().toString().substring(0, 8));
-        return departmentRepository.save(department);
+        Department saved = departmentRepository.save(department);
+        System.out.println("[AcademicService] Saved department with id: " + saved.getId());
+        return saved;
     }
 
     @Transactional
     public void deleteDepartment(String id) {
         departmentRepository.deleteById(id);
+        System.out.println("[AcademicService] Deleted department with id: " + id);
     }
 
     // --- Programmes ---
     @Transactional(readOnly = true)
     public List<Programme> getAllProgrammes() {
-        return programmeRepository.findAll();
+        List<Programme> list = programmeRepository.findAll();
+        System.out.println("[AcademicService] Fetched all programmes (" + list.size() + " items)");
+        return list;
     }
 
     @Transactional
     public Programme saveProgramme(Programme programme) {
         if (programme.getId() == null) programme.setId("prog-" + UUID.randomUUID().toString().substring(0, 8));
-        return programmeRepository.save(programme);
+        Programme saved = programmeRepository.save(programme);
+        System.out.println("[AcademicService] Saved programme with id: " + saved.getId());
+        return saved;
     }
 
     @Transactional
     public void deleteProgramme(String id) {
         programmeRepository.deleteById(id);
+        System.out.println("[AcademicService] Deleted programme with id: " + id);
     }
 
     // --- Batches ---
     @Transactional(readOnly = true)
     public List<Batch> getAllBatches() {
-        return batchRepository.findAll();
+        List<Batch> list = batchRepository.findAll();
+        System.out.println("[AcademicService] Fetched all batches (" + list.size() + " items)");
+        return list;
     }
 
     @Transactional(readOnly = true)
     public List<Batch> getBatchesByProgramme(String programmeId) {
-        return batchRepository.findByProgrammeId(programmeId);
+        List<Batch> list = batchRepository.findByProgrammeId(programmeId);
+        System.out.println("[AcademicService] Fetched batches (" + list.size() + " items) for programmeId: " + programmeId);
+        return list;
     }
 
     @Transactional
     public Batch saveBatch(Batch batch) {
         if (batch.getId() == null) batch.setId("batch-" + UUID.randomUUID().toString().substring(0, 8));
-        return batchRepository.save(batch);
+        Batch saved = batchRepository.save(batch);
+        System.out.println("[AcademicService] Saved batch with id: " + saved.getId());
+        return saved;
     }
 
     @Transactional
     public void deleteBatch(String id) {
         batchRepository.deleteById(id);
+        System.out.println("[AcademicService] Deleted batch with id: " + id);
     }
 
     // --- Courses ---
     @Transactional(readOnly = true)
     public List<Course> getAllCourses() {
-        return courseRepository.findAll();
+        List<Course> list = courseRepository.findAll();
+        System.out.println("[AcademicService] Fetched all courses (" + list.size() + " items)");
+        return list;
     }
 
     @Transactional(readOnly = true)
     public List<Course> getCoursesByProgramme(String programmeId) {
-        return courseRepository.findByProgrammeId(programmeId);
+        List<Course> list = courseRepository.findByProgrammeId(programmeId);
+        System.out.println("[AcademicService] Fetched courses (" + list.size() + " items) for programmeId: " + programmeId);
+        return list;
     }
 
     @Transactional
     public Course saveCourse(Course course) {
         if (course.getId() == null) course.setId("crs-" + UUID.randomUUID().toString().substring(0, 8));
-        return courseRepository.save(course);
+        Course saved = courseRepository.save(course);
+        System.out.println("[AcademicService] Saved course with id: " + saved.getId());
+        return saved;
     }
 
     @Transactional
     public void deleteCourse(String id) {
         courseRepository.deleteById(id);
+        System.out.println("[AcademicService] Deleted course with id: " + id);
     }
 
     // --- Students ---
     @Transactional(readOnly = true)
     public List<Student> getStudentsByBatch(String batchId) {
-        return studentRepository.findByBatchId(batchId);
+        List<Student> list = studentRepository.findByBatchId(batchId);
+        System.out.println("[AcademicService] Fetched students (" + list.size() + " items) for batchId: " + batchId);
+        return list;
     }
 
     @Transactional
     public Student saveStudent(Student student) {
         if (student.getId() == null) student.setId("std-" + UUID.randomUUID().toString().substring(0, 8));
-        return studentRepository.save(student);
+        Student saved = studentRepository.save(student);
+        System.out.println("[AcademicService] Saved student with id: " + saved.getId());
+        return saved;
     }
 
     @Transactional
     public void deleteStudent(String id) {
         studentRepository.deleteById(id);
+        System.out.println("[AcademicService] Deleted student with id: " + id);
     }
 }
