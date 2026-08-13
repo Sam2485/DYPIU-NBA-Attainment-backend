@@ -11,8 +11,8 @@ spring:
 
   datasource:
     url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/dypiu_obe_db}
-    username: ${DATABASE_USERNAME:postgres}
-    password: ${DATABASE_PASSWORD:postgres}
+    username: ${DATABASE_USERNAME:rajshaikh}
+    password: ${DATABASE_PASSWORD:"Sam@2445"}
     driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: 10
@@ -48,8 +48,8 @@ spring:
 app:
   jwt:
     secret: ${JWT_SECRET:dypiu_nba_attainment_system_super_secret_jwt_key_2026_java21_spring_boot_production_key}
-    expiration-ms: 86400000 # 24 hours
-  storage:
+    expiration-ms: 86400000 # 24 hours (Access Token)
+    refresh-expiration-ms: 604800000 # 7 days (Refresh Token)
     local-dir: ${LOCAL_STORAGE_PATH:C:/Users/samar/OneDrive/Desktop/Faculty Appraisal Project/DYPIU-NBA-Attainment-backend/storage}
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:3000,http://localhost:80}

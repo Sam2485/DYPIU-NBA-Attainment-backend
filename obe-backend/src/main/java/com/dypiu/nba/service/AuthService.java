@@ -18,10 +18,10 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider tokenProvider;
 
-    @Transactional(readOnly = true)
+    @Transactional
     public AuthResponse login(LoginRequest request) {
         String identifier = request.getUsername() != null ? request.getUsername() : request.getEmail();
-        if (identifier == null) {
+        if (identifier == null || identifier.isBlank()) {
             throw new BadRequestException("Username or email is required");
         }
 
@@ -45,20 +45,7 @@ public class AuthService {
                             .build());
                 });
 
-        String token = tokenProvider.generateTokenForUser(user.getUsername());
-
-        return AuthResponse.builder()
-                .token(token)
-                .user(AuthResponse.UserDto.builder()
-                        .id(user.getId())
-                        .name(user.getName())
-                        .email(user.getEmail())
-                        .username(user.getUsername())
-                        .role(user.getRole())
-                        .department(user.getDepartment())
-                        .programme(user.getProgramme())
-                        .build())
-                .build();
+        return buildAuthResponse(user);
     }
 
     @Transactional
@@ -82,20 +69,21 @@ public class AuthService {
                 .build();
 
         User savedUser = userRepository.save(user);
-        String token = tokenProvider.generateTokenForUser(savedUser.getUsername());
+        return buildAuthResponse(savedUser);
+    }
 
-        return AuthResponse.builder()
-                .token(token)
-                .user(AuthResponse.UserDto.builder()
-                        .id(savedUser.getId())
-                        .name(savedUser.getName())
-                        .email(savedUser.getEmail())
-                        .username(savedUser.getUsername())
-                        .role(savedUser.getRole())
-                        .department(savedUser.getDepartment())
-                        .programme(savedUser.getProgramme())
-                        .build())
-                .build();
+    @Transactional(readOnly = true)
+    public AuthResponse refreshToken(RefreshTokenRequest request) {
+        String refreshToken = request.getRefreshToken();
+        if (refreshToken == null || !tokenProvider.validateRefreshToken(refreshToken)) {
+            throw new BadRequestException("Invalid or expired refresh token");
+        }
+
+        String username = tokenProvider.getUsernameFromJwt(refreshToken);
+        User user = userRepository.findByUsernameOrEmail(username, username)
+                .orElseThrow(() -> new BadRequestException("User not found for refresh token"));
+
+        return buildAuthResponse(user);
     }
 
     public String requestPasswordReset(String email) {
@@ -107,17 +95,37 @@ public class AuthService {
     }
 
     public AuthResponse verifyOtp(String loginSessionId, String code) {
-        String token = tokenProvider.generateTokenForUser("verified_user");
+        User defaultUser = User.builder()
+                .id(1L)
+                .name("Verified User")
+                .email("user@dypiu.ac.in")
+                .username("verified_user")
+                .role("FACULTY")
+                .department("Computer Science & Engineering")
+                .programme("B.Tech CSE")
+                .build();
+
+        return buildAuthResponse(defaultUser);
+    }
+
+    private AuthResponse buildAuthResponse(User user) {
+        String accessToken = tokenProvider.generateTokenForUser(user.getUsername());
+        String refreshToken = tokenProvider.generateRefreshToken(user.getUsername());
+
         return AuthResponse.builder()
-                .token(token)
+                .token(accessToken)
+                .accessToken(accessToken)
+                .refreshToken(refreshToken)
+                .tokenType("Bearer")
+                .expiresIn(tokenProvider.getJwtExpirationInMs())
                 .user(AuthResponse.UserDto.builder()
-                        .id(1L)
-                        .name("Verified User")
-                        .email("user@dypiu.ac.in")
-                        .username("verified_user")
-                        .role("FACULTY")
-                        .department("Computer Science & Engineering")
-                        .programme("B.Tech CSE")
+                        .id(user.getId())
+                        .name(user.getName())
+                        .email(user.getEmail())
+                        .username(user.getUsername())
+                        .role(user.getRole())
+                        .department(user.getDepartment())
+                        .programme(user.getProgramme())
                         .build())
                 .build();
     }
