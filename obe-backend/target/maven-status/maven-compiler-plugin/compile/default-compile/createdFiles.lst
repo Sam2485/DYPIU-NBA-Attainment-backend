@@ -1,3 +1,4 @@
+com/dypiu/nba/dto/UserDto$UserDtoBuilder.class
 com/dypiu/nba/entity/School$SchoolBuilder.class
 com/dypiu/nba/dto/DepartmentSummaryDto$DepartmentSummaryDtoBuilder.class
 com/dypiu/nba/dto/DirectorSetupProgressDto$DirectorSetupProgressDtoBuilder.class
@@ -12,5 +13,6 @@ com/dypiu/nba/entity/SetupStepStatus.class
 com/dypiu/nba/entity/DirectorSetupProgress$DirectorSetupProgressBuilder.class
 com/dypiu/nba/controller/AcademicController.class
 com/dypiu/nba/repository/SchoolRepository.class
+com/dypiu/nba/dto/UserDto.class
 com/dypiu/nba/repository/DirectorSetupProgressRepository.class
 com/dypiu/nba/entity/School.class

@@ -3,6 +3,7 @@ package com.dypiu.nba.controller;
 import com.dypiu.nba.dto.DirectorSetupProgressDto;
 import com.dypiu.nba.dto.DirectorSchoolSummaryDto;
 import com.dypiu.nba.dto.DepartmentSummaryDto;
+import com.dypiu.nba.dto.UserDto;
 import com.dypiu.nba.dto.ApiResponse;
 import com.dypiu.nba.entity.*;
 import com.dypiu.nba.service.AcademicService;
@@ -18,6 +19,16 @@ import java.util.List;
 public class AcademicController {
 
     private final AcademicService academicService;
+
+    // --- Users by Role ---
+    @GetMapping("/users")
+    public ResponseEntity<ApiResponse<List<UserDto>>> getUsersByRole(
+            @RequestParam(required = true) String role) {
+        return ResponseEntity.ok(ApiResponse.<List<UserDto>>builder()
+                .success(true)
+                .data(academicService.getUsersByRole(role))
+                .build());
+    }
 
     // --- Director School Summary ---
     @GetMapping("/director/school-summary")

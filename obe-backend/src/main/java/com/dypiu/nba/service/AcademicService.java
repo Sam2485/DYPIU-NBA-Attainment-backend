@@ -10,6 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.dypiu.nba.dto.DirectorSetupProgressDto;
 import com.dypiu.nba.dto.DirectorSchoolSummaryDto;
 import com.dypiu.nba.dto.DepartmentSummaryDto;
+import com.dypiu.nba.dto.UserDto;
 import java.time.ZonedDateTime;
 import java.util.*;
 
@@ -24,6 +25,7 @@ public class AcademicService {
     private final CourseRepository courseRepository;
     private final StudentRepository studentRepository;
     private final DirectorSetupProgressRepository directorSetupProgressRepository;
+    private final UserRepository userRepository;
 
     // --- Director School Summary ---
     @Transactional(readOnly = true)
@@ -417,6 +419,15 @@ public class AcademicService {
         if (department.getId() == null) department.setId("dept-" + UUID.randomUUID().toString().substring(0, 8));
         Department saved = departmentRepository.save(department);
         System.out.println("[AcademicService] Saved department with id: " + saved.getId());
+
+        // Sync department info to HOD user if hodEmail or hod name matches
+        if (saved.getHodEmail() != null && !saved.getHodEmail().isBlank()) {
+            userRepository.findByEmail(saved.getHodEmail()).ifPresent(user -> {
+                user.setDepartment(saved.getName());
+                userRepository.save(user);
+                System.out.println("[AcademicService] Updated HOD user (" + user.getEmail() + ") department to: " + saved.getName());
+            });
+        }
         return saved;
     }
 
@@ -424,6 +435,21 @@ public class AcademicService {
     public void deleteDepartment(String id) {
         departmentRepository.deleteById(id);
         System.out.println("[AcademicService] Deleted department with id: " + id);
+    }
+
+    // --- Users by Role ---
+    @Transactional(readOnly = true)
+    public List<UserDto> getUsersByRole(String role) {
+        List<User> users = userRepository.findByRoleIgnoreCase(role);
+        return users.stream().map(u -> UserDto.builder()
+                .id(u.getId())
+                .name(u.getName())
+                .email(u.getEmail())
+                .role(u.getRole())
+                .department(u.getDepartment())
+                .programme(u.getProgramme())
+                .build()
+        ).toList();
     }
 
     // --- Programmes ---
