@@ -89,16 +89,24 @@ public class AcademicService {
 
     // --- Director Department Summary ---
     @Transactional(readOnly = true)
-    public List<DepartmentSummaryDto> getDepartmentSummary(String schoolId) {
-        String targetSchoolId = (schoolId != null && !schoolId.isBlank()) ? schoolId : "sch-1";
-        List<Department> departments = departmentRepository.findBySchoolId(targetSchoolId);
-        if (departments.isEmpty()) {
-            departments = departmentRepository.findAll();
+    public List<DepartmentSummaryDto> getDepartmentSummary(String schoolId, String directorEmail) {
+        String targetSchoolId = schoolId;
+        if ((targetSchoolId == null || targetSchoolId.isBlank() || targetSchoolId.equals("sch-1")) && directorEmail != null && !directorEmail.isBlank()) {
+            Optional<School> schOpt = schoolRepository.findByDirectorEmailIgnoreCase(directorEmail);
+            if (schOpt.isPresent()) {
+                targetSchoolId = schOpt.get().getId();
+            }
         }
+        if (targetSchoolId == null || targetSchoolId.isBlank()) {
+            targetSchoolId = "sch-1";
+        }
+
+        List<Department> departments = departmentRepository.findBySchoolId(targetSchoolId);
 
         List<DepartmentSummaryDto> list = new ArrayList<>();
         for (Department dept : departments) {
             boolean isHodAssigned = dept.getHod() != null && !dept.getHod().isBlank() && !dept.getHod().equalsIgnoreCase("Unassigned");
+            int progsCount = programmeRepository.findByDepartmentIdOrDepartmentName(dept.getId(), dept.getName()).size();
             list.add(DepartmentSummaryDto.builder()
                     .deptId(dept.getId())
                     .deptCode(dept.getCode())
@@ -106,6 +114,7 @@ public class AcademicService {
                     .deptHodName(dept.getHod())
                     .deptHodEmail(dept.getHodEmail())
                     .hodAssignedStatus(isHodAssigned)
+                    .programmesCount(progsCount)
                     .build());
         }
 

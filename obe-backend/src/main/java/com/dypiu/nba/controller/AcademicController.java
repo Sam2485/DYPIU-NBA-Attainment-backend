@@ -32,10 +32,11 @@ public class AcademicController {
     // --- Director Department Summary ---
     @GetMapping("/director/department-summary")
     public ResponseEntity<ApiResponse<List<DepartmentSummaryDto>>> getDepartmentSummary(
-            @RequestParam(required = false) String schoolId) {
+            @RequestParam(required = true) String schoolId,
+            @RequestParam(required = true) String directorEmail) {
         return ResponseEntity.ok(ApiResponse.<List<DepartmentSummaryDto>>builder()
                 .success(true)
-                .data(academicService.getDepartmentSummary(schoolId))
+                .data(academicService.getDepartmentSummary(schoolId, directorEmail))
                 .build());
     }
 

@@ -9,4 +9,5 @@ import java.util.List;
 public interface ProgrammeRepository extends JpaRepository<Programme, String> {
     List<Programme> findByDepartmentId(String departmentId);
     List<Programme> findByDepartmentIdIn(List<String> departmentIds);
+    List<Programme> findByDepartmentIdOrDepartmentName(String departmentId, String departmentName);
 }

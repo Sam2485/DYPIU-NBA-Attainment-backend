@@ -13,4 +13,5 @@ public class DepartmentSummaryDto {
     private String deptHodName;
     private String deptHodEmail;
     private Boolean hodAssignedStatus;
+    private Integer programmesCount;
 }
