@@ -95,6 +95,7 @@ public class AcademicService {
     // --- Director Department Summary ---
     @Transactional(readOnly = true)
     public List<DepartmentSummaryDto> getDepartmentSummary(String schoolId, String directorEmail) {
+        System.out.println("[AcademicService] getDepartmentSummary called | schoolId: " + schoolId + " | directorEmail: " + directorEmail);
         String targetSchoolId = schoolId;
         if ((targetSchoolId == null || targetSchoolId.isBlank() || targetSchoolId.equals("sch-1")) && directorEmail != null && !directorEmail.isBlank()) {
             Optional<School> schOpt = schoolRepository.findByDirectorEmailIgnoreCase(directorEmail);
@@ -128,9 +129,9 @@ public class AcademicService {
     }
 
     // --- Director Setup Progress ---
-    // --- Director Setup Progress ---
     @Transactional(readOnly = true)
     public DirectorSetupProgressDto getDirectorSetupProgress(String schoolId, String directorEmail) {
+        System.out.println("[AcademicService] getDirectorSetupProgress called | schoolId: " + schoolId + " | directorEmail: " + directorEmail);
         String targetSchoolId = schoolId;
         if ((targetSchoolId == null || targetSchoolId.isBlank() || targetSchoolId.equals("sch-1")) && directorEmail != null && !directorEmail.isBlank()) {
             Optional<School> schOpt = schoolRepository.findByDirectorEmailIgnoreCase(directorEmail);
@@ -164,6 +165,7 @@ public class AcademicService {
     public DirectorSetupProgressDto updateDirectorSetupProgress(
             String schoolId,
             Integer stepNumber) {
+        System.out.println("[AcademicService] updateDirectorSetupProgress called | schoolId: " + schoolId + " | stepNumber: " + stepNumber);
 
         String targetSchoolId =
                 (schoolId != null && !schoolId.isBlank())
@@ -344,6 +346,7 @@ public class AcademicService {
     // --- Schools ---
     @Transactional(readOnly = true)
     public List<School> getAllSchools() {
+        System.out.println("[AcademicService] getAllSchools called");
         List<School> schools = schoolRepository.findAll();
         System.out.println("[AcademicService] Fetched all schools list (" + schools.size() + " items)");
         return schools;
@@ -351,6 +354,7 @@ public class AcademicService {
 
     @Transactional(readOnly = true)
     public School getSchoolById(String id) {
+        System.out.println("[AcademicService] getSchoolById called | id: " + id);
         School school = schoolRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("School not found with id: " + id));
         System.out.println("[AcademicService] Fetched school by id: " + id);
@@ -359,6 +363,7 @@ public class AcademicService {
 
     @Transactional
     public School saveSchool(School school) {
+        System.out.println("[AcademicService] saveSchool called | school: " + (school != null ? school.getName() : "null"));
         if (school.getId() == null || school.getId().isBlank()) {
             school.setId("sch-" + UUID.randomUUID().toString().substring(0, 8));
         }
@@ -369,6 +374,7 @@ public class AcademicService {
 
     @Transactional
     public School updateSchool(String id, School schoolDetails) {
+        System.out.println("[AcademicService] updateSchool called | id: " + id + " | name: " + (schoolDetails != null ? schoolDetails.getName() : "null"));
         School school = schoolRepository.findById(id)
                 .orElseGet(() -> {
                     if (schoolDetails.getDirectorEmail() != null && !schoolDetails.getDirectorEmail().isBlank()) {
@@ -405,6 +411,7 @@ public class AcademicService {
     // --- Departments ---
     @Transactional(readOnly = true)
     public List<Department> getAllDepartments() {
+        System.out.println("[AcademicService] getAllDepartments called");
         List<Department> list = departmentRepository.findAll();
         System.out.println("[AcademicService] Fetched all departments (" + list.size() + " items)");
         return list;
@@ -412,6 +419,7 @@ public class AcademicService {
 
     @Transactional(readOnly = true)
     public List<Department> getDepartmentsBySchool(String schoolId) {
+        System.out.println("[AcademicService] getDepartmentsBySchool called | schoolId: " + schoolId);
         List<Department> list = departmentRepository.findBySchoolId(schoolId);
         System.out.println("[AcademicService] Fetched departments (" + list.size() + " items) for schoolId: " + schoolId);
         return list;
@@ -419,6 +427,7 @@ public class AcademicService {
 
     @Transactional
     public Department saveDepartment(Department department) {
+        System.out.println("[AcademicService] saveDepartment called | department: " + (department != null ? department.getName() : "null"));
         if (department.getId() == null) department.setId("dept-" + UUID.randomUUID().toString().substring(0, 8));
         Department saved = departmentRepository.save(department);
         System.out.println("[AcademicService] Saved department with id: " + saved.getId());
@@ -436,6 +445,7 @@ public class AcademicService {
 
     @Transactional
     public void deleteDepartment(String id) {
+        System.out.println("[AcademicService] deleteDepartment called | id: " + id);
         departmentRepository.deleteById(id);
         System.out.println("[AcademicService] Deleted department with id: " + id);
     }
@@ -443,8 +453,16 @@ public class AcademicService {
     // --- Users by Role ---
     @Transactional(readOnly = true)
     public List<UserDto> getUsersByRole(String role) {
-        List<User> users = userRepository.findByRoleIgnoreCase(role);
-        return users.stream().map(u -> UserDto.builder()
+        System.out.println("[AcademicService] getUsersByRole called | role: " + role);
+        String searchRole = role != null ? role.trim() : "HOD";
+        List<User> users = userRepository.findByRoleIgnoreCase(searchRole);
+        if (users.isEmpty() && (searchRole.equalsIgnoreCase("programme-coordinator") || searchRole.equalsIgnoreCase("programme_coordinator") || searchRole.equalsIgnoreCase("PROGRAMME_COORDINATOR"))) {
+            users = userRepository.findByRoleIgnoreCase("PROGRAMME_COORDINATOR");
+            if (users.isEmpty()) {
+                users = userRepository.findByRoleIgnoreCase("programme-coordinator");
+            }
+        }
+        List<UserDto> dtos = users.stream().map(u -> UserDto.builder()
                 .id(u.getId())
                 .name(u.getName())
                 .email(u.getEmail())
@@ -453,11 +471,14 @@ public class AcademicService {
                 .programme(u.getProgramme())
                 .build()
         ).toList();
+        System.out.println("[AcademicService] Fetched users by role (" + searchRole + "): count=" + dtos.size());
+        return dtos;
     }
 
     // --- Programmes ---
     @Transactional(readOnly = true)
     public List<Programme> getAllProgrammes() {
+        System.out.println("[AcademicService] getAllProgrammes called");
         List<Programme> list = programmeRepository.findAll();
         System.out.println("[AcademicService] Fetched all programmes (" + list.size() + " items)");
         return list;
@@ -465,6 +486,7 @@ public class AcademicService {
 
     @Transactional(readOnly = true)
     public List<Programme> getProgrammesBySchool(String schoolId) {
+        System.out.println("[AcademicService] getProgrammesBySchool called | schoolId: " + schoolId);
         List<Department> depts = departmentRepository.findBySchoolId(schoolId);
         if (depts == null || depts.isEmpty()) {
             return programmeRepository.findAll();
@@ -475,16 +497,34 @@ public class AcademicService {
         return list;
     }
 
+    @Transactional(readOnly = true)
+    public List<Programme> getProgrammesByDepartment(String departmentId) {
+        System.out.println("[AcademicService] getProgrammesByDepartment called | departmentId: " + departmentId);
+        if (departmentId == null || departmentId.isBlank()) {
+            return getAllProgrammes();
+        }
+        Optional<Department> deptOpt = departmentRepository.findById(departmentId);
+        String deptName = deptOpt.isPresent() ? deptOpt.get().getName() : "";
+        List<Programme> list = programmeRepository.findByDepartmentIdOrDepartmentName(departmentId, deptName);
+        if (list.isEmpty()) {
+            list = programmeRepository.findByDepartmentId(departmentId);
+        }
+        System.out.println("[AcademicService] Fetched programmes (" + list.size() + " items) for departmentId: " + departmentId);
+        return list;
+    }
+
     @Transactional
     public Programme saveProgramme(Programme programme) {
+        System.out.println("[AcademicService] saveProgramme called | id: " + (programme != null ? programme.getId() : "null") + " | name: " + (programme != null ? programme.getName() : "null") + " | coordinator: " + (programme != null ? programme.getCoordinator() : "null") + " | coordinatorEmail: " + (programme != null ? programme.getCoordinatorEmail() : "null"));
         if (programme.getId() == null) programme.setId("prog-" + UUID.randomUUID().toString().substring(0, 8));
         Programme saved = programmeRepository.save(programme);
-        System.out.println("[AcademicService] Saved programme with id: " + saved.getId());
+        System.out.println("[AcademicService] Saved programme with id: " + saved.getId() + ", coordinator: " + saved.getCoordinator() + ", coordinatorEmail: " + saved.getCoordinatorEmail());
         return saved;
     }
 
     @Transactional
     public void deleteProgramme(String id) {
+        System.out.println("[AcademicService] deleteProgramme called | id: " + id);
         programmeRepository.deleteById(id);
         System.out.println("[AcademicService] Deleted programme with id: " + id);
     }
@@ -492,6 +532,7 @@ public class AcademicService {
     // --- Batches ---
     @Transactional(readOnly = true)
     public List<Batch> getAllBatches() {
+        System.out.println("[AcademicService] getAllBatches called");
         List<Batch> list = batchRepository.findAll();
         System.out.println("[AcademicService] Fetched all batches (" + list.size() + " items)");
         return list;
@@ -499,6 +540,7 @@ public class AcademicService {
 
     @Transactional(readOnly = true)
     public List<Batch> getBatchesByProgramme(String programmeId) {
+        System.out.println("[AcademicService] getBatchesByProgramme called | programmeId: " + programmeId);
         List<Batch> list = batchRepository.findByProgrammeId(programmeId);
         System.out.println("[AcademicService] Fetched batches (" + list.size() + " items) for programmeId: " + programmeId);
         return list;
@@ -506,6 +548,7 @@ public class AcademicService {
 
     @Transactional
     public Batch saveBatch(Batch batch) {
+        System.out.println("[AcademicService] saveBatch called | name: " + (batch != null ? batch.getName() : "null"));
         if (batch.getId() == null) batch.setId("batch-" + UUID.randomUUID().toString().substring(0, 8));
         Batch saved = batchRepository.save(batch);
         System.out.println("[AcademicService] Saved batch with id: " + saved.getId());
@@ -514,6 +557,7 @@ public class AcademicService {
 
     @Transactional
     public void deleteBatch(String id) {
+        System.out.println("[AcademicService] deleteBatch called | id: " + id);
         batchRepository.deleteById(id);
         System.out.println("[AcademicService] Deleted batch with id: " + id);
     }
@@ -521,6 +565,7 @@ public class AcademicService {
     // --- Courses ---
     @Transactional(readOnly = true)
     public List<Course> getAllCourses() {
+        System.out.println("[AcademicService] getAllCourses called");
         List<Course> list = courseRepository.findAll();
         System.out.println("[AcademicService] Fetched all courses (" + list.size() + " items)");
         return list;
@@ -528,6 +573,7 @@ public class AcademicService {
 
     @Transactional(readOnly = true)
     public List<Course> getCoursesByProgramme(String programmeId) {
+        System.out.println("[AcademicService] getCoursesByProgramme called | programmeId: " + programmeId);
         List<Course> list = courseRepository.findByProgrammeId(programmeId);
         System.out.println("[AcademicService] Fetched courses (" + list.size() + " items) for programmeId: " + programmeId);
         return list;
@@ -535,6 +581,7 @@ public class AcademicService {
 
     @Transactional
     public Course saveCourse(Course course) {
+        System.out.println("[AcademicService] saveCourse called | name: " + (course != null ? course.getName() : "null"));
         if (course.getId() == null) course.setId("crs-" + UUID.randomUUID().toString().substring(0, 8));
         Course saved = courseRepository.save(course);
         System.out.println("[AcademicService] Saved course with id: " + saved.getId());
@@ -543,6 +590,7 @@ public class AcademicService {
 
     @Transactional
     public void deleteCourse(String id) {
+        System.out.println("[AcademicService] deleteCourse called | id: " + id);
         courseRepository.deleteById(id);
         System.out.println("[AcademicService] Deleted course with id: " + id);
     }
@@ -550,6 +598,7 @@ public class AcademicService {
     // --- Students ---
     @Transactional(readOnly = true)
     public List<Student> getStudentsByBatch(String batchId) {
+        System.out.println("[AcademicService] getStudentsByBatch called | batchId: " + batchId);
         List<Student> list = studentRepository.findByBatchId(batchId);
         System.out.println("[AcademicService] Fetched students (" + list.size() + " items) for batchId: " + batchId);
         return list;
@@ -557,6 +606,7 @@ public class AcademicService {
 
     @Transactional
     public Student saveStudent(Student student) {
+        System.out.println("[AcademicService] saveStudent called | name: " + (student != null ? student.getName() : "null"));
         if (student.getId() == null) student.setId("std-" + UUID.randomUUID().toString().substring(0, 8));
         Student saved = studentRepository.save(student);
         System.out.println("[AcademicService] Saved student with id: " + saved.getId());
@@ -565,6 +615,7 @@ public class AcademicService {
 
     @Transactional
     public void deleteStudent(String id) {
+        System.out.println("[AcademicService] deleteStudent called | id: " + id);
         studentRepository.deleteById(id);
         System.out.println("[AcademicService] Deleted student with id: " + id);
     }
@@ -578,7 +629,8 @@ public class AcademicService {
 
         // 1. First search department repository by hodEmail
         if (hodEmail != null && !hodEmail.isBlank()) {
-            Optional<Department> deptOpt = departmentRepository.findByHodEmailIgnoreCase(hodEmail);
+            String trimmedEmail = hodEmail.trim();
+            Optional<Department> deptOpt = departmentRepository.findByHodEmailIgnoreCase(trimmedEmail);
             if (deptOpt.isPresent()) {
                 dept = deptOpt.get();
             }
@@ -586,15 +638,16 @@ public class AcademicService {
 
         // 2. If not found by hodEmail, look up user by email to get user.getDepartment()
         if (dept == null && hodEmail != null && !hodEmail.isBlank()) {
-            Optional<User> userOpt = userRepository.findByEmail(hodEmail);
+            String trimmedEmail = hodEmail.trim();
+            Optional<User> userOpt = userRepository.findByEmail(trimmedEmail);
             if (userOpt.isPresent() && userOpt.get().getDepartment() != null && !userOpt.get().getDepartment().isBlank()) {
-                String userDeptName = userOpt.get().getDepartment();
+                String userDeptName = userOpt.get().getDepartment().trim();
                 Optional<Department> deptOpt = departmentRepository.findByName(userDeptName);
                 if (deptOpt.isPresent()) {
                     dept = deptOpt.get();
                 } else {
                     List<Department> matches = departmentRepository.findAll().stream()
-                            .filter(d -> d.getName() != null && d.getName().equalsIgnoreCase(userDeptName))
+                            .filter(d -> d.getName() != null && d.getName().trim().equalsIgnoreCase(userDeptName))
                             .toList();
                     if (!matches.isEmpty()) {
                         dept = matches.get(0);
@@ -603,15 +656,8 @@ public class AcademicService {
             }
         }
 
-        // 3. Fallback to first department if still null
         if (dept == null) {
-            List<Department> allDepts = departmentRepository.findAll();
-            if (!allDepts.isEmpty()) {
-                dept = allDepts.get(0);
-            }
-        }
-
-        if (dept == null) {
+            System.out.println("[AcademicService] No department found in database for hodEmail: " + hodEmail);
             return HodDepartmentSummaryDto.builder()
                     .deptId(null)
                     .deptCode(null)
@@ -662,6 +708,7 @@ public class AcademicService {
         }
 
         HodSetupProgressDto progressDto = getHodSetupProgress(deptId, resolvedHodEmail);
+        System.out.println("[AcademicService] Fetched HOD department summary for deptId: " + deptId + " (" + deptName + ") | hodEmail: " + resolvedHodEmail);
 
         return HodDepartmentSummaryDto.builder()
                 .deptId(deptId)
@@ -678,97 +725,176 @@ public class AcademicService {
                 .build();
     }
 
+    private String resolveTargetDeptId(String departmentId, String hodEmail) {
+        System.out.println("[AcademicService] resolveTargetDeptId called | departmentId: " + departmentId + " | hodEmail: " + hodEmail);
+        String targetDeptId = departmentId;
+        if ((targetDeptId == null || targetDeptId.isBlank()) && hodEmail != null && !hodEmail.isBlank()) {
+            String trimmedEmail = hodEmail.trim();
+            Optional<Department> deptOpt = departmentRepository.findByHodEmailIgnoreCase(trimmedEmail);
+            if (deptOpt.isPresent()) {
+                targetDeptId = deptOpt.get().getId();
+            } else {
+                Optional<User> userOpt = userRepository.findByEmail(trimmedEmail);
+                if (userOpt.isPresent() && userOpt.get().getDepartment() != null && !userOpt.get().getDepartment().isBlank()) {
+                    String userDeptName = userOpt.get().getDepartment().trim();
+                    Optional<Department> dOpt = departmentRepository.findByName(userDeptName);
+                    if (dOpt.isPresent()) {
+                        targetDeptId = dOpt.get().getId();
+                    } else {
+                        List<Department> matches = departmentRepository.findAll().stream()
+                                .filter(d -> d.getName() != null && d.getName().trim().equalsIgnoreCase(userDeptName))
+                                .toList();
+                        if (!matches.isEmpty()) {
+                            targetDeptId = matches.get(0).getId();
+                        }
+                    }
+                }
+            }
+        }
+        System.out.println("[AcademicService] Resolved targetDeptId: " + targetDeptId);
+        return targetDeptId;
+    }
+
     // --- HOD Setup Progress ---
     @Transactional(readOnly = true)
-    public HodSetupProgressDto getHodSetupProgress(String departmentId, String hodEmail) {
-        Optional<HodSetupProgress> progressOpt = Optional.empty();
+    public HodSetupProgressDto getHodSetupProgress(
+            String departmentId,
+            String hodEmail) {
+        System.out.println("[AcademicService] getHodSetupProgress called | departmentId: " + departmentId + " | hodEmail: " + hodEmail);
 
-        if (departmentId != null && !departmentId.isBlank()) {
-            progressOpt = hodSetupProgressRepository.findByDepartmentId(departmentId);
-        }
-        if (progressOpt.isEmpty() && hodEmail != null && !hodEmail.isBlank()) {
-            progressOpt = hodSetupProgressRepository.findByHodEmailIgnoreCase(hodEmail);
+        String targetDeptId = resolveTargetDeptId(departmentId, hodEmail);
+        validateDepartmentId(targetDeptId);
+
+        HodSetupProgress progress = hodSetupProgressRepository
+                .findByDepartmentId(targetDeptId)
+                .orElseGet(() -> createDefaultProgress(targetDeptId, hodEmail));
+
+        return buildHodSetupProgressDto(progress);
+    }
+
+
+    @Transactional
+    public HodSetupProgressDto updateHodSetupProgress(
+            String departmentId,
+            Integer stepNumber,
+            String hodEmail) {
+        System.out.println("[AcademicService] updateHodSetupProgress called | departmentId: " + departmentId + " | stepNumber: " + stepNumber + " | hodEmail: " + hodEmail);
+
+        String targetDeptId = resolveTargetDeptId(departmentId, hodEmail);
+        validateDepartmentId(targetDeptId);
+        validateStepNumber(stepNumber);
+
+        HodSetupProgress progress = hodSetupProgressRepository
+                .findByDepartmentId(targetDeptId)
+                .orElseGet(() -> createDefaultProgress(targetDeptId, hodEmail));
+
+        progress.setCurrentStep(stepNumber);
+
+        Set<String> completedSteps = getCompletedSteps(stepNumber);
+
+        Set<String> allSteps = new LinkedHashSet<>(
+                Arrays.asList(
+                        "coordinators",
+                        "batch",
+                        "outcomes",
+                        "review"
+                )
+        );
+
+        Set<String> pendingSteps = new LinkedHashSet<>(allSteps);
+        pendingSteps.removeAll(completedSteps);
+
+        progress.setCompletedSteps(String.join(",", completedSteps));
+        progress.setPendingSteps(String.join(",", pendingSteps));
+
+        progress.setOverallStatus(SetupStepStatus.IN_PROGRESS);
+
+        if (hodEmail != null && !hodEmail.isBlank()) {
+            progress.setHodEmail(hodEmail.trim());
         }
 
-        HodSetupProgress progress = progressOpt.orElseGet(() -> HodSetupProgress.builder()
-                .id("progress-dept-" + (departmentId != null ? departmentId : "default"))
-                .departmentId(departmentId != null ? departmentId : "dept-1")
+        hodSetupProgressRepository.save(progress);
+
+        System.out.println("[AcademicService] HOD setup progress updated | targetDeptId=" + targetDeptId + " | stepNumber=" + stepNumber + " | completed=" + completedSteps + " | pending=" + pendingSteps);
+
+        return buildHodSetupProgressDto(progress);
+    }
+
+
+    private HodSetupProgress createDefaultProgress(
+            String departmentId,
+            String hodEmail) {
+
+        return HodSetupProgress.builder()
+                .id("progress-dept-" + departmentId)
+                .departmentId(departmentId)
                 .hodEmail(hodEmail)
                 .currentStep(1)
                 .overallStatus(SetupStepStatus.IN_PROGRESS)
                 .completedSteps("")
-                .pendingSteps("batch,outcomes,coordinators,review")
-                .updatedAt(ZonedDateTime.now())
-                .build());
-
-        return buildHodSetupProgressDto(progress);
+                .pendingSteps("coordinators,batch,outcomes,review")
+                .build();
     }
 
-    @Transactional
-    public HodSetupProgressDto updateHodSetupProgress(String departmentId, Integer stepNumber, String hodEmail) {
-        String targetDeptId = (departmentId != null && !departmentId.isBlank()) ? departmentId : "dept-1";
 
-        Optional<HodSetupProgress> progressOpt = hodSetupProgressRepository.findByDepartmentId(targetDeptId);
-        if (progressOpt.isEmpty() && hodEmail != null && !hodEmail.isBlank()) {
-            progressOpt = hodSetupProgressRepository.findByHodEmailIgnoreCase(hodEmail);
-        }
-
-        HodSetupProgress progress = progressOpt.orElseGet(() -> HodSetupProgress.builder()
-                .id("progress-dept-" + targetDeptId)
-                .departmentId(targetDeptId)
-                .hodEmail(hodEmail)
-                .build());
-
-        int currentStep = (stepNumber != null && stepNumber >= 1 && stepNumber <= 4) ? stepNumber : 1;
-        progress.setCurrentStep(currentStep);
+    private Set<String> getCompletedSteps(Integer currentStep) {
 
         Set<String> completed = new LinkedHashSet<>();
-        if (progress.getCompletedSteps() != null && !progress.getCompletedSteps().isBlank()) {
-            completed.addAll(Arrays.asList(progress.getCompletedSteps().split(",")));
-        }
 
-        for (int i = 1; i < currentStep; i++) {
-            if (i == 1) completed.add("batch");
-            if (i == 2) completed.add("outcomes");
-            if (i == 3) completed.add("coordinators");
-        }
-        if (currentStep == 4) {
-            completed.add("batch");
-            completed.add("outcomes");
+        if (currentStep >= 2) {
             completed.add("coordinators");
-            completed.add("review");
-            progress.setOverallStatus(SetupStepStatus.COMPLETED);
-        } else {
-            progress.setOverallStatus(SetupStepStatus.IN_PROGRESS);
         }
 
-        Set<String> allSteps = new LinkedHashSet<>(Arrays.asList("batch", "outcomes", "coordinators", "review"));
-        Set<String> pending = new LinkedHashSet<>();
-        for (String s : allSteps) {
-            if (!completed.contains(s)) {
-                pending.add(s);
-            }
+        if (currentStep >= 3) {
+            completed.add("batch");
         }
 
-        progress.setCompletedSteps(String.join(",", completed));
-        progress.setPendingSteps(String.join(",", pending));
-        if (hodEmail != null && !hodEmail.isBlank()) {
-            progress.setHodEmail(hodEmail);
+        if (currentStep >= 4) {
+            completed.add("outcomes");
         }
-        progress.setUpdatedAt(ZonedDateTime.now());
 
-        hodSetupProgressRepository.save(progress);
-        return buildHodSetupProgressDto(progress);
+        return completed;
     }
 
-    private HodSetupProgressDto buildHodSetupProgressDto(HodSetupProgress progress) {
-        List<String> completedList = (progress.getCompletedSteps() != null && !progress.getCompletedSteps().isBlank())
-                ? Arrays.asList(progress.getCompletedSteps().split(","))
-                : Collections.emptyList();
 
-        List<String> pendingList = (progress.getPendingSteps() != null && !progress.getPendingSteps().isBlank())
-                ? Arrays.asList(progress.getPendingSteps().split(","))
-                : Collections.emptyList();
+    private void validateDepartmentId(String departmentId) {
+
+        if (departmentId == null || departmentId.isBlank()) {
+            throw new IllegalArgumentException(
+                    "Department ID is required"
+            );
+        }
+    }
+
+
+    private void validateStepNumber(Integer stepNumber) {
+
+        if (stepNumber == null || stepNumber < 1 || stepNumber > 4) {
+            throw new IllegalArgumentException(
+                    "Step number must be between 1 and 4"
+            );
+        }
+    }
+
+
+    private HodSetupProgressDto buildHodSetupProgressDto(
+            HodSetupProgress progress) {
+
+        List<String> completedList =
+                progress.getCompletedSteps() != null
+                        && !progress.getCompletedSteps().isBlank()
+                        ? Arrays.asList(
+                        progress.getCompletedSteps().split(",")
+                )
+                        : Collections.emptyList();
+
+        List<String> pendingList =
+                progress.getPendingSteps() != null
+                        && !progress.getPendingSteps().isBlank()
+                        ? Arrays.asList(
+                        progress.getPendingSteps().split(",")
+                )
+                        : Collections.emptyList();
 
         return HodSetupProgressDto.builder()
                 .id(progress.getId())
@@ -780,5 +906,44 @@ public class AcademicService {
                 .pendingSteps(pendingList)
                 .updatedAt(progress.getUpdatedAt())
                 .build();
+    }
+
+    @Transactional
+    public HodSetupProgressDto completeHodSetup(
+            String departmentId,
+            String hodEmail) {
+        System.out.println("[AcademicService] completeHodSetup called | departmentId: " + departmentId + " | hodEmail: " + hodEmail);
+
+        String targetDeptId = resolveTargetDeptId(departmentId, hodEmail);
+        validateDepartmentId(targetDeptId);
+
+        HodSetupProgress progress = hodSetupProgressRepository
+                .findByDepartmentId(targetDeptId)
+                .orElseGet(() -> createDefaultProgress(
+                        targetDeptId,
+                        hodEmail
+                ));
+
+        progress.setCurrentStep(4);
+
+        progress.setCompletedSteps(
+                "coordinators,batch,outcomes,review"
+        );
+
+        progress.setPendingSteps("");
+
+        progress.setOverallStatus(
+                SetupStepStatus.COMPLETED
+        );
+
+        if (hodEmail != null && !hodEmail.isBlank()) {
+            progress.setHodEmail(hodEmail.trim());
+        }
+
+        hodSetupProgressRepository.save(progress);
+
+        System.out.println("[AcademicService] HOD setup marked as COMPLETED for targetDeptId: " + targetDeptId);
+
+        return buildHodSetupProgressDto(progress);
     }
 }

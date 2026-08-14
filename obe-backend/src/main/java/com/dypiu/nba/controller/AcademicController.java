@@ -96,7 +96,7 @@ public class AcademicController {
                 .build());
     }
 
-    @PostMapping("/hod/setup-progress")
+    @PutMapping("/hod/setup-progress")
     public ResponseEntity<ApiResponse<HodSetupProgressDto>> updateHodSetupProgress(
             @RequestParam(required = false) String departmentId,
             @RequestParam(required = false, defaultValue = "1") Integer currentStep,
@@ -105,6 +105,17 @@ public class AcademicController {
                 .success(true)
                 .message("HOD setup progress updated successfully")
                 .data(academicService.updateHodSetupProgress(departmentId, currentStep, hodEmail))
+                .build());
+    }
+
+    @PostMapping("/hod/setup-progress/complete")
+    public ResponseEntity<ApiResponse<HodSetupProgressDto>> completeHodSetup(
+            @RequestParam(required = false) String departmentId,
+            @RequestParam(required = false) String hodEmail) {
+        return ResponseEntity.ok(ApiResponse.<HodSetupProgressDto>builder()
+                .success(true)
+                .message("HOD setup marked as completed successfully")
+                .data(academicService.completeHodSetup(departmentId, hodEmail))
                 .build());
     }
 
@@ -172,8 +183,12 @@ public class AcademicController {
 
     // --- Programmes ---
     @GetMapping("/programmes")
-    public ResponseEntity<ApiResponse<List<Programme>>> getProgrammes(@RequestParam(required = false) String schoolId) {
-        List<Programme> list = (schoolId != null && !schoolId.isBlank())
+    public ResponseEntity<ApiResponse<List<Programme>>> getProgrammes(
+            @RequestParam(required = false) String schoolId,
+            @RequestParam(required = false) String departmentId) {
+        List<Programme> list = (departmentId != null && !departmentId.isBlank())
+                ? academicService.getProgrammesByDepartment(departmentId)
+                : (schoolId != null && !schoolId.isBlank())
                 ? academicService.getProgrammesBySchool(schoolId)
                 : academicService.getAllProgrammes();
         return ResponseEntity.ok(ApiResponse.<List<Programme>>builder()
