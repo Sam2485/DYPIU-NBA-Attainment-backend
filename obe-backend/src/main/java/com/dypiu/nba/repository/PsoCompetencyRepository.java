@@ -9,5 +9,6 @@ import java.util.List;
 @Repository
 public interface PsoCompetencyRepository extends JpaRepository<PsoCompetency, String> {
     List<PsoCompetency> findByPsoId(String psoId);
+    List<PsoCompetency> findByPsoIdOrderByCodeAsc(String psoId);
     void deleteByPsoId(String psoId);
 }

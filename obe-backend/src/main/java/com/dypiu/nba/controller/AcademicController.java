@@ -5,6 +5,10 @@ import com.dypiu.nba.dto.DirectorSchoolSummaryDto;
 import com.dypiu.nba.dto.DepartmentSummaryDto;
 import com.dypiu.nba.dto.HodDepartmentSummaryDto;
 import com.dypiu.nba.dto.HodSetupProgressDto;
+import com.dypiu.nba.dto.ProgrammeCoordinatorSummaryDto;
+import com.dypiu.nba.dto.ProgrammeCoordinatorSetupProgressDto;
+import com.dypiu.nba.dto.CourseCoordinatorSummaryDto;
+import com.dypiu.nba.dto.CourseCoordinatorSetupProgressDto;
 import com.dypiu.nba.dto.UserDto;
 import com.dypiu.nba.dto.ApiResponse;
 import com.dypiu.nba.entity.*;
@@ -119,6 +123,92 @@ public class AcademicController {
                 .build());
     }
 
+    // --- Programme Coordinator Summary & Setup Progress ---
+    @GetMapping("/coordinator/programme-summary")
+    public ResponseEntity<ApiResponse<ProgrammeCoordinatorSummaryDto>> getProgrammeCoordinatorSummary(
+            @RequestParam(required = false) String coordinatorEmail,
+            @RequestParam(required = false) String programmeId) {
+        return ResponseEntity.ok(ApiResponse.<ProgrammeCoordinatorSummaryDto>builder()
+                .success(true)
+                .data(academicService.getProgrammeCoordinatorSummary(coordinatorEmail, programmeId))
+                .build());
+    }
+
+    @GetMapping("/coordinator/setup-progress")
+    public ResponseEntity<ApiResponse<ProgrammeCoordinatorSetupProgressDto>> getProgrammeCoordinatorSetupProgress(
+            @RequestParam(required = false) String coordinatorEmail,
+            @RequestParam(required = false) String programmeId) {
+        return ResponseEntity.ok(ApiResponse.<ProgrammeCoordinatorSetupProgressDto>builder()
+                .success(true)
+                .data(academicService.getProgrammeCoordinatorSetupProgress(coordinatorEmail, programmeId))
+                .build());
+    }
+
+    @PutMapping("/coordinator/setup-progress")
+    public ResponseEntity<ApiResponse<ProgrammeCoordinatorSetupProgressDto>> updateProgrammeCoordinatorSetupProgress(
+            @RequestParam(required = false) String coordinatorEmail,
+            @RequestParam(required = false) String programmeId,
+            @RequestParam(required = false, defaultValue = "1") Integer currentStep) {
+        return ResponseEntity.ok(ApiResponse.<ProgrammeCoordinatorSetupProgressDto>builder()
+                .success(true)
+                .message("Programme Coordinator setup progress updated successfully")
+                .data(academicService.updateProgrammeCoordinatorSetupProgress(coordinatorEmail, programmeId, currentStep))
+                .build());
+    }
+
+    @PostMapping("/coordinator/setup-progress/complete")
+    public ResponseEntity<ApiResponse<ProgrammeCoordinatorSetupProgressDto>> completeProgrammeCoordinatorSetup(
+            @RequestParam(required = false) String coordinatorEmail,
+            @RequestParam(required = false) String programmeId) {
+        return ResponseEntity.ok(ApiResponse.<ProgrammeCoordinatorSetupProgressDto>builder()
+                .success(true)
+                .message("Programme Coordinator setup marked as completed successfully")
+                .data(academicService.completeProgrammeCoordinatorSetup(coordinatorEmail, programmeId))
+                .build());
+    }
+
+    @GetMapping("/course-coordinator/summary")
+    public ResponseEntity<ApiResponse<CourseCoordinatorSummaryDto>> getCourseCoordinatorSummary(
+            @RequestParam(required = false) String coordinatorEmail) {
+        return ResponseEntity.ok(ApiResponse.<CourseCoordinatorSummaryDto>builder()
+                .success(true)
+                .data(academicService.getCourseCoordinatorSummary(coordinatorEmail))
+                .build());
+    }
+
+    @GetMapping("/course-coordinator/setup-progress")
+    public ResponseEntity<ApiResponse<CourseCoordinatorSetupProgressDto>> getCourseCoordinatorSetupProgress(
+            @RequestParam(required = false) String coordinatorEmail,
+            @RequestParam(required = false) String courseId) {
+        return ResponseEntity.ok(ApiResponse.<CourseCoordinatorSetupProgressDto>builder()
+                .success(true)
+                .data(academicService.getCourseCoordinatorSetupProgress(coordinatorEmail, courseId))
+                .build());
+    }
+
+    @PostMapping("/course-coordinator/setup-progress")
+    public ResponseEntity<ApiResponse<CourseCoordinatorSetupProgressDto>> updateCourseCoordinatorSetupProgress(
+            @RequestParam(required = false) String coordinatorEmail,
+            @RequestParam(required = false) String courseId,
+            @RequestParam(required = false, defaultValue = "1") Integer currentStep) {
+        return ResponseEntity.ok(ApiResponse.<CourseCoordinatorSetupProgressDto>builder()
+                .success(true)
+                .message("Course Coordinator setup progress updated successfully")
+                .data(academicService.updateCourseCoordinatorSetupProgress(coordinatorEmail, courseId, currentStep))
+                .build());
+    }
+
+    @PostMapping("/course-coordinator/setup-progress/complete")
+    public ResponseEntity<ApiResponse<CourseCoordinatorSetupProgressDto>> completeCourseCoordinatorSetup(
+            @RequestParam(required = false) String coordinatorEmail,
+            @RequestParam(required = false) String courseId) {
+        return ResponseEntity.ok(ApiResponse.<CourseCoordinatorSetupProgressDto>builder()
+                .success(true)
+                .message("Course Coordinator setup marked as completed successfully")
+                .data(academicService.completeCourseCoordinatorSetup(coordinatorEmail, courseId))
+                .build());
+    }
+
     // --- Schools ---
     @GetMapping("/schools")
     public ResponseEntity<ApiResponse<List<School>>> getSchools() {
@@ -185,8 +275,11 @@ public class AcademicController {
     @GetMapping("/programmes")
     public ResponseEntity<ApiResponse<List<Programme>>> getProgrammes(
             @RequestParam(required = false) String schoolId,
-            @RequestParam(required = false) String departmentId) {
-        List<Programme> list = (departmentId != null && !departmentId.isBlank())
+            @RequestParam(required = false) String departmentId,
+            @RequestParam(required = false) String coordinatorEmail) {
+        List<Programme> list = (coordinatorEmail != null && !coordinatorEmail.isBlank())
+                ? academicService.getProgrammesByCoordinatorEmail(coordinatorEmail)
+                : (departmentId != null && !departmentId.isBlank())
                 ? academicService.getProgrammesByDepartment(departmentId)
                 : (schoolId != null && !schoolId.isBlank())
                 ? academicService.getProgrammesBySchool(schoolId)

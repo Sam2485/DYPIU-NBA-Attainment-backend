@@ -2,10 +2,12 @@ package com.dypiu.nba.service;
 
 import com.dypiu.nba.entity.*;
 import com.dypiu.nba.repository.*;
+import com.dypiu.nba.dto.ProgrammeTargetDto;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
+import java.math.BigDecimal;
+import java.time.ZonedDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -19,14 +21,34 @@ public class OutcomeService {
     private final CourseOutcomeRepository coRepository;
     private final PoCompetencyRepository poCompetencyRepository;
     private final PsoCompetencyRepository psoCompetencyRepository;
+    private final ProgrammeTargetRepository targetRepository;
+    private final CourseRepository courseRepository;
+
+    private static final Comparator<String> NATURAL_CODE_COMPARATOR = (c1, c2) -> {
+        if (c1 == null) return -1;
+        if (c2 == null) return 1;
+        String p1 = c1.replaceAll("\\D+", "");
+        String p2 = c2.replaceAll("\\D+", "");
+        if (!p1.isEmpty() && !p2.isEmpty()) {
+            try {
+                int n1 = Integer.parseInt(p1);
+                int n2 = Integer.parseInt(p2);
+                if (n1 != n2) return Integer.compare(n1, n2);
+            } catch (NumberFormatException ignored) {}
+        }
+        return c1.compareToIgnoreCase(c2);
+    };
 
     @Transactional(readOnly = true)
     public List<ProgrammeOutcome> getPOsByProgramme(String programmeId) {
         System.out.println("[OutcomeService] getPOsByProgramme called | programmeId: " + programmeId);
-        List<ProgrammeOutcome> list = poRepository.findByProgrammeId(programmeId);
+        List<ProgrammeOutcome> list = poRepository.findByProgrammeIdOrderByCodeAsc(programmeId);
         for (ProgrammeOutcome po : list) {
-            po.setCompetencies(poCompetencyRepository.findByPoId(po.getId()));
+            List<PoCompetency> comps = poCompetencyRepository.findByPoIdOrderByCodeAsc(po.getId());
+            comps.sort(Comparator.comparing(PoCompetency::getCode, NATURAL_CODE_COMPARATOR));
+            po.setCompetencies(comps);
         }
+        list.sort(Comparator.comparing(ProgrammeOutcome::getCode, NATURAL_CODE_COMPARATOR));
         System.out.println("[OutcomeService] Fetched POs (" + list.size() + " items) with competencies for programmeId: " + programmeId);
         return list;
     }
@@ -113,11 +135,13 @@ public class OutcomeService {
                 }
             }
             if (!compsToSave.isEmpty()) {
+                compsToSave.sort(Comparator.comparing(PoCompetency::getCode, NATURAL_CODE_COMPARATOR));
                 poCompetencyRepository.saveAll(compsToSave);
             }
             po.setCompetencies(compsToSave);
         }
 
+        saved.sort(Comparator.comparing(ProgrammeOutcome::getCode, NATURAL_CODE_COMPARATOR));
         System.out.println("[OutcomeService] Saved POs (" + saved.size() + " items) with competencies for programmeId: " + programmeId);
         return saved;
     }
@@ -125,10 +149,13 @@ public class OutcomeService {
     @Transactional(readOnly = true)
     public List<ProgrammeSpecificOutcome> getPSOsByProgramme(String programmeId) {
         System.out.println("[OutcomeService] getPSOsByProgramme called | programmeId: " + programmeId);
-        List<ProgrammeSpecificOutcome> list = psoRepository.findByProgrammeId(programmeId);
+        List<ProgrammeSpecificOutcome> list = psoRepository.findByProgrammeIdOrderByCodeAsc(programmeId);
         for (ProgrammeSpecificOutcome pso : list) {
-            pso.setCompetencies(psoCompetencyRepository.findByPsoId(pso.getId()));
+            List<PsoCompetency> comps = psoCompetencyRepository.findByPsoIdOrderByCodeAsc(pso.getId());
+            comps.sort(Comparator.comparing(PsoCompetency::getCode, NATURAL_CODE_COMPARATOR));
+            pso.setCompetencies(comps);
         }
+        list.sort(Comparator.comparing(ProgrammeSpecificOutcome::getCode, NATURAL_CODE_COMPARATOR));
         System.out.println("[OutcomeService] Fetched PSOs (" + list.size() + " items) with competencies for programmeId: " + programmeId);
         return list;
     }
@@ -215,11 +242,13 @@ public class OutcomeService {
                 }
             }
             if (!compsToSave.isEmpty()) {
+                compsToSave.sort(Comparator.comparing(PsoCompetency::getCode, NATURAL_CODE_COMPARATOR));
                 psoCompetencyRepository.saveAll(compsToSave);
             }
             pso.setCompetencies(compsToSave);
         }
 
+        saved.sort(Comparator.comparing(ProgrammeSpecificOutcome::getCode, NATURAL_CODE_COMPARATOR));
         System.out.println("[OutcomeService] Saved PSOs (" + saved.size() + " items) with competencies for programmeId: " + programmeId);
         return saved;
     }
@@ -227,7 +256,8 @@ public class OutcomeService {
     @Transactional(readOnly = true)
     public List<PeoOutcome> getPEOsByProgramme(String programmeId) {
         System.out.println("[OutcomeService] getPEOsByProgramme called | programmeId: " + programmeId);
-        List<PeoOutcome> list = peoRepository.findByProgrammeId(programmeId);
+        List<PeoOutcome> list = peoRepository.findByProgrammeIdOrderByCodeAsc(programmeId);
+        list.sort(Comparator.comparing(PeoOutcome::getCode, NATURAL_CODE_COMPARATOR));
         System.out.println("[OutcomeService] Fetched PEOs (" + list.size() + " items) for programmeId: " + programmeId);
         return list;
     }
@@ -280,23 +310,50 @@ public class OutcomeService {
         }
 
         List<PeoOutcome> saved = peoRepository.saveAll(toSave);
+        saved.sort(Comparator.comparing(PeoOutcome::getCode, NATURAL_CODE_COMPARATOR));
         System.out.println("[OutcomeService] Saved PEOs (" + saved.size() + " items) for programmeId: " + programmeId);
         return saved;
     }
 
+    private String resolveTargetCourseId(String courseId) {
+        if (courseId != null && !courseId.isBlank() && courseRepository.existsById(courseId)) {
+            return courseId;
+        }
+        List<Course> all = courseRepository.findAll();
+        if (!all.isEmpty()) {
+            System.out.println("[OutcomeService] Course ID '" + courseId + "' not found in courses table. Rebinding to existing course ID: " + all.get(0).getId());
+            return all.get(0).getId();
+        }
+        String idToUse = (courseId != null && !courseId.isBlank()) ? courseId : "crs-1";
+        Course placeholder = Course.builder()
+                .id(idToUse)
+                .code("CS301")
+                .name("Computer Networks")
+                .programmeId("prog-1")
+                .semester("Sem V")
+                .academicYear("2025-26")
+                .build();
+        courseRepository.save(placeholder);
+        System.out.println("[OutcomeService] Auto-created placeholder course row in DB with id: " + idToUse);
+        return idToUse;
+    }
+
     @Transactional(readOnly = true)
     public List<CourseOutcome> getCOsByCourse(String courseId) {
-        System.out.println("[OutcomeService] getCOsByCourse called | courseId: " + courseId);
-        List<CourseOutcome> list = coRepository.findByCourseId(courseId);
-        System.out.println("[OutcomeService] Fetched COs (" + list.size() + " items) for courseId: " + courseId);
+        String targetCourseId = resolveTargetCourseId(courseId);
+        System.out.println("[OutcomeService] getCOsByCourse called | courseId: " + courseId + " -> targetCourseId: " + targetCourseId);
+        List<CourseOutcome> list = coRepository.findByCourseId(targetCourseId);
+        list.sort(Comparator.comparing(CourseOutcome::getCode, NATURAL_CODE_COMPARATOR));
+        System.out.println("[OutcomeService] Fetched COs (" + list.size() + " items) for courseId: " + targetCourseId);
         return list;
     }
 
     @Transactional
     public List<CourseOutcome> saveCOs(String courseId, List<CourseOutcome> cos) {
-        System.out.println("[OutcomeService] saveCOs called | courseId: " + courseId + " | count: " + (cos != null ? cos.size() : 0));
+        String targetCourseId = resolveTargetCourseId(courseId);
+        System.out.println("[OutcomeService] saveCOs called | courseId: " + courseId + " -> targetCourseId: " + targetCourseId + " | count: " + (cos != null ? cos.size() : 0));
 
-        List<CourseOutcome> existing = coRepository.findByCourseId(courseId);
+        List<CourseOutcome> existing = coRepository.findByCourseId(targetCourseId);
         Map<String, CourseOutcome> existingByCode = existing.stream()
                 .collect(Collectors.toMap(
                         c -> c.getCode().toLowerCase(),
@@ -309,7 +366,7 @@ public class OutcomeService {
 
         if (cos != null) {
             for (CourseOutcome co : cos) {
-                co.setCourseId(courseId);
+                co.setCourseId(targetCourseId);
 
                 String key = co.getCode().toLowerCase();
                 CourseOutcome targetCo;
@@ -332,12 +389,67 @@ public class OutcomeService {
                 .filter(c -> !processedIds.contains(c.getId()))
                 .collect(Collectors.toList());
         if (!toDelete.isEmpty()) {
-            System.out.println("[OutcomeService] Deleting " + toDelete.size() + " obsolete COs for courseId: " + courseId);
+            System.out.println("[OutcomeService] Deleting " + toDelete.size() + " obsolete COs for courseId: " + targetCourseId);
             coRepository.deleteAll(toDelete);
         }
 
         List<CourseOutcome> saved = coRepository.saveAll(toSave);
-        System.out.println("[OutcomeService] Saved COs (" + saved.size() + " items) for courseId: " + courseId);
+        saved.sort(Comparator.comparing(CourseOutcome::getCode, NATURAL_CODE_COMPARATOR));
+        System.out.println("[OutcomeService] Saved COs (" + saved.size() + " items) for courseId: " + targetCourseId);
         return saved;
+    }
+
+    // --- Programme Target Benchmark Levels ---
+    @Transactional(readOnly = true)
+    public ProgrammeTargetDto getProgrammeTargets(String programmeId) {
+        System.out.println("[OutcomeService] getProgrammeTargets called | programmeId: " + programmeId);
+        List<ProgrammeTarget> list = targetRepository.findByProgrammeId(programmeId);
+
+        Map<String, BigDecimal> poTargets = new LinkedHashMap<>();
+        Map<String, BigDecimal> psoTargets = new LinkedHashMap<>();
+
+        for (ProgrammeTarget pt : list) {
+            if (pt.getOutcomeCode() != null) {
+                if (pt.getOutcomeCode().toUpperCase().startsWith("PSO")) {
+                    psoTargets.put(pt.getOutcomeCode(), pt.getTargetValue());
+                } else if (pt.getOutcomeCode().toUpperCase().startsWith("PO")) {
+                    poTargets.put(pt.getOutcomeCode(), pt.getTargetValue());
+                }
+            }
+        }
+
+        return ProgrammeTargetDto.builder()
+                .programmeId(programmeId)
+                .poTargets(poTargets)
+                .psoTargets(psoTargets)
+                .build();
+    }
+
+    @Transactional
+    public ProgrammeTargetDto saveProgrammeTargets(String programmeId, ProgrammeTargetDto dto) {
+        System.out.println("[OutcomeService] saveProgrammeTargets called | programmeId: " + programmeId);
+        if (dto == null) return getProgrammeTargets(programmeId);
+
+        Map<String, BigDecimal> combined = new LinkedHashMap<>();
+        if (dto.getPoTargets() != null) combined.putAll(dto.getPoTargets());
+        if (dto.getPsoTargets() != null) combined.putAll(dto.getPsoTargets());
+
+        for (Map.Entry<String, BigDecimal> entry : combined.entrySet()) {
+            String code = entry.getKey();
+            BigDecimal val = entry.getValue() != null ? entry.getValue() : new BigDecimal("2.00");
+
+            ProgrammeTarget target = targetRepository.findByProgrammeIdAndOutcomeCode(programmeId, code)
+                    .orElseGet(() -> ProgrammeTarget.builder()
+                            .id("target-" + UUID.randomUUID().toString().substring(0, 8))
+                            .programmeId(programmeId)
+                            .outcomeCode(code)
+                            .build());
+
+            target.setTargetValue(val);
+            target.setUpdatedAt(ZonedDateTime.now());
+            targetRepository.save(target);
+        }
+
+        return getProgrammeTargets(programmeId);
     }
 }

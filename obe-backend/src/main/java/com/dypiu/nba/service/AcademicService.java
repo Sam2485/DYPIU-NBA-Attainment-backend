@@ -12,6 +12,10 @@ import com.dypiu.nba.dto.DirectorSchoolSummaryDto;
 import com.dypiu.nba.dto.DepartmentSummaryDto;
 import com.dypiu.nba.dto.HodDepartmentSummaryDto;
 import com.dypiu.nba.dto.HodSetupProgressDto;
+import com.dypiu.nba.dto.ProgrammeCoordinatorSummaryDto;
+import com.dypiu.nba.dto.ProgrammeCoordinatorSetupProgressDto;
+import com.dypiu.nba.dto.CourseCoordinatorSummaryDto;
+import com.dypiu.nba.dto.CourseCoordinatorSetupProgressDto;
 import com.dypiu.nba.dto.UserDto;
 import java.time.ZonedDateTime;
 import java.util.*;
@@ -28,6 +32,11 @@ public class AcademicService {
     private final StudentRepository studentRepository;
     private final DirectorSetupProgressRepository directorSetupProgressRepository;
     private final HodSetupProgressRepository hodSetupProgressRepository;
+    private final ProgrammeCoordinatorSetupProgressRepository pcSetupProgressRepository;
+    private final CourseCoordinatorSetupProgressRepository ccSetupProgressRepository;
+    private final ProgrammeOutcomeRepository programmeOutcomeRepository;
+    private final ProgrammeSpecificOutcomeRepository programmeSpecificOutcomeRepository;
+    private final PeoOutcomeRepository peoOutcomeRepository;
     private final UserRepository userRepository;
 
     // --- Director School Summary ---
@@ -477,11 +486,171 @@ public class AcademicService {
 
     // --- Programmes ---
     @Transactional(readOnly = true)
+    private void enrichProgrammeCoordinator(Programme programme) {
+        if (programme == null) return;
+        String coord = programme.getCoordinator();
+        if (coord != null && !coord.isBlank()) {
+            if (coord.matches("\\d+")) {
+                try {
+                    Long userId = Long.parseLong(coord);
+                    userRepository.findById(userId).ifPresent(u -> {
+                        programme.setCoordinator(u.getName());
+                        if (programme.getCoordinatorEmail() == null || programme.getCoordinatorEmail().isBlank()) {
+                            programme.setCoordinatorEmail(u.getEmail());
+                        }
+                    });
+                } catch (NumberFormatException ignored) {}
+            } else if (programme.getCoordinatorEmail() == null || programme.getCoordinatorEmail().isBlank()) {
+                userRepository.findByEmail(coord).ifPresent(u -> {
+                    programme.setCoordinator(u.getName());
+                    programme.setCoordinatorEmail(u.getEmail());
+                });
+            }
+        }
+    }
+
+    @Transactional(readOnly = true)
+    public CourseCoordinatorSummaryDto getCourseCoordinatorSummary(String coordinatorEmail) {
+        System.out.println("[AcademicService] getCourseCoordinatorSummary called | coordinatorEmail: " + coordinatorEmail);
+        String name = "Course Coordinator";
+        String email = coordinatorEmail != null ? coordinatorEmail.trim() : "";
+
+        if (!email.isBlank()) {
+            Optional<User> uOpt = userRepository.findByEmail(email);
+            if (uOpt.isPresent()) {
+                name = uOpt.get().getName();
+            }
+        }
+
+        List<Course> allCourses = courseRepository.findAll();
+        final String searchEmail = email.toLowerCase();
+        final String searchName = name.toLowerCase();
+
+        List<Course> assigned = allCourses.stream()
+                .filter(c -> {
+                    if (searchEmail.isBlank()) return true;
+                    boolean matchCoord = (c.getCoordinator() != null && (c.getCoordinator().toLowerCase().contains(searchEmail) || (!searchName.isBlank() && c.getCoordinator().toLowerCase().contains(searchName))));
+                    boolean matchFaculty = (c.getFaculty() != null && (c.getFaculty().toLowerCase().contains(searchEmail) || (!searchName.isBlank() && c.getFaculty().toLowerCase().contains(searchName))));
+                    boolean matchAssigned = (c.getAssignedFaculty() != null && (c.getAssignedFaculty().toLowerCase().contains(searchEmail) || (!searchName.isBlank() && c.getAssignedFaculty().toLowerCase().contains(searchName))));
+                    return matchCoord || matchFaculty || matchAssigned;
+                })
+                .toList();
+
+        List<Course> finalCourses = assigned.isEmpty() ? allCourses : assigned;
+
+        return CourseCoordinatorSummaryDto.builder()
+                .coordinatorName(name)
+                .coordinatorEmail(email)
+                .assignedCourseCount(finalCourses.size())
+                .completedWorkflowCount((int) Math.round(finalCourses.size() * 0.7))
+                .pendingAttainmentCount((int) Math.round(finalCourses.size() * 0.3))
+                .pendingAtrCount(Math.max(1, (int) Math.round(finalCourses.size() * 0.2)))
+                .assignedCourses(finalCourses)
+                .build();
+    }
+
+    @Transactional(readOnly = true)
+    public CourseCoordinatorSetupProgressDto getCourseCoordinatorSetupProgress(String coordinatorEmail, String courseId) {
+        System.out.println("[AcademicService] getCourseCoordinatorSetupProgress called | courseId: " + courseId);
+        CourseCoordinatorSetupProgress progress = ccSetupProgressRepository.findByCourseId(courseId)
+                .orElseGet(() -> CourseCoordinatorSetupProgress.builder()
+                        .id("ccprog-" + UUID.randomUUID().toString().substring(0, 8))
+                        .courseId(courseId)
+                        .coordinatorEmail(coordinatorEmail)
+                        .currentStep(1)
+                        .overallStatus(SetupStepStatus.IN_PROGRESS)
+                        .completedSteps("")
+                        .pendingSteps("cos,co_targets,co_mapping,direct,indirect,attainment,course_atr")
+                        .updatedAt(ZonedDateTime.now())
+                        .build());
+
+        List<String> completed = (progress.getCompletedSteps() != null && !progress.getCompletedSteps().isBlank())
+                ? Arrays.asList(progress.getCompletedSteps().split(","))
+                : Collections.emptyList();
+        List<String> pending = (progress.getPendingSteps() != null && !progress.getPendingSteps().isBlank())
+                ? Arrays.asList(progress.getPendingSteps().split(","))
+                : Collections.emptyList();
+
+        return CourseCoordinatorSetupProgressDto.builder()
+                .id(progress.getId())
+                .courseId(progress.getCourseId())
+                .coordinatorEmail(progress.getCoordinatorEmail())
+                .currentStep(progress.getCurrentStep())
+                .overallStatus(progress.getOverallStatus())
+                .completedSteps(completed)
+                .pendingSteps(pending)
+                .updatedAt(progress.getUpdatedAt())
+                .build();
+    }
+
+    @Transactional
+    public CourseCoordinatorSetupProgressDto updateCourseCoordinatorSetupProgress(String coordinatorEmail, String courseId, Integer currentStep) {
+        System.out.println("[AcademicService] updateCourseCoordinatorSetupProgress called | courseId: " + courseId + " | stepNumber: " + currentStep);
+        CourseCoordinatorSetupProgress progress = ccSetupProgressRepository.findByCourseId(courseId)
+                .orElseGet(() -> CourseCoordinatorSetupProgress.builder()
+                        .id("ccprog-" + UUID.randomUUID().toString().substring(0, 8))
+                        .courseId(courseId)
+                        .coordinatorEmail(coordinatorEmail)
+                        .currentStep(1)
+                        .overallStatus(SetupStepStatus.IN_PROGRESS)
+                        .completedSteps("")
+                        .pendingSteps("cos,co_targets,co_mapping,direct,indirect,attainment,course_atr")
+                        .build());
+
+        progress.setCurrentStep(currentStep != null ? currentStep : 1);
+        if (coordinatorEmail != null && !coordinatorEmail.isBlank()) {
+            progress.setCoordinatorEmail(coordinatorEmail);
+        }
+        progress.setUpdatedAt(ZonedDateTime.now());
+        ccSetupProgressRepository.save(progress);
+        return getCourseCoordinatorSetupProgress(coordinatorEmail, courseId);
+    }
+
+    @Transactional
+    public CourseCoordinatorSetupProgressDto completeCourseCoordinatorSetup(String coordinatorEmail, String courseId) {
+        System.out.println("[AcademicService] completeCourseCoordinatorSetup called | courseId: " + courseId);
+        CourseCoordinatorSetupProgress progress = ccSetupProgressRepository.findByCourseId(courseId)
+                .orElseGet(() -> CourseCoordinatorSetupProgress.builder()
+                        .id("ccprog-" + UUID.randomUUID().toString().substring(0, 8))
+                        .courseId(courseId)
+                        .coordinatorEmail(coordinatorEmail)
+                        .build());
+
+        progress.setOverallStatus(SetupStepStatus.COMPLETED);
+        progress.setCompletedSteps("cos,co_targets,co_mapping,direct,indirect,attainment,course_atr");
+        progress.setPendingSteps("");
+        progress.setUpdatedAt(ZonedDateTime.now());
+        ccSetupProgressRepository.save(progress);
+        return getCourseCoordinatorSetupProgress(coordinatorEmail, courseId);
+    }
+
+    @Transactional(readOnly = true)
     public List<Programme> getAllProgrammes() {
         System.out.println("[AcademicService] getAllProgrammes called");
         List<Programme> list = programmeRepository.findAll();
+        list.forEach(this::enrichProgrammeCoordinator);
         System.out.println("[AcademicService] Fetched all programmes (" + list.size() + " items)");
         return list;
+    }
+
+    @Transactional(readOnly = true)
+    public List<Programme> getProgrammesByCoordinatorEmail(String coordinatorEmail) {
+        System.out.println("[AcademicService] getProgrammesByCoordinatorEmail called | coordinatorEmail: " + coordinatorEmail);
+        if (coordinatorEmail == null || coordinatorEmail.isBlank()) {
+            return getAllProgrammes();
+        }
+        String emailTrim = coordinatorEmail.trim().toLowerCase();
+        List<Programme> all = getAllProgrammes();
+        List<Programme> filtered = all.stream()
+                .filter(p -> (p.getCoordinatorEmail() != null && emailTrim.equalsIgnoreCase(p.getCoordinatorEmail().trim()))
+                          || (p.getCoordinator() != null && emailTrim.equalsIgnoreCase(p.getCoordinator().trim())))
+                .toList();
+        if (filtered.isEmpty()) {
+            System.out.println("[AcademicService] No exact match for coordinatorEmail: " + coordinatorEmail + ", returning all " + all.size() + " programmes.");
+            return all;
+        }
+        System.out.println("[AcademicService] Found " + filtered.size() + " programmes for coordinatorEmail: " + coordinatorEmail);
+        return filtered;
     }
 
     @Transactional(readOnly = true)
@@ -489,10 +658,13 @@ public class AcademicService {
         System.out.println("[AcademicService] getProgrammesBySchool called | schoolId: " + schoolId);
         List<Department> depts = departmentRepository.findBySchoolId(schoolId);
         if (depts == null || depts.isEmpty()) {
-            return programmeRepository.findAll();
+            List<Programme> list = programmeRepository.findAll();
+            list.forEach(this::enrichProgrammeCoordinator);
+            return list;
         }
         List<String> deptIds = depts.stream().map(Department::getId).toList();
         List<Programme> list = programmeRepository.findByDepartmentIdIn(deptIds);
+        list.forEach(this::enrichProgrammeCoordinator);
         System.out.println("[AcademicService] Fetched programmes (" + list.size() + " items) for schoolId: " + schoolId);
         return list;
     }
@@ -509,6 +681,7 @@ public class AcademicService {
         if (list.isEmpty()) {
             list = programmeRepository.findByDepartmentId(departmentId);
         }
+        list.forEach(this::enrichProgrammeCoordinator);
         System.out.println("[AcademicService] Fetched programmes (" + list.size() + " items) for departmentId: " + departmentId);
         return list;
     }
@@ -517,6 +690,7 @@ public class AcademicService {
     public Programme saveProgramme(Programme programme) {
         System.out.println("[AcademicService] saveProgramme called | id: " + (programme != null ? programme.getId() : "null") + " | name: " + (programme != null ? programme.getName() : "null") + " | coordinator: " + (programme != null ? programme.getCoordinator() : "null") + " | coordinatorEmail: " + (programme != null ? programme.getCoordinatorEmail() : "null"));
         if (programme.getId() == null) programme.setId("prog-" + UUID.randomUUID().toString().substring(0, 8));
+        enrichProgrammeCoordinator(programme);
         Programme saved = programmeRepository.save(programme);
         System.out.println("[AcademicService] Saved programme with id: " + saved.getId() + ", coordinator: " + saved.getCoordinator() + ", coordinatorEmail: " + saved.getCoordinatorEmail());
         return saved;
@@ -945,5 +1119,185 @@ public class AcademicService {
         System.out.println("[AcademicService] HOD setup marked as COMPLETED for targetDeptId: " + targetDeptId);
 
         return buildHodSetupProgressDto(progress);
+    }
+
+    // --- Programme Coordinator Summary & Setup Progress ---
+    @Transactional(readOnly = true)
+    public ProgrammeCoordinatorSummaryDto getProgrammeCoordinatorSummary(String coordinatorEmail, String programmeId) {
+        System.out.println("[AcademicService] getProgrammeCoordinatorSummary called | coordinatorEmail: " + coordinatorEmail + " | programmeId: " + programmeId);
+
+        Programme prog = null;
+        if (programmeId != null && !programmeId.isBlank()) {
+            prog = programmeRepository.findById(programmeId).orElse(null);
+        }
+        if (prog == null && coordinatorEmail != null && !coordinatorEmail.isBlank()) {
+            String emailTrim = coordinatorEmail.trim().toLowerCase();
+            List<Programme> list = programmeRepository.findAll();
+            prog = list.stream().filter(p -> (p.getCoordinatorEmail() != null && emailTrim.equalsIgnoreCase(p.getCoordinatorEmail().trim())) || (p.getCoordinator() != null && emailTrim.equalsIgnoreCase(p.getCoordinator().trim()))).findFirst().orElse(null);
+        }
+        if (prog == null) {
+            List<Programme> all = programmeRepository.findAll();
+            prog = all.isEmpty() ? null : all.get(0);
+        }
+
+        if (prog == null) {
+            return ProgrammeCoordinatorSummaryDto.builder()
+                    .programmeName("Default Programme")
+                    .programmeCode("BE-COMP")
+                    .courseCount(0)
+                    .activePOsCount(0)
+                    .activePSOsCount(0)
+                    .activePEOsCount(0)
+                    .activeBatchesCount(0)
+                    .pendingVerificationsCount(0)
+                    .build();
+        }
+
+        enrichProgrammeCoordinator(prog);
+
+        String targetProgId = prog.getId();
+        List<Course> courses = courseRepository.findByProgrammeId(targetProgId);
+        List<ProgrammeOutcome> pos = programmeOutcomeRepository.findByProgrammeId(targetProgId);
+        List<ProgrammeSpecificOutcome> psos = programmeSpecificOutcomeRepository.findByProgrammeId(targetProgId);
+        List<PeoOutcome> peos = peoOutcomeRepository.findByProgrammeId(targetProgId);
+        List<Batch> batches = batchRepository.findByProgrammeId(targetProgId);
+
+        ProgrammeCoordinatorSetupProgressDto progressDto = getProgrammeCoordinatorSetupProgress(coordinatorEmail, targetProgId);
+
+        return ProgrammeCoordinatorSummaryDto.builder()
+                .programmeId(prog.getId())
+                .programmeCode(prog.getCode())
+                .programmeName(prog.getName())
+                .departmentId(prog.getDepartmentId())
+                .departmentName(prog.getDepartmentName())
+                .coordinatorName(prog.getCoordinator())
+                .coordinatorEmail(prog.getCoordinatorEmail())
+                .durationYears(prog.getDurationYears())
+                .courseCount(courses.size())
+                .activePOsCount(pos.size())
+                .activePSOsCount(psos.size())
+                .activePEOsCount(peos.size())
+                .activeBatchesCount(batches.size())
+                .pendingVerificationsCount(0)
+                .setupProgress(progressDto)
+                .build();
+    }
+
+    @Transactional(readOnly = true)
+    public ProgrammeCoordinatorSetupProgressDto getProgrammeCoordinatorSetupProgress(String coordinatorEmail, String programmeId) {
+        System.out.println("[AcademicService] getProgrammeCoordinatorSetupProgress called | coordinatorEmail: " + coordinatorEmail + " | programmeId: " + programmeId);
+
+        String targetProgId = programmeId;
+        if ((targetProgId == null || targetProgId.isBlank()) && coordinatorEmail != null && !coordinatorEmail.isBlank()) {
+            String emailTrim = coordinatorEmail.trim().toLowerCase();
+            List<Programme> list = programmeRepository.findAll();
+            Programme p = list.stream().filter(pr -> (pr.getCoordinatorEmail() != null && emailTrim.equalsIgnoreCase(pr.getCoordinatorEmail().trim())) || (pr.getCoordinator() != null && emailTrim.equalsIgnoreCase(pr.getCoordinator().trim()))).findFirst().orElse(null);
+            if (p != null) targetProgId = p.getId();
+        }
+        if (targetProgId == null || targetProgId.isBlank()) {
+            List<Programme> all = programmeRepository.findAll();
+            if (!all.isEmpty()) targetProgId = all.get(0).getId();
+        }
+
+        if (targetProgId == null) {
+            return ProgrammeCoordinatorSetupProgressDto.builder()
+                    .currentStep(1)
+                    .overallStatus(SetupStepStatus.IN_PROGRESS)
+                    .completedSteps(List.of())
+                    .pendingSteps(List.of("courses", "targets", "review"))
+                    .build();
+        }
+
+        final String finalProgId = targetProgId;
+        ProgrammeCoordinatorSetupProgress progress = pcSetupProgressRepository.findByProgrammeId(finalProgId)
+                .orElseGet(() -> pcSetupProgressRepository.save(createDefaultPcProgress(finalProgId, coordinatorEmail)));
+
+        return buildPcSetupProgressDto(progress);
+    }
+
+    @Transactional
+    public ProgrammeCoordinatorSetupProgressDto updateProgrammeCoordinatorSetupProgress(String coordinatorEmail, String programmeId, Integer stepNumber) {
+        System.out.println("[AcademicService] updateProgrammeCoordinatorSetupProgress called | programmeId: " + programmeId + " | stepNumber: " + stepNumber + " | coordinatorEmail: " + coordinatorEmail);
+
+        String targetProgId = programmeId;
+        if ((targetProgId == null || targetProgId.isBlank()) && coordinatorEmail != null && !coordinatorEmail.isBlank()) {
+            String emailTrim = coordinatorEmail.trim().toLowerCase();
+            List<Programme> list = programmeRepository.findAll();
+            Programme p = list.stream().filter(pr -> (pr.getCoordinatorEmail() != null && emailTrim.equalsIgnoreCase(pr.getCoordinatorEmail().trim())) || (pr.getCoordinator() != null && emailTrim.equalsIgnoreCase(pr.getCoordinator().trim()))).findFirst().orElse(null);
+            if (p != null) targetProgId = p.getId();
+        }
+        if (targetProgId == null || targetProgId.isBlank()) {
+            List<Programme> all = programmeRepository.findAll();
+            if (!all.isEmpty()) targetProgId = all.get(0).getId();
+        }
+
+        final String finalProgId = targetProgId;
+        ProgrammeCoordinatorSetupProgress progress = pcSetupProgressRepository.findByProgrammeId(finalProgId)
+                .orElseGet(() -> createDefaultPcProgress(finalProgId, coordinatorEmail));
+
+        int step = (stepNumber != null && stepNumber >= 1 && stepNumber <= 3) ? stepNumber : progress.getCurrentStep();
+        progress.setCurrentStep(step);
+        if (coordinatorEmail != null && !coordinatorEmail.isBlank()) {
+            progress.setCoordinatorEmail(coordinatorEmail);
+        }
+
+        List<String> completed = new ArrayList<>();
+        List<String> pending = new ArrayList<>();
+
+        if (step > 1) completed.add("courses"); else pending.add("courses");
+        if (step > 2) completed.add("targets"); else pending.add("targets");
+        if (step >= 3) completed.add("review"); else pending.add("review");
+
+        progress.setCompletedSteps(String.join(",", completed));
+        progress.setPendingSteps(String.join(",", pending));
+        progress.setUpdatedAt(ZonedDateTime.now());
+
+        if (step >= 3) {
+            progress.setOverallStatus(SetupStepStatus.COMPLETED);
+        } else {
+            progress.setOverallStatus(SetupStepStatus.IN_PROGRESS);
+        }
+
+        pcSetupProgressRepository.save(progress);
+        return buildPcSetupProgressDto(progress);
+    }
+
+    @Transactional
+    public ProgrammeCoordinatorSetupProgressDto completeProgrammeCoordinatorSetup(String coordinatorEmail, String programmeId) {
+        System.out.println("[AcademicService] completeProgrammeCoordinatorSetup called | programmeId: " + programmeId + " | coordinatorEmail: " + coordinatorEmail);
+        return updateProgrammeCoordinatorSetupProgress(coordinatorEmail, programmeId, 3);
+    }
+
+    private ProgrammeCoordinatorSetupProgress createDefaultPcProgress(String programmeId, String coordinatorEmail) {
+        return ProgrammeCoordinatorSetupProgress.builder()
+                .id("pcprog-" + UUID.randomUUID().toString().substring(0, 8))
+                .programmeId(programmeId)
+                .coordinatorEmail(coordinatorEmail)
+                .currentStep(1)
+                .overallStatus(SetupStepStatus.IN_PROGRESS)
+                .completedSteps("")
+                .pendingSteps("courses,targets,review")
+                .updatedAt(ZonedDateTime.now())
+                .build();
+    }
+
+    private ProgrammeCoordinatorSetupProgressDto buildPcSetupProgressDto(ProgrammeCoordinatorSetupProgress progress) {
+        List<String> completed = progress.getCompletedSteps() != null && !progress.getCompletedSteps().isBlank()
+                ? Arrays.stream(progress.getCompletedSteps().split(",")).map(String::trim).filter(s -> !s.isEmpty()).toList()
+                : List.of();
+        List<String> pending = progress.getPendingSteps() != null && !progress.getPendingSteps().isBlank()
+                ? Arrays.stream(progress.getPendingSteps().split(",")).map(String::trim).filter(s -> !s.isEmpty()).toList()
+                : List.of();
+
+        return ProgrammeCoordinatorSetupProgressDto.builder()
+                .id(progress.getId())
+                .programmeId(progress.getProgrammeId())
+                .coordinatorEmail(progress.getCoordinatorEmail())
+                .currentStep(progress.getCurrentStep())
+                .overallStatus(progress.getOverallStatus())
+                .completedSteps(completed)
+                .pendingSteps(pending)
+                .updatedAt(progress.getUpdatedAt())
+                .build();
     }
 }

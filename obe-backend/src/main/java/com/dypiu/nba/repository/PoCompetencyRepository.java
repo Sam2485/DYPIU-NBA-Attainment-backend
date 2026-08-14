@@ -9,5 +9,6 @@ import java.util.List;
 @Repository
 public interface PoCompetencyRepository extends JpaRepository<PoCompetency, String> {
     List<PoCompetency> findByPoId(String poId);
+    List<PoCompetency> findByPoIdOrderByCodeAsc(String poId);
     void deleteByPoId(String poId);
 }

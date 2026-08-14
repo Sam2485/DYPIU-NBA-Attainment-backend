@@ -1,6 +1,7 @@
 package com.dypiu.nba.controller;
 
 import com.dypiu.nba.dto.ApiResponse;
+import com.dypiu.nba.dto.ProgrammeTargetDto;
 import com.dypiu.nba.entity.*;
 import com.dypiu.nba.service.OutcomeService;
 import lombok.RequiredArgsConstructor;
@@ -81,6 +82,24 @@ public class OutcomeController {
                 .success(true)
                 .message("COs saved successfully")
                 .data(outcomeService.saveCOs(courseId, cos))
+                .build());
+    }
+
+    // --- Target Benchmark Levels ---
+    @GetMapping("/programmes/{programmeId}/targets")
+    public ResponseEntity<ApiResponse<ProgrammeTargetDto>> getProgrammeTargets(@PathVariable String programmeId) {
+        return ResponseEntity.ok(ApiResponse.<ProgrammeTargetDto>builder()
+                .success(true)
+                .data(outcomeService.getProgrammeTargets(programmeId))
+                .build());
+    }
+
+    @PostMapping("/programmes/{programmeId}/targets")
+    public ResponseEntity<ApiResponse<ProgrammeTargetDto>> saveProgrammeTargets(@PathVariable String programmeId, @RequestBody ProgrammeTargetDto targets) {
+        return ResponseEntity.ok(ApiResponse.<ProgrammeTargetDto>builder()
+                .success(true)
+                .message("Programme targets saved successfully")
+                .data(outcomeService.saveProgrammeTargets(programmeId, targets))
                 .build());
     }
 }
