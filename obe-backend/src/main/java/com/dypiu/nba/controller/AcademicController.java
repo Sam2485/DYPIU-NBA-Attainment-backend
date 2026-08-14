@@ -3,6 +3,8 @@ package com.dypiu.nba.controller;
 import com.dypiu.nba.dto.DirectorSetupProgressDto;
 import com.dypiu.nba.dto.DirectorSchoolSummaryDto;
 import com.dypiu.nba.dto.DepartmentSummaryDto;
+import com.dypiu.nba.dto.HodDepartmentSummaryDto;
+import com.dypiu.nba.dto.HodSetupProgressDto;
 import com.dypiu.nba.dto.UserDto;
 import com.dypiu.nba.dto.ApiResponse;
 import com.dypiu.nba.entity.*;
@@ -23,7 +25,7 @@ public class AcademicController {
     // --- Users by Role ---
     @GetMapping("/users")
     public ResponseEntity<ApiResponse<List<UserDto>>> getUsersByRole(
-            @RequestParam(required = true) String role) {
+            @RequestParam(required = false, defaultValue = "HOD") String role) {
         return ResponseEntity.ok(ApiResponse.<List<UserDto>>builder()
                 .success(true)
                 .data(academicService.getUsersByRole(role))
@@ -70,6 +72,39 @@ public class AcademicController {
                 .success(true)
                 .message("Director setup progress updated successfully")
                 .data(academicService.updateDirectorSetupProgress(schoolId, currentStep))
+                .build());
+    }
+
+    // --- HOD Department Summary ---
+    @GetMapping("/hod/department-summary")
+    public ResponseEntity<ApiResponse<HodDepartmentSummaryDto>> getHodDepartmentSummary(
+            @RequestParam(required = false) String hodEmail) {
+        return ResponseEntity.ok(ApiResponse.<HodDepartmentSummaryDto>builder()
+                .success(true)
+                .data(academicService.getHodDepartmentSummary(hodEmail))
+                .build());
+    }
+
+    // --- HOD Setup Progress ---
+    @GetMapping("/hod/setup-progress")
+    public ResponseEntity<ApiResponse<HodSetupProgressDto>> getHodSetupProgress(
+            @RequestParam(required = false) String departmentId,
+            @RequestParam(required = false) String hodEmail) {
+        return ResponseEntity.ok(ApiResponse.<HodSetupProgressDto>builder()
+                .success(true)
+                .data(academicService.getHodSetupProgress(departmentId, hodEmail))
+                .build());
+    }
+
+    @PostMapping("/hod/setup-progress")
+    public ResponseEntity<ApiResponse<HodSetupProgressDto>> updateHodSetupProgress(
+            @RequestParam(required = false) String departmentId,
+            @RequestParam(required = false, defaultValue = "1") Integer currentStep,
+            @RequestParam(required = false) String hodEmail) {
+        return ResponseEntity.ok(ApiResponse.<HodSetupProgressDto>builder()
+                .success(true)
+                .message("HOD setup progress updated successfully")
+                .data(academicService.updateHodSetupProgress(departmentId, currentStep, hodEmail))
                 .build());
     }
 

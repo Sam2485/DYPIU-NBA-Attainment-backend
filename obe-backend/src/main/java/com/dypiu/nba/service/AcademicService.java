@@ -10,6 +10,8 @@ import org.springframework.transaction.annotation.Transactional;
 import com.dypiu.nba.dto.DirectorSetupProgressDto;
 import com.dypiu.nba.dto.DirectorSchoolSummaryDto;
 import com.dypiu.nba.dto.DepartmentSummaryDto;
+import com.dypiu.nba.dto.HodDepartmentSummaryDto;
+import com.dypiu.nba.dto.HodSetupProgressDto;
 import com.dypiu.nba.dto.UserDto;
 import java.time.ZonedDateTime;
 import java.util.*;
@@ -25,6 +27,7 @@ public class AcademicService {
     private final CourseRepository courseRepository;
     private final StudentRepository studentRepository;
     private final DirectorSetupProgressRepository directorSetupProgressRepository;
+    private final HodSetupProgressRepository hodSetupProgressRepository;
     private final UserRepository userRepository;
 
     // --- Director School Summary ---
@@ -564,5 +567,218 @@ public class AcademicService {
     public void deleteStudent(String id) {
         studentRepository.deleteById(id);
         System.out.println("[AcademicService] Deleted student with id: " + id);
+    }
+
+    // --- HOD Department Summary ---
+    @Transactional(readOnly = true)
+    public HodDepartmentSummaryDto getHodDepartmentSummary(String hodEmail) {
+        System.out.println("[AcademicService] Starting HOD department summary fetch for hodEmail: " + hodEmail);
+
+        Department dept = null;
+
+        // 1. First search department repository by hodEmail
+        if (hodEmail != null && !hodEmail.isBlank()) {
+            Optional<Department> deptOpt = departmentRepository.findByHodEmailIgnoreCase(hodEmail);
+            if (deptOpt.isPresent()) {
+                dept = deptOpt.get();
+            }
+        }
+
+        // 2. If not found by hodEmail, look up user by email to get user.getDepartment()
+        if (dept == null && hodEmail != null && !hodEmail.isBlank()) {
+            Optional<User> userOpt = userRepository.findByEmail(hodEmail);
+            if (userOpt.isPresent() && userOpt.get().getDepartment() != null && !userOpt.get().getDepartment().isBlank()) {
+                String userDeptName = userOpt.get().getDepartment();
+                Optional<Department> deptOpt = departmentRepository.findByName(userDeptName);
+                if (deptOpt.isPresent()) {
+                    dept = deptOpt.get();
+                } else {
+                    List<Department> matches = departmentRepository.findAll().stream()
+                            .filter(d -> d.getName() != null && d.getName().equalsIgnoreCase(userDeptName))
+                            .toList();
+                    if (!matches.isEmpty()) {
+                        dept = matches.get(0);
+                    }
+                }
+            }
+        }
+
+        // 3. Fallback to first department if still null
+        if (dept == null) {
+            List<Department> allDepts = departmentRepository.findAll();
+            if (!allDepts.isEmpty()) {
+                dept = allDepts.get(0);
+            }
+        }
+
+        if (dept == null) {
+            return HodDepartmentSummaryDto.builder()
+                    .deptId(null)
+                    .deptCode(null)
+                    .deptName(null)
+                    .hodName(null)
+                    .hodEmail(hodEmail)
+                    .schoolId(null)
+                    .schoolName(null)
+                    .programmeCount(0)
+                    .assignedCoordinatorsCount(0)
+                    .courseCount(0)
+                    .setupProgress(getHodSetupProgress(null, hodEmail))
+                    .build();
+        }
+
+        String deptId = dept.getId();
+        String deptName = dept.getName();
+        String deptCode = dept.getCode();
+        String resolvedHodName = dept.getHod();
+        String resolvedHodEmail = (dept.getHodEmail() != null && !dept.getHodEmail().isBlank()) ? dept.getHodEmail() : hodEmail;
+        String schoolId = dept.getSchoolId();
+
+        // School info
+        String schoolName = "School of Engineering and Technology";
+        if (schoolId != null) {
+            Optional<School> schOpt = schoolRepository.findById(schoolId);
+            if (schOpt.isPresent()) {
+                schoolName = schOpt.get().getName();
+            }
+        }
+
+        // Programmes under department
+        List<Programme> programmes = programmeRepository.findByDepartmentIdOrDepartmentName(deptId, deptName);
+        int programmeCount = programmes.size();
+
+        // Count assigned coordinators
+        int assignedCoordinatorsCount = (int) programmes.stream()
+                .filter(p -> (p.getCoordinator() != null && !p.getCoordinator().isBlank() && !"Unassigned".equalsIgnoreCase(p.getCoordinator()) && !"No coordinator assigned yet".equalsIgnoreCase(p.getCoordinator()) && !"Pending HOD Assignment".equalsIgnoreCase(p.getCoordinator())) || (p.getCoordinatorEmail() != null && !p.getCoordinatorEmail().isBlank()))
+                .count();
+
+        // Courses under department's programmes
+        List<String> progIds = programmes.stream().map(Programme::getId).toList();
+        int courseCount = 0;
+        if (!progIds.isEmpty()) {
+            courseCount = courseRepository.findByProgrammeIdIn(progIds).size();
+        } else {
+            courseCount = courseRepository.findAll().size();
+        }
+
+        HodSetupProgressDto progressDto = getHodSetupProgress(deptId, resolvedHodEmail);
+
+        return HodDepartmentSummaryDto.builder()
+                .deptId(deptId)
+                .deptCode(deptCode)
+                .deptName(deptName)
+                .hodName(resolvedHodName)
+                .hodEmail(resolvedHodEmail)
+                .schoolId(schoolId)
+                .schoolName(schoolName)
+                .programmeCount(programmeCount)
+                .assignedCoordinatorsCount(assignedCoordinatorsCount)
+                .courseCount(courseCount)
+                .setupProgress(progressDto)
+                .build();
+    }
+
+    // --- HOD Setup Progress ---
+    @Transactional(readOnly = true)
+    public HodSetupProgressDto getHodSetupProgress(String departmentId, String hodEmail) {
+        Optional<HodSetupProgress> progressOpt = Optional.empty();
+
+        if (departmentId != null && !departmentId.isBlank()) {
+            progressOpt = hodSetupProgressRepository.findByDepartmentId(departmentId);
+        }
+        if (progressOpt.isEmpty() && hodEmail != null && !hodEmail.isBlank()) {
+            progressOpt = hodSetupProgressRepository.findByHodEmailIgnoreCase(hodEmail);
+        }
+
+        HodSetupProgress progress = progressOpt.orElseGet(() -> HodSetupProgress.builder()
+                .id("progress-dept-" + (departmentId != null ? departmentId : "default"))
+                .departmentId(departmentId != null ? departmentId : "dept-1")
+                .hodEmail(hodEmail)
+                .currentStep(1)
+                .overallStatus(SetupStepStatus.IN_PROGRESS)
+                .completedSteps("")
+                .pendingSteps("batch,outcomes,coordinators,review")
+                .updatedAt(ZonedDateTime.now())
+                .build());
+
+        return buildHodSetupProgressDto(progress);
+    }
+
+    @Transactional
+    public HodSetupProgressDto updateHodSetupProgress(String departmentId, Integer stepNumber, String hodEmail) {
+        String targetDeptId = (departmentId != null && !departmentId.isBlank()) ? departmentId : "dept-1";
+
+        Optional<HodSetupProgress> progressOpt = hodSetupProgressRepository.findByDepartmentId(targetDeptId);
+        if (progressOpt.isEmpty() && hodEmail != null && !hodEmail.isBlank()) {
+            progressOpt = hodSetupProgressRepository.findByHodEmailIgnoreCase(hodEmail);
+        }
+
+        HodSetupProgress progress = progressOpt.orElseGet(() -> HodSetupProgress.builder()
+                .id("progress-dept-" + targetDeptId)
+                .departmentId(targetDeptId)
+                .hodEmail(hodEmail)
+                .build());
+
+        int currentStep = (stepNumber != null && stepNumber >= 1 && stepNumber <= 4) ? stepNumber : 1;
+        progress.setCurrentStep(currentStep);
+
+        Set<String> completed = new LinkedHashSet<>();
+        if (progress.getCompletedSteps() != null && !progress.getCompletedSteps().isBlank()) {
+            completed.addAll(Arrays.asList(progress.getCompletedSteps().split(",")));
+        }
+
+        for (int i = 1; i < currentStep; i++) {
+            if (i == 1) completed.add("batch");
+            if (i == 2) completed.add("outcomes");
+            if (i == 3) completed.add("coordinators");
+        }
+        if (currentStep == 4) {
+            completed.add("batch");
+            completed.add("outcomes");
+            completed.add("coordinators");
+            completed.add("review");
+            progress.setOverallStatus(SetupStepStatus.COMPLETED);
+        } else {
+            progress.setOverallStatus(SetupStepStatus.IN_PROGRESS);
+        }
+
+        Set<String> allSteps = new LinkedHashSet<>(Arrays.asList("batch", "outcomes", "coordinators", "review"));
+        Set<String> pending = new LinkedHashSet<>();
+        for (String s : allSteps) {
+            if (!completed.contains(s)) {
+                pending.add(s);
+            }
+        }
+
+        progress.setCompletedSteps(String.join(",", completed));
+        progress.setPendingSteps(String.join(",", pending));
+        if (hodEmail != null && !hodEmail.isBlank()) {
+            progress.setHodEmail(hodEmail);
+        }
+        progress.setUpdatedAt(ZonedDateTime.now());
+
+        hodSetupProgressRepository.save(progress);
+        return buildHodSetupProgressDto(progress);
+    }
+
+    private HodSetupProgressDto buildHodSetupProgressDto(HodSetupProgress progress) {
+        List<String> completedList = (progress.getCompletedSteps() != null && !progress.getCompletedSteps().isBlank())
+                ? Arrays.asList(progress.getCompletedSteps().split(","))
+                : Collections.emptyList();
+
+        List<String> pendingList = (progress.getPendingSteps() != null && !progress.getPendingSteps().isBlank())
+                ? Arrays.asList(progress.getPendingSteps().split(","))
+                : Collections.emptyList();
+
+        return HodSetupProgressDto.builder()
+                .id(progress.getId())
+                .departmentId(progress.getDepartmentId())
+                .hodEmail(progress.getHodEmail())
+                .currentStep(progress.getCurrentStep())
+                .overallStatus(progress.getOverallStatus())
+                .completedSteps(completedList)
+                .pendingSteps(pendingList)
+                .updatedAt(progress.getUpdatedAt())
+                .build();
     }
 }
