@@ -3,6 +3,8 @@ package com.dypiu.nba.entity;
 import jakarta.persistence.*;
 import lombok.*;
 import java.time.ZonedDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "programme_outcomes")
@@ -28,6 +30,10 @@ public class ProgrammeOutcome {
     @Column(name = "academic_year", nullable = false)
     @Builder.Default
     private String academicYear = "2025-26";
+
+    @Transient
+    @Builder.Default
+    private List<PoCompetency> competencies = new ArrayList<>();
 
     @Column(name = "created_at", insertable = false, updatable = false)
     private ZonedDateTime createdAt;
