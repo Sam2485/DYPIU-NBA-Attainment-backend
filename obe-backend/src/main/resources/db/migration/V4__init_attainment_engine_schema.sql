@@ -1,7 +1,7 @@
 -- V4__init_attainment_engine_schema.sql
 -- Attainment Engine (Calculation Runs, Direct, Indirect, Overall CO & PO/PSO Attainment)
 
-CREATE TABLE calculation_runs (
+CREATE TABLE IF NOT EXISTS calculation_runs (
     id VARCHAR(50) PRIMARY KEY,
     course_id VARCHAR(50) REFERENCES courses(id) ON DELETE CASCADE,
     programme_id VARCHAR(50) REFERENCES programmes(id) ON DELETE CASCADE,
@@ -13,7 +13,7 @@ CREATE TABLE calculation_runs (
     executed_by VARCHAR(150)
 );
 
-CREATE TABLE direct_co_attainments (
+CREATE TABLE IF NOT EXISTS direct_co_attainments (
     id VARCHAR(50) PRIMARY KEY,
     run_id VARCHAR(50) NOT NULL REFERENCES calculation_runs(id) ON DELETE CASCADE,
     course_id VARCHAR(50) NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
@@ -27,7 +27,7 @@ CREATE TABLE direct_co_attainments (
     CONSTRAINT uq_run_direct_co UNIQUE (run_id, co_code)
 );
 
-CREATE TABLE indirect_co_attainments (
+CREATE TABLE IF NOT EXISTS indirect_co_attainments (
     id VARCHAR(50) PRIMARY KEY,
     run_id VARCHAR(50) NOT NULL REFERENCES calculation_runs(id) ON DELETE CASCADE,
     course_id VARCHAR(50) NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
@@ -41,7 +41,7 @@ CREATE TABLE indirect_co_attainments (
     CONSTRAINT uq_run_indirect_co UNIQUE (run_id, co_code)
 );
 
-CREATE TABLE overall_co_attainments (
+CREATE TABLE IF NOT EXISTS overall_co_attainments (
     id VARCHAR(50) PRIMARY KEY,
     run_id VARCHAR(50) NOT NULL REFERENCES calculation_runs(id) ON DELETE CASCADE,
     course_id VARCHAR(50) NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
@@ -55,7 +55,7 @@ CREATE TABLE overall_co_attainments (
     CONSTRAINT uq_run_overall_co UNIQUE (run_id, co_code)
 );
 
-CREATE TABLE po_attainments (
+CREATE TABLE IF NOT EXISTS po_attainments (
     id VARCHAR(50) PRIMARY KEY,
     run_id VARCHAR(50) NOT NULL REFERENCES calculation_runs(id) ON DELETE CASCADE,
     programme_id VARCHAR(50) NOT NULL REFERENCES programmes(id) ON DELETE CASCADE,
@@ -70,7 +70,7 @@ CREATE TABLE po_attainments (
     CONSTRAINT uq_run_po UNIQUE (run_id, po_code)
 );
 
-CREATE TABLE pso_attainments (
+CREATE TABLE IF NOT EXISTS pso_attainments (
     id VARCHAR(50) PRIMARY KEY,
     run_id VARCHAR(50) NOT NULL REFERENCES calculation_runs(id) ON DELETE CASCADE,
     programme_id VARCHAR(50) NOT NULL REFERENCES programmes(id) ON DELETE CASCADE,
@@ -85,5 +85,5 @@ CREATE TABLE pso_attainments (
     CONSTRAINT uq_run_pso UNIQUE (run_id, pso_code)
 );
 
-CREATE INDEX idx_calc_runs_course ON calculation_runs(course_id);
-CREATE INDEX idx_calc_runs_prog ON calculation_runs(programme_id);
+CREATE INDEX IF NOT EXISTS idx_calc_runs_course ON calculation_runs(course_id);
+CREATE INDEX IF NOT EXISTS idx_calc_runs_prog ON calculation_runs(programme_id);

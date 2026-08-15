@@ -1179,16 +1179,13 @@ public class AcademicService {
         System.out.println("[AcademicService] getProgrammeCoordinatorSummary called | coordinatorEmail: " + coordinatorEmail + " | programmeId: " + programmeId);
 
         List<Programme> allProgrammes = programmeRepository.findAll();
-        List<Programme> assignedProgrammes = new ArrayList<>();
-        if (coordinatorEmail != null && !coordinatorEmail.isBlank()) {
-            String emailTrim = coordinatorEmail.trim().toLowerCase();
-            assignedProgrammes = allProgrammes.stream()
-                    .filter(p -> (p.getCoordinatorEmail() != null && emailTrim.equalsIgnoreCase(p.getCoordinatorEmail().trim()))
-                              || (p.getCoordinator() != null && emailTrim.equalsIgnoreCase(p.getCoordinator().trim())))
-                    .collect(Collectors.toList());
-        }
-        if (assignedProgrammes.isEmpty()) {
+        List<Programme> assignedProgrammes = getProgrammesByCoordinatorEmail(coordinatorEmail);
+        if (assignedProgrammes == null || assignedProgrammes.isEmpty()) {
             assignedProgrammes = allProgrammes;
+        }
+
+        for (Programme p : assignedProgrammes) {
+            enrichProgrammeCoordinator(p);
         }
 
         Programme prog = null;

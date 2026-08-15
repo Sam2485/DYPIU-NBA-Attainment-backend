@@ -1,18 +1,18 @@
 -- V1__init_academic_and_user_schema.sql
 -- Academic Management & User/Access Control Schema
 
-CREATE TABLE schools (
+CREATE TABLE IF NOT EXISTS schools (
     id VARCHAR(50) PRIMARY KEY,
     code VARCHAR(20) NOT NULL UNIQUE,
     name VARCHAR(255) NOT NULL,
-    dean VARCHAR(150),
+    director VARCHAR(150),
     est_year VARCHAR(10),
-    email VARCHAR(150),
+    director_email VARCHAR(150),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE departments (
+CREATE TABLE IF NOT EXISTS departments (
     id VARCHAR(50) PRIMARY KEY,
     school_id VARCHAR(50) NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
     code VARCHAR(20) NOT NULL,
@@ -25,7 +25,7 @@ CREATE TABLE departments (
     CONSTRAINT uq_department_school_code UNIQUE (school_id, code)
 );
 
-CREATE TABLE programmes (
+CREATE TABLE IF NOT EXISTS programmes (
     id VARCHAR(50) PRIMARY KEY,
     department_id VARCHAR(50) NOT NULL REFERENCES departments(id) ON DELETE CASCADE,
     code VARCHAR(20) NOT NULL UNIQUE,
@@ -39,7 +39,7 @@ CREATE TABLE programmes (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE academic_years (
+CREATE TABLE IF NOT EXISTS academic_years (
     id VARCHAR(50) PRIMARY KEY,
     year_name VARCHAR(20) NOT NULL UNIQUE, -- e.g. "2025-26"
     start_date DATE,
@@ -48,7 +48,7 @@ CREATE TABLE academic_years (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE batches (
+CREATE TABLE IF NOT EXISTS batches (
     id VARCHAR(50) PRIMARY KEY,
     programme_id VARCHAR(50) NOT NULL REFERENCES programmes(id) ON DELETE CASCADE,
     programme_code VARCHAR(20) NOT NULL,
@@ -63,7 +63,7 @@ CREATE TABLE batches (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE semesters (
+CREATE TABLE IF NOT EXISTS semesters (
     id VARCHAR(50) PRIMARY KEY,
     batch_id VARCHAR(50) NOT NULL REFERENCES batches(id) ON DELETE CASCADE,
     semester_num INT NOT NULL, -- 1 to 8
@@ -73,7 +73,7 @@ CREATE TABLE semesters (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE courses (
+CREATE TABLE IF NOT EXISTS courses (
     id VARCHAR(50) PRIMARY KEY,
     code VARCHAR(50) NOT NULL,
     name VARCHAR(255) NOT NULL,
@@ -87,7 +87,7 @@ CREATE TABLE courses (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE students (
+CREATE TABLE IF NOT EXISTS students (
     id VARCHAR(50) PRIMARY KEY,
     batch_id VARCHAR(50) NOT NULL REFERENCES batches(id) ON DELETE CASCADE,
     prn VARCHAR(50) NOT NULL UNIQUE,
@@ -98,7 +98,7 @@ CREATE TABLE students (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
     id BIGSERIAL PRIMARY KEY,
     username VARCHAR(100) NOT NULL UNIQUE,
     email VARCHAR(150) NOT NULL UNIQUE,
@@ -113,11 +113,11 @@ CREATE TABLE users (
 );
 
 -- Indexes for fast query resolution
-CREATE INDEX idx_departments_school ON departments(school_id);
-CREATE INDEX idx_programmes_dept ON programmes(department_id);
-CREATE INDEX idx_batches_prog ON batches(programme_id);
-CREATE INDEX idx_semesters_batch ON semesters(batch_id);
-CREATE INDEX idx_courses_prog ON courses(programme_id);
-CREATE INDEX idx_students_batch ON students(batch_id);
-CREATE INDEX idx_users_username ON users(username);
-CREATE INDEX idx_users_email ON users(email);
+CREATE INDEX IF NOT EXISTS idx_departments_school ON departments(school_id);
+CREATE INDEX IF NOT EXISTS idx_programmes_dept ON programmes(department_id);
+CREATE INDEX IF NOT EXISTS idx_batches_prog ON batches(programme_id);
+CREATE INDEX IF NOT EXISTS idx_semesters_batch ON semesters(batch_id);
+CREATE INDEX IF NOT EXISTS idx_courses_prog ON courses(programme_id);
+CREATE INDEX IF NOT EXISTS idx_students_batch ON students(batch_id);
+CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
+CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);

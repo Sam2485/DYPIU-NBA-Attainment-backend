@@ -1,7 +1,7 @@
 -- V5__init_atr_and_approval_schema.sql
 -- Action Taken Reports (ATR) & Approval Workflow Schema
 
-CREATE TABLE course_atrs (
+CREATE TABLE IF NOT EXISTS course_atrs (
     id VARCHAR(50) PRIMARY KEY,
     course_id VARCHAR(50) NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
     co_code VARCHAR(30) NOT NULL,
@@ -17,7 +17,7 @@ CREATE TABLE course_atrs (
     CONSTRAINT uq_course_atr_co UNIQUE (course_id, co_code)
 );
 
-CREATE TABLE programme_atrs (
+CREATE TABLE IF NOT EXISTS programme_atrs (
     id VARCHAR(50) PRIMARY KEY,
     programme_id VARCHAR(50) NOT NULL REFERENCES programmes(id) ON DELETE CASCADE,
     batch_id VARCHAR(50) REFERENCES batches(id) ON DELETE CASCADE,
@@ -32,7 +32,7 @@ CREATE TABLE programme_atrs (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE approval_requests (
+CREATE TABLE IF NOT EXISTS approval_requests (
     id VARCHAR(50) PRIMARY KEY,
     type VARCHAR(50) NOT NULL, -- PO_PSO_FRAMEWORK, PROGRAMME_ATR, COURSE_CO_WEIGHTAGES, PROGRAMME_TARGETS, COURSE_ALLOCATION, COURSE_ATR
     title VARCHAR(255) NOT NULL,
@@ -50,7 +50,7 @@ CREATE TABLE approval_requests (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE approval_history (
+CREATE TABLE IF NOT EXISTS approval_history (
     id VARCHAR(50) PRIMARY KEY,
     approval_request_id VARCHAR(50) NOT NULL REFERENCES approval_requests(id) ON DELETE CASCADE,
     actor_name VARCHAR(150) NOT NULL,
@@ -60,6 +60,6 @@ CREATE TABLE approval_history (
     timestamp TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_course_atr_course ON course_atrs(course_id);
-CREATE INDEX idx_programme_atr_prog ON programme_atrs(programme_id);
-CREATE INDEX idx_approval_requests_status ON approval_requests(status);
+CREATE INDEX IF NOT EXISTS idx_course_atr_course ON course_atrs(course_id);
+CREATE INDEX IF NOT EXISTS idx_programme_atr_prog ON programme_atrs(programme_id);
+CREATE INDEX IF NOT EXISTS idx_approval_requests_status ON approval_requests(status);
