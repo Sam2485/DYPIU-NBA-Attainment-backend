@@ -13,8 +13,9 @@ public class CourseCoordinatorSummaryDto {
     private String coordinatorName;
     private String coordinatorEmail;
     private int assignedCourseCount;
-    private int completedWorkflowCount;
-    private int pendingAttainmentCount;
-    private int pendingAtrCount;
     private List<Course> assignedCourses;
+    private CourseCoordinatorSetupProgressDto setupProgress;
+    private int courseOutcomesCount;
+    private int poCount;
+    private int psoCount;
 }

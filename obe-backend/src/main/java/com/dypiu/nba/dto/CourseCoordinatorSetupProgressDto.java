@@ -12,9 +12,7 @@ import java.util.List;
 public class CourseCoordinatorSetupProgressDto {
     private String id;
     private String courseId;
-    private String coordinatorEmail;
     private Integer currentStep;
-    private SetupStepStatus overallStatus;
     private List<String> completedSteps;
     private List<String> pendingSteps;
     private ZonedDateTime updatedAt;
