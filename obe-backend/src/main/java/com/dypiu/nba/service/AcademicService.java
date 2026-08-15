@@ -19,6 +19,8 @@ import com.dypiu.nba.dto.CourseCoordinatorSetupProgressDto;
 import com.dypiu.nba.dto.UserDto;
 import java.time.ZonedDateTime;
 import java.util.*;
+import java.util.stream.Collectors;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -1176,34 +1178,72 @@ public class AcademicService {
     public ProgrammeCoordinatorSummaryDto getProgrammeCoordinatorSummary(String coordinatorEmail, String programmeId) {
         System.out.println("[AcademicService] getProgrammeCoordinatorSummary called | coordinatorEmail: " + coordinatorEmail + " | programmeId: " + programmeId);
 
+        List<Programme> allProgrammes = programmeRepository.findAll();
+        List<Programme> assignedProgrammes = new ArrayList<>();
+        if (coordinatorEmail != null && !coordinatorEmail.isBlank()) {
+            String emailTrim = coordinatorEmail.trim().toLowerCase();
+            assignedProgrammes = allProgrammes.stream()
+                    .filter(p -> (p.getCoordinatorEmail() != null && emailTrim.equalsIgnoreCase(p.getCoordinatorEmail().trim()))
+                              || (p.getCoordinator() != null && emailTrim.equalsIgnoreCase(p.getCoordinator().trim())))
+                    .collect(Collectors.toList());
+        }
+        if (assignedProgrammes.isEmpty()) {
+            assignedProgrammes = allProgrammes;
+        }
+
         Programme prog = null;
         if (programmeId != null && !programmeId.isBlank()) {
-            prog = programmeRepository.findById(programmeId).orElse(null);
+            String pId = programmeId.trim();
+            prog = assignedProgrammes.stream().filter(p -> pId.equals(p.getId())).findFirst()
+                    .orElseGet(() -> allProgrammes.stream().filter(p -> pId.equals(p.getId())).findFirst().orElse(null));
         }
-        if (prog == null && coordinatorEmail != null && !coordinatorEmail.isBlank()) {
-            String emailTrim = coordinatorEmail.trim().toLowerCase();
-            List<Programme> list = programmeRepository.findAll();
-            prog = list.stream().filter(p -> (p.getCoordinatorEmail() != null && emailTrim.equalsIgnoreCase(p.getCoordinatorEmail().trim())) || (p.getCoordinator() != null && emailTrim.equalsIgnoreCase(p.getCoordinator().trim()))).findFirst().orElse(null);
+        if (prog == null && !assignedProgrammes.isEmpty()) {
+            prog = assignedProgrammes.get(0);
         }
-        if (prog == null) {
-            List<Programme> all = programmeRepository.findAll();
-            prog = all.isEmpty() ? null : all.get(0);
+        if (prog == null && !allProgrammes.isEmpty()) {
+            prog = allProgrammes.get(0);
+        }
+
+        String resolvedName = "Programme Coordinator";
+        String resolvedEmail = coordinatorEmail != null ? coordinatorEmail : "";
+
+        if (prog != null) {
+            enrichProgrammeCoordinator(prog);
+            if (prog.getCoordinator() != null && !prog.getCoordinator().isBlank()) {
+                resolvedName = prog.getCoordinator();
+            }
+            if (resolvedEmail.isBlank() && prog.getCoordinatorEmail() != null && !prog.getCoordinatorEmail().isBlank()) {
+                resolvedEmail = prog.getCoordinatorEmail();
+            }
         }
 
         if (prog == null) {
+            ProgrammeCoordinatorSetupProgressDto emptyProgress = ProgrammeCoordinatorSetupProgressDto.builder()
+                    .currentStep(1)
+                    .overallStatus(SetupStepStatus.IN_PROGRESS)
+                    .completedSteps(List.of())
+                    .pendingSteps(List.of("programme setup", "po/pso target", "programme atr", "verify&finish"))
+                    .build();
+
             return ProgrammeCoordinatorSummaryDto.builder()
-                    .programmeName("Default Programme")
-                    .programmeCode("BE-COMP")
+                    .coordinatorName(resolvedName)
+                    .coordinatorEmail(resolvedEmail)
+                    .programmeId("")
+                    .programmeCode("—")
+                    .programmeName("No Programme Assigned Yet")
+                    .departmentId("")
+                    .departmentName("")
+                    .durationYears(4)
                     .courseCount(0)
                     .activePOsCount(0)
                     .activePSOsCount(0)
                     .activePEOsCount(0)
                     .activeBatchesCount(0)
                     .pendingVerificationsCount(0)
+                    .assignedProgrammes(assignedProgrammes)
+                    .setupProgress(emptyProgress)
                     .build();
         }
-
-        enrichProgrammeCoordinator(prog);
 
         String targetProgId = prog.getId();
         List<Course> courses = courseRepository.findByProgrammeId(targetProgId);
@@ -1220,8 +1260,8 @@ public class AcademicService {
                 .programmeName(prog.getName())
                 .departmentId(prog.getDepartmentId())
                 .departmentName(prog.getDepartmentName())
-                .coordinatorName(prog.getCoordinator())
-                .coordinatorEmail(prog.getCoordinatorEmail())
+                .coordinatorName(resolvedName)
+                .coordinatorEmail(resolvedEmail)
                 .durationYears(prog.getDurationYears())
                 .courseCount(courses.size())
                 .activePOsCount(pos.size())
@@ -1229,6 +1269,7 @@ public class AcademicService {
                 .activePEOsCount(peos.size())
                 .activeBatchesCount(batches.size())
                 .pendingVerificationsCount(0)
+                .assignedProgrammes(assignedProgrammes)
                 .setupProgress(progressDto)
                 .build();
     }
@@ -1254,7 +1295,7 @@ public class AcademicService {
                     .currentStep(1)
                     .overallStatus(SetupStepStatus.IN_PROGRESS)
                     .completedSteps(List.of())
-                    .pendingSteps(List.of("courses", "targets", "review"))
+                    .pendingSteps(List.of("programme setup", "po/pso target", "programme atr", "verify&finish"))
                     .build();
         }
 
@@ -1294,9 +1335,10 @@ public class AcademicService {
         List<String> completed = new ArrayList<>();
         List<String> pending = new ArrayList<>();
 
-        if (step > 1) completed.add("courses"); else pending.add("courses");
-        if (step > 2) completed.add("targets"); else pending.add("targets");
-        if (step >= 3) completed.add("review"); else pending.add("review");
+        if (step > 1) completed.add("programme setup"); else pending.add("programme setup");
+        if (step > 2) completed.add("po/pso target"); else pending.add("po/pso target");
+        if (step >= 3) completed.add("programme atr"); else pending.add("programme atr");
+        if (step >= 3) completed.add("verify&finish"); else pending.add("verify&finish");
 
         progress.setCompletedSteps(String.join(",", completed));
         progress.setPendingSteps(String.join(",", pending));
@@ -1326,7 +1368,7 @@ public class AcademicService {
                 .currentStep(1)
                 .overallStatus(SetupStepStatus.IN_PROGRESS)
                 .completedSteps("")
-                .pendingSteps("courses,targets,review")
+                .pendingSteps("programme setup,po/pso target,programme atr,verify&finish")
                 .updatedAt(ZonedDateTime.now())
                 .build();
     }

@@ -1,6 +1,8 @@
 package com.dypiu.nba.dto;
 
+import com.dypiu.nba.entity.Programme;
 import lombok.*;
+import java.util.List;
 
 @Data
 @Builder
@@ -21,5 +23,6 @@ public class ProgrammeCoordinatorSummaryDto {
     private Integer activePEOsCount;
     private Integer activeBatchesCount;
     private Integer pendingVerificationsCount;
+    private List<Programme> assignedProgrammes;
     private ProgrammeCoordinatorSetupProgressDto setupProgress;
 }
