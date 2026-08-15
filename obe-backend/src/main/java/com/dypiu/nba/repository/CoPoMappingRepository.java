@@ -8,5 +8,7 @@ import java.util.List;
 @Repository
 public interface CoPoMappingRepository extends JpaRepository<CoPoMapping, String> {
     List<CoPoMapping> findByCourseOutcomeId(String courseOutcomeId);
+    List<CoPoMapping> findByCourseOutcomeIdIn(List<String> courseOutcomeIds);
     void deleteByCourseOutcomeId(String courseOutcomeId);
+    void deleteByCourseOutcomeIdIn(List<String> courseOutcomeIds);
 }

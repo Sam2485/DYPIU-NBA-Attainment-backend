@@ -39,6 +39,7 @@ com/dypiu/nba/entity/ProgrammeTarget$ProgrammeTargetBuilder.class
 com/dypiu/nba/dto/CourseCoordinatorSummaryDto.class
 com/dypiu/nba/security/JwtAuthenticationEntryPoint.class
 com/dypiu/nba/dto/DirectorSchoolSummaryDto$DirectorSchoolSummaryDtoBuilder.class
+com/dypiu/nba/dto/CourseMappingMatrixDto$CourseMappingMatrixDtoBuilder.class
 com/dypiu/nba/repository/HodSetupProgressRepository.class
 com/dypiu/nba/service/MappingService.class
 com/dypiu/nba/entity/ApprovalRequest.class
@@ -118,6 +119,7 @@ com/dypiu/nba/entity/CoPsoMapping.class
 com/dypiu/nba/entity/Batch.class
 com/dypiu/nba/dto/CourseCoordinatorSetupProgressDto.class
 com/dypiu/nba/repository/StudentCoMarkRepository.class
+com/dypiu/nba/dto/CourseMappingMatrixDto.class
 com/dypiu/nba/repository/BatchRepository.class
 com/dypiu/nba/entity/CourseOutcome$CourseOutcomeBuilder.class
 com/dypiu/nba/controller/AttainmentController.class

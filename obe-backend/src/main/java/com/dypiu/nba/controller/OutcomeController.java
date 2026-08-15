@@ -102,4 +102,22 @@ public class OutcomeController {
                 .data(outcomeService.saveProgrammeTargets(programmeId, targets))
                 .build());
     }
+
+    // --- CO to PO/PSO Mapping Matrix ---
+    @GetMapping("/courses/{courseId}/mappings")
+    public ResponseEntity<ApiResponse<com.dypiu.nba.dto.CourseMappingMatrixDto>> getCourseMappings(@PathVariable String courseId) {
+        return ResponseEntity.ok(ApiResponse.<com.dypiu.nba.dto.CourseMappingMatrixDto>builder()
+                .success(true)
+                .data(outcomeService.getCourseMappings(courseId))
+                .build());
+    }
+
+    @PostMapping("/courses/{courseId}/mappings")
+    public ResponseEntity<ApiResponse<com.dypiu.nba.dto.CourseMappingMatrixDto>> saveCourseMappings(@PathVariable String courseId, @RequestBody com.dypiu.nba.dto.CourseMappingMatrixDto dto) {
+        return ResponseEntity.ok(ApiResponse.<com.dypiu.nba.dto.CourseMappingMatrixDto>builder()
+                .success(true)
+                .message("Course mappings saved successfully")
+                .data(outcomeService.saveCourseMappings(courseId, dto))
+                .build());
+    }
 }

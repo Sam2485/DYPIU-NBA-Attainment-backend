@@ -3,6 +3,7 @@ package com.dypiu.nba.service;
 import com.dypiu.nba.entity.*;
 import com.dypiu.nba.repository.*;
 import com.dypiu.nba.dto.ProgrammeTargetDto;
+import com.dypiu.nba.dto.CourseMappingMatrixDto;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,6 +24,8 @@ public class OutcomeService {
     private final PsoCompetencyRepository psoCompetencyRepository;
     private final ProgrammeTargetRepository targetRepository;
     private final CourseRepository courseRepository;
+    private final CoPoMappingRepository coPoMappingRepository;
+    private final CoPsoMappingRepository coPsoMappingRepository;
 
     private static final Comparator<String> NATURAL_CODE_COMPARATOR = (c1, c2) -> {
         if (c1 == null) return -1;
@@ -39,10 +42,17 @@ public class OutcomeService {
         return c1.compareToIgnoreCase(c2);
     };
 
-    @Transactional(readOnly = true)
+    private final Map<String, Map<String, Object>> coursePoKeywordsMap = new java.util.concurrent.ConcurrentHashMap<>();
+    private final Map<String, Map<String, Object>> coursePsoKeywordsMap = new java.util.concurrent.ConcurrentHashMap<>();
+
+    @Transactional
     public List<ProgrammeOutcome> getPOsByProgramme(String programmeId) {
         System.out.println("[OutcomeService] getPOsByProgramme called | programmeId: " + programmeId);
         List<ProgrammeOutcome> list = poRepository.findByProgrammeIdOrderByCodeAsc(programmeId);
+        if (list.isEmpty()) {
+            System.out.println("[OutcomeService] No POs found in DB for programmeId: " + programmeId + ". Seeding default POs...");
+            list = seedDefaultPOs(programmeId);
+        }
         for (ProgrammeOutcome po : list) {
             List<PoCompetency> comps = poCompetencyRepository.findByPoIdOrderByCodeAsc(po.getId());
             comps.sort(Comparator.comparing(PoCompetency::getCode, NATURAL_CODE_COMPARATOR));
@@ -51,6 +61,58 @@ public class OutcomeService {
         list.sort(Comparator.comparing(ProgrammeOutcome::getCode, NATURAL_CODE_COMPARATOR));
         System.out.println("[OutcomeService] Fetched POs (" + list.size() + " items) with competencies for programmeId: " + programmeId);
         return list;
+    }
+
+    private List<ProgrammeOutcome> seedDefaultPOs(String programmeId) {
+        String pId = (programmeId != null && !programmeId.isBlank()) ? programmeId : "prog-1";
+        String[][] poDefs = {
+            {"PO1", "Engineering Knowledge: Apply knowledge of mathematics, science, engineering fundamentals, and computer engineering to solve complex problems."},
+            {"PO2", "Problem Analysis: Identify, formulate, review research literature, and analyze complex engineering problems reaching substantiated conclusions."},
+            {"PO3", "Design/Development of Solutions: Design solutions for complex engineering problems and design system components or processes."},
+            {"PO4", "Conduct Investigations of Complex Problems: Use research-based knowledge and research methods including design of experiments, analysis and interpretation of data."},
+            {"PO5", "Modern Tool Usage: Create, select, and apply appropriate techniques, resources, and modern engineering and IT tools."},
+            {"PO6", "The Engineer and Society: Apply reasoning informed by contextual knowledge to assess societal, health, safety, legal and cultural issues."},
+            {"PO7", "Environment and Sustainability: Understand the impact of professional engineering solutions in societal and environmental contexts."},
+            {"PO8", "Ethics: Apply ethical principles and commit to professional ethics and responsibilities and norms of engineering practice."},
+            {"PO9", "Individual and Team Work: Function effectively as an individual, and as a member or leader in diverse teams, and in multidisciplinary settings."},
+            {"PO10", "Communication: Communicate effectively on complex engineering activities with the engineering community and with society at large."},
+            {"PO11", "Project Management and Finance: Demonstrate knowledge and understanding of engineering and management principles and apply these to manage projects."},
+            {"PO12", "Life-long Learning: Recognize the need for, and have the preparation and ability to engage in independent and life-long learning in the broadest context of technological change."}
+        };
+
+        List<ProgrammeOutcome> posToSave = new ArrayList<>();
+        for (String[] def : poDefs) {
+            String code = def[0];
+            String stmt = def[1];
+            String poId = "po-" + pId + "-" + code.toLowerCase();
+
+            ProgrammeOutcome po = ProgrammeOutcome.builder()
+                    .id(poId)
+                    .programmeId(pId)
+                    .code(code)
+                    .statement(stmt)
+                    .academicYear("2025-26")
+                    .build();
+            poRepository.save(po);
+
+            List<PoCompetency> comps = new ArrayList<>();
+            comps.add(PoCompetency.builder()
+                    .id("comp-" + poId + "-1")
+                    .poId(poId)
+                    .code(code + ".1")
+                    .statement("Demonstrate core competency and analytical skills for " + code)
+                    .build());
+            comps.add(PoCompetency.builder()
+                    .id("comp-" + poId + "-2")
+                    .poId(poId)
+                    .code(code + ".2")
+                    .statement("Apply contextual knowledge and modern methods for " + code)
+                    .build());
+            poCompetencyRepository.saveAll(comps);
+            po.setCompetencies(comps);
+            posToSave.add(po);
+        }
+        return posToSave;
     }
 
     @Transactional
@@ -146,10 +208,14 @@ public class OutcomeService {
         return saved;
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public List<ProgrammeSpecificOutcome> getPSOsByProgramme(String programmeId) {
         System.out.println("[OutcomeService] getPSOsByProgramme called | programmeId: " + programmeId);
         List<ProgrammeSpecificOutcome> list = psoRepository.findByProgrammeIdOrderByCodeAsc(programmeId);
+        if (list.isEmpty()) {
+            System.out.println("[OutcomeService] No PSOs found in DB for programmeId: " + programmeId + ". Seeding default PSOs...");
+            list = seedDefaultPSOs(programmeId);
+        }
         for (ProgrammeSpecificOutcome pso : list) {
             List<PsoCompetency> comps = psoCompetencyRepository.findByPsoIdOrderByCodeAsc(pso.getId());
             comps.sort(Comparator.comparing(PsoCompetency::getCode, NATURAL_CODE_COMPARATOR));
@@ -158,6 +224,49 @@ public class OutcomeService {
         list.sort(Comparator.comparing(ProgrammeSpecificOutcome::getCode, NATURAL_CODE_COMPARATOR));
         System.out.println("[OutcomeService] Fetched PSOs (" + list.size() + " items) with competencies for programmeId: " + programmeId);
         return list;
+    }
+
+    private List<ProgrammeSpecificOutcome> seedDefaultPSOs(String programmeId) {
+        String pId = (programmeId != null && !programmeId.isBlank()) ? programmeId : "prog-1";
+        String[][] psoDefs = {
+            {"PSO1", "Software System Design & Development: Ability to design, build, test and maintain scalable software applications using modern frameworks."},
+            {"PSO2", "Data Analytics & AI Integration: Ability to apply data structures, machine learning algorithms and statistical models to extract insights."},
+            {"PSO3", "Network Architecture & Security: Ability to configure, analyze and secure computer networks, cloud infrastructure and distributed systems."}
+        };
+
+        List<ProgrammeSpecificOutcome> psosToSave = new ArrayList<>();
+        for (String[] def : psoDefs) {
+            String code = def[0];
+            String stmt = def[1];
+            String psoId = "pso-" + pId + "-" + code.toLowerCase();
+
+            ProgrammeSpecificOutcome pso = ProgrammeSpecificOutcome.builder()
+                    .id(psoId)
+                    .programmeId(pId)
+                    .code(code)
+                    .statement(stmt)
+                    .academicYear("2025-26")
+                    .build();
+            psoRepository.save(pso);
+
+            List<PsoCompetency> comps = new ArrayList<>();
+            comps.add(PsoCompetency.builder()
+                    .id("psocomp-" + psoId + "-1")
+                    .psoId(psoId)
+                    .code(code + ".1")
+                    .statement("Demonstrate specialized domain skill statement 1 for " + code)
+                    .build());
+            comps.add(PsoCompetency.builder()
+                    .id("psocomp-" + psoId + "-2")
+                    .psoId(psoId)
+                    .code(code + ".2")
+                    .statement("Implement practical design and architecture solutions for " + code)
+                    .build());
+            psoCompetencyRepository.saveAll(comps);
+            pso.setCompetencies(comps);
+            psosToSave.add(pso);
+        }
+        return psosToSave;
     }
 
     @Transactional
@@ -451,5 +560,81 @@ public class OutcomeService {
         }
 
         return getProgrammeTargets(programmeId);
+    }
+
+    @Transactional(readOnly = true)
+    public CourseMappingMatrixDto getCourseMappings(String courseId) {
+        String targetCourseId = resolveTargetCourseId(courseId);
+        Course course = courseRepository.findById(targetCourseId).orElse(null);
+        String progId = course != null ? course.getProgrammeId() : "prog-1";
+
+        List<CourseOutcome> cos = coRepository.findByCourseId(targetCourseId);
+        List<String> coIds = cos.stream().map(CourseOutcome::getId).collect(Collectors.toList());
+
+        List<CoPoMapping> poMappings = coIds.isEmpty() ? Collections.emptyList() : coPoMappingRepository.findByCourseOutcomeIdIn(coIds);
+        List<CoPsoMapping> psoMappings = coIds.isEmpty() ? Collections.emptyList() : coPsoMappingRepository.findByCourseOutcomeIdIn(coIds);
+
+        Map<String, Object> poKw = coursePoKeywordsMap.getOrDefault(targetCourseId, Collections.emptyMap());
+        Map<String, Object> psoKw = coursePsoKeywordsMap.getOrDefault(targetCourseId, Collections.emptyMap());
+
+        return CourseMappingMatrixDto.builder()
+                .courseId(targetCourseId)
+                .programmeId(progId)
+                .poMappings(poMappings)
+                .psoMappings(psoMappings)
+                .poKeywordsStore(poKw)
+                .psoKeywordsStore(psoKw)
+                .build();
+    }
+
+    @Transactional
+    public CourseMappingMatrixDto saveCourseMappings(String courseId, CourseMappingMatrixDto dto) {
+        String targetCourseId = resolveTargetCourseId(courseId);
+        Course course = courseRepository.findById(targetCourseId).orElse(null);
+        String progId = course != null ? course.getProgrammeId() : (dto != null && dto.getProgrammeId() != null ? dto.getProgrammeId() : "prog-1");
+
+        if (dto != null && dto.getPoKeywordsStore() != null) {
+            coursePoKeywordsMap.put(targetCourseId, dto.getPoKeywordsStore());
+        }
+        if (dto != null && dto.getPsoKeywordsStore() != null) {
+            coursePsoKeywordsMap.put(targetCourseId, dto.getPsoKeywordsStore());
+        }
+
+        List<CourseOutcome> cos = coRepository.findByCourseId(targetCourseId);
+        List<String> coIds = cos.stream().map(CourseOutcome::getId).collect(Collectors.toList());
+
+        if (!coIds.isEmpty()) {
+            coPoMappingRepository.deleteByCourseOutcomeIdIn(coIds);
+            coPsoMappingRepository.deleteByCourseOutcomeIdIn(coIds);
+        }
+
+        List<CoPoMapping> savedPo = Collections.emptyList();
+        if (dto != null && dto.getPoMappings() != null && !dto.getPoMappings().isEmpty()) {
+            for (CoPoMapping m : dto.getPoMappings()) {
+                if (m.getId() == null || m.getId().isBlank()) {
+                    m.setId("copomap-" + UUID.randomUUID().toString().substring(0, 8));
+                }
+            }
+            savedPo = coPoMappingRepository.saveAll(dto.getPoMappings());
+        }
+
+        List<CoPsoMapping> savedPso = Collections.emptyList();
+        if (dto != null && dto.getPsoMappings() != null && !dto.getPsoMappings().isEmpty()) {
+            for (CoPsoMapping m : dto.getPsoMappings()) {
+                if (m.getId() == null || m.getId().isBlank()) {
+                    m.setId("copsomap-" + UUID.randomUUID().toString().substring(0, 8));
+                }
+            }
+            savedPso = coPsoMappingRepository.saveAll(dto.getPsoMappings());
+        }
+
+        return CourseMappingMatrixDto.builder()
+                .courseId(targetCourseId)
+                .programmeId(progId)
+                .poMappings(savedPo)
+                .psoMappings(savedPso)
+                .poKeywordsStore(coursePoKeywordsMap.getOrDefault(targetCourseId, Collections.emptyMap()))
+                .psoKeywordsStore(coursePsoKeywordsMap.getOrDefault(targetCourseId, Collections.emptyMap()))
+                .build();
     }
 }
