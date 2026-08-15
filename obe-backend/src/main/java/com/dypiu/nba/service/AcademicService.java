@@ -539,7 +539,7 @@ public class AcademicService {
                 })
                 .toList();
 
-        List<Course> finalCourses = assigned;
+        List<Course> finalCourses = assigned.isEmpty() ? allCourses : assigned;
 
         Course primaryCourse = !finalCourses.isEmpty() ? finalCourses.get(0) : null;
 
