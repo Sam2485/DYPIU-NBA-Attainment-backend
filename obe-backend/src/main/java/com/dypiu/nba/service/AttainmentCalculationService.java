@@ -66,49 +66,93 @@ public class AttainmentCalculationService {
             studentCoMarkRepository.deleteByCourseId(courseId);
             studentCoMarkRepository.flush();
 
-            String validBatchId = batchRepository.findAll().stream()
-                    .map(Batch::getId)
-                    .findFirst()
-                    .orElseGet(() -> {
-                        Batch b = Batch.builder()
-                                .id("batch-2024-28")
-                                .programmeId("prog-default")
-                                .programmeCode("BTECH")
-                                .programmeName("B.Tech Computer Science")
-                                .name("2024-2028")
-                                .startYear("2024")
-                                .endYear("2028")
-                                .build();
-                        try {
-                            return batchRepository.save(b).getId();
-                        } catch (Exception ignored) {
-                            return "batch-2024-28";
-                        }
-                    });
+            // 1. Resolve Programme & Academic Year from Course
+            Course course = courseRepository.findById(courseId).orElse(null);
+            String progId = course != null ? course.getProgrammeId() : null;
+            String academicYear = course != null && course.getAcademicYear() != null ? course.getAcademicYear() : "2025-26";
 
+            // 2. Find or Create Batch for this programme
+            String targetBatchId = null;
+            if (progId != null) {
+                List<Batch> progBatches = batchRepository.findByProgrammeId(progId);
+                if (!progBatches.isEmpty()) {
+                    targetBatchId = progBatches.get(0).getId();
+                }
+            }
+
+            if (targetBatchId == null) {
+                targetBatchId = batchRepository.findAll().stream()
+                        .map(Batch::getId)
+                        .findFirst()
+                        .orElse(null);
+            }
+
+            if (targetBatchId == null) {
+                String pId = progId != null ? progId : "prog-1";
+                Batch newBatch = Batch.builder()
+                        .id("batch-" + UUID.randomUUID().toString().substring(0, 8))
+                        .programmeId(pId)
+                        .programmeCode("BTECH")
+                        .programmeName("B.Tech Programme")
+                        .name("Batch " + academicYear)
+                        .startYear("2025")
+                        .endYear("2029")
+                        .status("ACTIVE")
+                        .build();
+                try {
+                    targetBatchId = batchRepository.save(newBatch).getId();
+                } catch (Exception e) {
+                    targetBatchId = "batch-default";
+                }
+            }
+
+            final String batchIdToUse = targetBatchId;
             List<StudentCoMark> markEntities = new ArrayList<>();
+            int newlyRegisteredCount = 0;
+
             for (StudentMarksRowDto st : studentList) {
                 String prn = st.getPrn();
-                String name = st.getStudentName() != null ? st.getStudentName() : "Student";
+                String name = st.getStudentName() != null && !st.getStudentName().isBlank() ? st.getStudentName() : ("Student " + st.getSrNo());
 
                 Student studentEntity = null;
                 if (prn != null && !prn.isBlank()) {
-                    final String batchIdToUse = validBatchId;
-                    studentEntity = studentRepository.findByPrn(prn).orElseGet(() -> {
-                        Student s = Student.builder()
-                                .id(prn) // Set student ID to PRN to satisfy student_co_marks foreign key constraint
+                    Optional<Student> existingOpt = studentRepository.findByPrn(prn);
+                    if (existingOpt.isPresent()) {
+                        Student existing = existingOpt.get();
+                        boolean updated = false;
+                        if ((existing.getName() == null || existing.getName().startsWith("Student ")) && !name.startsWith("Student ")) {
+                            existing.setName(name);
+                            updated = true;
+                        }
+                        if (existing.getBatchId() == null || existing.getBatchId().isBlank()) {
+                            existing.setBatchId(batchIdToUse);
+                            updated = true;
+                        }
+                        if (updated) {
+                            try {
+                                studentEntity = studentRepository.save(existing);
+                            } catch (Exception ignored) {
+                                studentEntity = existing;
+                            }
+                        } else {
+                            studentEntity = existing;
+                        }
+                    } else {
+                        Student newStudent = Student.builder()
+                                .id(prn) // Set student ID to PRN for foreign key integrity
                                 .batchId(batchIdToUse)
                                 .prn(prn)
                                 .name(name)
-                                .email(prn + "@dypiu.ac.in")
+                                .email(prn + "@dypiu.edu.in")
                                 .status("ENROLLED")
                                 .build();
                         try {
-                            return studentRepository.save(s);
-                        } catch (Exception ignored) {
-                            return studentRepository.findByPrn(prn).orElse(s);
+                            studentEntity = studentRepository.save(newStudent);
+                            newlyRegisteredCount++;
+                        } catch (Exception e) {
+                            studentEntity = studentRepository.findByPrn(prn).orElse(newStudent);
                         }
-                    });
+                    }
                 }
 
                 String studentId = studentEntity != null ? studentEntity.getId() : (prn != null ? prn : "std-" + st.getSrNo());
@@ -136,9 +180,9 @@ public class AttainmentCalculationService {
             }
 
             studentCoMarkRepository.saveAll(markEntities);
-            System.out.println("  [DATABASE PERSISTENCE SUCCESS]: Persisted " + markEntities.size() + " StudentCoMark records for course: " + courseId);
+            System.out.println("  [STUDENT DB AUTO-SYNC SUCCESS]: Registered " + newlyRegisteredCount + " new students in batch '" + batchIdToUse + "' and persisted " + markEntities.size() + " StudentCoMark records for course: " + courseId);
         } catch (Exception e) {
-            System.err.println("  [ERROR SAVING CO MARKS TO DB]: " + e.getMessage());
+            System.err.println("  [ERROR PERSISTING STUDENT MARKS & REGISTERING DB STUDENTS]: " + e.getMessage());
             e.printStackTrace();
         }
     }
