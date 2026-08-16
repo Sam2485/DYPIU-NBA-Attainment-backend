@@ -448,17 +448,23 @@ public class OutcomeService {
     @Transactional(readOnly = true)
     public List<CourseOutcome> getCOsByCourse(String courseId) {
         String targetCourseId = resolveTargetCourseId(courseId);
-        System.out.println("[OutcomeService] [DEBUG getCOsByCourse] Received courseId: '" + courseId + "' -> Target DB courseId: '" + targetCourseId + "'");
+        System.out.println("================================================================================");
+        System.out.println("[OutcomeService] >>> getCOsByCourse called | courseId: '" + courseId + "' -> targetCourseId: '" + targetCourseId + "'");
         List<CourseOutcome> list = coRepository.findByCourseId(targetCourseId);
         list.sort(Comparator.comparing(CourseOutcome::getCode, NATURAL_CODE_COMPARATOR));
-        System.out.println("[OutcomeService] [DEBUG getCOsByCourse] Fetched " + list.size() + " COs for courseId: '" + targetCourseId + "'");
+        for (CourseOutcome co : list) {
+            System.out.println("  [FETCHED CO FROM DB] Code: " + co.getCode() + " | Statement: " + co.getStatement() + " | TargetLevel: " + co.getTargetLevel());
+        }
+        System.out.println("[OutcomeService] <<< Returned " + list.size() + " COs for courseId: '" + targetCourseId + "'");
+        System.out.println("================================================================================");
         return list;
     }
 
     @Transactional
     public List<CourseOutcome> saveCOs(String courseId, List<CourseOutcome> cos) {
         String targetCourseId = resolveTargetCourseId(courseId);
-        System.out.println("[OutcomeService] saveCOs called | courseId: " + courseId + " -> targetCourseId: " + targetCourseId + " | count: " + (cos != null ? cos.size() : 0));
+        System.out.println("================================================================================");
+        System.out.println("[OutcomeService] >>> saveCOs called | courseId: " + courseId + " -> targetCourseId: " + targetCourseId + " | count: " + (cos != null ? cos.size() : 0));
 
         List<CourseOutcome> existing = coRepository.findByCourseId(targetCourseId);
         Map<String, CourseOutcome> existingByCode = existing.stream()
@@ -480,12 +486,20 @@ public class OutcomeService {
                 if (existingByCode.containsKey(key)) {
                     targetCo = existingByCode.get(key);
                     targetCo.setStatement(co.getStatement());
+                    if (co.getTargetLevel() != null) {
+                        targetCo.setTargetLevel(co.getTargetLevel());
+                    }
                 } else {
                     targetCo = co;
                     if (targetCo.getId() == null || targetCo.getId().isBlank()) {
                         targetCo.setId("co-" + UUID.randomUUID().toString().substring(0, 8));
                     }
+                    if (targetCo.getTargetLevel() == null) {
+                        targetCo.setTargetLevel(new BigDecimal("2.50"));
+                    }
                 }
+
+                System.out.println("  [SAVING CO TO DB] Code: " + targetCo.getCode() + " | TargetLevel: " + targetCo.getTargetLevel() + " | Statement: " + targetCo.getStatement());
 
                 processedIds.add(targetCo.getId());
                 toSave.add(targetCo);
@@ -502,7 +516,8 @@ public class OutcomeService {
 
         List<CourseOutcome> saved = coRepository.saveAll(toSave);
         saved.sort(Comparator.comparing(CourseOutcome::getCode, NATURAL_CODE_COMPARATOR));
-        System.out.println("[OutcomeService] Saved COs (" + saved.size() + " items) for courseId: " + targetCourseId);
+        System.out.println("[OutcomeService] <<< Saved & Persisted (" + saved.size() + " items) for courseId: " + targetCourseId);
+        System.out.println("================================================================================");
         return saved;
     }
 
