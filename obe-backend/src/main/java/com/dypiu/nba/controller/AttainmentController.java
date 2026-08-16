@@ -18,6 +18,7 @@ import java.util.Map;
 public class AttainmentController {
 
     private final AttainmentCalculationService calculationService;
+    private final com.dypiu.nba.repository.UploadedDocumentRepository uploadedDocumentRepository;
 
     @GetMapping("/config/{courseId}")
     public ResponseEntity<ApiResponse<AttainmentConfiguration>> getConfig(@PathVariable String courseId) {
@@ -125,5 +126,31 @@ public class AttainmentController {
                 .message("Uploaded audit documents retrieved successfully")
                 .data(calculationService.getUploadedDocumentsForCourse(courseId))
                 .build());
+    }
+
+    @GetMapping("/documents/{courseId}/download/{documentType}")
+    public ResponseEntity<org.springframework.core.io.Resource> downloadUploadedDocument(
+            @PathVariable String courseId,
+            @PathVariable String documentType) {
+        com.dypiu.nba.entity.UploadedDocument doc = uploadedDocumentRepository
+                .findFirstByCourseIdAndDocumentTypeOrderByUploadedAtDesc(courseId, documentType.toUpperCase())
+                .orElse(null);
+
+        if (doc == null || doc.getSavedPath() == null) {
+            return ResponseEntity.notFound().build();
+        }
+
+        java.io.File file = new java.io.File(doc.getSavedPath());
+        if (!file.exists()) {
+            return ResponseEntity.notFound().build();
+        }
+
+        org.springframework.core.io.Resource resource = new org.springframework.core.io.FileSystemResource(file);
+        String fileName = doc.getFileName() != null ? doc.getFileName() : file.getName();
+
+        return ResponseEntity.ok()
+                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + fileName + "\"")
+                .contentType(org.springframework.http.MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .body(resource);
     }
 }
