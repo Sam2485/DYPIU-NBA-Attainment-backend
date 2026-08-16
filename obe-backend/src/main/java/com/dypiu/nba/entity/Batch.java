@@ -19,10 +19,13 @@ public class Batch {
     @Column(name = "programme_id", nullable = false)
     private String programmeId;
 
-    @Column(name = "programme_code", nullable = false)
+    @Column(name = "previous_batch_id")
+    private String previousBatchId;
+
+    @Column(name = "programme_code")
     private String programmeCode;
 
-    @Column(name = "programme_name", nullable = false)
+    @Column(name = "programme_name")
     private String programmeName;
 
     @Column(name = "duration_years", nullable = false)

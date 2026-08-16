@@ -6,11 +6,11 @@ import java.time.ZonedDateTime;
 
 @Entity
 @Table(
-    name = "programme_atrs",
+    name = "course_offerings",
     uniqueConstraints = {
         @UniqueConstraint(
-            name = "uk_programme_atr_batch",
-            columnNames = {"programme_id", "batch_id"}
+            name = "uk_batch_course_sem",
+            columnNames = {"batch_id", "course_id", "semester"}
         )
     }
 )
@@ -19,31 +19,36 @@ import java.time.ZonedDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class ProgrammeAtr {
+public class CourseOffering {
 
     @Id
     private String id;
 
-    @Column(name = "programme_id", nullable = false)
-    private String programmeId;
+    @Column(name = "course_id", nullable = false)
+    private String courseId;
 
     @Column(name = "batch_id", nullable = false)
     private String batchId;
+
+    @Column(nullable = false)
+    @Builder.Default
+    private Integer semester = 1;
 
     @Column(name = "academic_year", nullable = false)
     @Builder.Default
     private String academicYear = "2025-26";
 
+    @Column(name = "course_coordinator_id")
+    private String courseCoordinatorId;
+
+    @Column(name = "course_coordinator_name")
+    private String courseCoordinatorName;
+
+    @Column(name = "assigned_faculty", columnDefinition = "TEXT")
+    private String assignedFaculty;
+
     @Builder.Default
-    private String status = "DRAFT"; // DRAFT, SUBMITTED_FOR_APPROVAL, APPROVED, NEEDS_REVISION
-
-    private String submittedBy;
-    private ZonedDateTime submittedAt;
-    private String approvedBy;
-    private ZonedDateTime approvedAt;
-
-    @Column(name = "observations_json", columnDefinition = "TEXT")
-    private String observationsJson;
+    private String status = "ACTIVE";
 
     @Column(name = "created_at", insertable = false, updatable = false)
     private ZonedDateTime createdAt;

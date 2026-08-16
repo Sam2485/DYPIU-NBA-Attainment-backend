@@ -1,7 +1,9 @@
 package com.dypiu.nba.service;
 
+import com.dypiu.nba.entity.Batch;
 import com.dypiu.nba.entity.CourseAtr;
 import com.dypiu.nba.entity.ProgrammeAtr;
+import com.dypiu.nba.repository.BatchRepository;
 import com.dypiu.nba.repository.CourseAtrRepository;
 import com.dypiu.nba.repository.ProgrammeAtrRepository;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +20,7 @@ public class AtrService {
 
     private final CourseAtrRepository courseAtrRepository;
     private final ProgrammeAtrRepository programmeAtrRepository;
+    private final BatchRepository batchRepository;
 
     @Transactional(readOnly = true)
     public List<CourseAtr> getCourseAtrs(String courseId) {
@@ -36,6 +39,22 @@ public class AtrService {
     @Transactional(readOnly = true)
     public Optional<ProgrammeAtr> getProgrammeAtr(String programmeId) {
         return programmeAtrRepository.findByProgrammeId(programmeId);
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<ProgrammeAtr> getProgrammeAtrByBatch(String programmeId, String batchId) {
+        if (batchId != null && !batchId.isBlank()) {
+            return programmeAtrRepository.findByProgrammeIdAndBatchId(programmeId, batchId);
+        }
+        return programmeAtrRepository.findByProgrammeId(programmeId);
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<ProgrammeAtr> getPreviousBatchProgrammeAtr(String batchId) {
+        if (batchId == null || batchId.isBlank()) return Optional.empty();
+        Batch currentBatch = batchRepository.findById(batchId).orElse(null);
+        if (currentBatch == null || currentBatch.getPreviousBatchId() == null) return Optional.empty();
+        return programmeAtrRepository.findByProgrammeIdAndBatchId(currentBatch.getProgrammeId(), currentBatch.getPreviousBatchId());
     }
 
     @Transactional

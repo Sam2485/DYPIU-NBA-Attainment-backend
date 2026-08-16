@@ -29,6 +29,7 @@ com/dypiu/nba/entity/ProgrammeCoordinatorSetupProgress$ProgrammeCoordinatorSetup
 com/dypiu/nba/dto/AuthResponse.class
 com/dypiu/nba/dto/ResetPasswordRequest.class
 com/dypiu/nba/entity/PsoCompetency.class
+com/dypiu/nba/entity/CourseOffering$CourseOfferingBuilder.class
 com/dypiu/nba/entity/PeoOutcome$PeoOutcomeBuilder.class
 com/dypiu/nba/dto/HodSetupProgressDto$HodSetupProgressDtoBuilder.class
 com/dypiu/nba/repository/StudentRepository.class
@@ -72,6 +73,7 @@ com/dypiu/nba/entity/ProgrammeOutcome.class
 com/dypiu/nba/entity/ProgrammeAtr$ProgrammeAtrBuilder.class
 com/dypiu/nba/dto/CourseCoordinatorSummaryDto$CourseCoordinatorSummaryDtoBuilder.class
 com/dypiu/nba/entity/Course$CourseBuilder.class
+com/dypiu/nba/entity/CourseOffering.class
 com/dypiu/nba/exception/BadRequestException.class
 com/dypiu/nba/dto/RefreshTokenRequest.class
 com/dypiu/nba/dto/StudentMarksRowDto$StudentMarksRowDtoBuilder.class
@@ -111,6 +113,7 @@ com/dypiu/nba/entity/AttainmentConfiguration.class
 com/dypiu/nba/entity/CourseOutcome.class
 com/dypiu/nba/entity/Student.class
 com/dypiu/nba/controller/MappingController.class
+com/dypiu/nba/repository/CourseOfferingRepository.class
 com/dypiu/nba/entity/CoPoMapping.class
 com/dypiu/nba/dto/CourseCoordinatorSetupProgressDto$CourseCoordinatorSetupProgressDtoBuilder.class
 com/dypiu/nba/dto/ProgrammeTargetDto.class

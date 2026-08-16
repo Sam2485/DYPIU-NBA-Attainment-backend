@@ -41,6 +41,23 @@ public class AcademicService {
     private final ProgrammeSpecificOutcomeRepository programmeSpecificOutcomeRepository;
     private final PeoOutcomeRepository peoOutcomeRepository;
     private final UserRepository userRepository;
+    private final CourseOfferingRepository courseOfferingRepository;
+
+    @Transactional(readOnly = true)
+    public List<CourseOffering> getCourseOfferingsByBatch(String batchId) {
+        return courseOfferingRepository.findByBatchId(batchId);
+    }
+
+    @Transactional
+    public CourseOffering saveCourseOffering(CourseOffering offering) {
+        if (offering.getId() == null) offering.setId("offering-" + UUID.randomUUID().toString().substring(0, 8));
+        return courseOfferingRepository.save(offering);
+    }
+
+    @Transactional
+    public void deleteCourseOffering(String id) {
+        courseOfferingRepository.deleteById(id);
+    }
 
     // --- Director School Summary ---
     @Transactional(readOnly = true)

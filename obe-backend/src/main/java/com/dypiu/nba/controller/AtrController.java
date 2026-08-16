@@ -35,10 +35,20 @@ public class AtrController {
     }
 
     @GetMapping("/programme/{programmeId}")
-    public ResponseEntity<ApiResponse<ProgrammeAtr>> getProgrammeAtr(@PathVariable String programmeId) {
+    public ResponseEntity<ApiResponse<ProgrammeAtr>> getProgrammeAtr(
+            @PathVariable String programmeId,
+            @RequestParam(value = "batchId", required = false) String batchId) {
         return ResponseEntity.ok(ApiResponse.<ProgrammeAtr>builder()
                 .success(true)
-                .data(atrService.getProgrammeAtr(programmeId).orElse(null))
+                .data(atrService.getProgrammeAtrByBatch(programmeId, batchId).orElse(null))
+                .build());
+    }
+
+    @GetMapping("/programme/previous-batch/{batchId}")
+    public ResponseEntity<ApiResponse<ProgrammeAtr>> getPreviousBatchProgrammeAtr(@PathVariable String batchId) {
+        return ResponseEntity.ok(ApiResponse.<ProgrammeAtr>builder()
+                .success(true)
+                .data(atrService.getPreviousBatchProgrammeAtr(batchId).orElse(null))
                 .build());
     }
 

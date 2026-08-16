@@ -349,6 +349,30 @@ public class AcademicController {
         return ResponseEntity.ok(ApiResponse.<Void>builder().success(true).message("Course deleted").build());
     }
 
+    // --- Course Offerings (Batch Specific) ---
+    @GetMapping("/course-offerings")
+    public ResponseEntity<ApiResponse<List<com.dypiu.nba.entity.CourseOffering>>> getCourseOfferings(@RequestParam String batchId) {
+        return ResponseEntity.ok(ApiResponse.<List<com.dypiu.nba.entity.CourseOffering>>builder()
+                .success(true)
+                .data(academicService.getCourseOfferingsByBatch(batchId))
+                .build());
+    }
+
+    @PostMapping("/course-offerings")
+    public ResponseEntity<ApiResponse<com.dypiu.nba.entity.CourseOffering>> saveCourseOffering(@RequestBody com.dypiu.nba.entity.CourseOffering offering) {
+        return ResponseEntity.ok(ApiResponse.<com.dypiu.nba.entity.CourseOffering>builder()
+                .success(true)
+                .message("Course Offering saved successfully")
+                .data(academicService.saveCourseOffering(offering))
+                .build());
+    }
+
+    @DeleteMapping("/course-offerings/{id}")
+    public ResponseEntity<ApiResponse<Void>> deleteCourseOffering(@PathVariable String id) {
+        academicService.deleteCourseOffering(id);
+        return ResponseEntity.ok(ApiResponse.<Void>builder().success(true).message("Course Offering deleted").build());
+    }
+
     // --- Students ---
     @GetMapping("/batches/{batchId}/students")
     public ResponseEntity<ApiResponse<List<Student>>> getStudentsByBatch(@PathVariable String batchId) {

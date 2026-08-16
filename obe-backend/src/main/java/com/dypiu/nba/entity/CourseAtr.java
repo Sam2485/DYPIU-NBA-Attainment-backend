@@ -20,6 +20,9 @@ public class CourseAtr {
     @Column(name = "course_id", nullable = false)
     private String courseId;
 
+    @Column(name = "course_offering_id")
+    private String courseOfferingId;
+
     @Column(name = "co_code", nullable = false, length = 30)
     private String coCode;
 
