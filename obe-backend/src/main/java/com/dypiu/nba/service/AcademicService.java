@@ -583,21 +583,7 @@ public class AcademicService {
         if (courseId != null && !courseId.isBlank() && courseRepository.existsById(courseId)) {
             return courseId;
         }
-        List<Course> all = courseRepository.findAll();
-        if (!all.isEmpty()) {
-            return all.get(0).getId();
-        }
-        String idToUse = (courseId != null && !courseId.isBlank()) ? courseId : "crs-1";
-        Course placeholder = Course.builder()
-                .id(idToUse)
-                .code("CS301")
-                .name("Computer Networks")
-                .programmeId("prog-1")
-                .semester("Sem V")
-                .academicYear("2025-26")
-                .build();
-        courseRepository.save(placeholder);
-        return idToUse;
+        return courseId;
     }
 
     @Transactional(readOnly = true)

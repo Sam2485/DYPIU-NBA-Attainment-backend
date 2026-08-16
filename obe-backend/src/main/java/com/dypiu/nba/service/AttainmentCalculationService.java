@@ -890,6 +890,27 @@ public class AttainmentCalculationService {
                 .build();
     }
 
+    private <T> T getCoMapValue(Map<String, T> map, String coCode, int index, T defaultValue) {
+        if (map == null || map.isEmpty()) return defaultValue;
+        if (coCode != null && map.containsKey(coCode)) return map.get(coCode);
+
+        String posKey = "CO" + (index + 1);
+        if (map.containsKey(posKey)) return map.get(posKey);
+
+        String normCoCode = coCode != null ? coCode.toLowerCase().replaceAll("[^a-z0-9]", "") : "";
+        String normPosKey = posKey.toLowerCase();
+        String indexStr = String.valueOf(index + 1);
+
+        for (Map.Entry<String, T> entry : map.entrySet()) {
+            if (entry.getKey() == null) continue;
+            String k = entry.getKey().toLowerCase().replaceAll("[^a-z0-9]", "");
+            if (k.equals(normCoCode) || k.equals(normPosKey) || k.endsWith(indexStr) || k.equals("co" + indexStr)) {
+                return entry.getValue();
+            }
+        }
+        return defaultValue;
+    }
+
     @Transactional(readOnly = true)
     public Map<String, Object> calculateCourseCoAttainment(String courseId) {
         AttainmentConfiguration config = getAttainmentConfig(courseId);
@@ -918,48 +939,24 @@ public class AttainmentCalculationService {
         for (int i = 0; i < cos.size(); i++) {
             CourseOutcome co = cos.get(i);
             String coCode = co.getCode();
-            String posKey = "CO" + (i + 1);
             String statement = co.getStatement() != null ? co.getStatement() : "Course outcome " + coCode;
 
             // 1. Direct Examination Data
-            BigDecimal directPct = BigDecimal.ZERO;
-            int directLevel = 0;
-            if (examResult.getPercentageAboveThreshold() != null) {
-                if (examResult.getPercentageAboveThreshold().containsKey(coCode)) {
-                    directPct = examResult.getPercentageAboveThreshold().get(coCode);
-                } else if (examResult.getPercentageAboveThreshold().containsKey(posKey)) {
-                    directPct = examResult.getPercentageAboveThreshold().get(posKey);
-                }
-            }
-            if (examResult.getCoAttainmentLevels() != null) {
-                if (examResult.getCoAttainmentLevels().containsKey(coCode)) {
-                    directLevel = examResult.getCoAttainmentLevels().get(coCode);
-                } else if (examResult.getCoAttainmentLevels().containsKey(posKey)) {
-                    directLevel = examResult.getCoAttainmentLevels().get(posKey);
-                }
-            }
+            BigDecimal directPct = getCoMapValue(examResult.getPercentageAboveThreshold(), coCode, i, BigDecimal.ZERO);
+            Integer directLevelObj = getCoMapValue(examResult.getCoAttainmentLevels(), coCode, i, 0);
+            int directLevel = directLevelObj != null ? directLevelObj : 0;
 
             // 2. Indirect Course End Survey Data
-            BigDecimal indirectPct = BigDecimal.ZERO;
-            BigDecimal indirectScore = BigDecimal.ZERO;
-            if (surveyResult.getOverallIndirectPercentages() != null) {
-                if (surveyResult.getOverallIndirectPercentages().containsKey(coCode)) {
-                    indirectPct = surveyResult.getOverallIndirectPercentages().get(coCode);
-                } else if (surveyResult.getOverallIndirectPercentages().containsKey(posKey)) {
-                    indirectPct = surveyResult.getOverallIndirectPercentages().get(posKey);
-                }
-            }
-            if (surveyResult.getIndirectAttainmentScores() != null) {
-                if (surveyResult.getIndirectAttainmentScores().containsKey(coCode)) {
-                    indirectScore = surveyResult.getIndirectAttainmentScores().get(coCode);
-                } else if (surveyResult.getIndirectAttainmentScores().containsKey(posKey)) {
-                    indirectScore = surveyResult.getIndirectAttainmentScores().get(posKey);
-                }
-            }
+            BigDecimal indirectPct = getCoMapValue(surveyResult.getOverallIndirectPercentages(), coCode, i, BigDecimal.ZERO);
+            BigDecimal indirectScore = getCoMapValue(surveyResult.getIndirectAttainmentScores(), coCode, i, BigDecimal.ZERO);
 
             int indirectLevel = indirectScore.compareTo(new BigDecimal("2.50")) >= 0 ? 3 : (indirectScore.compareTo(new BigDecimal("1.50")) >= 0 ? 2 : (indirectScore.compareTo(BigDecimal.ZERO) > 0 ? 1 : 0));
             if (indirectPct.compareTo(new BigDecimal("80.00")) >= 0) {
                 indirectLevel = 3;
+            } else if (indirectPct.compareTo(new BigDecimal("60.00")) >= 0) {
+                indirectLevel = 2;
+            } else if (indirectPct.compareTo(BigDecimal.ZERO) > 0 && indirectLevel == 0) {
+                indirectLevel = 1;
             }
 
             // 3. Weightages (80% Direct / 20% Indirect)

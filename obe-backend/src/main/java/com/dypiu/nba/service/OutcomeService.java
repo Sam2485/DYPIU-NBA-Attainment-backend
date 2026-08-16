@@ -634,27 +634,39 @@ public class OutcomeService {
         if (!coIds.isEmpty()) {
             coPoMappingRepository.deleteByCourseOutcomeIdIn(coIds);
             coPsoMappingRepository.deleteByCourseOutcomeIdIn(coIds);
+            coPoMappingRepository.flush();
+            coPsoMappingRepository.flush();
         }
 
         List<CoPoMapping> savedPo = Collections.emptyList();
         if (dto != null && dto.getPoMappings() != null && !dto.getPoMappings().isEmpty()) {
+            Map<String, CoPoMapping> uniquePoMap = new LinkedHashMap<>();
             for (CoPoMapping m : dto.getPoMappings()) {
+                if (m.getCourseOutcomeId() == null || m.getPoCode() == null) continue;
+                String key = m.getCourseOutcomeId() + "::" + m.getPoCode();
                 if (m.getId() == null || m.getId().isBlank()) {
                     m.setId("copomap-" + UUID.randomUUID().toString().substring(0, 8));
                 }
+                uniquePoMap.put(key, m);
             }
-            savedPo = coPoMappingRepository.saveAll(dto.getPoMappings());
+            savedPo = coPoMappingRepository.saveAll(uniquePoMap.values());
+            coPoMappingRepository.flush();
         }
         System.out.println("[OutcomeService] [DEBUG courseId]   -> SAVED PO MAPPINGS COUNT: " + savedPo.size());
 
         List<CoPsoMapping> savedPso = Collections.emptyList();
         if (dto != null && dto.getPsoMappings() != null && !dto.getPsoMappings().isEmpty()) {
+            Map<String, CoPsoMapping> uniquePsoMap = new LinkedHashMap<>();
             for (CoPsoMapping m : dto.getPsoMappings()) {
+                if (m.getCourseOutcomeId() == null || m.getPsoCode() == null) continue;
+                String key = m.getCourseOutcomeId() + "::" + m.getPsoCode();
                 if (m.getId() == null || m.getId().isBlank()) {
                     m.setId("copsomap-" + UUID.randomUUID().toString().substring(0, 8));
                 }
+                uniquePsoMap.put(key, m);
             }
-            savedPso = coPsoMappingRepository.saveAll(dto.getPsoMappings());
+            savedPso = coPsoMappingRepository.saveAll(uniquePsoMap.values());
+            coPsoMappingRepository.flush();
         }
         System.out.println("[OutcomeService] [DEBUG courseId]   -> SAVED PSO MAPPINGS COUNT: " + savedPso.size());
         System.out.println("================================================================================");
