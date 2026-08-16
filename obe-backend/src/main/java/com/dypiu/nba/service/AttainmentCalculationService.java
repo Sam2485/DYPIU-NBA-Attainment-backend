@@ -28,6 +28,7 @@ public class AttainmentCalculationService {
     private final StudentRepository studentRepository;
     private final BatchRepository batchRepository;
     private final UploadedDocumentRepository uploadedDocumentRepository;
+    private final CourseRepository courseRepository;
 
     private final Map<String, ExaminationAttainmentResultDto> examinationAttainmentStore = new ConcurrentHashMap<>();
     private final Map<String, SurveyAttainmentResultDto> surveyAttainmentStore = new ConcurrentHashMap<>();
@@ -146,11 +147,27 @@ public class AttainmentCalculationService {
 
     @Transactional
     public ExaminationAttainmentResultDto processAndSaveExaminationFile(String courseId, MultipartFile file, BigDecimal optionalThreshold) {
-        System.out.println("================================================================================");
-        System.out.println("[AttainmentCalculationService] >>> processAndSaveExaminationFile called | courseId: " + courseId + " | filename: " + file.getOriginalFilename());
+        return processAndSaveExaminationFile(courseId, file, optionalThreshold, "Teacher / Course Coordinator");
+    }
 
-        // 1. Save uploaded file to disk
-        String uploadDir = System.getProperty("user.home") + "/.obe_uploads/examination/";
+    @Transactional
+    public ExaminationAttainmentResultDto processAndSaveExaminationFile(String courseId, MultipartFile file, BigDecimal optionalThreshold, String uploadedBy) {
+        Course course = courseRepository.findById(courseId).orElse(null);
+        String progId = course != null ? course.getProgrammeId() : "N/A";
+        String batchName = course != null && course.getAcademicYear() != null ? course.getAcademicYear() : "2025-26";
+        String uploader = uploadedBy != null && !uploadedBy.isBlank() ? uploadedBy : "Teacher / Course Coordinator";
+
+        System.out.println("================================================================================");
+        System.out.println("[AUDIT LOG - DIRECT ATTAINMENT FILE UPLOAD]");
+        System.out.println("  Document Type : DIRECT ATTAINMENT (EXAMINATION)");
+        System.out.println("  Course ID     : " + courseId);
+        System.out.println("  Programme ID  : " + progId);
+        System.out.println("  Batch / Year  : " + batchName);
+        System.out.println("  Uploaded By   : " + uploader);
+        System.out.println("  Original File : " + file.getOriginalFilename());
+
+        // 1. Save uploaded file to separate direct_attainment directory
+        String uploadDir = System.getProperty("user.home") + "/.obe_uploads/direct_attainment/" + courseId + "/";
         File dir = new File(uploadDir);
         if (!dir.exists()) dir.mkdirs();
 
@@ -160,7 +177,7 @@ public class AttainmentCalculationService {
 
         try {
             file.transferTo(targetFile);
-            System.out.println("  [FILE SAVED TO BACKEND DISK]: " + targetFile.getAbsolutePath());
+            System.out.println("  [SAVED PATH]  : " + targetFile.getAbsolutePath());
         } catch (Exception e) {
             System.err.println("  [ERROR SAVING FILE TO DISK]: " + e.getMessage());
         }
@@ -323,12 +340,15 @@ public class AttainmentCalculationService {
         // 3. Persist Student CO Marks to Database
         saveStudentCoMarksToDatabase(courseId, coMaxMarks, studentList);
 
-        // 4. Persist Uploaded Document Record to Database
+        // 4. Persist Uploaded Document Record to Database with Audit Metadata
         try {
             uploadedDocumentRepository.deleteByCourseIdAndDocumentType(courseId, "EXAMINATION");
             UploadedDocument doc = UploadedDocument.builder()
                     .id(UUID.randomUUID().toString())
                     .courseId(courseId)
+                    .programmeId(progId)
+                    .batchName(batchName)
+                    .uploadedBy(uploader)
                     .documentType("EXAMINATION")
                     .fileName(originalFilename)
                     .savedFileName(savedFileName)
@@ -339,6 +359,8 @@ public class AttainmentCalculationService {
                     .uploadedAt(ZonedDateTime.now())
                     .build();
             uploadedDocumentRepository.save(doc);
+            System.out.println("  [DATABASE PERSISTED] Direct Attainment Document Audit Record Saved Successfully.");
+            System.out.println("================================================================================");
         } catch (Exception e) {
             System.err.println("  [ERROR SAVING UPLOADED DOCUMENT RECORD]: " + e.getMessage());
         }
@@ -561,10 +583,26 @@ public class AttainmentCalculationService {
 
     @Transactional
     public SurveyAttainmentResultDto processAndSaveSurveyFile(String courseId, MultipartFile file) {
-        System.out.println("================================================================================");
-        System.out.println("[AttainmentCalculationService] >>> processAndSaveSurveyFile called | courseId: " + courseId + " | filename: " + file.getOriginalFilename());
+        return processAndSaveSurveyFile(courseId, file, "Teacher / Course Coordinator");
+    }
 
-        String uploadDir = System.getProperty("user.home") + "/.obe_uploads/survey/";
+    @Transactional
+    public SurveyAttainmentResultDto processAndSaveSurveyFile(String courseId, MultipartFile file, String uploadedBy) {
+        Course course = courseRepository.findById(courseId).orElse(null);
+        String progId = course != null ? course.getProgrammeId() : "N/A";
+        String batchName = course != null && course.getAcademicYear() != null ? course.getAcademicYear() : "2025-26";
+        String uploader = uploadedBy != null && !uploadedBy.isBlank() ? uploadedBy : "Teacher / Course Coordinator";
+
+        System.out.println("================================================================================");
+        System.out.println("[AUDIT LOG - INDIRECT ATTAINMENT FILE UPLOAD]");
+        System.out.println("  Document Type : INDIRECT ATTAINMENT (SURVEY)");
+        System.out.println("  Course ID     : " + courseId);
+        System.out.println("  Programme ID  : " + progId);
+        System.out.println("  Batch / Year  : " + batchName);
+        System.out.println("  Uploaded By   : " + uploader);
+        System.out.println("  Original File : " + file.getOriginalFilename());
+
+        String uploadDir = System.getProperty("user.home") + "/.obe_uploads/indirect_attainment/" + courseId + "/";
         File dir = new File(uploadDir);
         if (!dir.exists()) dir.mkdirs();
 
@@ -574,7 +612,7 @@ public class AttainmentCalculationService {
 
         try {
             file.transferTo(targetFile);
-            System.out.println("  [SURVEY FILE SAVED TO DISK]: " + targetFile.getAbsolutePath());
+            System.out.println("  [SAVED PATH]  : " + targetFile.getAbsolutePath());
         } catch (Exception e) {
             System.err.println("  [ERROR SAVING SURVEY FILE TO DISK]: " + e.getMessage());
         }
@@ -681,12 +719,15 @@ public class AttainmentCalculationService {
             e.printStackTrace();
         }
 
-        // Persist Survey Upload Document Metadata
+        // Persist Survey Upload Document Metadata with Audit Metadata
         try {
             uploadedDocumentRepository.deleteByCourseIdAndDocumentType(courseId, "SURVEY");
             UploadedDocument doc = UploadedDocument.builder()
                     .id(UUID.randomUUID().toString())
                     .courseId(courseId)
+                    .programmeId(progId)
+                    .batchName(batchName)
+                    .uploadedBy(uploader)
                     .documentType("SURVEY")
                     .fileName(originalFilename)
                     .savedFileName(savedFileName)
@@ -696,6 +737,8 @@ public class AttainmentCalculationService {
                     .uploadedAt(ZonedDateTime.now())
                     .build();
             uploadedDocumentRepository.save(doc);
+            System.out.println("  [DATABASE PERSISTED] Indirect Attainment Document Audit Record Saved Successfully.");
+            System.out.println("================================================================================");
         } catch (Exception e) {
             System.err.println("  [ERROR SAVING SURVEY UPLOAD DOCUMENT RECORD]: " + e.getMessage());
         }
@@ -830,6 +873,94 @@ public class AttainmentCalculationService {
         return result;
     }
 
+    private List<SurveyResponseRowDto> parseSurveyFileToResponses(File targetFile) {
+        List<SurveyResponseRowDto> surveyResponses = new ArrayList<>();
+        Map<String, Integer> coHeaderMap = new LinkedHashMap<>();
+        int headerRowIdx = -1;
+
+        try (InputStream is = new FileInputStream(targetFile);
+             Workbook workbook = WorkbookFactory.create(is)) {
+
+            Sheet sheet = workbook.getSheet("3. Course End Survey");
+            if (sheet == null && workbook.getNumberOfSheets() > 0) {
+                sheet = workbook.getSheetAt(0);
+            }
+
+            if (sheet != null) {
+                DataFormatter formatter = new DataFormatter();
+                int rIdx = 0;
+                for (Row r : sheet) {
+                    boolean hasCO1 = false;
+                    for (Cell c : r) {
+                        if (c != null && formatter.formatCellValue(c).trim().equalsIgnoreCase("CO1")) {
+                            hasCO1 = true;
+                            break;
+                        }
+                    }
+                    if (hasCO1 && rIdx > 5) {
+                        headerRowIdx = rIdx;
+                        for (Cell c : r) {
+                            String val = formatter.formatCellValue(c).trim();
+                            if (val.toUpperCase().matches("^CO\\d+$")) {
+                                coHeaderMap.put(val.toUpperCase(), c.getColumnIndex());
+                            }
+                        }
+                    }
+                    rIdx++;
+                }
+
+                if (coHeaderMap.isEmpty()) {
+                    coHeaderMap.put("CO1", 2);
+                    coHeaderMap.put("CO2", 3);
+                    coHeaderMap.put("CO3", 4);
+                    coHeaderMap.put("CO4", 5);
+                    coHeaderMap.put("CO5", 6);
+                }
+
+                rIdx = 0;
+                int srNo = 1;
+                for (Row r : sheet) {
+                    if (r == null || rIdx <= headerRowIdx) {
+                        rIdx++;
+                        continue;
+                    }
+
+                    String prnVal = "";
+                    Cell prnCell = r.getCell(1);
+                    if (prnCell != null) prnVal = formatter.formatCellValue(prnCell).trim();
+
+                    Map<String, String> coFeedbacks = new LinkedHashMap<>();
+                    boolean hasFeedback = false;
+                    for (Map.Entry<String, Integer> entry : coHeaderMap.entrySet()) {
+                        String coCode = entry.getKey();
+                        int colIdx = entry.getValue();
+                        Cell feedbackCell = r.getCell(colIdx);
+                        if (feedbackCell != null) {
+                            String val = formatter.formatCellValue(feedbackCell).trim();
+                            if (!val.isEmpty()) {
+                                coFeedbacks.put(coCode, val);
+                                hasFeedback = true;
+                            }
+                        }
+                    }
+
+                    if (hasFeedback) {
+                        surveyResponses.add(SurveyResponseRowDto.builder()
+                                .srNo(srNo++)
+                                .studentName(prnVal.isEmpty() ? "Student " + (srNo - 1) : prnVal)
+                                .coFeedbacks(coFeedbacks)
+                                .build());
+                    }
+                    rIdx++;
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("Error parsing survey file: " + e.getMessage());
+        }
+
+        return surveyResponses;
+    }
+
     @Transactional(readOnly = true)
     public SurveyAttainmentResultDto getSurveyAttainment(String courseId) {
         if (courseId != null && surveyAttainmentStore.containsKey(courseId)) {
@@ -851,6 +982,20 @@ public class AttainmentCalculationService {
                 fileDetails.put("uploadedAt", doc.getUploadedAt().toString());
                 fileDetails.put("recordsProcessed", doc.getRecordsProcessed());
                 fileDetails.put("status", "SAVED_AND_VERIFIED");
+
+                if (doc.getSavedPath() != null && new File(doc.getSavedPath()).exists()) {
+                    List<SurveyResponseRowDto> responses = parseSurveyFileToResponses(new File(doc.getSavedPath()));
+                    if (!responses.isEmpty()) {
+                        SurveyMarksPayloadDto payload = SurveyMarksPayloadDto.builder()
+                                .courseId(courseId)
+                                .surveyResponses(responses)
+                                .build();
+                        SurveyAttainmentResultDto result = calculateSurveyAttainment(courseId, payload);
+                        result.setFileDetails(fileDetails);
+                        surveyAttainmentStore.put(courseId, result);
+                        return result;
+                    }
+                }
 
                 SurveyAttainmentResultDto result = SurveyAttainmentResultDto.builder()
                         .courseId(courseId)
@@ -995,5 +1140,9 @@ public class AttainmentCalculationService {
         response.put("surveyDetails", surveyResult);
 
         return response;
+    }
+
+    public List<UploadedDocument> getUploadedDocumentsForCourse(String courseId) {
+        return uploadedDocumentRepository.findByCourseId(courseId);
     }
 }

@@ -41,6 +41,15 @@ public class UploadedDocument {
     @Column(name = "threshold_percentage")
     private BigDecimal thresholdPercentage;
 
+    @Column(name = "programme_id")
+    private String programmeId;
+
+    @Column(name = "batch_name")
+    private String batchName;
+
+    @Column(name = "uploaded_by")
+    private String uploadedBy;
+
     @Column(name = "uploaded_at")
     private ZonedDateTime uploadedAt;
 }

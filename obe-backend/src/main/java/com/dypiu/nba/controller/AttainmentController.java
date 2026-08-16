@@ -71,11 +71,14 @@ public class AttainmentController {
     public ResponseEntity<ApiResponse<ExaminationAttainmentResultDto>> uploadAndProcessExaminationSheet(
             @PathVariable String courseId,
             @RequestParam("file") MultipartFile file,
-            @RequestParam(value = "thresholdPercentage", required = false) BigDecimal thresholdPercentage) {
+            @RequestParam(value = "thresholdPercentage", required = false) BigDecimal thresholdPercentage,
+            @RequestParam(value = "uploadedBy", required = false) String uploadedBy,
+            java.security.Principal principal) {
+        String uploader = (uploadedBy != null && !uploadedBy.isBlank()) ? uploadedBy : (principal != null ? principal.getName() : "Teacher / Course Coordinator");
         return ResponseEntity.ok(ApiResponse.<ExaminationAttainmentResultDto>builder()
                 .success(true)
-                .message("Examination sheet document saved on backend server disk, parsed via Apache POI, and attainment calculated successfully")
-                .data(calculationService.processAndSaveExaminationFile(courseId, file, thresholdPercentage))
+                .message("Examination sheet saved to direct attainment directory with audit metadata, parsed via POI, and attainment calculated successfully")
+                .data(calculationService.processAndSaveExaminationFile(courseId, file, thresholdPercentage, uploader))
                 .build());
     }
 
@@ -104,11 +107,23 @@ public class AttainmentController {
     @PostMapping(value = "/survey/{courseId}/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ApiResponse<SurveyAttainmentResultDto>> uploadAndProcessSurveySheet(
             @PathVariable String courseId,
-            @RequestParam("file") MultipartFile file) {
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "uploadedBy", required = false) String uploadedBy,
+            java.security.Principal principal) {
+        String uploader = (uploadedBy != null && !uploadedBy.isBlank()) ? uploadedBy : (principal != null ? principal.getName() : "Teacher / Course Coordinator");
         return ResponseEntity.ok(ApiResponse.<SurveyAttainmentResultDto>builder()
                 .success(true)
-                .message("Course End Survey sheet document saved on backend server disk, parsed via Apache POI, and indirect attainment calculated successfully")
-                .data(calculationService.processAndSaveSurveyFile(courseId, file))
+                .message("Course End Survey sheet saved to indirect attainment directory with audit metadata, parsed via POI, and indirect attainment calculated successfully")
+                .data(calculationService.processAndSaveSurveyFile(courseId, file, uploader))
+                .build());
+    }
+
+    @GetMapping("/documents/{courseId}")
+    public ResponseEntity<ApiResponse<java.util.List<com.dypiu.nba.entity.UploadedDocument>>> getUploadedDocuments(@PathVariable String courseId) {
+        return ResponseEntity.ok(ApiResponse.<java.util.List<com.dypiu.nba.entity.UploadedDocument>>builder()
+                .success(true)
+                .message("Uploaded audit documents retrieved successfully")
+                .data(calculationService.getUploadedDocumentsForCourse(courseId))
                 .build());
     }
 }

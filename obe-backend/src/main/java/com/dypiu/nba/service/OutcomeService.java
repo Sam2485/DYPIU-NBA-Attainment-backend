@@ -4,6 +4,8 @@ import com.dypiu.nba.entity.*;
 import com.dypiu.nba.repository.*;
 import com.dypiu.nba.dto.ProgrammeTargetDto;
 import com.dypiu.nba.dto.CourseMappingMatrixDto;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,6 +28,8 @@ public class OutcomeService {
     private final CourseRepository courseRepository;
     private final CoPoMappingRepository coPoMappingRepository;
     private final CoPsoMappingRepository coPsoMappingRepository;
+    private final CourseMappingKeywordRepository courseMappingKeywordRepository;
+    private final ObjectMapper objectMapper;
 
     private static final Comparator<String> NATURAL_CODE_COMPARATOR = (c1, c2) -> {
         if (c1 == null) return -1;
@@ -579,7 +583,7 @@ public class OutcomeService {
     public CourseMappingMatrixDto getCourseMappings(String courseId) {
         String targetCourseId = resolveTargetCourseId(courseId);
         Course course = courseRepository.findById(targetCourseId).orElse(null);
-        String progId = course.getProgrammeId() ;
+        String progId = course != null ? course.getProgrammeId() : null;
 
         List<CourseOutcome> cos = getCOsByCourse(targetCourseId);
         List<ProgrammeOutcome> pos = (progId != null) ? getPOsByProgramme(progId) : Collections.emptyList();
@@ -590,10 +594,34 @@ public class OutcomeService {
         List<CoPoMapping> poMappings = coIds.isEmpty() ? Collections.emptyList() : coPoMappingRepository.findByCourseOutcomeIdIn(coIds);
         List<CoPsoMapping> psoMappings = coIds.isEmpty() ? Collections.emptyList() : coPsoMappingRepository.findByCourseOutcomeIdIn(coIds);
 
-        Map<String, Object> poKw = coursePoKeywordsMap.getOrDefault(targetCourseId, Collections.emptyMap());
-        Map<String, Object> psoKw = coursePsoKeywordsMap.getOrDefault(targetCourseId, Collections.emptyMap());
+        Map<String, Object> poKw = Collections.emptyMap();
+        Map<String, Object> psoKw = Collections.emptyMap();
 
-        System.out.println("[OutcomeService] getCourseMappings | programmeId: " + progId + " | PO Count: " + pos.size() + " | PSO Count: " + psos.size());
+        Optional<CourseMappingKeyword> poKwOpt = courseMappingKeywordRepository.findByCourseIdAndKeywordType(targetCourseId, "PO");
+        if (poKwOpt.isPresent()) {
+            try {
+                poKw = objectMapper.readValue(poKwOpt.get().getKeywordsJson(), new TypeReference<Map<String, Object>>() {});
+                System.out.println("[OutcomeService] [FETCHED KEYWORDS FROM DB] >>> PO KEYWORDS FOR COURSE '" + targetCourseId + "': " + poKw);
+            } catch (Exception e) {
+                System.err.println("[OutcomeService] ERROR PARSING PO KEYWORDS FROM DB: " + e.getMessage());
+            }
+        } else if (coursePoKeywordsMap.containsKey(targetCourseId)) {
+            poKw = coursePoKeywordsMap.get(targetCourseId);
+        }
+
+        Optional<CourseMappingKeyword> psoKwOpt = courseMappingKeywordRepository.findByCourseIdAndKeywordType(targetCourseId, "PSO");
+        if (psoKwOpt.isPresent()) {
+            try {
+                psoKw = objectMapper.readValue(psoKwOpt.get().getKeywordsJson(), new TypeReference<Map<String, Object>>() {});
+                System.out.println("[OutcomeService] [FETCHED KEYWORDS FROM DB] >>> PSO KEYWORDS FOR COURSE '" + targetCourseId + "': " + psoKw);
+            } catch (Exception e) {
+                System.err.println("[OutcomeService] ERROR PARSING PSO KEYWORDS FROM DB: " + e.getMessage());
+            }
+        } else if (coursePsoKeywordsMap.containsKey(targetCourseId)) {
+            psoKw = coursePsoKeywordsMap.get(targetCourseId);
+        }
+
+        System.out.println("[OutcomeService] getCourseMappings | courseId: " + targetCourseId + " | programmeId: " + progId + " | PO Count: " + pos.size() + " | PSO Count: " + psos.size());
 
         return CourseMappingMatrixDto.builder()
                 .courseId(targetCourseId)
@@ -615,17 +643,55 @@ public class OutcomeService {
         String progId = course != null ? course.getProgrammeId() : (dto != null && dto.getProgrammeId() != null ? dto.getProgrammeId() : null);
 
         System.out.println("================================================================================");
-        System.out.println("[OutcomeService] [DEBUG courseId] >>> saveCourseMappings received input courseId: '" + courseId + "' -> resolved targetCourseId: '" + targetCourseId + "'");
-        System.out.println("[OutcomeService] [DEBUG courseId]   -> Course Entity Name: " + (course != null ? course.getName() : "N/A"));
-        System.out.println("[OutcomeService] [DEBUG courseId]   -> Extracted Programme ID: " + progId);
+        System.out.println("[OutcomeService] [SAVING COURSE MAPPINGS] courseId: '" + courseId + "' -> targetCourseId: '" + targetCourseId + "'");
+        System.out.println("  Course Name: " + (course != null ? course.getName() : "N/A"));
+        System.out.println("  Programme ID: " + progId);
+
+        Map<String, Object> poKwToReturn = Collections.emptyMap();
+        Map<String, Object> psoKwToReturn = Collections.emptyMap();
 
         if (dto != null && dto.getPoKeywordsStore() != null) {
-            coursePoKeywordsMap.put(targetCourseId, dto.getPoKeywordsStore());
-            System.out.println("[OutcomeService] [DEBUG courseId]   -> SAVING PO KEYWORDS: " + dto.getPoKeywordsStore());
+            poKwToReturn = dto.getPoKeywordsStore();
+            coursePoKeywordsMap.put(targetCourseId, poKwToReturn);
+            try {
+                String poJson = objectMapper.writeValueAsString(poKwToReturn);
+                CourseMappingKeyword entity = courseMappingKeywordRepository.findByCourseIdAndKeywordType(targetCourseId, "PO")
+                        .orElse(CourseMappingKeyword.builder()
+                                .id("kw-po-" + UUID.randomUUID().toString().substring(0, 8))
+                                .courseId(targetCourseId)
+                                .keywordType("PO")
+                                .build());
+                entity.setKeywordsJson(poJson);
+                courseMappingKeywordRepository.save(entity);
+                System.out.println("================================================================================");
+                System.out.println("  [SAVING PO KEYWORDS TO DB] courseId: '" + targetCourseId + "'");
+                System.out.println("  PO KEYWORDS JSON: " + poJson);
+                System.out.println("================================================================================");
+            } catch (Exception e) {
+                System.err.println("  [ERROR SAVING PO KEYWORDS TO DB]: " + e.getMessage());
+            }
         }
+
         if (dto != null && dto.getPsoKeywordsStore() != null) {
-            coursePsoKeywordsMap.put(targetCourseId, dto.getPsoKeywordsStore());
-            System.out.println("[OutcomeService] [DEBUG courseId]   -> SAVING PSO KEYWORDS: " + dto.getPsoKeywordsStore());
+            psoKwToReturn = dto.getPsoKeywordsStore();
+            coursePsoKeywordsMap.put(targetCourseId, psoKwToReturn);
+            try {
+                String psoJson = objectMapper.writeValueAsString(psoKwToReturn);
+                CourseMappingKeyword entity = courseMappingKeywordRepository.findByCourseIdAndKeywordType(targetCourseId, "PSO")
+                        .orElse(CourseMappingKeyword.builder()
+                                .id("kw-pso-" + UUID.randomUUID().toString().substring(0, 8))
+                                .courseId(targetCourseId)
+                                .keywordType("PSO")
+                                .build());
+                entity.setKeywordsJson(psoJson);
+                courseMappingKeywordRepository.save(entity);
+                System.out.println("================================================================================");
+                System.out.println("  [SAVING PSO KEYWORDS TO DB] courseId: '" + targetCourseId + "'");
+                System.out.println("  PSO KEYWORDS JSON: " + psoJson);
+                System.out.println("================================================================================");
+            } catch (Exception e) {
+                System.err.println("  [ERROR SAVING PSO KEYWORDS TO DB]: " + e.getMessage());
+            }
         }
 
         List<CourseOutcome> cos = getCOsByCourse(targetCourseId);
@@ -652,7 +718,7 @@ public class OutcomeService {
             savedPo = coPoMappingRepository.saveAll(uniquePoMap.values());
             coPoMappingRepository.flush();
         }
-        System.out.println("[OutcomeService] [DEBUG courseId]   -> SAVED PO MAPPINGS COUNT: " + savedPo.size());
+        System.out.println("  [SAVED PO MAPPINGS COUNT]: " + savedPo.size());
 
         List<CoPsoMapping> savedPso = Collections.emptyList();
         if (dto != null && dto.getPsoMappings() != null && !dto.getPsoMappings().isEmpty()) {
@@ -668,7 +734,7 @@ public class OutcomeService {
             savedPso = coPsoMappingRepository.saveAll(uniquePsoMap.values());
             coPsoMappingRepository.flush();
         }
-        System.out.println("[OutcomeService] [DEBUG courseId]   -> SAVED PSO MAPPINGS COUNT: " + savedPso.size());
+        System.out.println("  [SAVED PSO MAPPINGS COUNT]: " + savedPso.size());
         System.out.println("================================================================================");
 
         List<ProgrammeOutcome> pos = (progId != null) ? getPOsByProgramme(progId) : Collections.emptyList();
@@ -682,8 +748,8 @@ public class OutcomeService {
                 .psos(psos)
                 .poMappings(savedPo)
                 .psoMappings(savedPso)
-                .poKeywordsStore(coursePoKeywordsMap.getOrDefault(targetCourseId, Collections.emptyMap()))
-                .psoKeywordsStore(coursePsoKeywordsMap.getOrDefault(targetCourseId, Collections.emptyMap()))
+                .poKeywordsStore(poKwToReturn)
+                .psoKeywordsStore(psoKwToReturn)
                 .build();
     }
 }
