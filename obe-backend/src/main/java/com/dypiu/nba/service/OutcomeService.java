@@ -47,7 +47,8 @@ public class OutcomeService {
 
     @Transactional
     public List<ProgrammeOutcome> getPOsByProgramme(String programmeId) {
-        System.out.println("[OutcomeService] getPOsByProgramme called | programmeId: " + programmeId);
+        System.out.println("================================================================================");
+        System.out.println("[OutcomeService] >>> getPOsByProgramme called | programmeId: " + programmeId);
         List<ProgrammeOutcome> list = poRepository.findByProgrammeIdOrderByCodeAsc(programmeId);
         if (list.isEmpty()) {
             System.out.println("[OutcomeService] No POs found in DB for programmeId: " + programmeId + ". Seeding default POs...");
@@ -57,9 +58,14 @@ public class OutcomeService {
             List<PoCompetency> comps = poCompetencyRepository.findByPoIdOrderByCodeAsc(po.getId());
             comps.sort(Comparator.comparing(PoCompetency::getCode, NATURAL_CODE_COMPARATOR));
             po.setCompetencies(comps);
+            System.out.println("  [PO ENTRY] Code: " + po.getCode() + " | Statement: " + po.getStatement());
+            for (PoCompetency comp : comps) {
+                System.out.println("      -> Competency Code: " + comp.getCode() + " | Statement: " + comp.getStatement());
+            }
         }
         list.sort(Comparator.comparing(ProgrammeOutcome::getCode, NATURAL_CODE_COMPARATOR));
-        System.out.println("[OutcomeService] Fetched POs (" + list.size() + " items) with competencies for programmeId: " + programmeId);
+        System.out.println("[OutcomeService] <<< OUTGOING POs Payload (" + list.size() + " items) for programmeId: " + programmeId);
+        System.out.println("================================================================================");
         return list;
     }
 
@@ -210,7 +216,8 @@ public class OutcomeService {
 
     @Transactional
     public List<ProgrammeSpecificOutcome> getPSOsByProgramme(String programmeId) {
-        System.out.println("[OutcomeService] getPSOsByProgramme called | programmeId: " + programmeId);
+        System.out.println("================================================================================");
+        System.out.println("[OutcomeService] >>> getPSOsByProgramme called | programmeId: " + programmeId);
         List<ProgrammeSpecificOutcome> list = psoRepository.findByProgrammeIdOrderByCodeAsc(programmeId);
         if (list.isEmpty()) {
             System.out.println("[OutcomeService] No PSOs found in DB for programmeId: " + programmeId + ". Seeding default PSOs...");
@@ -220,9 +227,14 @@ public class OutcomeService {
             List<PsoCompetency> comps = psoCompetencyRepository.findByPsoIdOrderByCodeAsc(pso.getId());
             comps.sort(Comparator.comparing(PsoCompetency::getCode, NATURAL_CODE_COMPARATOR));
             pso.setCompetencies(comps);
+            System.out.println("  [PSO ENTRY] Code: " + pso.getCode() + " | Statement: " + pso.getStatement());
+            for (PsoCompetency comp : comps) {
+                System.out.println("      -> Competency Code: " + comp.getCode() + " | Statement: " + comp.getStatement());
+            }
         }
         list.sort(Comparator.comparing(ProgrammeSpecificOutcome::getCode, NATURAL_CODE_COMPARATOR));
-        System.out.println("[OutcomeService] Fetched PSOs (" + list.size() + " items) with competencies for programmeId: " + programmeId);
+        System.out.println("[OutcomeService] <<< OUTGOING PSOs Payload (" + list.size() + " items) for programmeId: " + programmeId);
+        System.out.println("================================================================================");
         return list;
     }
 
@@ -425,35 +437,21 @@ public class OutcomeService {
     }
 
     private String resolveTargetCourseId(String courseId) {
-        if (courseId != null && !courseId.isBlank() && courseRepository.existsById(courseId)) {
+        if (courseId == null || courseId.isBlank()) return null;
+        if (courseRepository.existsById(courseId)) {
+            System.out.println("[OutcomeService] [DEBUG courseId] Exact courseId found in DB: " + courseId);
             return courseId;
         }
-        List<Course> all = courseRepository.findAll();
-        if (!all.isEmpty()) {
-            System.out.println("[OutcomeService] Course ID '" + courseId + "' not found in courses table. Rebinding to existing course ID: " + all.get(0).getId());
-            return all.get(0).getId();
-        }
-        String idToUse = (courseId != null && !courseId.isBlank()) ? courseId : "crs-1";
-        Course placeholder = Course.builder()
-                .id(idToUse)
-                .code("CS301")
-                .name("Computer Networks")
-                .programmeId("prog-1")
-                .semester("Sem V")
-                .academicYear("2025-26")
-                .build();
-        courseRepository.save(placeholder);
-        System.out.println("[OutcomeService] Auto-created placeholder course row in DB with id: " + idToUse);
-        return idToUse;
+        return courseId;
     }
 
     @Transactional(readOnly = true)
     public List<CourseOutcome> getCOsByCourse(String courseId) {
         String targetCourseId = resolveTargetCourseId(courseId);
-        System.out.println("[OutcomeService] getCOsByCourse called | courseId: " + courseId + " -> targetCourseId: " + targetCourseId);
+        System.out.println("[OutcomeService] [DEBUG getCOsByCourse] Received courseId: '" + courseId + "' -> Target DB courseId: '" + targetCourseId + "'");
         List<CourseOutcome> list = coRepository.findByCourseId(targetCourseId);
         list.sort(Comparator.comparing(CourseOutcome::getCode, NATURAL_CODE_COMPARATOR));
-        System.out.println("[OutcomeService] Fetched COs (" + list.size() + " items) for courseId: " + targetCourseId);
+        System.out.println("[OutcomeService] [DEBUG getCOsByCourse] Fetched " + list.size() + " COs for courseId: '" + targetCourseId + "'");
         return list;
     }
 
@@ -562,13 +560,16 @@ public class OutcomeService {
         return getProgrammeTargets(programmeId);
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public CourseMappingMatrixDto getCourseMappings(String courseId) {
         String targetCourseId = resolveTargetCourseId(courseId);
         Course course = courseRepository.findById(targetCourseId).orElse(null);
-        String progId = course != null ? course.getProgrammeId() : "prog-1";
+        String progId = course.getProgrammeId() ;
 
-        List<CourseOutcome> cos = coRepository.findByCourseId(targetCourseId);
+        List<CourseOutcome> cos = getCOsByCourse(targetCourseId);
+        List<ProgrammeOutcome> pos = (progId != null) ? getPOsByProgramme(progId) : Collections.emptyList();
+        List<ProgrammeSpecificOutcome> psos = (progId != null) ? getPSOsByProgramme(progId) : Collections.emptyList();
+
         List<String> coIds = cos.stream().map(CourseOutcome::getId).collect(Collectors.toList());
 
         List<CoPoMapping> poMappings = coIds.isEmpty() ? Collections.emptyList() : coPoMappingRepository.findByCourseOutcomeIdIn(coIds);
@@ -577,9 +578,14 @@ public class OutcomeService {
         Map<String, Object> poKw = coursePoKeywordsMap.getOrDefault(targetCourseId, Collections.emptyMap());
         Map<String, Object> psoKw = coursePsoKeywordsMap.getOrDefault(targetCourseId, Collections.emptyMap());
 
+        System.out.println("[OutcomeService] getCourseMappings | programmeId: " + progId + " | PO Count: " + pos.size() + " | PSO Count: " + psos.size());
+
         return CourseMappingMatrixDto.builder()
                 .courseId(targetCourseId)
                 .programmeId(progId)
+                .cos(cos)
+                .pos(pos)
+                .psos(psos)
                 .poMappings(poMappings)
                 .psoMappings(psoMappings)
                 .poKeywordsStore(poKw)
@@ -591,16 +597,23 @@ public class OutcomeService {
     public CourseMappingMatrixDto saveCourseMappings(String courseId, CourseMappingMatrixDto dto) {
         String targetCourseId = resolveTargetCourseId(courseId);
         Course course = courseRepository.findById(targetCourseId).orElse(null);
-        String progId = course != null ? course.getProgrammeId() : (dto != null && dto.getProgrammeId() != null ? dto.getProgrammeId() : "prog-1");
+        String progId = course != null ? course.getProgrammeId() : (dto != null && dto.getProgrammeId() != null ? dto.getProgrammeId() : null);
+
+        System.out.println("================================================================================");
+        System.out.println("[OutcomeService] [DEBUG courseId] >>> saveCourseMappings received input courseId: '" + courseId + "' -> resolved targetCourseId: '" + targetCourseId + "'");
+        System.out.println("[OutcomeService] [DEBUG courseId]   -> Course Entity Name: " + (course != null ? course.getName() : "N/A"));
+        System.out.println("[OutcomeService] [DEBUG courseId]   -> Extracted Programme ID: " + progId);
 
         if (dto != null && dto.getPoKeywordsStore() != null) {
             coursePoKeywordsMap.put(targetCourseId, dto.getPoKeywordsStore());
+            System.out.println("[OutcomeService] [DEBUG courseId]   -> SAVING PO KEYWORDS: " + dto.getPoKeywordsStore());
         }
         if (dto != null && dto.getPsoKeywordsStore() != null) {
             coursePsoKeywordsMap.put(targetCourseId, dto.getPsoKeywordsStore());
+            System.out.println("[OutcomeService] [DEBUG courseId]   -> SAVING PSO KEYWORDS: " + dto.getPsoKeywordsStore());
         }
 
-        List<CourseOutcome> cos = coRepository.findByCourseId(targetCourseId);
+        List<CourseOutcome> cos = getCOsByCourse(targetCourseId);
         List<String> coIds = cos.stream().map(CourseOutcome::getId).collect(Collectors.toList());
 
         if (!coIds.isEmpty()) {
@@ -617,6 +630,7 @@ public class OutcomeService {
             }
             savedPo = coPoMappingRepository.saveAll(dto.getPoMappings());
         }
+        System.out.println("[OutcomeService] [DEBUG courseId]   -> SAVED PO MAPPINGS COUNT: " + savedPo.size());
 
         List<CoPsoMapping> savedPso = Collections.emptyList();
         if (dto != null && dto.getPsoMappings() != null && !dto.getPsoMappings().isEmpty()) {
@@ -627,10 +641,18 @@ public class OutcomeService {
             }
             savedPso = coPsoMappingRepository.saveAll(dto.getPsoMappings());
         }
+        System.out.println("[OutcomeService] [DEBUG courseId]   -> SAVED PSO MAPPINGS COUNT: " + savedPso.size());
+        System.out.println("================================================================================");
+
+        List<ProgrammeOutcome> pos = (progId != null) ? getPOsByProgramme(progId) : Collections.emptyList();
+        List<ProgrammeSpecificOutcome> psos = (progId != null) ? getPSOsByProgramme(progId) : Collections.emptyList();
 
         return CourseMappingMatrixDto.builder()
                 .courseId(targetCourseId)
                 .programmeId(progId)
+                .cos(cos)
+                .pos(pos)
+                .psos(psos)
                 .poMappings(savedPo)
                 .psoMappings(savedPso)
                 .poKeywordsStore(coursePoKeywordsMap.getOrDefault(targetCourseId, Collections.emptyMap()))
