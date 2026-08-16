@@ -2,17 +2,18 @@ package com.dypiu.nba.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+
 import java.time.ZonedDateTime;
 
 @Entity
 @Table(
-    name = "programme_atrs",
-    uniqueConstraints = {
-        @UniqueConstraint(
-            name = "uk_programme_atr_batch",
-            columnNames = {"programme_id", "batch_id"}
-        )
-    }
+        name = "programme_atrs",
+        uniqueConstraints = {
+                @UniqueConstraint(
+                        name = "uk_programme_batch_atr",
+                        columnNames = {"programme_id", "batch_id"}
+                )
+        }
 )
 @Getter
 @Setter
@@ -30,17 +31,27 @@ public class ProgrammeAtr {
     @Column(name = "batch_id", nullable = false)
     private String batchId;
 
-    @Column(name = "academic_year", nullable = false)
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 30)
     @Builder.Default
-    private String academicYear = "2025-26";
+    private ProgrammeAtrStatus status = ProgrammeAtrStatus.DRAFT;
 
-    @Builder.Default
-    private String status = "DRAFT"; // DRAFT, SUBMITTED_FOR_APPROVAL, APPROVED, NEEDS_REVISION
-
+    // Created/submitted by Programme Coordinator
+    @Column(name = "submitted_by")
     private String submittedBy;
+
+    @Column(name = "submitted_at")
     private ZonedDateTime submittedAt;
-    private String approvedBy;
-    private ZonedDateTime approvedAt;
+
+    // Verified by HOD
+    @Column(name = "verified_by")
+    private String verifiedBy;
+
+    @Column(name = "verified_at")
+    private ZonedDateTime verifiedAt;
+
+    @Column(name = "verification_comments", columnDefinition = "TEXT")
+    private String verificationComments;
 
     @Column(name = "observations_json", columnDefinition = "TEXT")
     private String observationsJson;
@@ -48,6 +59,6 @@ public class ProgrammeAtr {
     @Column(name = "created_at", insertable = false, updatable = false)
     private ZonedDateTime createdAt;
 
-    @Column(name = "updated_at", insertable = false, updatable = false)
+    @Column(name = "updated_at")
     private ZonedDateTime updatedAt;
 }

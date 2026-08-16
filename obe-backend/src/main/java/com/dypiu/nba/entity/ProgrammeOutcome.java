@@ -2,12 +2,19 @@ package com.dypiu.nba.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+
 import java.time.ZonedDateTime;
-import java.util.ArrayList;
-import java.util.List;
 
 @Entity
-@Table(name = "programme_outcomes")
+@Table(
+        name = "programme_outcomes",
+        uniqueConstraints = {
+                @UniqueConstraint(
+                        name = "uk_programme_po_code",
+                        columnNames = {"programme_id", "code"}
+                )
+        }
+)
 @Getter
 @Setter
 @NoArgsConstructor
@@ -27,14 +34,15 @@ public class ProgrammeOutcome {
     @Column(nullable = false, columnDefinition = "TEXT")
     private String statement;
 
-    @Column(name = "academic_year", nullable = false)
-    @Builder.Default
-    private String academicYear = "2025-26";
-
-    @Transient
-    @Builder.Default
-    private List<PoCompetency> competencies = new ArrayList<>();
-
     @Column(name = "created_at", insertable = false, updatable = false)
     private ZonedDateTime createdAt;
+
+    @Column(name = "updated_at", insertable = false, updatable = false)
+    private ZonedDateTime updatedAt;
+
+    @Transient
+    private String academicYear;
+
+    @Transient
+    private java.util.List<PoCompetency> competencies;
 }

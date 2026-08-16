@@ -2,10 +2,19 @@ package com.dypiu.nba.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+
 import java.time.ZonedDateTime;
 
 @Entity
-@Table(name = "co_pso_mappings")
+@Table(
+        name = "co_pso_mappings",
+        uniqueConstraints = {
+                @UniqueConstraint(
+                        name = "uk_co_pso",
+                        columnNames = {"course_outcome_id", "pso_code"}
+                )
+        }
+)
 @Getter
 @Setter
 @NoArgsConstructor
@@ -24,7 +33,7 @@ public class CoPsoMapping {
 
     @Column(name = "mapping_level", nullable = false)
     @Builder.Default
-    private Integer mappingLevel = 0; // 0, 1, 2, 3
+    private Integer mappingLevel = 0;
 
     @Column(name = "created_at", insertable = false, updatable = false)
     private ZonedDateTime createdAt;

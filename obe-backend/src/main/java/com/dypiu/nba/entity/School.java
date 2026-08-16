@@ -2,6 +2,7 @@ package com.dypiu.nba.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+
 import java.time.ZonedDateTime;
 
 @Entity
@@ -22,8 +23,11 @@ public class School {
     @Column(nullable = false, length = 255)
     private String name;
 
-    @Column(name = "director")
-    private String director;
+    @Column(name = "director_id")
+    private Long directorId;
+
+    @Column(name = "director_name")
+    private String directorName;
 
     @Column(name = "director_email")
     private String directorEmail;
@@ -36,4 +40,13 @@ public class School {
 
     @Column(name = "updated_at", insertable = false, updatable = false)
     private ZonedDateTime updatedAt;
+
+    @Transient
+    public String getDirector() {
+        return directorName;
+    }
+
+    public void setDirector(String director) {
+        this.directorName = director;
+    }
 }

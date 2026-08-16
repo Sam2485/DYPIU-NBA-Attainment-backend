@@ -9,5 +9,4 @@ import java.util.List;
 public interface ProgrammeSpecificOutcomeRepository extends JpaRepository<ProgrammeSpecificOutcome, String> {
     List<ProgrammeSpecificOutcome> findByProgrammeId(String programmeId);
     List<ProgrammeSpecificOutcome> findByProgrammeIdOrderByCodeAsc(String programmeId);
-    List<ProgrammeSpecificOutcome> findByProgrammeIdAndAcademicYear(String programmeId, String academicYear);
 }

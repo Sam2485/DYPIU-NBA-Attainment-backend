@@ -2,10 +2,19 @@ package com.dypiu.nba.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+
 import java.time.ZonedDateTime;
 
 @Entity
-@Table(name = "courses")
+@Table(
+        name = "courses",
+        uniqueConstraints = {
+                @UniqueConstraint(
+                        name = "uk_programme_course_code",
+                        columnNames = {"programme_id", "code"}
+                )
+        }
+)
 @Getter
 @Setter
 @NoArgsConstructor
@@ -25,22 +34,34 @@ public class Course {
     @Column(name = "programme_id", nullable = false)
     private String programmeId;
 
-    @Column(nullable = false, length = 50)
-    private String semester;
+    @Column(nullable = false)
+    private Integer credits;
 
-    private String coordinator;
-    private String faculty;
+    @Column(name = "course_type", length = 50)
+    private String courseType;
 
-    @Column(name = "assigned_faculty", columnDefinition = "TEXT")
-    private String assignedFaculty;
-
-    @Column(name = "academic_year", nullable = false)
     @Builder.Default
-    private String academicYear = "2025-26";
+    @Column(nullable = false, length = 30)
+    private String status = "ACTIVE";
 
     @Column(name = "created_at", insertable = false, updatable = false)
     private ZonedDateTime createdAt;
 
     @Column(name = "updated_at", insertable = false, updatable = false)
     private ZonedDateTime updatedAt;
+
+    @Transient
+    private String coordinator;
+
+    @Transient
+    private String faculty;
+
+    @Transient
+    private String assignedFaculty;
+
+    @Transient
+    private String semester;
+
+    @Transient
+    private String academicYear;
 }

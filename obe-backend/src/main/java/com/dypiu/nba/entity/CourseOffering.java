@@ -2,17 +2,18 @@ package com.dypiu.nba.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+
 import java.time.ZonedDateTime;
 
 @Entity
 @Table(
-    name = "course_offerings",
-    uniqueConstraints = {
-        @UniqueConstraint(
-            name = "uk_batch_course_sem",
-            columnNames = {"batch_id", "course_id", "semester"}
-        )
-    }
+        name = "course_offerings",
+        uniqueConstraints = {
+                @UniqueConstraint(
+                        name = "uk_batch_course_semester",
+                        columnNames = {"batch_id", "course_id", "semester"}
+                )
+        }
 )
 @Getter
 @Setter
@@ -31,15 +32,10 @@ public class CourseOffering {
     private String batchId;
 
     @Column(nullable = false)
-    @Builder.Default
-    private Integer semester = 1;
-
-    @Column(name = "academic_year", nullable = false)
-    @Builder.Default
-    private String academicYear = "2025-26";
+    private Integer semester;
 
     @Column(name = "course_coordinator_id")
-    private String courseCoordinatorId;
+    private Long courseCoordinatorId;
 
     @Column(name = "course_coordinator_name")
     private String courseCoordinatorName;
@@ -48,6 +44,7 @@ public class CourseOffering {
     private String assignedFaculty;
 
     @Builder.Default
+    @Column(nullable = false, length = 30)
     private String status = "ACTIVE";
 
     @Column(name = "created_at", insertable = false, updatable = false)

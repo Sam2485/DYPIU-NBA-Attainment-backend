@@ -25,6 +25,8 @@ import java.util.List;
 public class AcademicController {
 
     private final AcademicService academicService;
+    private final com.dypiu.nba.service.OutcomeService outcomeService;
+
 
     // --- Users by Role ---
     @GetMapping("/users")
@@ -307,9 +309,30 @@ public class AcademicController {
 
     // --- Batches ---
     @GetMapping("/batches")
-    public ResponseEntity<ApiResponse<List<Batch>>> getBatches(@RequestParam(required = false) String programmeId) {
-        List<Batch> batches = programmeId != null ? academicService.getBatchesByProgramme(programmeId) : academicService.getAllBatches();
+    public ResponseEntity<ApiResponse<List<Batch>>> getBatches(
+            @RequestParam(required = false) String programmeId,
+            @RequestParam(required = false) String userEmail,
+            @RequestParam(required = false) String role,
+            java.security.Principal principal) {
+        String email = (userEmail != null && !userEmail.isBlank()) ? userEmail : (principal != null ? principal.getName() : null);
+        List<Batch> batches = academicService.getBatchesScoped(programmeId, email, role);
         return ResponseEntity.ok(ApiResponse.<List<Batch>>builder().success(true).data(batches).build());
+    }
+
+    @GetMapping("/batches/{id}")
+    public ResponseEntity<ApiResponse<Batch>> getBatchById(@PathVariable String id) {
+        return ResponseEntity.ok(ApiResponse.<Batch>builder()
+                .success(true)
+                .data(academicService.getAllBatches().stream().filter(b -> b.getId().equals(id)).findFirst().orElse(null))
+                .build());
+    }
+
+    @GetMapping("/batches/{batchId}/context")
+    public ResponseEntity<ApiResponse<com.dypiu.nba.dto.BatchContextDto>> getBatchContext(@PathVariable String batchId) {
+        return ResponseEntity.ok(ApiResponse.<com.dypiu.nba.dto.BatchContextDto>builder()
+                .success(true)
+                .data(academicService.getBatchContext(batchId))
+                .build());
     }
 
     @PostMapping("/batches")
@@ -332,6 +355,14 @@ public class AcademicController {
     public ResponseEntity<ApiResponse<List<Course>>> getCourses(@RequestParam(required = false) String programmeId) {
         List<Course> courses = programmeId != null ? academicService.getCoursesByProgramme(programmeId) : academicService.getAllCourses();
         return ResponseEntity.ok(ApiResponse.<List<Course>>builder().success(true).data(courses).build());
+    }
+
+    @GetMapping("/courses/{id}")
+    public ResponseEntity<ApiResponse<Course>> getCourseById(@PathVariable String id) {
+        return ResponseEntity.ok(ApiResponse.<Course>builder()
+                .success(true)
+                .data(academicService.getCourseById(id))
+                .build());
     }
 
     @PostMapping("/courses")
@@ -358,6 +389,14 @@ public class AcademicController {
                 .build());
     }
 
+    @GetMapping("/course-offerings/{offeringId}")
+    public ResponseEntity<ApiResponse<com.dypiu.nba.entity.CourseOffering>> getCourseOfferingById(@PathVariable String offeringId) {
+        return ResponseEntity.ok(ApiResponse.<com.dypiu.nba.entity.CourseOffering>builder()
+                .success(true)
+                .data(academicService.getCourseOfferingsByBatch(null).stream().filter(o -> o.getId().equals(offeringId)).findFirst().orElse(null))
+                .build());
+    }
+
     @PostMapping("/course-offerings")
     public ResponseEntity<ApiResponse<com.dypiu.nba.entity.CourseOffering>> saveCourseOffering(@RequestBody com.dypiu.nba.entity.CourseOffering offering) {
         return ResponseEntity.ok(ApiResponse.<com.dypiu.nba.entity.CourseOffering>builder()
@@ -372,6 +411,45 @@ public class AcademicController {
         academicService.deleteCourseOffering(id);
         return ResponseEntity.ok(ApiResponse.<Void>builder().success(true).message("Course Offering deleted").build());
     }
+
+    @GetMapping("/course-offerings/{offeringId}/outcomes")
+    public ResponseEntity<ApiResponse<List<CourseOutcome>>> getOfferingOutcomes(@PathVariable String offeringId) {
+        return ResponseEntity.ok(ApiResponse.<List<CourseOutcome>>builder()
+                .success(true)
+                .data(outcomeService.getOutcomesByOffering(offeringId))
+                .build());
+    }
+
+    @PostMapping("/course-offerings/{offeringId}/outcomes")
+    public ResponseEntity<ApiResponse<List<CourseOutcome>>> saveOfferingOutcomes(
+            @PathVariable String offeringId,
+            @RequestBody List<CourseOutcome> outcomes) {
+        return ResponseEntity.ok(ApiResponse.<List<CourseOutcome>>builder()
+                .success(true)
+                .message("Course outcomes saved for offering")
+                .data(outcomeService.saveOutcomesByOffering(offeringId, outcomes))
+                .build());
+    }
+
+    @GetMapping("/course-offerings/{offeringId}/mappings")
+    public ResponseEntity<ApiResponse<com.dypiu.nba.dto.CourseMappingMatrixDto>> getOfferingMappings(@PathVariable String offeringId) {
+        return ResponseEntity.ok(ApiResponse.<com.dypiu.nba.dto.CourseMappingMatrixDto>builder()
+                .success(true)
+                .data(outcomeService.getMappingsByOffering(offeringId))
+                .build());
+    }
+
+    @PutMapping("/course-offerings/{offeringId}/mappings")
+    public ResponseEntity<ApiResponse<com.dypiu.nba.dto.CourseMappingMatrixDto>> saveOfferingMappings(
+            @PathVariable String offeringId,
+            @RequestBody com.dypiu.nba.dto.CourseMappingMatrixDto dto) {
+        return ResponseEntity.ok(ApiResponse.<com.dypiu.nba.dto.CourseMappingMatrixDto>builder()
+                .success(true)
+                .message("Course mappings saved for offering")
+                .data(outcomeService.saveMappingsByOffering(offeringId, dto))
+                .build());
+    }
+
 
     // --- Students ---
     @GetMapping("/batches/{batchId}/students")

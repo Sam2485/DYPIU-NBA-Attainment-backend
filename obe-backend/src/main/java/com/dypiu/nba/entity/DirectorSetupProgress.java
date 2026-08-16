@@ -6,7 +6,15 @@ import lombok.*;
 import java.time.ZonedDateTime;
 
 @Entity
-@Table(name = "director_setup_progress")
+@Table(
+        name = "director_setup_progress",
+        uniqueConstraints = {
+                @UniqueConstraint(
+                        name = "uk_director_setup_school",
+                        columnNames = {"school_id"}
+                )
+        }
+)
 @Getter
 @Setter
 @NoArgsConstructor
@@ -17,19 +25,22 @@ public class DirectorSetupProgress {
     @Id
     private String id;
 
-    @Column(name = "school_id", nullable = false, unique = true)
+    @Column(name = "school_id", nullable = false)
     private String schoolId;
 
     @Column(name = "current_step", nullable = false)
-    private Integer currentStep;
+    @Builder.Default
+    private Integer currentStep = 1;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "current_step_enum", nullable = false)
-    private DirectorSetupStep currentStepEnum;
+    @Builder.Default
+    private DirectorSetupStep currentStepEnum = DirectorSetupStep.SCHOOL;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "overall_status", nullable = false)
-    private SetupStepStatus overallStatus;
+    @Builder.Default
+    private SetupStepStatus overallStatus = SetupStepStatus.NOT_STARTED;
 
     @Column(name = "completed_steps", length = 500)
     private String completedSteps;

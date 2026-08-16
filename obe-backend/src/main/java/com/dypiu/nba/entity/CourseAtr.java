@@ -2,11 +2,20 @@ package com.dypiu.nba.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+
 import java.math.BigDecimal;
 import java.time.ZonedDateTime;
 
 @Entity
-@Table(name = "course_atrs")
+@Table(
+        name = "course_atrs",
+        uniqueConstraints = {
+                @UniqueConstraint(
+                        name = "uk_offering_co_atr",
+                        columnNames = {"course_offering_id", "co_code"}
+                )
+        }
+)
 @Getter
 @Setter
 @NoArgsConstructor
@@ -17,10 +26,7 @@ public class CourseAtr {
     @Id
     private String id;
 
-    @Column(name = "course_id", nullable = false)
-    private String courseId;
-
-    @Column(name = "course_offering_id")
+    @Column(name = "course_offering_id", nullable = false)
     private String courseOfferingId;
 
     @Column(name = "co_code", nullable = false, length = 30)
@@ -37,8 +43,10 @@ public class CourseAtr {
     @Column(name = "pct_achieved", nullable = false)
     private BigDecimal pctAchieved;
 
-    @Column(nullable = false, length = 50)
-    private String status; // "Target Achieved", "Target Not Achieved"
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 30)
+    @Builder.Default
+    private CourseAtrStatus status = CourseAtrStatus.DRAFT;
 
     @Column(columnDefinition = "TEXT")
     private String statement;
@@ -46,8 +54,26 @@ public class CourseAtr {
     @Column(name = "actions_json", columnDefinition = "TEXT")
     private String actionsJson;
 
+    // Created by Course Coordinator
+    @Column(name = "submitted_by")
     private String submittedBy;
 
-    @Column(name = "submitted_at", insertable = false, updatable = false)
+    @Column(name = "submitted_at")
     private ZonedDateTime submittedAt;
+
+    // Verified by Programme Coordinator
+    @Column(name = "verified_by")
+    private String verifiedBy;
+
+    @Column(name = "verified_at")
+    private ZonedDateTime verifiedAt;
+
+    @Column(name = "verification_comments", columnDefinition = "TEXT")
+    private String verificationComments;
+
+    @Column(name = "created_at", insertable = false, updatable = false)
+    private ZonedDateTime createdAt;
+
+    @Column(name = "updated_at")
+    private ZonedDateTime updatedAt;
 }

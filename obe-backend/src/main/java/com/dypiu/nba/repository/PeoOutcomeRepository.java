@@ -9,5 +9,4 @@ import java.util.List;
 public interface PeoOutcomeRepository extends JpaRepository<PeoOutcome, String> {
     List<PeoOutcome> findByProgrammeId(String programmeId);
     List<PeoOutcome> findByProgrammeIdOrderByCodeAsc(String programmeId);
-    List<PeoOutcome> findByProgrammeIdAndAcademicYear(String programmeId, String academicYear);
 }

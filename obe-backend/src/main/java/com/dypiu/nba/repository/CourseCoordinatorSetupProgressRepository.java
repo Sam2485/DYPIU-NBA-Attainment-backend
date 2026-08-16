@@ -7,6 +7,6 @@ import java.util.Optional;
 
 @Repository
 public interface CourseCoordinatorSetupProgressRepository extends JpaRepository<CourseCoordinatorSetupProgress, String> {
-    Optional<CourseCoordinatorSetupProgress> findByCourseId(String courseId);
-    Optional<CourseCoordinatorSetupProgress> findByCoordinatorEmailAndCourseId(String coordinatorEmail, String courseId);
+    Optional<CourseCoordinatorSetupProgress> findByCourseOfferingId(String courseOfferingId);
+    Optional<CourseCoordinatorSetupProgress> findByCoordinatorEmailAndCourseOfferingId(String coordinatorEmail, String courseOfferingId);
 }

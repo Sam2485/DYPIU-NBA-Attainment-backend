@@ -2,9 +2,16 @@ package com.dypiu.nba.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
-
 @Entity
-@Table(name = "pso_competencies")
+@Table(
+        name = "pso_competencies",
+        uniqueConstraints = {
+                @UniqueConstraint(
+                        name = "uk_pso_competency_code",
+                        columnNames = {"pso_id", "code"}
+                )
+        }
+)
 @Getter
 @Setter
 @NoArgsConstructor
@@ -15,7 +22,7 @@ public class PsoCompetency {
     @Id
     private String id;
 
-    @Column(name = "pso_id")
+    @Column(name = "pso_id", nullable = false)
     private String psoId;
 
     @Column(nullable = false, length = 30)

@@ -1,11 +1,7 @@
 package com.dypiu.nba.service;
 
-import com.dypiu.nba.entity.AttainmentConfiguration;
-import com.dypiu.nba.entity.CourseOutcome;
-import com.dypiu.nba.entity.StudentCoMark;
-import com.dypiu.nba.repository.AttainmentConfigurationRepository;
-import com.dypiu.nba.repository.CourseOutcomeRepository;
-import com.dypiu.nba.repository.StudentCoMarkRepository;
+import com.dypiu.nba.entity.*;
+import com.dypiu.nba.repository.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -34,19 +30,40 @@ class AttainmentCalculationServiceTest {
     @Mock
     private CourseOutcomeRepository courseOutcomeRepository;
 
+    @Mock
+    private StudentRepository studentRepository;
+
+    @Mock
+    private BatchRepository batchRepository;
+
+    @Mock
+    private UploadedDocumentRepository uploadedDocumentRepository;
+
+    @Mock
+    private CourseRepository courseRepository;
+
+    @Mock
+    private CourseOfferingRepository courseOfferingRepository;
+
     @InjectMocks
     private AttainmentCalculationService calculationService;
 
     private AttainmentConfiguration config;
     private CourseOutcome co1;
+    private CourseOffering offering;
 
     @BeforeEach
     void setUp() {
-        config = AttainmentConfiguration.builder()
-                .id("cfg-crs-1")
+        offering = CourseOffering.builder()
+                .id("offering-1")
                 .courseId("crs-1")
-                .courseCode("310244")
-                .courseName("Computer Network and Security")
+                .batchId("batch-1")
+                .semester(5)
+                .build();
+
+        config = AttainmentConfiguration.builder()
+                .id("cfg-offering-1")
+                .courseOfferingId("offering-1")
                 .directWeight(new BigDecimal("80.00"))
                 .indirectWeight(new BigDecimal("20.00"))
                 .directThreshold(new BigDecimal("60.00"))
@@ -55,7 +72,7 @@ class AttainmentCalculationServiceTest {
 
         co1 = CourseOutcome.builder()
                 .id("co-1-1")
-                .courseId("crs-1")
+                .courseOfferingId("offering-1")
                 .code("C321.1")
                 .statement("Interpret fundamental concepts")
                 .build();
@@ -63,16 +80,17 @@ class AttainmentCalculationServiceTest {
 
     @Test
     void testCalculateCourseCoAttainment_FormulaVerification() {
-        when(configRepository.findByCourseId("crs-1")).thenReturn(Optional.of(config));
-        when(courseOutcomeRepository.findByCourseId("crs-1")).thenReturn(List.of(co1));
+        when(courseOfferingRepository.existsById("offering-1")).thenReturn(true);
+        when(configRepository.findByCourseOfferingId("offering-1")).thenReturn(Optional.of(config));
+        when(courseOutcomeRepository.findByCourseOfferingId("offering-1")).thenReturn(List.of(co1));
 
         StudentCoMark m1 = StudentCoMark.builder().coCode("C321.1").marksObtained(new BigDecimal("75")).maxMarks(new BigDecimal("100")).build();
         StudentCoMark m2 = StudentCoMark.builder().coCode("C321.1").marksObtained(new BigDecimal("80")).maxMarks(new BigDecimal("100")).build();
         StudentCoMark m3 = StudentCoMark.builder().coCode("C321.1").marksObtained(new BigDecimal("50")).maxMarks(new BigDecimal("100")).build();
 
-        when(studentCoMarkRepository.findByCourseId("crs-1")).thenReturn(List.of(m1, m2, m3));
+        when(studentCoMarkRepository.findByCourseOfferingId("offering-1")).thenReturn(List.of(m1, m2, m3));
 
-        Map<String, Object> result = calculationService.calculateCourseCoAttainment("crs-1");
+        Map<String, Object> result = calculationService.calculateCourseCoAttainment("offering-1");
 
         assertNotNull(result);
         assertTrue(result.containsKey("coAttainments"));
@@ -81,6 +99,6 @@ class AttainmentCalculationServiceTest {
 
         Map<String, Object> co1Res = coAttainments.get(0);
         assertEquals("C321.1", co1Res.get("coCode"));
-        assertNotNull(co1Res.get("overallAttainment"));
+        assertNotNull(co1Res.get("combinedAttainment"));
     }
 }

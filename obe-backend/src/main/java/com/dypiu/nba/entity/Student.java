@@ -2,10 +2,19 @@ package com.dypiu.nba.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+
 import java.time.ZonedDateTime;
 
 @Entity
-@Table(name = "students")
+@Table(
+        name = "students",
+        uniqueConstraints = {
+                @UniqueConstraint(
+                        name = "uk_student_prn",
+                        columnNames = {"prn"}
+                )
+        }
+)
 @Getter
 @Setter
 @NoArgsConstructor
@@ -28,8 +37,10 @@ public class Student {
     @Column(nullable = false, length = 150)
     private String email;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 30)
     @Builder.Default
-    private String status = "ENROLLED";
+    private StudentStatus status = StudentStatus.ENROLLED;
 
     @Column(name = "created_at", insertable = false, updatable = false)
     private ZonedDateTime createdAt;

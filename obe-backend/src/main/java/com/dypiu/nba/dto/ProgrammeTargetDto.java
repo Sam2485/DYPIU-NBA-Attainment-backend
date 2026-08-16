@@ -11,6 +11,8 @@ import java.util.Map;
 @Builder
 public class ProgrammeTargetDto {
     private String programmeId;
+    private String batchId;
     private Map<String, BigDecimal> poTargets;
     private Map<String, BigDecimal> psoTargets;
+
 }

@@ -3,7 +3,6 @@ package com.dypiu.nba.entity;
 import jakarta.persistence.*;
 import lombok.*;
 import java.time.ZonedDateTime;
-
 @Entity
 @Table(name = "approval_history")
 @Getter
@@ -19,14 +18,17 @@ public class ApprovalHistory {
     @Column(name = "approval_request_id", nullable = false)
     private String approvalRequestId;
 
+    @Column(name = "actor_id")
+    private Long actorId;
+
     @Column(name = "actor_name", nullable = false)
     private String actorName;
 
     @Column(name = "actor_role", nullable = false)
     private String actorRole;
 
-    @Column(nullable = false)
-    private String action; // SUBMITTED, APPROVED, REJECTED, REVISION_REQUESTED
+    @Column(nullable = false, length = 50)
+    private String action;
 
     @Column(columnDefinition = "TEXT")
     private String comments;

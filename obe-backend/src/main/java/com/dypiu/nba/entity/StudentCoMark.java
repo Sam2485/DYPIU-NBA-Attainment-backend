@@ -4,9 +4,20 @@ import jakarta.persistence.*;
 import lombok.*;
 import java.math.BigDecimal;
 import java.time.ZonedDateTime;
-
 @Entity
-@Table(name = "student_co_marks")
+@Table(
+        name = "student_co_marks",
+        uniqueConstraints = {
+                @UniqueConstraint(
+                        name = "uk_student_offering_co",
+                        columnNames = {
+                                "student_id",
+                                "course_offering_id",
+                                "co_code"
+                        }
+                )
+        }
+)
 @Getter
 @Setter
 @NoArgsConstructor
@@ -20,8 +31,8 @@ public class StudentCoMark {
     @Column(name = "upload_id")
     private String uploadId;
 
-    @Column(name = "course_id", nullable = false)
-    private String courseId;
+    @Column(name = "course_offering_id", nullable = false)
+    private String courseOfferingId;
 
     @Column(name = "student_id", nullable = false)
     private String studentId;

@@ -3,9 +3,16 @@ package com.dypiu.nba.entity;
 import jakarta.persistence.*;
 import lombok.*;
 import java.time.ZonedDateTime;
-
 @Entity
-@Table(name = "departments")
+@Table(
+        name = "departments",
+        uniqueConstraints = {
+                @UniqueConstraint(
+                        name = "uk_school_department_code",
+                        columnNames = {"school_id", "code"}
+                )
+        }
+)
 @Getter
 @Setter
 @NoArgsConstructor
@@ -29,6 +36,7 @@ public class Department {
     private String hodEmail;
 
     @Builder.Default
+    @Column(nullable = false, length = 30)
     private String status = "ACTIVE";
 
     @Column(name = "created_at", insertable = false, updatable = false)

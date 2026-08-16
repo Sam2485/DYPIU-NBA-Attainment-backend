@@ -26,10 +26,14 @@ public class OutcomeService {
     private final PsoCompetencyRepository psoCompetencyRepository;
     private final ProgrammeTargetRepository targetRepository;
     private final CourseRepository courseRepository;
+    private final CourseOfferingRepository courseOfferingRepository;
     private final CoPoMappingRepository coPoMappingRepository;
     private final CoPsoMappingRepository coPsoMappingRepository;
     private final CourseMappingKeywordRepository courseMappingKeywordRepository;
+    private final BatchRepository batchRepository;
     private final ObjectMapper objectMapper;
+
+
 
     private static final Comparator<String> NATURAL_CODE_COMPARATOR = (c1, c2) -> {
         if (c1 == null) return -1;
@@ -101,8 +105,8 @@ public class OutcomeService {
                     .programmeId(pId)
                     .code(code)
                     .statement(stmt)
-                    .academicYear("2025-26")
                     .build();
+
             poRepository.save(po);
 
             List<PoCompetency> comps = new ArrayList<>();
@@ -440,37 +444,30 @@ public class OutcomeService {
         return saved;
     }
 
-    private String resolveTargetCourseId(String courseId) {
-        if (courseId == null || courseId.isBlank()) return null;
-        if (courseRepository.existsById(courseId)) {
-            System.out.println("[OutcomeService] [DEBUG courseId] Exact courseId found in DB: " + courseId);
-            return courseId;
+    private String resolveOfferingId(String offeringOrCourseId) {
+        if (offeringOrCourseId == null || offeringOrCourseId.isBlank()) return null;
+        if (courseOfferingRepository.existsById(offeringOrCourseId)) {
+            return offeringOrCourseId;
         }
-        return courseId;
+        List<CourseOffering> offerings = courseOfferingRepository.findByCourseId(offeringOrCourseId);
+        if (!offerings.isEmpty()) {
+            return offerings.get(0).getId();
+        }
+        return offeringOrCourseId;
     }
 
     @Transactional(readOnly = true)
-    public List<CourseOutcome> getCOsByCourse(String courseId) {
-        String targetCourseId = resolveTargetCourseId(courseId);
-        System.out.println("================================================================================");
-        System.out.println("[OutcomeService] >>> getCOsByCourse called | courseId: '" + courseId + "' -> targetCourseId: '" + targetCourseId + "'");
-        List<CourseOutcome> list = coRepository.findByCourseId(targetCourseId);
+    public List<CourseOutcome> getCOsByCourse(String courseIdOrOfferingId) {
+        String targetOfferingId = resolveOfferingId(courseIdOrOfferingId);
+        List<CourseOutcome> list = coRepository.findByCourseOfferingId(targetOfferingId);
         list.sort(Comparator.comparing(CourseOutcome::getCode, NATURAL_CODE_COMPARATOR));
-        for (CourseOutcome co : list) {
-            System.out.println("  [FETCHED CO FROM DB] Code: " + co.getCode() + " | Statement: " + co.getStatement() + " | TargetLevel: " + co.getTargetLevel());
-        }
-        System.out.println("[OutcomeService] <<< Returned " + list.size() + " COs for courseId: '" + targetCourseId + "'");
-        System.out.println("================================================================================");
         return list;
     }
 
     @Transactional
-    public List<CourseOutcome> saveCOs(String courseId, List<CourseOutcome> cos) {
-        String targetCourseId = resolveTargetCourseId(courseId);
-        System.out.println("================================================================================");
-        System.out.println("[OutcomeService] >>> saveCOs called | courseId: " + courseId + " -> targetCourseId: " + targetCourseId + " | count: " + (cos != null ? cos.size() : 0));
-
-        List<CourseOutcome> existing = coRepository.findByCourseId(targetCourseId);
+    public List<CourseOutcome> saveCOs(String courseIdOrOfferingId, List<CourseOutcome> cos) {
+        String targetOfferingId = resolveOfferingId(courseIdOrOfferingId);
+        List<CourseOutcome> existing = coRepository.findByCourseOfferingId(targetOfferingId);
         Map<String, CourseOutcome> existingByCode = existing.stream()
                 .collect(Collectors.toMap(
                         c -> c.getCode().toLowerCase(),
@@ -483,7 +480,7 @@ public class OutcomeService {
 
         if (cos != null) {
             for (CourseOutcome co : cos) {
-                co.setCourseId(targetCourseId);
+                co.setCourseOfferingId(targetOfferingId);
 
                 String key = co.getCode().toLowerCase();
                 CourseOutcome targetCo;
@@ -503,8 +500,6 @@ public class OutcomeService {
                     }
                 }
 
-                System.out.println("  [SAVING CO TO DB] Code: " + targetCo.getCode() + " | TargetLevel: " + targetCo.getTargetLevel() + " | Statement: " + targetCo.getStatement());
-
                 processedIds.add(targetCo.getId());
                 toSave.add(targetCo);
             }
@@ -514,22 +509,20 @@ public class OutcomeService {
                 .filter(c -> !processedIds.contains(c.getId()))
                 .collect(Collectors.toList());
         if (!toDelete.isEmpty()) {
-            System.out.println("[OutcomeService] Deleting " + toDelete.size() + " obsolete COs for courseId: " + targetCourseId);
             coRepository.deleteAll(toDelete);
         }
 
         List<CourseOutcome> saved = coRepository.saveAll(toSave);
         saved.sort(Comparator.comparing(CourseOutcome::getCode, NATURAL_CODE_COMPARATOR));
-        System.out.println("[OutcomeService] <<< Saved & Persisted (" + saved.size() + " items) for courseId: " + targetCourseId);
-        System.out.println("================================================================================");
         return saved;
     }
 
     // --- Programme Target Benchmark Levels ---
     @Transactional(readOnly = true)
     public ProgrammeTargetDto getProgrammeTargets(String programmeId) {
-        System.out.println("[OutcomeService] getProgrammeTargets called | programmeId: " + programmeId);
-        List<ProgrammeTarget> list = targetRepository.findByProgrammeId(programmeId);
+        List<Batch> batches = batchRepository.findByProgrammeId(programmeId);
+        List<String> batchIds = batches.stream().map(Batch::getId).collect(Collectors.toList());
+        List<ProgrammeTarget> list = batchIds.isEmpty() ? Collections.emptyList() : targetRepository.findByBatchIdIn(batchIds);
 
         Map<String, BigDecimal> poTargets = new LinkedHashMap<>();
         Map<String, BigDecimal> psoTargets = new LinkedHashMap<>();
@@ -551,10 +544,41 @@ public class OutcomeService {
                 .build();
     }
 
+    @Transactional(readOnly = true)
+    public ProgrammeTargetDto getBatchProgrammeTargets(String batchId) {
+        Batch batch = batchRepository.findById(batchId).orElse(null);
+        String progId = batch != null ? batch.getProgrammeId() : null;
+        List<ProgrammeTarget> list = targetRepository.findByBatchId(batchId);
+
+        Map<String, BigDecimal> poTargets = new LinkedHashMap<>();
+        Map<String, BigDecimal> psoTargets = new LinkedHashMap<>();
+
+        for (ProgrammeTarget pt : list) {
+            if (pt.getOutcomeCode() != null) {
+                if (pt.getOutcomeCode().toUpperCase().startsWith("PSO")) {
+                    psoTargets.put(pt.getOutcomeCode(), pt.getTargetValue());
+                } else if (pt.getOutcomeCode().toUpperCase().startsWith("PO")) {
+                    poTargets.put(pt.getOutcomeCode(), pt.getTargetValue());
+                }
+            }
+        }
+
+        return ProgrammeTargetDto.builder()
+                .programmeId(progId)
+                .batchId(batchId)
+                .poTargets(poTargets)
+                .psoTargets(psoTargets)
+                .build();
+    }
+
     @Transactional
     public ProgrammeTargetDto saveProgrammeTargets(String programmeId, ProgrammeTargetDto dto) {
-        System.out.println("[OutcomeService] saveProgrammeTargets called | programmeId: " + programmeId);
         if (dto == null) return getProgrammeTargets(programmeId);
+
+        List<Batch> batches = batchRepository.findByProgrammeId(programmeId);
+        String targetBatchId = (dto.getBatchId() != null && !dto.getBatchId().isBlank())
+                ? dto.getBatchId()
+                : (!batches.isEmpty() ? batches.get(0).getId() : "batch-" + programmeId);
 
         Map<String, BigDecimal> combined = new LinkedHashMap<>();
         if (dto.getPoTargets() != null) combined.putAll(dto.getPoTargets());
@@ -563,15 +587,18 @@ public class OutcomeService {
         for (Map.Entry<String, BigDecimal> entry : combined.entrySet()) {
             String code = entry.getKey();
             BigDecimal val = entry.getValue() != null ? entry.getValue() : new BigDecimal("2.00");
+            OutcomeType oType = code.toUpperCase().startsWith("PSO") ? OutcomeType.PSO : (code.toUpperCase().startsWith("PEO") ? OutcomeType.PEO : OutcomeType.PO);
 
-            ProgrammeTarget target = targetRepository.findByProgrammeIdAndOutcomeCode(programmeId, code)
+            ProgrammeTarget target = targetRepository.findByBatchIdAndOutcomeCode(targetBatchId, code)
                     .orElseGet(() -> ProgrammeTarget.builder()
                             .id("target-" + UUID.randomUUID().toString().substring(0, 8))
-                            .programmeId(programmeId)
+                            .batchId(targetBatchId)
+                            .outcomeType(oType)
                             .outcomeCode(code)
                             .build());
 
             target.setTargetValue(val);
+            target.setOutcomeType(oType);
             target.setUpdatedAt(ZonedDateTime.now());
             targetRepository.save(target);
         }
@@ -580,12 +607,15 @@ public class OutcomeService {
     }
 
     @Transactional
-    public CourseMappingMatrixDto getCourseMappings(String courseId) {
-        String targetCourseId = resolveTargetCourseId(courseId);
-        Course course = courseRepository.findById(targetCourseId).orElse(null);
+    public CourseMappingMatrixDto getCourseMappings(String courseIdOrOfferingId) {
+        String targetOfferingId = resolveOfferingId(courseIdOrOfferingId);
+        CourseOffering offering = courseOfferingRepository.findById(targetOfferingId).orElse(null);
+        String courseId = offering != null ? offering.getCourseId() : targetOfferingId;
+
+        Course course = courseRepository.findById(courseId).orElse(null);
         String progId = course != null ? course.getProgrammeId() : null;
 
-        List<CourseOutcome> cos = getCOsByCourse(targetCourseId);
+        List<CourseOutcome> cos = getCOsByCourse(targetOfferingId);
         List<ProgrammeOutcome> pos = (progId != null) ? getPOsByProgramme(progId) : Collections.emptyList();
         List<ProgrammeSpecificOutcome> psos = (progId != null) ? getPSOsByProgramme(progId) : Collections.emptyList();
 
@@ -597,34 +627,26 @@ public class OutcomeService {
         Map<String, Object> poKw = Collections.emptyMap();
         Map<String, Object> psoKw = Collections.emptyMap();
 
-        Optional<CourseMappingKeyword> poKwOpt = courseMappingKeywordRepository.findByCourseIdAndKeywordType(targetCourseId, "PO");
+        Optional<CourseMappingKeyword> poKwOpt = courseMappingKeywordRepository.findByCourseOfferingIdAndKeywordType(targetOfferingId, "PO");
         if (poKwOpt.isPresent()) {
             try {
                 poKw = objectMapper.readValue(poKwOpt.get().getKeywordsJson(), new TypeReference<Map<String, Object>>() {});
-                System.out.println("[OutcomeService] [FETCHED KEYWORDS FROM DB] >>> PO KEYWORDS FOR COURSE '" + targetCourseId + "': " + poKw);
-            } catch (Exception e) {
-                System.err.println("[OutcomeService] ERROR PARSING PO KEYWORDS FROM DB: " + e.getMessage());
-            }
-        } else if (coursePoKeywordsMap.containsKey(targetCourseId)) {
-            poKw = coursePoKeywordsMap.get(targetCourseId);
+            } catch (Exception ignored) {}
+        } else if (coursePoKeywordsMap.containsKey(targetOfferingId)) {
+            poKw = coursePoKeywordsMap.get(targetOfferingId);
         }
 
-        Optional<CourseMappingKeyword> psoKwOpt = courseMappingKeywordRepository.findByCourseIdAndKeywordType(targetCourseId, "PSO");
+        Optional<CourseMappingKeyword> psoKwOpt = courseMappingKeywordRepository.findByCourseOfferingIdAndKeywordType(targetOfferingId, "PSO");
         if (psoKwOpt.isPresent()) {
             try {
                 psoKw = objectMapper.readValue(psoKwOpt.get().getKeywordsJson(), new TypeReference<Map<String, Object>>() {});
-                System.out.println("[OutcomeService] [FETCHED KEYWORDS FROM DB] >>> PSO KEYWORDS FOR COURSE '" + targetCourseId + "': " + psoKw);
-            } catch (Exception e) {
-                System.err.println("[OutcomeService] ERROR PARSING PSO KEYWORDS FROM DB: " + e.getMessage());
-            }
-        } else if (coursePsoKeywordsMap.containsKey(targetCourseId)) {
-            psoKw = coursePsoKeywordsMap.get(targetCourseId);
+            } catch (Exception ignored) {}
+        } else if (coursePsoKeywordsMap.containsKey(targetOfferingId)) {
+            psoKw = coursePsoKeywordsMap.get(targetOfferingId);
         }
 
-        System.out.println("[OutcomeService] getCourseMappings | courseId: " + targetCourseId + " | programmeId: " + progId + " | PO Count: " + pos.size() + " | PSO Count: " + psos.size());
-
         return CourseMappingMatrixDto.builder()
-                .courseId(targetCourseId)
+                .courseId(courseId)
                 .programmeId(progId)
                 .cos(cos)
                 .pos(pos)
@@ -636,65 +658,53 @@ public class OutcomeService {
                 .build();
     }
 
-    @Transactional
-    public CourseMappingMatrixDto saveCourseMappings(String courseId, CourseMappingMatrixDto dto) {
-        String targetCourseId = resolveTargetCourseId(courseId);
-        Course course = courseRepository.findById(targetCourseId).orElse(null);
-        String progId = course != null ? course.getProgrammeId() : (dto != null && dto.getProgrammeId() != null ? dto.getProgrammeId() : null);
 
-        System.out.println("================================================================================");
-        System.out.println("[OutcomeService] [SAVING COURSE MAPPINGS] courseId: '" + courseId + "' -> targetCourseId: '" + targetCourseId + "'");
-        System.out.println("  Course Name: " + (course != null ? course.getName() : "N/A"));
-        System.out.println("  Programme ID: " + progId);
+    @Transactional
+    public CourseMappingMatrixDto saveCourseMappings(String courseIdOrOfferingId, CourseMappingMatrixDto dto) {
+        String targetOfferingId = resolveOfferingId(courseIdOrOfferingId);
+        CourseOffering offering = courseOfferingRepository.findById(targetOfferingId).orElse(null);
+        String courseId = offering != null ? offering.getCourseId() : targetOfferingId;
+
+        Course course = courseRepository.findById(courseId).orElse(null);
+        String progId = course != null ? course.getProgrammeId() : (dto != null && dto.getProgrammeId() != null ? dto.getProgrammeId() : null);
 
         Map<String, Object> poKwToReturn = Collections.emptyMap();
         Map<String, Object> psoKwToReturn = Collections.emptyMap();
 
         if (dto != null && dto.getPoKeywordsStore() != null) {
             poKwToReturn = dto.getPoKeywordsStore();
-            coursePoKeywordsMap.put(targetCourseId, poKwToReturn);
+            coursePoKeywordsMap.put(targetOfferingId, poKwToReturn);
             try {
                 String poJson = objectMapper.writeValueAsString(poKwToReturn);
-                CourseMappingKeyword entity = courseMappingKeywordRepository.findByCourseIdAndKeywordType(targetCourseId, "PO")
+                CourseMappingKeyword entity = courseMappingKeywordRepository.findByCourseOfferingIdAndKeywordType(targetOfferingId, "PO")
                         .orElse(CourseMappingKeyword.builder()
                                 .id("kw-po-" + UUID.randomUUID().toString().substring(0, 8))
-                                .courseId(targetCourseId)
+                                .courseOfferingId(targetOfferingId)
                                 .keywordType("PO")
                                 .build());
                 entity.setKeywordsJson(poJson);
                 courseMappingKeywordRepository.save(entity);
-                System.out.println("================================================================================");
-                System.out.println("  [SAVING PO KEYWORDS TO DB] courseId: '" + targetCourseId + "'");
-                System.out.println("  PO KEYWORDS JSON: " + poJson);
-                System.out.println("================================================================================");
-            } catch (Exception e) {
-                System.err.println("  [ERROR SAVING PO KEYWORDS TO DB]: " + e.getMessage());
-            }
+            } catch (Exception ignored) {}
         }
 
         if (dto != null && dto.getPsoKeywordsStore() != null) {
             psoKwToReturn = dto.getPsoKeywordsStore();
-            coursePsoKeywordsMap.put(targetCourseId, psoKwToReturn);
+            coursePsoKeywordsMap.put(targetOfferingId, psoKwToReturn);
             try {
                 String psoJson = objectMapper.writeValueAsString(psoKwToReturn);
-                CourseMappingKeyword entity = courseMappingKeywordRepository.findByCourseIdAndKeywordType(targetCourseId, "PSO")
+                CourseMappingKeyword entity = courseMappingKeywordRepository.findByCourseOfferingIdAndKeywordType(targetOfferingId, "PSO")
                         .orElse(CourseMappingKeyword.builder()
                                 .id("kw-pso-" + UUID.randomUUID().toString().substring(0, 8))
-                                .courseId(targetCourseId)
+                                .courseOfferingId(targetOfferingId)
                                 .keywordType("PSO")
                                 .build());
                 entity.setKeywordsJson(psoJson);
                 courseMappingKeywordRepository.save(entity);
-                System.out.println("================================================================================");
-                System.out.println("  [SAVING PSO KEYWORDS TO DB] courseId: '" + targetCourseId + "'");
-                System.out.println("  PSO KEYWORDS JSON: " + psoJson);
-                System.out.println("================================================================================");
-            } catch (Exception e) {
-                System.err.println("  [ERROR SAVING PSO KEYWORDS TO DB]: " + e.getMessage());
-            }
+            } catch (Exception ignored) {}
         }
 
-        List<CourseOutcome> cos = getCOsByCourse(targetCourseId);
+        List<CourseOutcome> cos = getCOsByCourse(targetOfferingId);
+
         List<String> coIds = cos.stream().map(CourseOutcome::getId).collect(Collectors.toList());
 
         if (!coIds.isEmpty()) {
@@ -741,7 +751,7 @@ public class OutcomeService {
         List<ProgrammeSpecificOutcome> psos = (progId != null) ? getPSOsByProgramme(progId) : Collections.emptyList();
 
         return CourseMappingMatrixDto.builder()
-                .courseId(targetCourseId)
+                .courseId(courseIdOrOfferingId)
                 .programmeId(progId)
                 .cos(cos)
                 .pos(pos)
@@ -752,4 +762,34 @@ public class OutcomeService {
                 .psoKeywordsStore(psoKwToReturn)
                 .build();
     }
+
+    @Transactional(readOnly = true)
+    public List<CourseOutcome> getOutcomesByOffering(String offeringId) {
+        CourseOffering offering = courseOfferingRepository.findById(offeringId)
+                .orElseThrow(() -> new com.dypiu.nba.exception.ResourceNotFoundException("Course Offering not found: " + offeringId));
+        return getCOsByCourse(offering.getId());
+    }
+
+
+    @Transactional
+    public List<CourseOutcome> saveOutcomesByOffering(String offeringId, List<CourseOutcome> cos) {
+        CourseOffering offering = courseOfferingRepository.findById(offeringId)
+                .orElseThrow(() -> new com.dypiu.nba.exception.ResourceNotFoundException("Course Offering not found: " + offeringId));
+        return saveCOs(offering.getCourseId(), cos);
+    }
+
+    @Transactional
+    public CourseMappingMatrixDto getMappingsByOffering(String offeringId) {
+        CourseOffering offering = courseOfferingRepository.findById(offeringId)
+                .orElseThrow(() -> new com.dypiu.nba.exception.ResourceNotFoundException("Course Offering not found: " + offeringId));
+        return getCourseMappings(offering.getCourseId());
+    }
+
+    @Transactional
+    public CourseMappingMatrixDto saveMappingsByOffering(String offeringId, CourseMappingMatrixDto dto) {
+        CourseOffering offering = courseOfferingRepository.findById(offeringId)
+                .orElseThrow(() -> new com.dypiu.nba.exception.ResourceNotFoundException("Course Offering not found: " + offeringId));
+        return saveCourseMappings(offering.getCourseId(), dto);
+    }
 }
+

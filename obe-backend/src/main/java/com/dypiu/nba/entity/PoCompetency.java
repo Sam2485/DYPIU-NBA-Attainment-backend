@@ -4,7 +4,15 @@ import jakarta.persistence.*;
 import lombok.*;
 
 @Entity
-@Table(name = "po_competencies")
+@Table(
+        name = "po_competencies",
+        uniqueConstraints = {
+                @UniqueConstraint(
+                        name = "uk_po_competency_code",
+                        columnNames = {"po_id", "code"}
+                )
+        }
+)
 @Getter
 @Setter
 @NoArgsConstructor
@@ -15,7 +23,7 @@ public class PoCompetency {
     @Id
     private String id;
 
-    @Column(name = "po_id")
+    @Column(name = "po_id", nullable = false)
     private String poId;
 
     @Column(nullable = false, length = 30)

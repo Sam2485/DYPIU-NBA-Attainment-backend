@@ -2,6 +2,7 @@ package com.dypiu.nba.service;
 
 import com.dypiu.nba.dto.*;
 import com.dypiu.nba.entity.User;
+import com.dypiu.nba.entity.UserRole;
 import com.dypiu.nba.exception.BadRequestException;
 import com.dypiu.nba.repository.UserRepository;
 import com.dypiu.nba.security.JwtTokenProvider;
@@ -59,12 +60,19 @@ public class AuthService {
             throw new BadRequestException("Email is already registered");
         }
 
+        UserRole userRole = UserRole.FACULTY;
+        if (request.getRole() != null) {
+            try {
+                userRole = UserRole.valueOf(request.getRole().toUpperCase());
+            } catch (Exception ignored) {}
+        }
+
         User user = User.builder()
                 .username(request.getUsername())
                 .email(request.getEmail())
                 .passwordHash(passwordEncoder.encode(request.getPassword()))
                 .name(request.getName() != null ? request.getName() : request.getUsername())
-                .role(request.getRole() != null ? request.getRole() : "FACULTY")
+                .role(userRole)
                 .isActive(true)
                 .build();
 
@@ -100,7 +108,7 @@ public class AuthService {
                 .name("Verified User")
                 .email("user@dypiu.ac.in")
                 .username("verified_user")
-                .role("FACULTY")
+                .role(UserRole.FACULTY)
                 .build();
 
         return buildAuthResponse(defaultUser);
@@ -121,8 +129,9 @@ public class AuthService {
                         .name(user.getName())
                         .email(user.getEmail())
                         .username(user.getUsername())
-                        .role(user.getRole())
+                        .role(user.getRole() != null ? user.getRole().name() : "FACULTY")
                         .build())
                 .build();
     }
+
 }

@@ -1,13 +1,21 @@
 package com.dypiu.nba.entity;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.persistence.*;
 import lombok.*;
+
 import java.math.BigDecimal;
 import java.time.ZonedDateTime;
 
 @Entity
-@Table(name = "course_outcomes")
+@Table(
+        name = "course_outcomes",
+        uniqueConstraints = {
+                @UniqueConstraint(
+                        name = "uk_offering_co_code",
+                        columnNames = {"course_offering_id", "code"}
+                )
+        }
+)
 @Getter
 @Setter
 @NoArgsConstructor
@@ -18,8 +26,8 @@ public class CourseOutcome {
     @Id
     private String id;
 
-    @Column(name = "course_id", nullable = false)
-    private String courseId;
+    @Column(name = "course_offering_id", nullable = false)
+    private String courseOfferingId;
 
     @Column(nullable = false, length = 30)
     private String code;
@@ -27,7 +35,7 @@ public class CourseOutcome {
     @Column(nullable = false, columnDefinition = "TEXT")
     private String statement;
 
-    @Column(name = "target_level")
+    @Column(name = "target_level", nullable = false, precision = 4, scale = 2)
     @Builder.Default
     private BigDecimal targetLevel = new BigDecimal("2.50");
 
@@ -36,27 +44,4 @@ public class CourseOutcome {
 
     @Column(name = "updated_at", insertable = false, updatable = false)
     private ZonedDateTime updatedAt;
-
-    @JsonProperty("targetLevel")
-    public void setTargetLevelFromJson(Object val) {
-        if (val == null) return;
-        if (val instanceof BigDecimal) {
-            this.targetLevel = (BigDecimal) val;
-        } else if (val instanceof Number) {
-            this.targetLevel = BigDecimal.valueOf(((Number) val).doubleValue());
-        } else {
-            try {
-                this.targetLevel = new BigDecimal(val.toString().trim());
-            } catch (Exception e) {
-                this.targetLevel = new BigDecimal("2.50");
-            }
-        }
-    }
-
-    @JsonProperty("target")
-    public void setTargetFromJson(Object val) {
-        if (val != null) {
-            setTargetLevelFromJson(val);
-        }
-    }
 }

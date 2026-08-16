@@ -1,2 +1,4 @@
+com/dypiu/nba/service/CourseOfferingUploadAlignmentTest.class
 com/dypiu/nba/service/AttainmentCalculationServiceTest.class
+com/dypiu/nba/service/AttainmentReportExportServiceTest.class
 com/dypiu/nba/ObeBackendApplicationTests.class

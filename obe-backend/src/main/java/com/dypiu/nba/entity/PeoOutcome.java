@@ -5,7 +5,15 @@ import lombok.*;
 import java.time.ZonedDateTime;
 
 @Entity
-@Table(name = "peo_outcomes")
+@Table(
+        name = "peo_outcomes",
+        uniqueConstraints = {
+                @UniqueConstraint(
+                        name = "uk_programme_peo_code",
+                        columnNames = {"programme_id", "code"}
+                )
+        }
+)
 @Getter
 @Setter
 @NoArgsConstructor
@@ -25,10 +33,12 @@ public class PeoOutcome {
     @Column(nullable = false, columnDefinition = "TEXT")
     private String statement;
 
-    @Column(name = "academic_year", nullable = false)
-    @Builder.Default
-    private String academicYear = "2025-26";
-
     @Column(name = "created_at", insertable = false, updatable = false)
     private ZonedDateTime createdAt;
+
+    @Column(name = "updated_at", insertable = false, updatable = false)
+    private ZonedDateTime updatedAt;
+
+    @Transient
+    private String academicYear;
 }

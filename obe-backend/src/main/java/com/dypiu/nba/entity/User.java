@@ -2,6 +2,7 @@ package com.dypiu.nba.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+
 import java.time.ZonedDateTime;
 
 @Entity
@@ -29,14 +30,30 @@ public class User {
     @Column(nullable = false, length = 150)
     private String name;
 
-    @Column(nullable = false, length = 50)
-    private String role; // IQAC, DIRECTOR, HOD, PROGRAMME_COORDINATOR, FACULTY
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private UserRole role;
 
-    private String department;
-    private String programme;
+    /*
+     * Organizational scope.
+     *
+     * IQAC      → schoolId may be null because IQAC is institution-wide
+     * DIRECTOR  → schoolId
+     * HOD       → departmentId
+     * PC        → programmeId
+     * FACULTY   → depends on assignment
+     */
+    @Column(name = "school_id")
+    private String schoolId;
+
+    @Column(name = "department_id")
+    private String departmentId;
+
+    @Column(name = "programme_id")
+    private String programmeId;
 
     @Builder.Default
-    @Column(name = "is_active")
+    @Column(name = "is_active", nullable = false)
     private Boolean isActive = true;
 
     @Column(name = "created_at", insertable = false, updatable = false)
@@ -44,4 +61,10 @@ public class User {
 
     @Column(name = "updated_at", insertable = false, updatable = false)
     private ZonedDateTime updatedAt;
+
+    @Transient
+    private String department;
+
+    @Transient
+    private String programme;
 }

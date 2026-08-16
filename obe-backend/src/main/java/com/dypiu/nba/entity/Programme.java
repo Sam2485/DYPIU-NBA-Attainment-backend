@@ -2,10 +2,19 @@ package com.dypiu.nba.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+
 import java.time.ZonedDateTime;
 
 @Entity
-@Table(name = "programmes")
+@Table(
+        name = "programmes",
+        uniqueConstraints = {
+                @UniqueConstraint(
+                        name = "uk_department_programme_code",
+                        columnNames = {"department_id", "code"}
+                )
+        }
+)
 @Getter
 @Setter
 @NoArgsConstructor
@@ -19,7 +28,7 @@ public class Programme {
     @Column(name = "department_id", nullable = false)
     private String departmentId;
 
-    @Column(nullable = false, unique = true, length = 20)
+    @Column(nullable = false, length = 20)
     private String code;
 
     @Column(nullable = false, length = 255)
@@ -29,11 +38,8 @@ public class Programme {
     @Builder.Default
     private Integer durationYears = 4;
 
-    private String departmentName;
-    private String coordinator;
-    private String coordinatorEmail;
-
     @Builder.Default
+    @Column(nullable = false, length = 30)
     private String status = "ACTIVE";
 
     @Column(name = "created_at", insertable = false, updatable = false)
@@ -41,4 +47,13 @@ public class Programme {
 
     @Column(name = "updated_at", insertable = false, updatable = false)
     private ZonedDateTime updatedAt;
+
+    @Transient
+    private String coordinator;
+
+    @Transient
+    private String coordinatorEmail;
+
+    @Transient
+    private String departmentName;
 }

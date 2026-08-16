@@ -4,7 +4,6 @@ import jakarta.persistence.*;
 import lombok.*;
 import java.math.BigDecimal;
 import java.time.ZonedDateTime;
-
 @Entity
 @Table(name = "uploaded_documents")
 @Getter
@@ -17,11 +16,15 @@ public class UploadedDocument {
     @Id
     private String id;
 
-    @Column(name = "course_id", nullable = false)
-    private String courseId;
+    @Column(name = "batch_id", nullable = false)
+    private String batchId;
 
+    @Column(name = "course_offering_id")
+    private String courseOfferingId;
+
+    @Enumerated(EnumType.STRING)
     @Column(name = "document_type", nullable = false, length = 50)
-    private String documentType; // "EXAMINATION" or "SURVEY"
+    private DocumentType documentType;
 
     @Column(name = "file_name", nullable = false)
     private String fileName;
@@ -32,20 +35,11 @@ public class UploadedDocument {
     @Column(name = "saved_path", nullable = false)
     private String savedPath;
 
-    @Column(name = "file_size")
     private Long fileSize;
 
-    @Column(name = "records_processed")
     private Integer recordsProcessed;
 
-    @Column(name = "threshold_percentage")
     private BigDecimal thresholdPercentage;
-
-    @Column(name = "programme_id")
-    private String programmeId;
-
-    @Column(name = "batch_name")
-    private String batchName;
 
     @Column(name = "uploaded_by")
     private String uploadedBy;

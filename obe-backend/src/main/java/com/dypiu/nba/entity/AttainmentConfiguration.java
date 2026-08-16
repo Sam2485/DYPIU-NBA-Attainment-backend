@@ -2,11 +2,20 @@ package com.dypiu.nba.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+
 import java.math.BigDecimal;
 import java.time.ZonedDateTime;
 
 @Entity
-@Table(name = "attainment_configurations")
+@Table(
+        name = "attainment_configurations",
+        uniqueConstraints = {
+                @UniqueConstraint(
+                        name = "uk_attainment_config_offering",
+                        columnNames = {"course_offering_id"}
+                )
+        }
+)
 @Getter
 @Setter
 @NoArgsConstructor
@@ -17,14 +26,8 @@ public class AttainmentConfiguration {
     @Id
     private String id;
 
-    @Column(name = "course_id", nullable = false, unique = true)
-    private String courseId;
-
-    @Column(name = "course_code", nullable = false)
-    private String courseCode;
-
-    @Column(name = "course_name", nullable = false)
-    private String courseName;
+    @Column(name = "course_offering_id", nullable = false)
+    private String courseOfferingId;
 
     @Column(name = "direct_weight", nullable = false)
     @Builder.Default
@@ -42,15 +45,18 @@ public class AttainmentConfiguration {
     @Builder.Default
     private BigDecimal indirectThreshold = new BigDecimal("60.00");
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 30)
     @Builder.Default
-    private String status = "DRAFT"; // DRAFT, SUBMITTED, VERIFIED
+    private AttainmentConfigStatus status = AttainmentConfigStatus.DRAFT;
 
     private String submittedBy;
+
     private ZonedDateTime submittedAt;
 
     @Column(name = "created_at", insertable = false, updatable = false)
     private ZonedDateTime createdAt;
 
-    @Column(name = "updated_at", insertable = false, updatable = false)
+    @Column(name = "updated_at")
     private ZonedDateTime updatedAt;
 }

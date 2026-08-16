@@ -42,6 +42,65 @@ public class AcademicService {
     private final PeoOutcomeRepository peoOutcomeRepository;
     private final UserRepository userRepository;
     private final CourseOfferingRepository courseOfferingRepository;
+    private final CourseAtrRepository courseAtrRepository;
+    private final ProgrammeAtrRepository programmeAtrRepository;
+
+    @Transactional(readOnly = true)
+    public com.dypiu.nba.dto.BatchContextDto getBatchContext(String batchId) {
+        Batch batch = batchRepository.findById(batchId)
+                .orElseThrow(() -> new ResourceNotFoundException("Batch not found: " + batchId));
+
+        Programme prog = programmeRepository.findById(batch.getProgrammeId()).orElse(null);
+        Department dept = (prog != null && prog.getDepartmentId() != null) ? departmentRepository.findById(prog.getDepartmentId()).orElse(null) : null;
+        School school = (dept != null && dept.getSchoolId() != null) ? schoolRepository.findById(dept.getSchoolId()).orElse(null) : null;
+
+        List<Student> students = studentRepository.findByBatchId(batchId);
+        List<CourseOffering> offerings = courseOfferingRepository.findByBatchId(batchId);
+        Set<String> uniqueCourseIds = offerings.stream().map(CourseOffering::getCourseId).collect(Collectors.toSet());
+        List<String> offeringIds = offerings.stream().map(CourseOffering::getId).collect(Collectors.toList());
+
+        long completedAtrs = offeringIds.isEmpty() ? 0 : courseAtrRepository.findByCourseOfferingIdIn(offeringIds).stream()
+                                                         .filter(a -> a.getStatus() == CourseAtrStatus.VERIFIED)
+                                                         .count();
+
+        String progAtrStatus = "DRAFT";
+        if (prog != null) {
+            Optional<ProgrammeAtr> patr = programmeAtrRepository.findByProgrammeIdAndBatchId(prog.getId(), batchId);
+            if (patr.isPresent() && patr.get().getStatus() != null) {
+                progAtrStatus = patr.get().getStatus().name();
+            }
+        }
+
+        return com.dypiu.nba.dto.BatchContextDto.builder()
+                .batch(com.dypiu.nba.dto.BatchContextDto.BatchSummary.builder()
+                        .id(batch.getId())
+                        .name(batch.getName())
+                        .programmeId(batch.getProgrammeId())
+                        .programmeName(batch.getProgrammeName())
+                        .status(batch.getStatus())
+                        .build())
+                .programme(prog != null ? com.dypiu.nba.dto.BatchContextDto.ProgrammeSummary.builder()
+                                          .id(prog.getId())
+                                          .code(prog.getCode())
+                                          .name(prog.getName())
+                                          .build() : null)
+                .department(dept != null ? com.dypiu.nba.dto.BatchContextDto.DepartmentSummary.builder()
+                                           .id(dept.getId())
+                                           .name(dept.getName())
+                                           .build() : null)
+                .school(school != null ? com.dypiu.nba.dto.BatchContextDto.SchoolSummary.builder()
+                                         .id(school.getId())
+                                         .name(school.getName())
+                                         .build() : null)
+                .statistics(com.dypiu.nba.dto.BatchContextDto.Statistics.builder()
+                        .studentCount(students.size())
+                        .courseCount(uniqueCourseIds.size())
+                        .courseOfferingCount(offerings.size())
+                        .completedCourseAtrCount(completedAtrs)
+                        .programmeAtrStatus(progAtrStatus)
+                        .build())
+                .build();
+    }
 
     @Transactional(readOnly = true)
     public List<CourseOffering> getCourseOfferingsByBatch(String batchId) {
@@ -141,7 +200,7 @@ public class AcademicService {
         List<DepartmentSummaryDto> list = new ArrayList<>();
         for (Department dept : departments) {
             boolean isHodAssigned = dept.getHod() != null && !dept.getHod().isBlank() && !dept.getHod().equalsIgnoreCase("Unassigned");
-            int progsCount = programmeRepository.findByDepartmentIdOrDepartmentName(dept.getId(), dept.getName()).size();
+            int progsCount = programmeRepository.findByDepartmentId(dept.getId()).size();
             list.add(DepartmentSummaryDto.builder()
                     .deptId(dept.getId())
                     .deptCode(dept.getCode())
@@ -484,22 +543,30 @@ public class AcademicService {
     public List<UserDto> getUsersByRole(String role) {
         System.out.println("[AcademicService] getUsersByRole called | role: " + role);
         String searchRole = role != null ? role.trim() : "HOD";
-        List<User> users = userRepository.findByRoleIgnoreCase(searchRole);
-        if (users.isEmpty() && (searchRole.equalsIgnoreCase("programme-coordinator") || searchRole.equalsIgnoreCase("programme_coordinator") || searchRole.equalsIgnoreCase("PROGRAMME_COORDINATOR"))) {
-            users = userRepository.findByRoleIgnoreCase("PROGRAMME_COORDINATOR");
-            if (users.isEmpty()) {
-                users = userRepository.findByRoleIgnoreCase("programme-coordinator");
-            }
+
+        UserRole userRole;
+
+        if (searchRole.equalsIgnoreCase("programme-coordinator")
+                || searchRole.equalsIgnoreCase("programme_coordinator")) {
+            userRole = UserRole.PROGRAMME_COORDINATOR;
+        } else {
+            userRole = UserRole.valueOf(searchRole.toUpperCase());
         }
-        List<UserDto> dtos = users.stream().map(u -> UserDto.builder()
-                .id(u.getId())
-                .name(u.getName())
-                .email(u.getEmail())
-                .role(u.getRole())
-                .department(u.getDepartment())
-                .programme(u.getProgramme())
-                .build()
-        ).toList();
+
+        List<User> users = userRepository.findByRole(userRole);
+        List<UserDto> dtos = users.stream()
+                .map(u -> UserDto.builder()
+                        .id(u.getId())
+                        .name(u.getName())
+                        .email(u.getEmail())
+                        .role(u.getRole() != null
+                                ? u.getRole().name()
+                                : UserRole.FACULTY.name())
+                        .department(u.getDepartment())
+                        .programme(u.getProgramme())
+                        .build())
+                .toList();
+
         System.out.println("[AcademicService] Fetched users by role (" + searchRole + "): count=" + dtos.size());
         return dtos;
     }
@@ -568,11 +635,9 @@ public class AcademicService {
         if (primaryCourse != null) {
             setupProgress = getCourseCoordinatorSetupProgress(email, primaryCourse.getId());
 
-            String resolvedCourseId = resolveTargetCourseId(primaryCourse.getId());
-            coCount = courseOutcomeRepository.findByCourseId(resolvedCourseId).size();
-            if (coCount == 0 && !resolvedCourseId.equals(primaryCourse.getId())) {
-                coCount = courseOutcomeRepository.findByCourseId(primaryCourse.getId()).size();
-            }
+            List<CourseOffering> offerings = courseOfferingRepository.findByCourseId(primaryCourse.getId());
+            String offeringId = !offerings.isEmpty() ? offerings.get(0).getId() : primaryCourse.getId();
+            coCount = courseOutcomeRepository.findByCourseOfferingId(offeringId).size();
 
             String programmeId = primaryCourse.getProgrammeId();
             if (programmeId != null && !programmeId.isBlank()) {
@@ -607,10 +672,10 @@ public class AcademicService {
     public CourseCoordinatorSetupProgressDto getCourseCoordinatorSetupProgress(String coordinatorEmail, String courseId) {
         String targetCourseId = resolveTargetCourseId(courseId);
         System.out.println("[AcademicService] getCourseCoordinatorSetupProgress called | courseId: " + courseId + " -> targetCourseId: " + targetCourseId);
-        CourseCoordinatorSetupProgress progress = ccSetupProgressRepository.findByCourseId(targetCourseId)
+        CourseCoordinatorSetupProgress progress = ccSetupProgressRepository.findByCourseOfferingId(targetCourseId)
                 .orElseGet(() -> CourseCoordinatorSetupProgress.builder()
                         .id("ccprog-" + UUID.randomUUID().toString().substring(0, 8))
-                        .courseId(targetCourseId)
+                        .courseOfferingId(targetCourseId)
                         .coordinatorEmail(coordinatorEmail)
                         .currentStep(1)
                         .overallStatus(SetupStepStatus.IN_PROGRESS)
@@ -640,10 +705,10 @@ public class AcademicService {
     public CourseCoordinatorSetupProgressDto updateCourseCoordinatorSetupProgress(String coordinatorEmail, String courseId, Integer currentStep) {
         String targetCourseId = resolveTargetCourseId(courseId);
         System.out.println("[AcademicService] updateCourseCoordinatorSetupProgress called | courseId: " + courseId + " -> targetCourseId: " + targetCourseId + " | stepNumber: " + currentStep);
-        CourseCoordinatorSetupProgress progress = ccSetupProgressRepository.findByCourseId(targetCourseId)
+        CourseCoordinatorSetupProgress progress = ccSetupProgressRepository.findByCourseOfferingId(targetCourseId)
                 .orElseGet(() -> CourseCoordinatorSetupProgress.builder()
                         .id("ccprog-" + UUID.randomUUID().toString().substring(0, 8))
-                        .courseId(targetCourseId)
+                        .courseOfferingId(targetCourseId)
                         .coordinatorEmail(coordinatorEmail)
                         .currentStep(1)
                         .overallStatus(SetupStepStatus.IN_PROGRESS)
@@ -664,12 +729,13 @@ public class AcademicService {
     public CourseCoordinatorSetupProgressDto completeCourseCoordinatorSetup(String coordinatorEmail, String courseId) {
         String targetCourseId = resolveTargetCourseId(courseId);
         System.out.println("[AcademicService] completeCourseCoordinatorSetup called | courseId: " + courseId + " -> targetCourseId: " + targetCourseId);
-        CourseCoordinatorSetupProgress progress = ccSetupProgressRepository.findByCourseId(targetCourseId)
+        CourseCoordinatorSetupProgress progress = ccSetupProgressRepository.findByCourseOfferingId(targetCourseId)
                 .orElseGet(() -> CourseCoordinatorSetupProgress.builder()
                         .id("ccprog-" + UUID.randomUUID().toString().substring(0, 8))
-                        .courseId(targetCourseId)
+                        .courseOfferingId(targetCourseId)
                         .coordinatorEmail(coordinatorEmail)
                         .build());
+
 
         progress.setOverallStatus(SetupStepStatus.COMPLETED);
         progress.setCompletedSteps("cos,co_mapping,direct,indirect,attainment,course_atr");
@@ -698,7 +764,7 @@ public class AcademicService {
         List<Programme> all = getAllProgrammes();
         List<Programme> filtered = all.stream()
                 .filter(p -> (p.getCoordinatorEmail() != null && emailTrim.equalsIgnoreCase(p.getCoordinatorEmail().trim()))
-                          || (p.getCoordinator() != null && emailTrim.equalsIgnoreCase(p.getCoordinator().trim())))
+                        || (p.getCoordinator() != null && emailTrim.equalsIgnoreCase(p.getCoordinator().trim())))
                 .toList();
         if (filtered.isEmpty()) {
             System.out.println("[AcademicService] No exact match for coordinatorEmail: " + coordinatorEmail + ", returning all " + all.size() + " programmes.");
@@ -730,12 +796,7 @@ public class AcademicService {
         if (departmentId == null || departmentId.isBlank()) {
             return getAllProgrammes();
         }
-        Optional<Department> deptOpt = departmentRepository.findById(departmentId);
-        String deptName = deptOpt.isPresent() ? deptOpt.get().getName() : "";
-        List<Programme> list = programmeRepository.findByDepartmentIdOrDepartmentName(departmentId, deptName);
-        if (list.isEmpty()) {
-            list = programmeRepository.findByDepartmentId(departmentId);
-        }
+        List<Programme> list = programmeRepository.findByDepartmentId(departmentId);
         list.forEach(this::enrichProgrammeCoordinator);
         System.out.println("[AcademicService] Fetched programmes (" + list.size() + " items) for departmentId: " + departmentId);
         return list;
@@ -775,6 +836,101 @@ public class AcademicService {
         return list;
     }
 
+    @Transactional(readOnly = true)
+    public List<Batch> getBatchesScoped(String programmeId, String userEmail, String role) {
+        System.out.println("================================================================================");
+        System.out.println("[AcademicService] >>> getBatchesScoped | programmeId: " + programmeId + " | userEmail: " + userEmail + " | role: " + role);
+
+        // 1. Explicit programme filter
+        if (programmeId != null && !programmeId.isBlank()) {
+            return getBatchesByProgramme(programmeId);
+        }
+
+        // 2. Unrestricted roles or missing parameters
+        if (userEmail == null || userEmail.isBlank() || role == null || role.isBlank() ||
+                "DIRECTOR".equalsIgnoreCase(role) || "SCHOOL_DIRECTOR".equalsIgnoreCase(role) || "ADMIN".equalsIgnoreCase(role)) {
+            List<Batch> all = getAllBatches();
+            System.out.println("  [DIRECTOR / ALL ACCESS]: Returning all " + all.size() + " batches across school.");
+            return all;
+        }
+
+        String emailTrim = userEmail.trim().toLowerCase();
+        String userName = "";
+        Optional<User> uOpt = userRepository.findByEmail(userEmail.trim());
+        if (uOpt.isPresent()) {
+            userName = uOpt.get().getName() != null ? uOpt.get().getName().trim().toLowerCase() : "";
+        }
+
+        // 3. COURSE COORDINATOR (FACULTY): Only batches of the programmes for assigned courses
+        if ("FACULTY".equalsIgnoreCase(role) || "COURSE_COORDINATOR".equalsIgnoreCase(role)) {
+            List<Course> allCourses = courseRepository.findAll();
+            final String searchName = userName;
+            Set<String> assignedProgIds = new HashSet<>();
+
+            for (Course c : allCourses) {
+                boolean matchCoord = (c.getCoordinator() != null && (c.getCoordinator().toLowerCase().contains(emailTrim) || (!searchName.isBlank() && c.getCoordinator().toLowerCase().contains(searchName))));
+                boolean matchFaculty = (c.getFaculty() != null && (c.getFaculty().toLowerCase().contains(emailTrim) || (!searchName.isBlank() && c.getFaculty().toLowerCase().contains(searchName))));
+                boolean matchAssigned = (c.getAssignedFaculty() != null && (c.getAssignedFaculty().toLowerCase().contains(emailTrim) || (!searchName.isBlank() && c.getAssignedFaculty().toLowerCase().contains(searchName))));
+
+                if ((matchCoord || matchFaculty || matchAssigned) && c.getProgrammeId() != null && !c.getProgrammeId().isBlank()) {
+                    assignedProgIds.add(c.getProgrammeId());
+                }
+            }
+
+            if (!assignedProgIds.isEmpty()) {
+                List<Batch> filtered = batchRepository.findAll().stream()
+                        .filter(b -> assignedProgIds.contains(b.getProgrammeId()))
+                        .collect(Collectors.toList());
+                System.out.println("  [COURSE COORDINATOR SCOPE]: Found " + filtered.size() + " batches for assigned programme IDs: " + assignedProgIds);
+                if (!filtered.isEmpty()) return filtered;
+            }
+            System.out.println("  [COURSE COORDINATOR SCOPE]: No specific programme batches matched, returning fallback all batches.");
+            return getAllBatches();
+        }
+
+        // 4. PROGRAMME COORDINATOR: Batches under all assigned programmes
+        if ("PROGRAMME_COORDINATOR".equalsIgnoreCase(role)) {
+            List<Programme> assignedProgs = getProgrammesByCoordinatorEmail(userEmail);
+            Set<String> progIds = assignedProgs.stream().map(Programme::getId).collect(Collectors.toSet());
+
+            if (!progIds.isEmpty()) {
+                List<Batch> filtered = batchRepository.findAll().stream()
+                        .filter(b -> progIds.contains(b.getProgrammeId()))
+                        .collect(Collectors.toList());
+                System.out.println("  [PROGRAMME COORDINATOR SCOPE]: Found " + filtered.size() + " batches for assigned programmes: " + progIds);
+                if (!filtered.isEmpty()) return filtered;
+            }
+            return getAllBatches();
+        }
+
+        // 5. HOD: Batches under all programmes belonging to their Department
+        if ("HOD".equalsIgnoreCase(role)) {
+            List<Department> allDepts = departmentRepository.findAll();
+            final String searchName = userName;
+            Department hodDept = allDepts.stream()
+                    .filter(d -> (d.getHodEmail() != null && d.getHodEmail().equalsIgnoreCase(emailTrim))
+                            || (d.getHod() != null && (d.getHod().toLowerCase().contains(emailTrim) || (!searchName.isBlank() && d.getHod().toLowerCase().contains(searchName)))))
+                    .findFirst()
+                    .orElse(null);
+
+            if (hodDept != null) {
+                List<Programme> deptProgs = programmeRepository.findByDepartmentId(hodDept.getId());
+                Set<String> progIds = deptProgs.stream().map(Programme::getId).collect(Collectors.toSet());
+
+                if (!progIds.isEmpty()) {
+                    List<Batch> filtered = batchRepository.findAll().stream()
+                            .filter(b -> progIds.contains(b.getProgrammeId()))
+                            .collect(Collectors.toList());
+                    System.out.println("  [HOD SCOPE]: Found " + filtered.size() + " batches under department '" + hodDept.getName() + "' (progIds: " + progIds + ")");
+                    if (!filtered.isEmpty()) return filtered;
+                }
+            }
+            return getAllBatches();
+        }
+
+        return getAllBatches();
+    }
+
     @Transactional
     public Batch saveBatch(Batch batch) {
         System.out.println("[AcademicService] saveBatch called | name: " + (batch != null ? batch.getName() : "null"));
@@ -801,7 +957,13 @@ public class AcademicService {
     }
 
     @Transactional(readOnly = true)
+    public Course getCourseById(String id) {
+        return courseRepository.findById(id).orElse(null);
+    }
+
+    @Transactional(readOnly = true)
     public List<Course> getCoursesByProgramme(String programmeId) {
+
         System.out.println("[AcademicService] getCoursesByProgramme called | programmeId: " + programmeId);
         List<Course> list = courseRepository.findByProgrammeId(programmeId);
         System.out.println("[AcademicService] Fetched courses (" + list.size() + " items) for programmeId: " + programmeId);
@@ -919,7 +1081,7 @@ public class AcademicService {
         }
 
         // Programmes under department
-        List<Programme> programmes = programmeRepository.findByDepartmentIdOrDepartmentName(deptId, deptName);
+        List<Programme> programmes = programmeRepository.findByDepartmentId(deptId);
         int programmeCount = programmes.size();
 
         // Count assigned coordinators
