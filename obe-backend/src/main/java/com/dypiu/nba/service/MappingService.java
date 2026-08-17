@@ -20,11 +20,13 @@ public class MappingService {
 
     @Transactional(readOnly = true)
     public List<CoPoMapping> getCoPoMappings(String courseOutcomeId) {
+        System.out.println("[MappingService] getCoPoMappings called | courseOutcomeId: " + courseOutcomeId);
         return coPoMappingRepository.findByCourseOutcomeId(courseOutcomeId);
     }
 
     @Transactional
     public List<CoPoMapping> saveCoPoMappings(String courseOutcomeId, List<CoPoMapping> mappings) {
+        System.out.println("[MappingService] saveCoPoMappings called | courseOutcomeId: " + courseOutcomeId + " | count: " + (mappings != null ? mappings.size() : 0));
         coPoMappingRepository.deleteByCourseOutcomeId(courseOutcomeId);
         mappings.forEach(m -> {
             m.setCourseOutcomeId(courseOutcomeId);
@@ -35,11 +37,13 @@ public class MappingService {
 
     @Transactional(readOnly = true)
     public List<CoPsoMapping> getCoPsoMappings(String courseOutcomeId) {
+        System.out.println("[MappingService] getCoPsoMappings called | courseOutcomeId: " + courseOutcomeId);
         return coPsoMappingRepository.findByCourseOutcomeId(courseOutcomeId);
     }
 
     @Transactional
     public List<CoPsoMapping> saveCoPsoMappings(String courseOutcomeId, List<CoPsoMapping> mappings) {
+        System.out.println("[MappingService] saveCoPsoMappings called | courseOutcomeId: " + courseOutcomeId + " | count: " + (mappings != null ? mappings.size() : 0));
         coPsoMappingRepository.deleteByCourseOutcomeId(courseOutcomeId);
         mappings.forEach(m -> {
             m.setCourseOutcomeId(courseOutcomeId);

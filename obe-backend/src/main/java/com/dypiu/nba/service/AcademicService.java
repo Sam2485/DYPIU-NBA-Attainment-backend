@@ -4,8 +4,10 @@ import com.dypiu.nba.entity.*;
 import com.dypiu.nba.exception.ResourceNotFoundException;
 import com.dypiu.nba.repository.*;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import com.dypiu.nba.dto.DirectorSetupProgressDto;
 import com.dypiu.nba.dto.DirectorSchoolSummaryDto;
@@ -47,6 +49,7 @@ public class AcademicService {
 
     @Transactional(readOnly = true)
     public com.dypiu.nba.dto.BatchContextDto getBatchContext(String batchId) {
+        System.out.println("[AcademicService] getBatchContext called | batchId: " + batchId);
         Batch batch = batchRepository.findById(batchId)
                 .orElseThrow(() -> new ResourceNotFoundException("Batch not found: " + batchId));
 
@@ -104,31 +107,45 @@ public class AcademicService {
 
     @Transactional(readOnly = true)
     public List<CourseOffering> getCourseOfferingsByBatch(String batchId) {
+        System.out.println("[AcademicService] getCourseOfferingsByBatch called | batchId: " + batchId);
         return courseOfferingRepository.findByBatchId(batchId);
     }
 
     @Transactional
     public CourseOffering saveCourseOffering(CourseOffering offering) {
+        System.out.println("[AcademicService] saveCourseOffering called | courseId: " + (offering != null ? offering.getCourseId() : "null"));
         if (offering.getId() == null) offering.setId("offering-" + UUID.randomUUID().toString().substring(0, 8));
         return courseOfferingRepository.save(offering);
     }
 
     @Transactional
     public void deleteCourseOffering(String id) {
+        System.out.println("[AcademicService] deleteCourseOffering called | id: " + id);
         courseOfferingRepository.deleteById(id);
     }
 
     // --- Director School Summary ---
     @Transactional(readOnly = true)
     public DirectorSchoolSummaryDto getDirectorSchoolSummary(String directorEmail) {
-        System.out.println("[AcademicService] Starting school summary fetch for directorEmail: " + directorEmail );
+        System.out.println("[AcademicService] Starting school summary fetch for directorEmail: " + directorEmail);
         Optional<School> schoolOpt = Optional.empty();
 
-        // 1. Fetch school having director email as our director email
         if (directorEmail != null && !directorEmail.isBlank()) {
-            schoolOpt = schoolRepository.findByDirectorEmailIgnoreCase(directorEmail);
+            String cleanEmail = directorEmail.trim();
+            schoolOpt = schoolRepository.findByDirectorEmailIgnoreCase(cleanEmail);
+            if (schoolOpt.isEmpty()) {
+                Optional<User> userOpt = userRepository.findByEmail(cleanEmail);
+                if (userOpt.isPresent()) {
+                    User user = userOpt.get();
+                    if (user.getSchoolId() != null && !user.getSchoolId().isBlank()) {
+                        schoolOpt = schoolRepository.findById(user.getSchoolId());
+                    }
+                    if (schoolOpt.isEmpty() && user.getId() != null) {
+                        schoolOpt = schoolRepository.findByDirectorId(user.getId());
+                    }
+                }
+            }
         }
-
 
         if (schoolOpt.isEmpty()) {
             System.out.println("[AcademicService] No school found under Director email: " + directorEmail);
@@ -137,7 +154,7 @@ public class AcademicService {
                     .schoolName(null)
                     .schoolCode(null)
                     .directorName(null)
-                    .directorEmail(null)
+                    .directorEmail(directorEmail)
                     .estYear(null)
                     .totalDepartments(0)
                     .assignedHODsCount(0)
@@ -148,7 +165,8 @@ public class AcademicService {
 
         School school = schoolOpt.get();
         List<Department> departments = departmentRepository.findBySchoolId(school.getId());
-        List<Programme> allProgrammes = programmeRepository.findAll();
+        List<String> deptIds = departments.stream().map(Department::getId).toList();
+        List<Programme> schoolProgrammes = deptIds.isEmpty() ? Collections.emptyList() : programmeRepository.findByDepartmentIdIn(deptIds);
 
         int assignedHodCount = 0;
         int unassignedHodCount = 0;
@@ -162,18 +180,21 @@ public class AcademicService {
             }
         }
 
+        String dName = school.getDirectorName() != null && !school.getDirectorName().isBlank()
+                ? school.getDirectorName()
+                : school.getDirector();
+
         DirectorSchoolSummaryDto summary = DirectorSchoolSummaryDto.builder()
                 .schoolId(school.getId())
                 .schoolName(school.getName())
                 .schoolCode(school.getCode())
-                .directorName(school.getDirector())
+                .directorName(dName)
                 .directorEmail(school.getDirectorEmail())
                 .estYear(school.getEstYear())
                 .totalDepartments(departments.size())
                 .assignedHODsCount(assignedHodCount)
                 .unassignedHODsCount(unassignedHodCount)
-                .totalProgrammes(allProgrammes.size())
-
+                .totalProgrammes(schoolProgrammes.size())
                 .build();
 
         System.out.println("[AcademicService] Fetched director school summary for school: " + school.getName() + " (ID: " + school.getId() + ")");
@@ -340,7 +361,7 @@ public class AcademicService {
 
 
             // ─────────────────────────────
-            // STEP 4 → REVIEW
+            // STEP 4 → REVIEW & COMPLETE
             // ─────────────────────────────
             case 4:
 
@@ -349,11 +370,11 @@ public class AcademicService {
                 completed.addAll(List.of(
                         "school",
                         "department",
-                        "programme"
+                        "programme",
+                        "review"
                 ));
 
-                // Review is currently being worked on.
-                pending.add("review");
+                overallStatus = SetupStepStatus.COMPLETED;
 
                 break;
 
@@ -452,10 +473,60 @@ public class AcademicService {
     @Transactional
     public School saveSchool(School school) {
         System.out.println("[AcademicService] saveSchool called | school: " + (school != null ? school.getName() : "null"));
+        if (school == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "School details cannot be null.");
+        }
+
+        // 1. Check if directorId is already mapped to another school
+        if (school.getDirectorId() != null) {
+            Optional<School> existingByDirectorId = schoolRepository.findByDirectorId(school.getDirectorId());
+            if (existingByDirectorId.isPresent()) {
+                School existing = existingByDirectorId.get();
+                if (school.getId() == null || !existing.getId().equalsIgnoreCase(school.getId())) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                            "Director is already assigned to School: " + existing.getName() + " (" + existing.getCode() + "). A Director can only manage one school.");
+                }
+            }
+        }
+
+        // 2. Check if directorEmail is already mapped to another school
+        if (school.getDirectorEmail() != null && !school.getDirectorEmail().isBlank()) {
+            String cleanEmail = school.getDirectorEmail().trim();
+            Optional<School> existingByEmail = schoolRepository.findByDirectorEmailIgnoreCase(cleanEmail);
+            if (existingByEmail.isPresent()) {
+                School existing = existingByEmail.get();
+                if (school.getId() == null || !existing.getId().equalsIgnoreCase(school.getId())) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                            "Director with email '" + cleanEmail + "' is already assigned to School: " + existing.getName() + " (" + existing.getCode() + "). A Director can only manage one school.");
+                }
+            }
+
+            // Sync directorId and directorName from User entity if available
+            userRepository.findByEmail(cleanEmail).ifPresent(u -> {
+                if (school.getDirectorId() == null) {
+                    school.setDirectorId(u.getId());
+                }
+                if (school.getDirectorName() == null || school.getDirectorName().isBlank()) {
+                    school.setDirectorName(u.getName());
+                }
+            });
+        }
+
         if (school.getId() == null || school.getId().isBlank()) {
             school.setId("sch-" + UUID.randomUUID().toString().substring(0, 8));
         }
+
         School saved = schoolRepository.save(school);
+
+        // Sync schoolId to the Director user in userRepository
+        if (saved.getDirectorEmail() != null && !saved.getDirectorEmail().isBlank()) {
+            userRepository.findByEmail(saved.getDirectorEmail().trim()).ifPresent(u -> {
+                u.setSchoolId(saved.getId());
+                userRepository.save(u);
+                System.out.println("[AcademicService] Associated director user (" + u.getEmail() + ") with school: " + saved.getId());
+            });
+        }
+
         System.out.println("[AcademicService] Saved school with id: " + saved.getId());
         return saved;
     }
@@ -464,13 +535,40 @@ public class AcademicService {
     public School updateSchool(String id, School schoolDetails) {
         System.out.println("[AcademicService] updateSchool called | id: " + id + " | name: " + (schoolDetails != null ? schoolDetails.getName() : "null"));
         School school = schoolRepository.findById(id)
-                .orElseGet(() -> {
-                    if (schoolDetails.getDirectorEmail() != null && !schoolDetails.getDirectorEmail().isBlank()) {
-                        return schoolRepository.findByDirectorEmailIgnoreCase(schoolDetails.getDirectorEmail())
-                                .orElse(School.builder().id(id).build());
-                    }
-                    return School.builder().id(id).build();
-                });
+                .orElseThrow(() -> new ResourceNotFoundException("School not found with id: " + id));
+
+        // 1. Validate Director ID Uniqueness
+        if (schoolDetails.getDirectorId() != null) {
+            Optional<School> existingByDirectorId = schoolRepository.findByDirectorId(schoolDetails.getDirectorId());
+            if (existingByDirectorId.isPresent() && !existingByDirectorId.get().getId().equalsIgnoreCase(id)) {
+                School existing = existingByDirectorId.get();
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Director is already assigned to School: " + existing.getName() + " (" + existing.getCode() + "). A Director can only manage one school.");
+            }
+            school.setDirectorId(schoolDetails.getDirectorId());
+        }
+
+        // 2. Validate Director Email Uniqueness
+        if (schoolDetails.getDirectorEmail() != null && !schoolDetails.getDirectorEmail().isBlank()) {
+            String cleanEmail = schoolDetails.getDirectorEmail().trim();
+            Optional<School> existingByEmail = schoolRepository.findByDirectorEmailIgnoreCase(cleanEmail);
+            if (existingByEmail.isPresent() && !existingByEmail.get().getId().equalsIgnoreCase(id)) {
+                School existing = existingByEmail.get();
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Director with email '" + cleanEmail + "' is already assigned to School: " + existing.getName() + " (" + existing.getCode() + "). A Director can only manage one school.");
+            }
+            school.setDirectorEmail(cleanEmail);
+
+            // Sync directorId and directorName from User entity if available
+            userRepository.findByEmail(cleanEmail).ifPresent(u -> {
+                if (school.getDirectorId() == null) {
+                    school.setDirectorId(u.getId());
+                }
+                if (schoolDetails.getDirectorName() == null || schoolDetails.getDirectorName().isBlank()) {
+                    school.setDirectorName(u.getName());
+                }
+            });
+        }
 
         if (schoolDetails.getName() != null && !schoolDetails.getName().isBlank()) {
             school.setName(schoolDetails.getName());
@@ -478,20 +576,25 @@ public class AcademicService {
         if (schoolDetails.getCode() != null && !schoolDetails.getCode().isBlank()) {
             school.setCode(schoolDetails.getCode());
         }
-        if (schoolDetails.getDirector() != null) {
+        if (schoolDetails.getDirectorName() != null) {
+            school.setDirectorName(schoolDetails.getDirectorName());
+        } else if (schoolDetails.getDirector() != null) {
             school.setDirector(schoolDetails.getDirector());
-        }
-        if (schoolDetails.getDirectorEmail() != null) {
-            school.setDirectorEmail(schoolDetails.getDirectorEmail());
         }
         if (schoolDetails.getEstYear() != null) {
             school.setEstYear(schoolDetails.getEstYear());
         }
 
-        if (school.getId() == null || school.getId().isBlank()) {
-            school.setId(id);
-        }
         School updated = schoolRepository.save(school);
+
+        // Sync schoolId to the Director user in userRepository
+        if (updated.getDirectorEmail() != null && !updated.getDirectorEmail().isBlank()) {
+            userRepository.findByEmail(updated.getDirectorEmail().trim()).ifPresent(u -> {
+                u.setSchoolId(updated.getId());
+                userRepository.save(u);
+            });
+        }
+
         System.out.println("[AcademicService] Updated school info for id: " + updated.getId());
         return updated;
     }
@@ -542,18 +645,43 @@ public class AcademicService {
     @Transactional(readOnly = true)
     public List<UserDto> getUsersByRole(String role) {
         System.out.println("[AcademicService] getUsersByRole called | role: " + role);
-        String searchRole = role != null ? role.trim() : "HOD";
+        List<User> users;
 
-        UserRole userRole;
-
-        if (searchRole.equalsIgnoreCase("programme-coordinator")
-                || searchRole.equalsIgnoreCase("programme_coordinator")) {
-            userRole = UserRole.PROGRAMME_COORDINATOR;
+        if (role == null || role.isBlank() || role.equalsIgnoreCase("ALL")) {
+            users = userRepository.findAll();
         } else {
-            userRole = UserRole.valueOf(searchRole.toUpperCase());
+            String searchRole = role.trim().toUpperCase().replace("-", "_");
+            if (searchRole.equals("PROGRAMME_COORDINATOR")
+                    || searchRole.equals("COORDINATOR")
+                    || searchRole.equals("PC")
+                    || searchRole.equals("PROGRAMME_COORD")) {
+                List<User> pcs = userRepository.findByRole(UserRole.PROGRAMME_COORDINATOR);
+                List<User> faculties = userRepository.findByRole(UserRole.FACULTY);
+                Set<Long> seenIds = new HashSet<>();
+                users = new ArrayList<>();
+                for (User u : pcs) {
+                    if (u.getId() != null && seenIds.add(u.getId())) {
+                        users.add(u);
+                    }
+                }
+                for (User u : faculties) {
+                    if (u.getId() != null && seenIds.add(u.getId())) {
+                        users.add(u);
+                    }
+                }
+                if (users.isEmpty()) {
+                    users = userRepository.findAll();
+                }
+            } else {
+                try {
+                    UserRole userRole = UserRole.valueOf(searchRole);
+                    users = userRepository.findByRole(userRole);
+                } catch (IllegalArgumentException e) {
+                    users = userRepository.findAll();
+                }
+            }
         }
 
-        List<User> users = userRepository.findByRole(userRole);
         List<UserDto> dtos = users.stream()
                 .map(u -> UserDto.builder()
                         .id(u.getId())
@@ -567,7 +695,7 @@ public class AcademicService {
                         .build())
                 .toList();
 
-        System.out.println("[AcademicService] Fetched users by role (" + searchRole + "): count=" + dtos.size());
+        System.out.println("[AcademicService] Fetched users by role (" + role + "): count=" + dtos.size());
         return dtos;
     }
 
@@ -576,6 +704,20 @@ public class AcademicService {
     private void enrichProgrammeCoordinator(Programme programme) {
         if (programme == null) return;
         String coord = programme.getCoordinator();
+        String coordEmail = programme.getCoordinatorEmail();
+
+        // 1. If coordinatorEmail is valid, lookup user by email
+        if (coordEmail != null && !coordEmail.isBlank() && coordEmail.contains("@")) {
+            Optional<User> uOpt = userRepository.findByEmail(coordEmail.trim());
+            if (uOpt.isPresent()) {
+                User u = uOpt.get();
+                programme.setCoordinator(u.getName());
+                programme.setCoordinatorEmail(u.getEmail());
+                return;
+            }
+        }
+
+        // 2. Lookup by coordinator string (ID, email, username, name)
         if (coord != null && !coord.isBlank()) {
             if (coord.matches("\\d+")) {
                 try {
@@ -587,11 +729,25 @@ public class AcademicService {
                         }
                     });
                 } catch (NumberFormatException ignored) {}
-            } else if (programme.getCoordinatorEmail() == null || programme.getCoordinatorEmail().isBlank()) {
-                userRepository.findByEmail(coord).ifPresent(u -> {
+            } else if (coord.contains("@")) {
+                userRepository.findByEmail(coord.trim()).ifPresent(u -> {
                     programme.setCoordinator(u.getName());
                     programme.setCoordinatorEmail(u.getEmail());
                 });
+            } else {
+                Optional<User> uOpt = userRepository.findByUsername(coord.trim());
+                if (uOpt.isEmpty()) {
+                    uOpt = userRepository.findAll().stream()
+                            .filter(u -> u.getName() != null && u.getName().trim().equalsIgnoreCase(coord.trim()))
+                            .findFirst();
+                }
+                if (uOpt.isPresent()) {
+                    User u = uOpt.get();
+                    programme.setCoordinator(u.getName());
+                    if (programme.getCoordinatorEmail() == null || programme.getCoordinatorEmail().isBlank()) {
+                        programme.setCoordinatorEmail(u.getEmail());
+                    }
+                }
             }
         }
     }
@@ -755,6 +911,17 @@ public class AcademicService {
     }
 
     @Transactional(readOnly = true)
+    public Programme getProgrammeById(String id) {
+        System.out.println("[AcademicService] getProgrammeById called | id: " + id);
+        if (id == null || id.isBlank()) return null;
+        Programme p = programmeRepository.findById(id).orElse(null);
+        if (p != null) {
+            enrichProgrammeCoordinator(p);
+        }
+        return p;
+    }
+
+    @Transactional(readOnly = true)
     public List<Programme> getProgrammesByCoordinatorEmail(String coordinatorEmail) {
         System.out.println("[AcademicService] getProgrammesByCoordinatorEmail called | coordinatorEmail: " + coordinatorEmail);
         if (coordinatorEmail == null || coordinatorEmail.isBlank()) {
@@ -805,9 +972,65 @@ public class AcademicService {
     @Transactional
     public Programme saveProgramme(Programme programme) {
         System.out.println("[AcademicService] saveProgramme called | id: " + (programme != null ? programme.getId() : "null") + " | name: " + (programme != null ? programme.getName() : "null") + " | coordinator: " + (programme != null ? programme.getCoordinator() : "null") + " | coordinatorEmail: " + (programme != null ? programme.getCoordinatorEmail() : "null"));
-        if (programme.getId() == null) programme.setId("prog-" + UUID.randomUUID().toString().substring(0, 8));
-        enrichProgrammeCoordinator(programme);
-        Programme saved = programmeRepository.save(programme);
+        if (programme == null) return null;
+
+        Programme targetProg = programme;
+        if (programme.getId() != null) {
+            Optional<Programme> existingOpt = programmeRepository.findById(programme.getId());
+            if (existingOpt.isPresent()) {
+                Programme existing = existingOpt.get();
+                if (programme.getName() != null) existing.setName(programme.getName());
+                if (programme.getCode() != null) existing.setCode(programme.getCode());
+                if (programme.getDepartmentId() != null) existing.setDepartmentId(programme.getDepartmentId());
+                if (programme.getDurationYears() != null) existing.setDurationYears(programme.getDurationYears());
+                if (programme.getStatus() != null) existing.setStatus(programme.getStatus());
+                if (programme.getDepartmentName() != null) existing.setDepartmentName(programme.getDepartmentName());
+                if (programme.getCoordinator() != null) existing.setCoordinator(programme.getCoordinator());
+                if (programme.getCoordinatorEmail() != null) existing.setCoordinatorEmail(programme.getCoordinatorEmail());
+                targetProg = existing;
+            }
+        } else {
+            targetProg.setId("prog-" + UUID.randomUUID().toString().substring(0, 8));
+        }
+
+        if (programme.getCoordinator() != null && !programme.getCoordinator().isBlank()) {
+            targetProg.setCoordinator(programme.getCoordinator());
+        }
+        if (programme.getCoordinatorEmail() != null && !programme.getCoordinatorEmail().isBlank()) {
+            targetProg.setCoordinatorEmail(programme.getCoordinatorEmail());
+        }
+
+        final Programme finalProg = targetProg;
+        enrichProgrammeCoordinator(finalProg);
+
+        // Populate department name if missing
+        if ((finalProg.getDepartmentName() == null || finalProg.getDepartmentName().isBlank()) && finalProg.getDepartmentId() != null) {
+            departmentRepository.findById(finalProg.getDepartmentId()).ifPresent(d -> finalProg.setDepartmentName(d.getName()));
+        }
+
+        // Bidirectionally synchronize user record if coordinator assigned
+        String coordEmail = finalProg.getCoordinatorEmail();
+        if (coordEmail != null && !coordEmail.isBlank()) {
+            Optional<User> userOpt = userRepository.findByEmail(coordEmail.trim());
+            if (userOpt.isEmpty()) {
+                userOpt = userRepository.findByUsername(coordEmail.trim());
+            }
+            if (userOpt.isPresent()) {
+                User user = userOpt.get();
+                user.setProgrammeId(finalProg.getId());
+                user.setProgramme(finalProg.getName());
+                if (finalProg.getDepartmentId() != null) {
+                    user.setDepartmentId(finalProg.getDepartmentId());
+                }
+                if (user.getRole() == UserRole.FACULTY) {
+                    user.setRole(UserRole.PROGRAMME_COORDINATOR);
+                }
+                userRepository.save(user);
+                System.out.println("[AcademicService] Synchronized user " + user.getEmail() + " as PC for programme " + finalProg.getName());
+            }
+        }
+
+        Programme saved = programmeRepository.save(finalProg);
         System.out.println("[AcademicService] Saved programme with id: " + saved.getId() + ", coordinator: " + saved.getCoordinator() + ", coordinatorEmail: " + saved.getCoordinatorEmail());
         return saved;
     }
@@ -854,23 +1077,43 @@ public class AcademicService {
             return all;
         }
 
-        String emailTrim = userEmail.trim().toLowerCase();
+        String emailTrim = userEmail != null ? userEmail.trim().toLowerCase() : "";
         String userName = "";
-        Optional<User> uOpt = userRepository.findByEmail(userEmail.trim());
-        if (uOpt.isPresent()) {
-            userName = uOpt.get().getName() != null ? uOpt.get().getName().trim().toLowerCase() : "";
+        if (userEmail != null && !userEmail.isBlank()) {
+            Optional<User> uOpt = userRepository.findByUsernameIgnoreCaseOrEmailIgnoreCase(userEmail.trim(), userEmail.trim());
+            if (uOpt.isEmpty()) {
+                uOpt = userRepository.findByEmail(userEmail.trim());
+            }
+            if (uOpt.isEmpty()) {
+                uOpt = userRepository.findByUsername(userEmail.trim());
+            }
+            if (uOpt.isEmpty()) {
+                uOpt = userRepository.findAll().stream()
+                        .filter(u -> u.getName() != null && u.getName().trim().equalsIgnoreCase(userEmail.trim()))
+                        .findFirst();
+            }
+            if (uOpt.isPresent()) {
+                User u = uOpt.get();
+                if (u.getEmail() != null) emailTrim = u.getEmail().trim().toLowerCase();
+                if (u.getName() != null) userName = u.getName().trim().toLowerCase();
+                if ((role == null || role.isBlank()) && u.getRole() != null) {
+                    role = u.getRole().name();
+                }
+            }
         }
+
+        final String finalEmailTrim = emailTrim;
+        final String searchName = userName;
 
         // 3. COURSE COORDINATOR (FACULTY): Only batches of the programmes for assigned courses
         if ("FACULTY".equalsIgnoreCase(role) || "COURSE_COORDINATOR".equalsIgnoreCase(role)) {
             List<Course> allCourses = courseRepository.findAll();
-            final String searchName = userName;
             Set<String> assignedProgIds = new HashSet<>();
 
             for (Course c : allCourses) {
-                boolean matchCoord = (c.getCoordinator() != null && (c.getCoordinator().toLowerCase().contains(emailTrim) || (!searchName.isBlank() && c.getCoordinator().toLowerCase().contains(searchName))));
-                boolean matchFaculty = (c.getFaculty() != null && (c.getFaculty().toLowerCase().contains(emailTrim) || (!searchName.isBlank() && c.getFaculty().toLowerCase().contains(searchName))));
-                boolean matchAssigned = (c.getAssignedFaculty() != null && (c.getAssignedFaculty().toLowerCase().contains(emailTrim) || (!searchName.isBlank() && c.getAssignedFaculty().toLowerCase().contains(searchName))));
+                boolean matchCoord = (c.getCoordinator() != null && (c.getCoordinator().toLowerCase().contains(finalEmailTrim) || (!searchName.isBlank() && c.getCoordinator().toLowerCase().contains(searchName))));
+                boolean matchFaculty = (c.getFaculty() != null && (c.getFaculty().toLowerCase().contains(finalEmailTrim) || (!searchName.isBlank() && c.getFaculty().toLowerCase().contains(searchName))));
+                boolean matchAssigned = (c.getAssignedFaculty() != null && (c.getAssignedFaculty().toLowerCase().contains(finalEmailTrim) || (!searchName.isBlank() && c.getAssignedFaculty().toLowerCase().contains(searchName))));
 
                 if ((matchCoord || matchFaculty || matchAssigned) && c.getProgrammeId() != null && !c.getProgrammeId().isBlank()) {
                     assignedProgIds.add(c.getProgrammeId());
@@ -890,7 +1133,7 @@ public class AcademicService {
 
         // 4. PROGRAMME COORDINATOR: Batches under all assigned programmes
         if ("PROGRAMME_COORDINATOR".equalsIgnoreCase(role)) {
-            List<Programme> assignedProgs = getProgrammesByCoordinatorEmail(userEmail);
+            List<Programme> assignedProgs = getProgrammesByCoordinatorEmail(finalEmailTrim);
             Set<String> progIds = assignedProgs.stream().map(Programme::getId).collect(Collectors.toSet());
 
             if (!progIds.isEmpty()) {
@@ -906,10 +1149,9 @@ public class AcademicService {
         // 5. HOD: Batches under all programmes belonging to their Department
         if ("HOD".equalsIgnoreCase(role)) {
             List<Department> allDepts = departmentRepository.findAll();
-            final String searchName = userName;
             Department hodDept = allDepts.stream()
-                    .filter(d -> (d.getHodEmail() != null && d.getHodEmail().equalsIgnoreCase(emailTrim))
-                            || (d.getHod() != null && (d.getHod().toLowerCase().contains(emailTrim) || (!searchName.isBlank() && d.getHod().toLowerCase().contains(searchName)))))
+                    .filter(d -> (d.getHodEmail() != null && d.getHodEmail().equalsIgnoreCase(finalEmailTrim))
+                            || (d.getHod() != null && (d.getHod().toLowerCase().contains(finalEmailTrim) || (!searchName.isBlank() && d.getHod().toLowerCase().contains(searchName)))))
                     .findFirst()
                     .orElse(null);
 
@@ -958,6 +1200,7 @@ public class AcademicService {
 
     @Transactional(readOnly = true)
     public Course getCourseById(String id) {
+        System.out.println("[AcademicService] getCourseById called | id: " + id);
         return courseRepository.findById(id).orElse(null);
     }
 
@@ -1018,32 +1261,66 @@ public class AcademicService {
 
         Department dept = null;
 
-        // 1. First search department repository by hodEmail
         if (hodEmail != null && !hodEmail.isBlank()) {
-            String trimmedEmail = hodEmail.trim();
-            Optional<Department> deptOpt = departmentRepository.findByHodEmailIgnoreCase(trimmedEmail);
+            String search = hodEmail.trim();
+
+            // 1. First search department repository by hodEmail
+            Optional<Department> deptOpt = departmentRepository.findByHodEmailIgnoreCase(search);
             if (deptOpt.isPresent()) {
                 dept = deptOpt.get();
             }
-        }
 
-        // 2. If not found by hodEmail, look up user by email to get user.getDepartment()
-        if (dept == null && hodEmail != null && !hodEmail.isBlank()) {
-            String trimmedEmail = hodEmail.trim();
-            Optional<User> userOpt = userRepository.findByEmail(trimmedEmail);
-            if (userOpt.isPresent() && userOpt.get().getDepartment() != null && !userOpt.get().getDepartment().isBlank()) {
-                String userDeptName = userOpt.get().getDepartment().trim();
-                Optional<Department> deptOpt = departmentRepository.findByName(userDeptName);
-                if (deptOpt.isPresent()) {
-                    dept = deptOpt.get();
-                } else {
-                    List<Department> matches = departmentRepository.findAll().stream()
-                            .filter(d -> d.getName() != null && d.getName().trim().equalsIgnoreCase(userDeptName))
-                            .toList();
-                    if (!matches.isEmpty()) {
-                        dept = matches.get(0);
+            // 2. Search department by HOD display name
+            if (dept == null) {
+                List<Department> byHod = departmentRepository.findAll().stream()
+                        .filter(d -> d.getHod() != null && d.getHod().trim().equalsIgnoreCase(search))
+                        .toList();
+                if (!byHod.isEmpty()) {
+                    dept = byHod.get(0);
+                }
+            }
+
+            // 3. Look up User by username, email, or name
+            if (dept == null) {
+                Optional<User> userOpt = userRepository.findByUsernameIgnoreCaseOrEmailIgnoreCase(search, search);
+                if (userOpt.isEmpty()) {
+                    userOpt = userRepository.findByEmail(search);
+                }
+                if (userOpt.isEmpty()) {
+                    userOpt = userRepository.findByUsername(search);
+                }
+                if (userOpt.isEmpty()) {
+                    userOpt = userRepository.findAll().stream()
+                            .filter(u -> u.getName() != null && u.getName().trim().equalsIgnoreCase(search))
+                            .findFirst();
+                }
+
+                if (userOpt.isPresent()) {
+                    User u = userOpt.get();
+                    if (u.getDepartmentId() != null && !u.getDepartmentId().isBlank()) {
+                        dept = departmentRepository.findById(u.getDepartmentId()).orElse(null);
+                    }
+                    if (dept == null && u.getDepartment() != null && !u.getDepartment().isBlank()) {
+                        String userDeptName = u.getDepartment().trim();
+                        dept = departmentRepository.findByName(userDeptName).orElse(null);
+                        if (dept == null) {
+                            List<Department> matches = departmentRepository.findAll().stream()
+                                    .filter(d -> d.getName() != null && d.getName().trim().equalsIgnoreCase(userDeptName))
+                                    .toList();
+                            if (!matches.isEmpty()) {
+                                dept = matches.get(0);
+                            }
+                        }
                     }
                 }
+            }
+        }
+
+        // 4. Default fallback to first department in database
+        if (dept == null) {
+            List<Department> allDepts = departmentRepository.findAll();
+            if (!allDepts.isEmpty()) {
+                dept = allDepts.get(0);
             }
         }
 
@@ -1119,30 +1396,72 @@ public class AcademicService {
     private String resolveTargetDeptId(String departmentId, String hodEmail) {
         System.out.println("[AcademicService] resolveTargetDeptId called | departmentId: " + departmentId + " | hodEmail: " + hodEmail);
         String targetDeptId = departmentId;
-        if ((targetDeptId == null || targetDeptId.isBlank()) && hodEmail != null && !hodEmail.isBlank()) {
-            String trimmedEmail = hodEmail.trim();
-            Optional<Department> deptOpt = departmentRepository.findByHodEmailIgnoreCase(trimmedEmail);
+        if (targetDeptId != null && !targetDeptId.isBlank() && !targetDeptId.contains("@") && !targetDeptId.equals("null")) {
+            return targetDeptId;
+        }
+
+        String search = (hodEmail != null && !hodEmail.isBlank() && !hodEmail.equals("null"))
+                ? hodEmail.trim()
+                : (targetDeptId != null && !targetDeptId.equals("null") ? targetDeptId.trim() : null);
+
+        if (search != null && !search.isBlank()) {
+            // 1. Search by hodEmail
+            Optional<Department> deptOpt = departmentRepository.findByHodEmailIgnoreCase(search);
             if (deptOpt.isPresent()) {
-                targetDeptId = deptOpt.get().getId();
-            } else {
-                Optional<User> userOpt = userRepository.findByEmail(trimmedEmail);
-                if (userOpt.isPresent() && userOpt.get().getDepartment() != null && !userOpt.get().getDepartment().isBlank()) {
-                    String userDeptName = userOpt.get().getDepartment().trim();
+                return deptOpt.get().getId();
+            }
+
+            // 2. Search by HOD display name
+            List<Department> byHod = departmentRepository.findAll().stream()
+                    .filter(d -> d.getHod() != null && d.getHod().trim().equalsIgnoreCase(search))
+                    .toList();
+            if (!byHod.isEmpty()) {
+                return byHod.get(0).getId();
+            }
+
+            // 3. Search user by username, email, or name
+            Optional<User> userOpt = userRepository.findByUsernameIgnoreCaseOrEmailIgnoreCase(search, search);
+            if (userOpt.isEmpty()) {
+                userOpt = userRepository.findByEmail(search);
+            }
+            if (userOpt.isEmpty()) {
+                userOpt = userRepository.findByUsername(search);
+            }
+            if (userOpt.isEmpty()) {
+                userOpt = userRepository.findAll().stream()
+                        .filter(u -> u.getName() != null && u.getName().trim().equalsIgnoreCase(search))
+                        .findFirst();
+            }
+
+            if (userOpt.isPresent()) {
+                User u = userOpt.get();
+                if (u.getDepartmentId() != null && !u.getDepartmentId().isBlank()) {
+                    return u.getDepartmentId();
+                }
+                if (u.getDepartment() != null && !u.getDepartment().isBlank()) {
+                    String userDeptName = u.getDepartment().trim();
                     Optional<Department> dOpt = departmentRepository.findByName(userDeptName);
                     if (dOpt.isPresent()) {
-                        targetDeptId = dOpt.get().getId();
-                    } else {
-                        List<Department> matches = departmentRepository.findAll().stream()
-                                .filter(d -> d.getName() != null && d.getName().trim().equalsIgnoreCase(userDeptName))
-                                .toList();
-                        if (!matches.isEmpty()) {
-                            targetDeptId = matches.get(0).getId();
-                        }
+                        return dOpt.get().getId();
+                    }
+                    List<Department> matches = departmentRepository.findAll().stream()
+                            .filter(d -> d.getName() != null && d.getName().trim().equalsIgnoreCase(userDeptName))
+                            .toList();
+                    if (!matches.isEmpty()) {
+                        return matches.get(0).getId();
                     }
                 }
             }
         }
-        System.out.println("[AcademicService] Resolved targetDeptId: " + targetDeptId);
+
+        // 4. Default fallback to first department
+        List<Department> allDepts = departmentRepository.findAll();
+        if (!allDepts.isEmpty()) {
+            targetDeptId = allDepts.get(0).getId();
+            System.out.println("[AcademicService] Fallback targetDeptId to first department: " + targetDeptId);
+            return targetDeptId;
+        }
+
         return targetDeptId;
     }
 
@@ -1198,7 +1517,11 @@ public class AcademicService {
         progress.setCompletedSteps(String.join(",", completedSteps));
         progress.setPendingSteps(String.join(",", pendingSteps));
 
-        progress.setOverallStatus(SetupStepStatus.IN_PROGRESS);
+        if (stepNumber >= 4) {
+            progress.setOverallStatus(SetupStepStatus.COMPLETED);
+        } else {
+            progress.setOverallStatus(SetupStepStatus.IN_PROGRESS);
+        }
 
         if (hodEmail != null && !hodEmail.isBlank()) {
             progress.setHodEmail(hodEmail.trim());
@@ -1242,6 +1565,7 @@ public class AcademicService {
 
         if (currentStep >= 4) {
             completed.add("outcomes");
+            completed.add("review");
         }
 
         return completed;

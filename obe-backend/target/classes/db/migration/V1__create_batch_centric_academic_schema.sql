@@ -32,10 +32,10 @@ CREATE TABLE schools (
                          code VARCHAR(20) NOT NULL UNIQUE,
                          name VARCHAR(255) NOT NULL,
 
-                         director_id BIGINT,
+                         director_id BIGINT UNIQUE,
                          director_name VARCHAR(255),
                          director VARCHAR(150),
-                         director_email VARCHAR(150),
+                         director_email VARCHAR(150) UNIQUE,
 
                          est_year VARCHAR(10),
 

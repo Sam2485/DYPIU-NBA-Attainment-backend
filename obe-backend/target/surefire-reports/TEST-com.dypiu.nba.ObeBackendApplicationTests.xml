@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://maven.apache.org/surefire/maven-surefire-plugin/xsd/surefire-test-report-3.0.xsd" version="3.0" name="com.dypiu.nba.ObeBackendApplicationTests" time="3.704" tests="1" errors="0" skipped="0" failures="0">
+<testsuite xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://maven.apache.org/surefire/maven-surefire-plugin/xsd/surefire-test-report-3.0.xsd" version="3.0" name="com.dypiu.nba.ObeBackendApplicationTests" time="4.42" tests="1" errors="0" skipped="0" failures="0">
   <properties>
     <property name="java.specification.version" value="21"/>
     <property name="sun.jnu.encoding" value="UTF-8"/>
@@ -13,8 +13,8 @@
     <property name="java.vm.specification.version" value="21"/>
     <property name="sun.java.launcher" value="SUN_STANDARD"/>
     <property name="user.country" value="IN"/>
-    <property name="sun.boot.library.path" value="/opt/homebrew/Cellar/openjdk@21/21.0.11/libexec/openjdk.jdk/Contents/Home/lib"/>
-    <property name="sun.java.command" value="/Users/rajshaikh/Desktop/DYPIU-NBA-Attainment-backend/obe-backend/target/surefire/surefirebooter-20260816212221656_3.jar /Users/rajshaikh/Desktop/DYPIU-NBA-Attainment-backend/obe-backend/target/surefire 2026-08-16T21-22-21_608-jvmRun1 surefire-20260816212221656_1tmp surefire_0-20260816212221656_2tmp"/>
+    <property name="sun.boot.library.path" value="/opt/homebrew/Cellar/openjdk@21/21.0.12/libexec/openjdk.jdk/Contents/Home/lib"/>
+    <property name="sun.java.command" value="/Users/rajshaikh/Desktop/DYPIU-NBA-Attainment-backend/obe-backend/target/surefire/surefirebooter-20260817134412825_3.jar /Users/rajshaikh/Desktop/DYPIU-NBA-Attainment-backend/obe-backend/target/surefire 2026-08-17T13-44-12_770-jvmRun1 surefire-20260817134412825_1tmp surefire_0-20260817134412825_2tmp"/>
     <property name="http.nonProxyHosts" value="local|*.local|169.254/16|*.169.254/16"/>
     <property name="jdk.debug" value="release"/>
     <property name="surefire.test.class.path" value="/Users/rajshaikh/Desktop/DYPIU-NBA-Attainment-backend/obe-backend/target/test-classes:/Users/rajshaikh/Desktop/DYPIU-NBA-Attainment-backend/obe-backend/target/classes:/Users/rajshaikh/.m2/repository/org/springframework/boot/spring-boot-starter-web/3.3.2/spring-boot-starter-web-3.3.2.jar:/Users/rajshaikh/.m2/repository/org/springframework/boot/spring-boot-starter/3.3.2/spring-boot-starter-3.3.2.jar:/Users/rajshaikh/.m2/repository/org/springframework/boot/spring-boot/3.3.2/spring-boot-3.3.2.jar:/Users/rajshaikh/.m2/repository/org/springframework/boot/spring-boot-autoconfigure/3.3.2/spring-boot-autoconfigure-3.3.2.jar:/Users/rajshaikh/.m2/repository/org/springframework/boot/spring-boot-starter-logging/3.3.2/spring-boot-starter-logging-3.3.2.jar:/Users/rajshaikh/.m2/repository/ch/qos/logback/logback-classic/1.5.6/logback-classic-1.5.6.jar:/Users/rajshaikh/.m2/repository/ch/qos/logback/logback-core/1.5.6/logback-core-1.5.6.jar:/Users/rajshaikh/.m2/repository/org/apache/logging/log4j/log4j-to-slf4j/2.23.1/log4j-to-slf4j-2.23.1.jar:/Users/rajshaikh/.m2/repository/org/slf4j/jul-to-slf4j/2.0.13/jul-to-slf4j-2.0.13.jar:/Users/rajshaikh/.m2/repository/jakarta/annotation/jakarta.annotation-api/2.1.1/jakarta.annotation-api-2.1.1.jar:/Users/rajshaikh/.m2/repository/org/yaml/snakeyaml/2.2/snakeyaml-2.2.jar:/Users/rajshaikh/.m2/repository/org/springframework/boot/spring-boot-starter-json/3.3.2/spring-boot-starter-json-3.3.2.jar:/Users/rajshaikh/.m2/repository/com/fasterxml/jackson/datatype/jackson-datatype-jdk8/2.17.2/jackson-datatype-jdk8-2.17.2.jar:/Users/rajshaikh/.m2/repository/com/fasterxml/jackson/datatype/jackson-datatype-jsr310/2.17.2/jackson-datatype-jsr310-2.17.2.jar:/Users/rajshaikh/.m2/repository/com/fasterxml/jackson/module/jackson-module-parameter-names/2.17.2/jackson-module-parameter-names-2.17.2.jar:/Users/rajshaikh/.m2/repository/org/springframework/boot/spring-boot-starter-tomcat/3.3.2/spring-boot-starter-tomcat-3.3.2.jar:/Users/rajshaikh/.m2/repository/org/apache/tomcat/embed/tomcat-embed-core/10.1.26/tomcat-embed-core-10.1.26.jar:/Users/rajshaikh/.m2/repository/org/apache/tomcat/embed/tomcat-embed-websocket/10.1.26/tomcat-embed-websocket-10.1.26.jar:/Users/rajshaikh/.m2/repository/org/springframework/spring-web/6.1.11/spring-web-6.1.11.jar:/Users/rajshaikh/.m2/repository/org/springframework/spring-beans/6.1.11/spring-beans-6.1.11.jar:/Users/rajshaikh/.m2/repository/io/micrometer/micrometer-observation/1.13.2/micrometer-observation-1.13.2.jar:/Users/rajshaikh/.m2/repository/io/micrometer/micrometer-commons/1.13.2/micrometer-commons-1.13.2.jar:/Users/rajshaikh/.m2/repository/org/springframework/spring-webmvc/6.1.11/spring-webmvc-6.1.11.jar:/Users/rajshaikh/.m2/repository/org/springframework/spring-context/6.1.11/spring-context-6.1.11.jar:/Users/rajshaikh/.m2/repository/org/springframework/spring-expression/6.1.11/spring-expression-6.1.11.jar:/Users/rajshaikh/.m2/repository/org/springframework/boot/spring-boot-starter-data-jpa/3.3.2/spring-boot-starter-data-jpa-3.3.2.jar:/Users/rajshaikh/.m2/repository/org/springframework/boot/spring-boot-starter-aop/3.3.2/spring-boot-starter-aop-3.3.2.jar:/Users/rajshaikh/.m2/repository/org/aspectj/aspectjweaver/1.9.22.1/aspectjweaver-1.9.22.1.jar:/Users/rajshaikh/.m2/repository/org/springframework/boot/spring-boot-starter-jdbc/3.3.2/spring-boot-starter-jdbc-3.3.2.jar:/Users/rajshaikh/.m2/repository/com/zaxxer/HikariCP/5.1.0/HikariCP-5.1.0.jar:/Users/rajshaikh/.m2/repository/org/springframework/spring-jdbc/6.1.11/spring-jdbc-6.1.11.jar:/Users/rajshaikh/.m2/repository/org/hibernate/orm/hibernate-core/6.5.2.Final/hibernate-core-6.5.2.Final.jar:/Users/rajshaikh/.m2/repository/jakarta/persistence/jakarta.persistence-api/3.1.0/jakarta.persistence-api-3.1.0.jar:/Users/rajshaikh/.m2/repository/jakarta/transaction/jakarta.transaction-api/2.0.1/jakarta.transaction-api-2.0.1.jar:/Users/rajshaikh/.m2/repository/org/jboss/logging/jboss-logging/3.5.3.Final/jboss-logging-3.5.3.Final.jar:/Users/rajshaikh/.m2/repository/org/hibernate/common/hibernate-commons-annotations/6.0.6.Final/hibernate-commons-annotations-6.0.6.Final.jar:/Users/rajshaikh/.m2/repository/io/smallrye/jandex/3.1.2/jandex-3.1.2.jar:/Users/rajshaikh/.m2/repository/com/fasterxml/classmate/1.7.0/classmate-1.7.0.jar:/Users/rajshaikh/.m2/repository/net/bytebuddy/byte-buddy/1.14.18/byte-buddy-1.14.18.jar:/Users/rajshaikh/.m2/repository/org/glassfish/jaxb/jaxb-runtime/4.0.5/jaxb-runtime-4.0.5.jar:/Users/rajshaikh/.m2/repository/org/glassfish/jaxb/jaxb-core/4.0.5/jaxb-core-4.0.5.jar:/Users/rajshaikh/.m2/repository/org/eclipse/angus/angus-activation/2.0.2/angus-activation-2.0.2.jar:/Users/rajshaikh/.m2/repository/org/glassfish/jaxb/txw2/4.0.5/txw2-4.0.5.jar:/Users/rajshaikh/.m2/repository/com/sun/istack/istack-commons-runtime/4.1.2/istack-commons-runtime-4.1.2.jar:/Users/rajshaikh/.m2/repository/jakarta/inject/jakarta.inject-api/2.0.1/jakarta.inject-api-2.0.1.jar:/Users/rajshaikh/.m2/repository/org/antlr/antlr4-runtime/4.13.0/antlr4-runtime-4.13.0.jar:/Users/rajshaikh/.m2/repository/org/springframework/data/spring-data-jpa/3.3.2/spring-data-jpa-3.3.2.jar:/Users/rajshaikh/.m2/repository/org/springframework/data/spring-data-commons/3.3.2/spring-data-commons-3.3.2.jar:/Users/rajshaikh/.m2/repository/org/springframework/spring-orm/6.1.11/spring-orm-6.1.11.jar:/Users/rajshaikh/.m2/repository/org/springframework/spring-tx/6.1.11/spring-tx-6.1.11.jar:/Users/rajshaikh/.m2/repository/org/slf4j/slf4j-api/2.0.13/slf4j-api-2.0.13.jar:/Users/rajshaikh/.m2/repository/org/springframework/spring-aspects/6.1.11/spring-aspects-6.1.11.jar:/Users/rajshaikh/.m2/repository/org/springframework/boot/spring-boot-starter-security/3.3.2/spring-boot-starter-security-3.3.2.jar:/Users/rajshaikh/.m2/repository/org/springframework/spring-aop/6.1.11/spring-aop-6.1.11.jar:/Users/rajshaikh/.m2/repository/org/springframework/security/spring-security-config/6.3.1/spring-security-config-6.3.1.jar:/Users/rajshaikh/.m2/repository/org/springframework/security/spring-security-web/6.3.1/spring-security-web-6.3.1.jar:/Users/rajshaikh/.m2/repository/org/springframework/boot/spring-boot-starter-validation/3.3.2/spring-boot-starter-validation-3.3.2.jar:/Users/rajshaikh/.m2/repository/org/apache/tomcat/embed/tomcat-embed-el/10.1.26/tomcat-embed-el-10.1.26.jar:/Users/rajshaikh/.m2/repository/org/hibernate/validator/hibernate-validator/8.0.1.Final/hibernate-validator-8.0.1.Final.jar:/Users/rajshaikh/.m2/repository/jakarta/validation/jakarta.validation-api/3.0.2/jakarta.validation-api-3.0.2.jar:/Users/rajshaikh/.m2/repository/org/postgresql/postgresql/42.7.3/postgresql-42.7.3.jar:/Users/rajshaikh/.m2/repository/org/checkerframework/checker-qual/3.42.0/checker-qual-3.42.0.jar:/Users/rajshaikh/.m2/repository/org/flywaydb/flyway-core/10.10.0/flyway-core-10.10.0.jar:/Users/rajshaikh/.m2/repository/com/fasterxml/jackson/dataformat/jackson-dataformat-toml/2.17.2/jackson-dataformat-toml-2.17.2.jar:/Users/rajshaikh/.m2/repository/com/fasterxml/jackson/core/jackson-core/2.17.2/jackson-core-2.17.2.jar:/Users/rajshaikh/.m2/repository/com/google/code/gson/gson/2.10.1/gson-2.10.1.jar:/Users/rajshaikh/.m2/repository/org/flywaydb/flyway-database-postgresql/10.10.0/flyway-database-postgresql-10.10.0.jar:/Users/rajshaikh/.m2/repository/io/jsonwebtoken/jjwt-api/0.12.6/jjwt-api-0.12.6.jar:/Users/rajshaikh/.m2/repository/io/jsonwebtoken/jjwt-impl/0.12.6/jjwt-impl-0.12.6.jar:/Users/rajshaikh/.m2/repository/io/jsonwebtoken/jjwt-jackson/0.12.6/jjwt-jackson-0.12.6.jar:/Users/rajshaikh/.m2/repository/com/fasterxml/jackson/core/jackson-databind/2.17.2/jackson-databind-2.17.2.jar:/Users/rajshaikh/.m2/repository/com/fasterxml/jackson/core/jackson-annotations/2.17.2/jackson-annotations-2.17.2.jar:/Users/rajshaikh/.m2/repository/org/apache/poi/poi-ooxml/5.2.5/poi-ooxml-5.2.5.jar:/Users/rajshaikh/.m2/repository/org/apache/poi/poi/5.2.5/poi-5.2.5.jar:/Users/rajshaikh/.m2/repository/commons-codec/commons-codec/1.16.1/commons-codec-1.16.1.jar:/Users/rajshaikh/.m2/repository/org/apache/commons/commons-math3/3.6.1/commons-math3-3.6.1.jar:/Users/rajshaikh/.m2/repository/com/zaxxer/SparseBitSet/1.3/SparseBitSet-1.3.jar:/Users/rajshaikh/.m2/repository/org/apache/poi/poi-ooxml-lite/5.2.5/poi-ooxml-lite-5.2.5.jar:/Users/rajshaikh/.m2/repository/org/apache/xmlbeans/xmlbeans/5.2.0/xmlbeans-5.2.0.jar:/Users/rajshaikh/.m2/repository/org/apache/commons/commons-compress/1.25.0/commons-compress-1.25.0.jar:/Users/rajshaikh/.m2/repository/commons-io/commons-io/2.15.0/commons-io-2.15.0.jar:/Users/rajshaikh/.m2/repository/com/github/virtuald/curvesapi/1.08/curvesapi-1.08.jar:/Users/rajshaikh/.m2/repository/org/apache/logging/log4j/log4j-api/2.23.1/log4j-api-2.23.1.jar:/Users/rajshaikh/.m2/repository/org/apache/commons/commons-collections4/4.4/commons-collections4-4.4.jar:/Users/rajshaikh/.m2/repository/com/github/librepdf/openpdf/2.0.3/openpdf-2.0.3.jar:/Users/rajshaikh/.m2/repository/org/projectlombok/lombok/1.18.34/lombok-1.18.34.jar:/Users/rajshaikh/.m2/repository/org/springframework/boot/spring-boot-starter-test/3.3.2/spring-boot-starter-test-3.3.2.jar:/Users/rajshaikh/.m2/repository/org/springframework/boot/spring-boot-test/3.3.2/spring-boot-test-3.3.2.jar:/Users/rajshaikh/.m2/repository/org/springframework/boot/spring-boot-test-autoconfigure/3.3.2/spring-boot-test-autoconfigure-3.3.2.jar:/Users/rajshaikh/.m2/repository/com/jayway/jsonpath/json-path/2.9.0/json-path-2.9.0.jar:/Users/rajshaikh/.m2/repository/jakarta/xml/bind/jakarta.xml.bind-api/4.0.2/jakarta.xml.bind-api-4.0.2.jar:/Users/rajshaikh/.m2/repository/jakarta/activation/jakarta.activation-api/2.1.3/jakarta.activation-api-2.1.3.jar:/Users/rajshaikh/.m2/repository/net/minidev/json-smart/2.5.1/json-smart-2.5.1.jar:/Users/rajshaikh/.m2/repository/net/minidev/accessors-smart/2.5.1/accessors-smart-2.5.1.jar:/Users/rajshaikh/.m2/repository/org/ow2/asm/asm/9.6/asm-9.6.jar:/Users/rajshaikh/.m2/repository/org/assertj/assertj-core/3.25.3/assertj-core-3.25.3.jar:/Users/rajshaikh/.m2/repository/org/awaitility/awaitility/4.2.1/awaitility-4.2.1.jar:/Users/rajshaikh/.m2/repository/org/hamcrest/hamcrest/2.2/hamcrest-2.2.jar:/Users/rajshaikh/.m2/repository/org/junit/jupiter/junit-jupiter/5.10.3/junit-jupiter-5.10.3.jar:/Users/rajshaikh/.m2/repository/org/junit/jupiter/junit-jupiter-api/5.10.3/junit-jupiter-api-5.10.3.jar:/Users/rajshaikh/.m2/repository/org/opentest4j/opentest4j/1.3.0/opentest4j-1.3.0.jar:/Users/rajshaikh/.m2/repository/org/junit/platform/junit-platform-commons/1.10.3/junit-platform-commons-1.10.3.jar:/Users/rajshaikh/.m2/repository/org/apiguardian/apiguardian-api/1.1.2/apiguardian-api-1.1.2.jar:/Users/rajshaikh/.m2/repository/org/junit/jupiter/junit-jupiter-params/5.10.3/junit-jupiter-params-5.10.3.jar:/Users/rajshaikh/.m2/repository/org/junit/jupiter/junit-jupiter-engine/5.10.3/junit-jupiter-engine-5.10.3.jar:/Users/rajshaikh/.m2/repository/org/junit/platform/junit-platform-engine/1.10.3/junit-platform-engine-1.10.3.jar:/Users/rajshaikh/.m2/repository/org/mockito/mockito-core/5.11.0/mockito-core-5.11.0.jar:/Users/rajshaikh/.m2/repository/net/bytebuddy/byte-buddy-agent/1.14.18/byte-buddy-agent-1.14.18.jar:/Users/rajshaikh/.m2/repository/org/objenesis/objenesis/3.3/objenesis-3.3.jar:/Users/rajshaikh/.m2/repository/org/mockito/mockito-junit-jupiter/5.11.0/mockito-junit-jupiter-5.11.0.jar:/Users/rajshaikh/.m2/repository/org/skyscreamer/jsonassert/1.5.3/jsonassert-1.5.3.jar:/Users/rajshaikh/.m2/repository/com/vaadin/external/google/android-json/0.0.20131108.vaadin1/android-json-0.0.20131108.vaadin1.jar:/Users/rajshaikh/.m2/repository/org/springframework/spring-core/6.1.11/spring-core-6.1.11.jar:/Users/rajshaikh/.m2/repository/org/springframework/spring-jcl/6.1.11/spring-jcl-6.1.11.jar:/Users/rajshaikh/.m2/repository/org/springframework/spring-test/6.1.11/spring-test-6.1.11.jar:/Users/rajshaikh/.m2/repository/org/xmlunit/xmlunit-core/2.9.1/xmlunit-core-2.9.1.jar:/Users/rajshaikh/.m2/repository/org/springframework/security/spring-security-test/6.3.1/spring-security-test-6.3.1.jar:/Users/rajshaikh/.m2/repository/org/springframework/security/spring-security-core/6.3.1/spring-security-core-6.3.1.jar:/Users/rajshaikh/.m2/repository/org/springframework/security/spring-security-crypto/6.3.1/spring-security-crypto-6.3.1.jar:/Users/rajshaikh/.m2/repository/com/h2database/h2/2.2.224/h2-2.2.224.jar:"/>
@@ -22,8 +22,8 @@
     <property name="user.home" value="/Users/rajshaikh"/>
     <property name="user.language" value="en"/>
     <property name="java.specification.vendor" value="Oracle Corporation"/>
-    <property name="java.version.date" value="2026-04-21"/>
-    <property name="java.home" value="/opt/homebrew/Cellar/openjdk@21/21.0.11/libexec/openjdk.jdk/Contents/Home"/>
+    <property name="java.version.date" value="2026-07-21"/>
+    <property name="java.home" value="/opt/homebrew/Cellar/openjdk@21/21.0.12/libexec/openjdk.jdk/Contents/Home"/>
     <property name="file.separator" value="/"/>
     <property name="basedir" value="/Users/rajshaikh/Desktop/DYPIU-NBA-Attainment-backend/obe-backend"/>
     <property name="java.vm.compressedOopsMode" value="Zero based"/>
@@ -33,10 +33,10 @@
     <property name="FILE_LOG_CHARSET" value="UTF-8"/>
     <property name="java.awt.headless" value="true"/>
     <property name="apple.awt.application.name" value="ForkedBooter"/>
-    <property name="surefire.real.class.path" value="/Users/rajshaikh/Desktop/DYPIU-NBA-Attainment-backend/obe-backend/target/surefire/surefirebooter-20260816212221656_3.jar"/>
+    <property name="surefire.real.class.path" value="/Users/rajshaikh/Desktop/DYPIU-NBA-Attainment-backend/obe-backend/target/surefire/surefirebooter-20260817134412825_3.jar"/>
     <property name="sun.management.compiler" value="HotSpot 64-Bit Tiered Compilers"/>
     <property name="ftp.nonProxyHosts" value="local|*.local|169.254/16|*.169.254/16"/>
-    <property name="java.runtime.version" value="21.0.11"/>
+    <property name="java.runtime.version" value="21.0.12"/>
     <property name="user.name" value="rajshaikh"/>
     <property name="stdout.encoding" value="UTF-8"/>
     <property name="path.separator" value=":"/>
@@ -49,26 +49,26 @@
     <property name="java.vendor.url.bug" value="https://github.com/Homebrew/homebrew-core/issues"/>
     <property name="java.io.tmpdir" value="/var/folders/yk/t269rb0j23d4_bv61vjlql_00000gn/T/"/>
     <property name="com.zaxxer.hikari.pool_number" value="1"/>
-    <property name="java.version" value="21.0.11"/>
+    <property name="java.version" value="21.0.12"/>
     <property name="user.dir" value="/Users/rajshaikh/Desktop/DYPIU-NBA-Attainment-backend/obe-backend"/>
     <property name="os.arch" value="aarch64"/>
     <property name="java.vm.specification.name" value="Java Virtual Machine Specification"/>
-    <property name="PID" value="15358"/>
+    <property name="PID" value="55985"/>
     <property name="CONSOLE_LOG_CHARSET" value="UTF-8"/>
     <property name="native.encoding" value="UTF-8"/>
     <property name="java.library.path" value="/Users/rajshaikh/Library/Java/Extensions:/Library/Java/Extensions:/Network/Library/Java/Extensions:/System/Library/Java/Extensions:/usr/lib/java:."/>
     <property name="java.vm.info" value="mixed mode, sharing"/>
     <property name="stderr.encoding" value="UTF-8"/>
     <property name="java.vendor" value="Homebrew"/>
-    <property name="java.vm.version" value="21.0.11"/>
+    <property name="java.vm.version" value="21.0.12"/>
     <property name="sun.io.unicode.encoding" value="UnicodeBig"/>
     <property name="socksNonProxyHosts" value="local|*.local|169.254/16|*.169.254/16"/>
     <property name="java.class.version" value="65.0"/>
     <property name="LOGGED_APPLICATION_NAME" value="[obe-backend-test] "/>
   </properties>
-  <testcase name="contextLoads" classname="com.dypiu.nba.ObeBackendApplicationTests" time="0.326">
-    <system-out><![CDATA[21:22:22.109 [main] INFO org.springframework.test.context.support.AnnotationConfigContextLoaderUtils -- Could not detect default configuration classes for test class [com.dypiu.nba.ObeBackendApplicationTests]: ObeBackendApplicationTests does not declare any static, non-private, non-final, nested classes annotated with @Configuration.
-21:22:22.171 [main] INFO org.springframework.boot.test.context.SpringBootTestContextBootstrapper -- Found @SpringBootConfiguration com.dypiu.nba.ObeBackendApplication for test class com.dypiu.nba.ObeBackendApplicationTests
+  <testcase name="contextLoads" classname="com.dypiu.nba.ObeBackendApplicationTests" time="0.766">
+    <system-out><![CDATA[13:44:13.261 [main] INFO org.springframework.test.context.support.AnnotationConfigContextLoaderUtils -- Could not detect default configuration classes for test class [com.dypiu.nba.ObeBackendApplicationTests]: ObeBackendApplicationTests does not declare any static, non-private, non-final, nested classes annotated with @Configuration.
+13:44:13.331 [main] INFO org.springframework.boot.test.context.SpringBootTestContextBootstrapper -- Found @SpringBootConfiguration com.dypiu.nba.ObeBackendApplication for test class com.dypiu.nba.ObeBackendApplicationTests
 
   .   ____          _            __ _ _
  /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
@@ -79,20 +79,20 @@
 
  :: Spring Boot ::                (v3.3.2)
 
-2026-08-16T21:22:22.400+05:30  INFO 15358 --- [obe-backend-test] [           main] c.dypiu.nba.ObeBackendApplicationTests   : Starting ObeBackendApplicationTests using Java 21.0.11 with PID 15358 (started by rajshaikh in /Users/rajshaikh/Desktop/DYPIU-NBA-Attainment-backend/obe-backend)
-2026-08-16T21:22:22.400+05:30 DEBUG 15358 --- [obe-backend-test] [           main] c.dypiu.nba.ObeBackendApplicationTests   : Running with Spring Boot v3.3.2, Spring v6.1.11
-2026-08-16T21:22:22.400+05:30  INFO 15358 --- [obe-backend-test] [           main] c.dypiu.nba.ObeBackendApplicationTests   : The following 1 profile is active: "test"
-2026-08-16T21:22:22.840+05:30  INFO 15358 --- [obe-backend-test] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data JPA repositories in DEFAULT mode.
-2026-08-16T21:22:22.900+05:30  INFO 15358 --- [obe-backend-test] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 56 ms. Found 29 JPA repository interfaces.
-2026-08-16T21:22:23.215+05:30  INFO 15358 --- [obe-backend-test] [           main] o.hibernate.jpa.internal.util.LogHelper  : HHH000204: Processing PersistenceUnitInfo [name: default]
-2026-08-16T21:22:23.262+05:30  INFO 15358 --- [obe-backend-test] [           main] org.hibernate.Version                    : HHH000412: Hibernate ORM core version 6.5.2.Final
-2026-08-16T21:22:23.281+05:30  INFO 15358 --- [obe-backend-test] [           main] o.h.c.internal.RegionFactoryInitiator    : HHH000026: Second-level cache disabled
-2026-08-16T21:22:23.438+05:30  INFO 15358 --- [obe-backend-test] [           main] o.s.o.j.p.SpringPersistenceUnitInfo      : No LoadTimeWeaver setup: ignoring JPA class transformer
-2026-08-16T21:22:23.450+05:30  INFO 15358 --- [obe-backend-test] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Starting...
-2026-08-16T21:22:23.551+05:30  INFO 15358 --- [obe-backend-test] [           main] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Added connection conn0: url=jdbc:h2:mem:dypiu_obe_testdb user=SA
-2026-08-16T21:22:23.552+05:30  INFO 15358 --- [obe-backend-test] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Start completed.
-2026-08-16T21:22:23.567+05:30  WARN 15358 --- [obe-backend-test] [           main] org.hibernate.orm.deprecation            : HHH90000025: H2Dialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
-2026-08-16T21:22:24.223+05:30  INFO 15358 --- [obe-backend-test] [           main] o.h.e.t.j.p.i.JtaPlatformInitiator       : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-08-17T13:44:13.551+05:30  INFO 55985 --- [obe-backend-test] [           main] c.dypiu.nba.ObeBackendApplicationTests   : Starting ObeBackendApplicationTests using Java 21.0.12 with PID 55985 (started by rajshaikh in /Users/rajshaikh/Desktop/DYPIU-NBA-Attainment-backend/obe-backend)
+2026-08-17T13:44:13.552+05:30 DEBUG 55985 --- [obe-backend-test] [           main] c.dypiu.nba.ObeBackendApplicationTests   : Running with Spring Boot v3.3.2, Spring v6.1.11
+2026-08-17T13:44:13.552+05:30  INFO 55985 --- [obe-backend-test] [           main] c.dypiu.nba.ObeBackendApplicationTests   : The following 1 profile is active: "test"
+2026-08-17T13:44:14.043+05:30  INFO 55985 --- [obe-backend-test] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-08-17T13:44:14.099+05:30  INFO 55985 --- [obe-backend-test] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 52 ms. Found 29 JPA repository interfaces.
+2026-08-17T13:44:14.409+05:30  INFO 55985 --- [obe-backend-test] [           main] o.hibernate.jpa.internal.util.LogHelper  : HHH000204: Processing PersistenceUnitInfo [name: default]
+2026-08-17T13:44:14.454+05:30  INFO 55985 --- [obe-backend-test] [           main] org.hibernate.Version                    : HHH000412: Hibernate ORM core version 6.5.2.Final
+2026-08-17T13:44:14.476+05:30  INFO 55985 --- [obe-backend-test] [           main] o.h.c.internal.RegionFactoryInitiator    : HHH000026: Second-level cache disabled
+2026-08-17T13:44:14.634+05:30  INFO 55985 --- [obe-backend-test] [           main] o.s.o.j.p.SpringPersistenceUnitInfo      : No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-08-17T13:44:14.647+05:30  INFO 55985 --- [obe-backend-test] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Starting...
+2026-08-17T13:44:14.746+05:30  INFO 55985 --- [obe-backend-test] [           main] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Added connection conn0: url=jdbc:h2:mem:dypiu_obe_testdb user=SA
+2026-08-17T13:44:14.747+05:30  INFO 55985 --- [obe-backend-test] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Start completed.
+2026-08-17T13:44:14.762+05:30  WARN 55985 --- [obe-backend-test] [           main] org.hibernate.orm.deprecation            : HHH90000025: H2Dialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
+2026-08-17T13:44:15.421+05:30  INFO 55985 --- [obe-backend-test] [           main] o.h.e.t.j.p.i.JtaPlatformInitiator       : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
 Hibernate: 
     drop table if exists approval_history cascade 
 Hibernate: 
@@ -153,8 +153,9 @@ Hibernate:
     drop table if exists users cascade 
 Hibernate: 
     create table approval_history (
+        actor_id bigint,
         timestamp timestamp(6) with time zone,
-        action varchar(255) not null,
+        action varchar(50) not null,
         actor_name varchar(255) not null,
         actor_role varchar(255) not null,
         approval_request_id varchar(255) not null,
@@ -168,17 +169,21 @@ Hibernate:
         created_at timestamp(6) with time zone,
         submitted_at timestamp(6) with time zone,
         updated_at timestamp(6) with time zone,
-        type varchar(50) not null,
         approved_by varchar(255),
+        batch_id varchar(255),
         course_id varchar(255),
+        course_offering_id varchar(255),
+        department_id varchar(255),
         details TEXT,
         id varchar(255) not null,
         programme_id varchar(255),
         remarks TEXT,
+        resource_id varchar(255) not null,
         school_id varchar(255),
-        status varchar(255),
         submitted_by varchar(255) not null,
         title varchar(255) not null,
+        status enum ('APPROVED','DRAFT','NEEDS_REVISION','PENDING') not null,
+        type enum ('ATTAINMENT_CONFIGURATION','COURSE_ATR','COURSE_OFFERING','OTHER','PROGRAMME_ATR') not null,
         primary key (id)
     )
 Hibernate: 
@@ -190,30 +195,27 @@ Hibernate:
         created_at timestamp(6) with time zone,
         submitted_at timestamp(6) with time zone,
         updated_at timestamp(6) with time zone,
-        course_code varchar(255) not null,
-        course_id varchar(255) not null unique,
-        course_name varchar(255) not null,
+        course_offering_id varchar(255) not null,
         id varchar(255) not null,
-        status varchar(255),
         submitted_by varchar(255),
-        primary key (id)
+        status enum ('DRAFT','NEEDS_REVISION','VERIFIED') not null,
+        primary key (id),
+        constraint uk_attainment_config_offering unique (course_offering_id)
     )
 Hibernate: 
     create table batches (
         duration_years integer not null,
+        end_year integer not null,
+        start_year integer not null,
         created_at timestamp(6) with time zone,
         updated_at timestamp(6) with time zone,
-        end_year varchar(255) not null,
+        status varchar(30) not null,
+        name varchar(100) not null,
         id varchar(255) not null,
-        name varchar(255) not null,
         previous_batch_id varchar(255),
-        programme_code varchar(255),
         programme_id varchar(255) not null,
-        programme_name varchar(255),
-        start_year varchar(255) not null,
-        status varchar(255),
-        year_level varchar(255),
-        primary key (id)
+        primary key (id),
+        constraint uk_batch_programme_start_year unique (programme_id, start_year)
     )
 Hibernate: 
     create table cc_setup_progress (
@@ -222,10 +224,11 @@ Hibernate:
         completed_steps varchar(500),
         pending_steps varchar(500),
         coordinator_email varchar(255),
-        course_id varchar(255) not null unique,
+        course_offering_id varchar(255) not null,
         id varchar(255) not null,
         overall_status enum ('COMPLETED','IN_PROGRESS','NOT_STARTED') not null,
-        primary key (id)
+        primary key (id),
+        constraint uk_cc_setup_offering unique (course_offering_id)
     )
 Hibernate: 
     create table co_po_mappings (
@@ -235,7 +238,8 @@ Hibernate:
         po_code varchar(20) not null,
         course_outcome_id varchar(255) not null,
         id varchar(255) not null,
-        primary key (id)
+        primary key (id),
+        constraint uk_co_po unique (course_outcome_id, po_code)
     )
 Hibernate: 
     create table co_pso_mappings (
@@ -245,89 +249,96 @@ Hibernate:
         pso_code varchar(20) not null,
         course_outcome_id varchar(255) not null,
         id varchar(255) not null,
-        primary key (id)
+        primary key (id),
+        constraint uk_co_pso unique (course_outcome_id, pso_code)
     )
 Hibernate: 
     create table course_atrs (
         actual_score numeric(38,2) not null,
         pct_achieved numeric(38,2) not null,
         target_score numeric(38,2) not null,
+        created_at timestamp(6) with time zone,
         submitted_at timestamp(6) with time zone,
+        updated_at timestamp(6) with time zone,
+        verified_at timestamp(6) with time zone,
         co_code varchar(30) not null,
-        status varchar(50) not null,
         actions_json TEXT,
-        course_id varchar(255) not null,
-        course_offering_id varchar(255),
+        course_offering_id varchar(255) not null,
         id varchar(255) not null,
         statement TEXT,
         submitted_by varchar(255),
         title varchar(255),
-        primary key (id)
+        verification_comments TEXT,
+        verified_by varchar(255),
+        status enum ('DRAFT','NEEDS_REVISION','SUBMITTED_FOR_VERIFICATION','VERIFIED') not null,
+        primary key (id),
+        constraint uk_offering_co_atr unique (course_offering_id, co_code)
     )
 Hibernate: 
     create table course_mapping_keywords (
         created_at timestamp(6) with time zone,
         updated_at timestamp(6) with time zone,
         keyword_type varchar(20) not null,
-        course_id varchar(255) not null,
+        course_offering_id varchar(255) not null,
         id varchar(255) not null,
         keywords_json TEXT not null,
-        primary key (id)
+        primary key (id),
+        constraint uk_offering_keyword_type unique (course_offering_id, keyword_type)
     )
 Hibernate: 
     create table course_offerings (
         semester integer not null,
+        course_coordinator_id bigint,
         created_at timestamp(6) with time zone,
         updated_at timestamp(6) with time zone,
-        academic_year varchar(255) not null,
+        status varchar(30) not null,
         assigned_faculty TEXT,
         batch_id varchar(255) not null,
-        course_coordinator_id varchar(255),
         course_coordinator_name varchar(255),
         course_id varchar(255) not null,
         id varchar(255) not null,
-        status varchar(255),
         primary key (id),
-        constraint uk_batch_course_sem unique (batch_id, course_id, semester)
+        constraint uk_batch_course_semester unique (batch_id, course_id, semester)
     )
 Hibernate: 
     create table course_outcomes (
-        target_level numeric(38,2),
+        target_level numeric(4,2) not null,
         created_at timestamp(6) with time zone,
         updated_at timestamp(6) with time zone,
         code varchar(30) not null,
-        course_id varchar(255) not null,
+        course_offering_id varchar(255) not null,
         id varchar(255) not null,
         statement TEXT not null,
-        primary key (id)
+        primary key (id),
+        constraint uk_offering_co_code unique (course_offering_id, code)
     )
 Hibernate: 
     create table courses (
+        credits integer not null,
         created_at timestamp(6) with time zone,
         updated_at timestamp(6) with time zone,
+        status varchar(30) not null,
         code varchar(50) not null,
-        semester varchar(50) not null,
-        academic_year varchar(255) not null,
-        assigned_faculty TEXT,
-        coordinator varchar(255),
-        faculty varchar(255),
+        course_type varchar(50),
         id varchar(255) not null,
         name varchar(255) not null,
         programme_id varchar(255) not null,
-        primary key (id)
+        primary key (id),
+        constraint uk_programme_course_code unique (programme_id, code)
     )
 Hibernate: 
     create table departments (
         created_at timestamp(6) with time zone,
         updated_at timestamp(6) with time zone,
         code varchar(20) not null,
+        status varchar(30) not null,
         hod varchar(255),
         hod_email varchar(255),
         id varchar(255) not null,
         name varchar(255) not null,
         school_id varchar(255) not null,
-        status varchar(255),
-        primary key (id)
+        primary key (id),
+        constraint uk_school_department_code unique (school_id, code)
     )
 Hibernate: 
     create table director_setup_progress (
@@ -336,10 +347,11 @@ Hibernate:
         completed_steps varchar(500),
         pending_steps varchar(500),
         id varchar(255) not null,
-        school_id varchar(255) not null unique,
+        school_id varchar(255) not null,
         current_step_enum enum ('DEPARTMENT','PROGRAMME','REVIEW','SCHOOL') not null,
         overall_status enum ('COMPLETED','IN_PROGRESS','NOT_STARTED') not null,
-        primary key (id)
+        primary key (id),
+        constraint uk_director_setup_school unique (school_id)
     )
 Hibernate: 
     create table hod_setup_progress (
@@ -347,11 +359,12 @@ Hibernate:
         updated_at timestamp(6) with time zone,
         completed_steps varchar(500),
         pending_steps varchar(500),
-        department_id varchar(255) not null unique,
+        department_id varchar(255) not null,
         hod_email varchar(255),
         id varchar(255) not null,
         overall_status enum ('COMPLETED','IN_PROGRESS','NOT_STARTED') not null,
-        primary key (id)
+        primary key (id),
+        constraint uk_hod_setup_department unique (department_id)
     )
 Hibernate: 
     create table pc_setup_progress (
@@ -359,66 +372,72 @@ Hibernate:
         updated_at timestamp(6) with time zone,
         completed_steps varchar(500),
         pending_steps varchar(500),
+        batch_id varchar(255) not null,
         coordinator_email varchar(255),
         id varchar(255) not null,
-        programme_id varchar(255) not null unique,
+        programme_id varchar(255) not null,
         overall_status enum ('COMPLETED','IN_PROGRESS','NOT_STARTED') not null,
-        primary key (id)
+        primary key (id),
+        constraint uk_pc_setup_programme_batch unique (programme_id, batch_id)
     )
 Hibernate: 
     create table peo_outcomes (
         created_at timestamp(6) with time zone,
+        updated_at timestamp(6) with time zone,
         code varchar(20) not null,
-        academic_year varchar(255) not null,
         id varchar(255) not null,
         programme_id varchar(255) not null,
         statement TEXT not null,
-        primary key (id)
+        primary key (id),
+        constraint uk_programme_peo_code unique (programme_id, code)
     )
 Hibernate: 
     create table po_competencies (
         code varchar(30) not null,
         id varchar(255) not null,
-        po_id varchar(255),
+        po_id varchar(255) not null,
         statement TEXT not null,
-        primary key (id)
+        primary key (id),
+        constraint uk_po_competency_code unique (po_id, code)
     )
 Hibernate: 
     create table programme_atrs (
-        approved_at timestamp(6) with time zone,
         created_at timestamp(6) with time zone,
         submitted_at timestamp(6) with time zone,
         updated_at timestamp(6) with time zone,
-        academic_year varchar(255) not null,
-        approved_by varchar(255),
+        verified_at timestamp(6) with time zone,
         batch_id varchar(255) not null,
         id varchar(255) not null,
         observations_json TEXT,
         programme_id varchar(255) not null,
-        status varchar(255),
         submitted_by varchar(255),
+        verification_comments TEXT,
+        verified_by varchar(255),
+        status enum ('DRAFT','NEEDS_REVISION','SUBMITTED_FOR_VERIFICATION','VERIFIED') not null,
         primary key (id),
-        constraint uk_programme_atr_batch unique (programme_id, batch_id)
+        constraint uk_programme_batch_atr unique (programme_id, batch_id)
     )
 Hibernate: 
     create table programme_outcomes (
         created_at timestamp(6) with time zone,
+        updated_at timestamp(6) with time zone,
         code varchar(20) not null,
-        academic_year varchar(255) not null,
         id varchar(255) not null,
         programme_id varchar(255) not null,
         statement TEXT not null,
-        primary key (id)
+        primary key (id),
+        constraint uk_programme_po_code unique (programme_id, code)
     )
 Hibernate: 
     create table programme_specific_outcomes (
         created_at timestamp(6) with time zone,
+        updated_at timestamp(6) with time zone,
         code varchar(20) not null,
-        academic_year varchar(255) not null,
         id varchar(255) not null,
         programme_id varchar(255) not null,
         statement TEXT not null,
-        primary key (id)
+        primary key (id),
+        constraint uk_programme_pso_code unique (programme_id, code)
     )
 Hibernate: 
     create table programme_targets (
@@ -426,41 +445,45 @@ Hibernate:
         created_at timestamp(6) with time zone,
         updated_at timestamp(6) with time zone,
         outcome_code varchar(20) not null,
+        batch_id varchar(255) not null,
         id varchar(255) not null,
-        programme_id varchar(255) not null,
+        outcome_type enum ('PEO','PO','PSO') not null,
         primary key (id),
-        constraint uq_prog_target unique (programme_id, outcome_code)
+        constraint uq_batch_outcome_target unique (batch_id, outcome_type, outcome_code)
     )
 Hibernate: 
     create table programmes (
         duration_years integer not null,
         created_at timestamp(6) with time zone,
         updated_at timestamp(6) with time zone,
-        code varchar(20) not null unique,
-        coordinator varchar(255),
-        coordinator_email varchar(255),
+        code varchar(20) not null,
+        status varchar(30) not null,
+        coordinator varchar(150),
+        coordinator_email varchar(150),
         department_id varchar(255) not null,
         department_name varchar(255),
         id varchar(255) not null,
         name varchar(255) not null,
-        status varchar(255),
-        primary key (id)
+        primary key (id),
+        constraint uk_department_programme_code unique (department_id, code)
     )
 Hibernate: 
     create table pso_competencies (
         code varchar(30) not null,
         id varchar(255) not null,
-        pso_id varchar(255),
+        pso_id varchar(255) not null,
         statement TEXT not null,
-        primary key (id)
+        primary key (id),
+        constraint uk_pso_competency_code unique (pso_id, code)
     )
 Hibernate: 
     create table schools (
         created_at timestamp(6) with time zone,
+        director_id bigint,
         updated_at timestamp(6) with time zone,
         code varchar(20) not null unique,
-        director varchar(255),
         director_email varchar(255),
+        director_name varchar(255),
         est_year varchar(255),
         id varchar(255) not null,
         name varchar(255) not null,
@@ -474,12 +497,13 @@ Hibernate:
         created_at timestamp(6) with time zone,
         co_code varchar(30) not null,
         prn varchar(50) not null,
-        course_id varchar(255) not null,
+        course_offering_id varchar(255) not null,
         id varchar(255) not null,
         student_id varchar(255) not null,
         student_name varchar(255),
         upload_id varchar(255),
-        primary key (id)
+        primary key (id),
+        constraint uk_student_offering_co unique (student_id, course_offering_id, co_code)
     )
 Hibernate: 
     create table students (
@@ -490,7 +514,7 @@ Hibernate:
         name varchar(150) not null,
         batch_id varchar(255) not null,
         id varchar(255) not null,
-        status varchar(255),
+        status enum ('ACTIVE','DROPPED','ENROLLED','GRADUATED','TRANSFERRED') not null,
         primary key (id)
     )
 Hibernate: 
@@ -499,37 +523,37 @@ Hibernate:
         threshold_percentage numeric(38,2),
         file_size bigint,
         uploaded_at timestamp(6) with time zone,
-        document_type varchar(50) not null,
-        batch_name varchar(255),
-        course_id varchar(255) not null,
+        batch_id varchar(255) not null,
+        course_offering_id varchar(255),
         file_name varchar(255) not null,
         id varchar(255) not null,
-        programme_id varchar(255),
         saved_file_name varchar(255) not null,
         saved_path varchar(255) not null,
         uploaded_by varchar(255),
+        document_type enum ('EXAMINATION','OTHER','SURVEY') not null,
         primary key (id)
     )
 Hibernate: 
     create table users (
-        is_active boolean,
+        is_active boolean not null,
         created_at timestamp(6) with time zone,
         id bigint generated by default as identity,
         updated_at timestamp(6) with time zone,
-        role varchar(50) not null,
         username varchar(100) not null unique,
         email varchar(150) not null unique,
         name varchar(150) not null,
-        department varchar(255),
+        department_id varchar(255),
         password_hash varchar(255) not null,
-        programme varchar(255),
+        programme_id varchar(255),
+        school_id varchar(255),
+        role enum ('DIRECTOR','FACULTY','HOD','IQAC','PROGRAMME_COORDINATOR') not null,
         primary key (id)
     )
-2026-08-16T21:22:24.263+05:30  INFO 15358 --- [obe-backend-test] [           main] j.LocalContainerEntityManagerFactoryBean : Initialized JPA EntityManagerFactory for persistence unit 'default'
-2026-08-16T21:22:24.693+05:30  INFO 15358 --- [obe-backend-test] [           main] o.s.d.j.r.query.QueryEnhancerFactory     : Hibernate is in classpath; If applicable, HQL parser will be used.
-2026-08-16T21:22:25.011+05:30  WARN 15358 --- [obe-backend-test] [           main] JpaBaseConfiguration$JpaWebConfiguration : spring.jpa.open-in-view is enabled by default. Therefore, database queries may be performed during view rendering. Explicitly configure spring.jpa.open-in-view to disable this warning
-2026-08-16T21:22:25.024+05:30  INFO 15358 --- [obe-backend-test] [           main] r$InitializeUserDetailsManagerConfigurer : Global AuthenticationManager configured with UserDetailsService bean with name customUserDetailsService
-2026-08-16T21:22:25.381+05:30  INFO 15358 --- [obe-backend-test] [           main] c.dypiu.nba.ObeBackendApplicationTests   : Started ObeBackendApplicationTests in 3.137 seconds (process running for 3.676)
+2026-08-17T13:44:15.459+05:30  INFO 55985 --- [obe-backend-test] [           main] j.LocalContainerEntityManagerFactoryBean : Initialized JPA EntityManagerFactory for persistence unit 'default'
+2026-08-17T13:44:15.974+05:30  INFO 55985 --- [obe-backend-test] [           main] o.s.d.j.r.query.QueryEnhancerFactory     : Hibernate is in classpath; If applicable, HQL parser will be used.
+2026-08-17T13:44:16.224+05:30  WARN 55985 --- [obe-backend-test] [           main] JpaBaseConfiguration$JpaWebConfiguration : spring.jpa.open-in-view is enabled by default. Therefore, database queries may be performed during view rendering. Explicitly configure spring.jpa.open-in-view to disable this warning
+2026-08-17T13:44:16.240+05:30  INFO 55985 --- [obe-backend-test] [           main] r$InitializeUserDetailsManagerConfigurer : Global AuthenticationManager configured with UserDetailsService bean with name customUserDetailsService
+2026-08-17T13:44:16.775+05:30  INFO 55985 --- [obe-backend-test] [           main] c.dypiu.nba.ObeBackendApplicationTests   : Started ObeBackendApplicationTests in 3.369 seconds (process running for 3.903)
 ]]></system-out>
     <system-err><![CDATA[WARNING: A Java agent has been loaded dynamically (/Users/rajshaikh/.m2/repository/net/bytebuddy/byte-buddy-agent/1.14.18/byte-buddy-agent-1.14.18.jar)
 WARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning

@@ -31,7 +31,7 @@ public class AcademicController {
     // --- Users by Role ---
     @GetMapping("/users")
     public ResponseEntity<ApiResponse<List<UserDto>>> getUsersByRole(
-            @RequestParam(required = false, defaultValue = "HOD") String role) {
+            @RequestParam(required = false) String role) {
         return ResponseEntity.ok(ApiResponse.<List<UserDto>>builder()
                 .success(true)
                 .data(academicService.getUsersByRole(role))
@@ -41,21 +41,29 @@ public class AcademicController {
     // --- Director School Summary ---
     @GetMapping("/director/school-summary")
     public ResponseEntity<ApiResponse<DirectorSchoolSummaryDto>> getDirectorSchoolSummary(
-            @RequestParam(required = false) String directorEmail) {
+            @RequestParam(required = false) String directorEmail,
+            java.security.Principal principal) {
+        String email = (directorEmail != null && !directorEmail.isBlank())
+                ? directorEmail
+                : (principal != null ? principal.getName() : null);
         return ResponseEntity.ok(ApiResponse.<DirectorSchoolSummaryDto>builder()
                 .success(true)
-                .data(academicService.getDirectorSchoolSummary(directorEmail))
+                .data(academicService.getDirectorSchoolSummary(email))
                 .build());
     }
 
     // --- Director Department Summary ---
     @GetMapping("/director/department-summary")
     public ResponseEntity<ApiResponse<List<DepartmentSummaryDto>>> getDepartmentSummary(
-            @RequestParam(required = true) String schoolId,
-            @RequestParam(required = true) String directorEmail) {
+            @RequestParam(required = false) String schoolId,
+            @RequestParam(required = false) String directorEmail,
+            java.security.Principal principal) {
+        String email = (directorEmail != null && !directorEmail.isBlank())
+                ? directorEmail
+                : (principal != null ? principal.getName() : null);
         return ResponseEntity.ok(ApiResponse.<List<DepartmentSummaryDto>>builder()
                 .success(true)
-                .data(academicService.getDepartmentSummary(schoolId, directorEmail))
+                .data(academicService.getDepartmentSummary(schoolId, email))
                 .build());
     }
 
@@ -63,31 +71,58 @@ public class AcademicController {
     @GetMapping("/director/setup-progress")
     public ResponseEntity<ApiResponse<DirectorSetupProgressDto>> getDirectorSetupProgress(
             @RequestParam(required = false) String schoolId,
-            @RequestParam(required = false) String directorEmail) {
+            @RequestParam(required = false) String directorEmail,
+            @RequestParam(required = false) String id,
+            java.security.Principal principal) {
+        String targetSchool = (schoolId != null && !schoolId.isBlank()) ? schoolId : id;
+        String email = (directorEmail != null && !directorEmail.isBlank())
+                ? directorEmail
+                : (principal != null ? principal.getName() : null);
         return ResponseEntity.ok(ApiResponse.<DirectorSetupProgressDto>builder()
                 .success(true)
-                .data(academicService.getDirectorSetupProgress(schoolId, directorEmail))
+                .data(academicService.getDirectorSetupProgress(targetSchool, email))
                 .build());
     }
 
-    @PostMapping("/director/setup-progress")
+    @RequestMapping(value = "/director/setup-progress", method = {RequestMethod.POST, RequestMethod.PUT})
     public ResponseEntity<ApiResponse<DirectorSetupProgressDto>> updateDirectorSetupProgress(
             @RequestParam(required = false) String schoolId,
-            @RequestParam(required = false, defaultValue = "1") Integer currentStep) {
+            @RequestParam(required = false) String id,
+            @RequestParam(required = false) Integer step,
+            @RequestParam(required = false) Integer currentStep,
+            @RequestBody(required = false) java.util.Map<String, Object> body,
+            java.security.Principal principal) {
+        String targetSchool = schoolId != null ? schoolId : id;
+        Integer targetStep = step != null ? step : currentStep;
+        if (body != null) {
+            if (targetSchool == null && body.containsKey("identifier")) targetSchool = String.valueOf(body.get("identifier"));
+            if (targetSchool == null && body.containsKey("schoolId")) targetSchool = String.valueOf(body.get("schoolId"));
+            if (targetStep == null && body.containsKey("step")) {
+                try { targetStep = Integer.parseInt(String.valueOf(body.get("step"))); } catch (Exception ignored) {}
+            }
+        }
+        if (targetStep == null) targetStep = 1;
         return ResponseEntity.ok(ApiResponse.<DirectorSetupProgressDto>builder()
                 .success(true)
                 .message("Director setup progress updated successfully")
-                .data(academicService.updateDirectorSetupProgress(schoolId, currentStep))
+                .data(academicService.updateDirectorSetupProgress(targetSchool, targetStep))
                 .build());
     }
 
     // --- HOD Department Summary ---
     @GetMapping("/hod/department-summary")
     public ResponseEntity<ApiResponse<HodDepartmentSummaryDto>> getHodDepartmentSummary(
-            @RequestParam(required = false) String hodEmail) {
+            @RequestParam(required = false) String hodEmail,
+            java.security.Principal principal) {
+        String email = (hodEmail != null && !hodEmail.isBlank())
+                ? hodEmail
+                : (principal != null ? principal.getName() : null);
+        System.out.println("\n>>> [CONTROLLER] GET /api/v1/academic/hod/department-summary | hodEmail param: " + hodEmail + " | principal: " + (principal != null ? principal.getName() : "null") + " | resolved email: " + email);
+        HodDepartmentSummaryDto data = academicService.getHodDepartmentSummary(email);
+        System.out.println("<<< [CONTROLLER] GET /api/v1/academic/hod/department-summary SUCCESS | deptId: " + data.getDeptId() + " | deptName: " + data.getDeptName() + " | hodEmail: " + data.getHodEmail());
         return ResponseEntity.ok(ApiResponse.<HodDepartmentSummaryDto>builder()
                 .success(true)
-                .data(academicService.getHodDepartmentSummary(hodEmail))
+                .data(data)
                 .build());
     }
 
@@ -95,33 +130,72 @@ public class AcademicController {
     @GetMapping("/hod/setup-progress")
     public ResponseEntity<ApiResponse<HodSetupProgressDto>> getHodSetupProgress(
             @RequestParam(required = false) String departmentId,
-            @RequestParam(required = false) String hodEmail) {
+            @RequestParam(required = false) String hodEmail,
+            @RequestParam(required = false) String id,
+            java.security.Principal principal) {
+        String email = (hodEmail != null && !hodEmail.isBlank())
+                ? hodEmail
+                : (principal != null ? principal.getName() : null);
+        String deptId = (departmentId != null && !departmentId.isBlank()) ? departmentId : id;
+        System.out.println("\n>>> [CONTROLLER] GET /api/v1/academic/hod/setup-progress | deptId: " + deptId + " | email: " + email);
+        HodSetupProgressDto data = academicService.getHodSetupProgress(deptId, email);
+        System.out.println("<<< [CONTROLLER] GET /api/v1/academic/hod/setup-progress SUCCESS | currentStep: " + data.getCurrentStep() + " | status: " + data.getOverallStatus());
         return ResponseEntity.ok(ApiResponse.<HodSetupProgressDto>builder()
                 .success(true)
-                .data(academicService.getHodSetupProgress(departmentId, hodEmail))
+                .data(data)
                 .build());
     }
 
-    @PutMapping("/hod/setup-progress")
+    @RequestMapping(value = "/hod/setup-progress", method = {RequestMethod.POST, RequestMethod.PUT})
     public ResponseEntity<ApiResponse<HodSetupProgressDto>> updateHodSetupProgress(
             @RequestParam(required = false) String departmentId,
-            @RequestParam(required = false, defaultValue = "1") Integer currentStep,
-            @RequestParam(required = false) String hodEmail) {
+            @RequestParam(required = false) String hodEmail,
+            @RequestParam(required = false) String id,
+            @RequestParam(required = false) Integer step,
+            @RequestParam(required = false) Integer currentStep,
+            @RequestBody(required = false) java.util.Map<String, Object> body,
+            java.security.Principal principal) {
+        String deptId = departmentId != null ? departmentId : id;
+        String email = (hodEmail != null && !hodEmail.isBlank())
+                ? hodEmail
+                : (principal != null ? principal.getName() : null);
+        Integer targetStep = step != null ? step : currentStep;
+        if (body != null) {
+            if (deptId == null && body.containsKey("identifier")) deptId = String.valueOf(body.get("identifier"));
+            if (deptId == null && body.containsKey("departmentId")) deptId = String.valueOf(body.get("departmentId"));
+            if (email == null && body.containsKey("email")) email = String.valueOf(body.get("email"));
+            if (targetStep == null && body.containsKey("step")) {
+                try { targetStep = Integer.parseInt(String.valueOf(body.get("step"))); } catch (Exception ignored) {}
+            }
+        }
+        if (targetStep == null) targetStep = 1;
+        System.out.println("\n>>> [CONTROLLER] POST/PUT /api/v1/academic/hod/setup-progress | deptId: " + deptId + " | step: " + targetStep + " | email: " + email);
+        HodSetupProgressDto updated = academicService.updateHodSetupProgress(deptId, targetStep, email);
+        System.out.println("<<< [CONTROLLER] POST/PUT /api/v1/academic/hod/setup-progress SUCCESS | newStep: " + updated.getCurrentStep() + " | completedSteps: " + updated.getCompletedSteps());
         return ResponseEntity.ok(ApiResponse.<HodSetupProgressDto>builder()
                 .success(true)
                 .message("HOD setup progress updated successfully")
-                .data(academicService.updateHodSetupProgress(departmentId, currentStep, hodEmail))
+                .data(updated)
                 .build());
     }
 
     @PostMapping("/hod/setup-progress/complete")
     public ResponseEntity<ApiResponse<HodSetupProgressDto>> completeHodSetup(
             @RequestParam(required = false) String departmentId,
-            @RequestParam(required = false) String hodEmail) {
+            @RequestParam(required = false) String hodEmail,
+            @RequestParam(required = false) String id,
+            java.security.Principal principal) {
+        String email = (hodEmail != null && !hodEmail.isBlank())
+                ? hodEmail
+                : (principal != null ? principal.getName() : null);
+        String deptId = (departmentId != null && !departmentId.isBlank()) ? departmentId : id;
+        System.out.println("\n>>> [CONTROLLER] POST /api/v1/academic/hod/setup-progress/complete | deptId: " + deptId + " | email: " + email);
+        HodSetupProgressDto completed = academicService.completeHodSetup(deptId, email);
+        System.out.println("<<< [CONTROLLER] POST /api/v1/academic/hod/setup-progress/complete SUCCESS | status: " + completed.getOverallStatus());
         return ResponseEntity.ok(ApiResponse.<HodSetupProgressDto>builder()
                 .success(true)
                 .message("HOD setup marked as completed successfully")
-                .data(academicService.completeHodSetup(departmentId, hodEmail))
+                .data(completed)
                 .build());
     }
 
@@ -267,6 +341,18 @@ public class AcademicController {
                 .build());
     }
 
+    @PutMapping("/departments/{id}")
+    public ResponseEntity<ApiResponse<Department>> updateDepartment(
+            @PathVariable String id,
+            @RequestBody Department department) {
+        department.setId(id);
+        return ResponseEntity.ok(ApiResponse.<Department>builder()
+                .success(true)
+                .message("Department updated successfully")
+                .data(academicService.saveDepartment(department))
+                .build());
+    }
+
     @DeleteMapping("/departments/{id}")
     public ResponseEntity<ApiResponse<Void>> deleteDepartment(@PathVariable String id) {
         academicService.deleteDepartment(id);
@@ -292,18 +378,68 @@ public class AcademicController {
                 .build());
     }
 
+    @GetMapping("/programmes/{id}")
+    public ResponseEntity<ApiResponse<Programme>> getProgrammeById(@PathVariable String id) {
+        return ResponseEntity.ok(ApiResponse.<Programme>builder()
+                .success(true)
+                .data(academicService.getProgrammeById(id))
+                .build());
+    }
+
     @PostMapping("/programmes")
     public ResponseEntity<ApiResponse<Programme>> saveProgramme(@RequestBody Programme programme) {
+        System.out.println("\n>>> [CONTROLLER] POST /api/v1/academic/programmes | id: " + (programme != null ? programme.getId() : "null") + " | name: " + (programme != null ? programme.getName() : "null") + " | coordinator: " + (programme != null ? programme.getCoordinator() : "null") + " | coordinatorEmail: " + (programme != null ? programme.getCoordinatorEmail() : "null"));
+        Programme saved = academicService.saveProgramme(programme);
+        System.out.println("<<< [CONTROLLER] POST /api/v1/academic/programmes SUCCESS | savedId: " + saved.getId() + " | coordinator: " + saved.getCoordinator() + " | coordinatorEmail: " + saved.getCoordinatorEmail());
         return ResponseEntity.ok(ApiResponse.<Programme>builder()
                 .success(true)
                 .message("Programme saved successfully")
-                .data(academicService.saveProgramme(programme))
+                .data(saved)
+                .build());
+    }
+
+    @PutMapping("/programmes/{id}")
+    public ResponseEntity<ApiResponse<Programme>> updateProgramme(
+            @PathVariable String id,
+            @RequestBody Programme programme) {
+        programme.setId(id);
+        System.out.println("\n>>> [CONTROLLER] PUT /api/v1/academic/programmes/" + id + " | name: " + programme.getName() + " | coordinator: " + programme.getCoordinator() + " | coordinatorEmail: " + programme.getCoordinatorEmail());
+        Programme saved = academicService.saveProgramme(programme);
+        System.out.println("<<< [CONTROLLER] PUT /api/v1/academic/programmes/" + id + " SUCCESS | savedId: " + saved.getId() + " | coordinator: " + saved.getCoordinator() + " | coordinatorEmail: " + saved.getCoordinatorEmail());
+        return ResponseEntity.ok(ApiResponse.<Programme>builder()
+                .success(true)
+                .message("Programme updated successfully")
+                .data(saved)
+                .build());
+    }
+
+    @PutMapping("/programmes/{id}/coordinator")
+    public ResponseEntity<ApiResponse<Programme>> updateProgrammeCoordinator(
+            @PathVariable String id,
+            @RequestBody java.util.Map<String, Object> body) {
+        String coordinator = body.containsKey("coordinator") ? String.valueOf(body.get("coordinator")) : (body.containsKey("coordinatorId") ? String.valueOf(body.get("coordinatorId")) : null);
+        String coordinatorEmail = body.containsKey("coordinatorEmail") ? String.valueOf(body.get("coordinatorEmail")) : null;
+        System.out.println("\n>>> [CONTROLLER] PUT /api/v1/academic/programmes/" + id + "/coordinator | coordinator: " + coordinator + " | email: " + coordinatorEmail);
+        Programme prog = academicService.getProgrammeById(id);
+        if (prog == null) {
+            prog = Programme.builder().id(id).name("Programme " + id).code(id).build();
+        }
+        if (coordinator != null) prog.setCoordinator(coordinator);
+        if (coordinatorEmail != null) prog.setCoordinatorEmail(coordinatorEmail);
+        Programme saved = academicService.saveProgramme(prog);
+        System.out.println("<<< [CONTROLLER] PUT /api/v1/academic/programmes/" + id + "/coordinator SUCCESS | coordinator: " + saved.getCoordinator());
+        return ResponseEntity.ok(ApiResponse.<Programme>builder()
+                .success(true)
+                .message("Programme coordinator updated successfully")
+                .data(saved)
                 .build());
     }
 
     @DeleteMapping("/programmes/{id}")
     public ResponseEntity<ApiResponse<Void>> deleteProgramme(@PathVariable String id) {
+        System.out.println("\n>>> [CONTROLLER] DELETE /api/v1/academic/programmes/" + id);
         academicService.deleteProgramme(id);
+        System.out.println("<<< [CONTROLLER] DELETE /api/v1/academic/programmes/" + id + " SUCCESS");
         return ResponseEntity.ok(ApiResponse.<Void>builder().success(true).message("Programme deleted").build());
     }
 
@@ -344,6 +480,18 @@ public class AcademicController {
                 .build());
     }
 
+    @PutMapping("/batches/{id}")
+    public ResponseEntity<ApiResponse<Batch>> updateBatch(
+            @PathVariable String id,
+            @RequestBody Batch batch) {
+        batch.setId(id);
+        return ResponseEntity.ok(ApiResponse.<Batch>builder()
+                .success(true)
+                .message("Batch updated successfully")
+                .data(academicService.saveBatch(batch))
+                .build());
+    }
+
     @DeleteMapping("/batches/{id}")
     public ResponseEntity<ApiResponse<Void>> deleteBatch(@PathVariable String id) {
         academicService.deleteBatch(id);
@@ -370,6 +518,18 @@ public class AcademicController {
         return ResponseEntity.ok(ApiResponse.<Course>builder()
                 .success(true)
                 .message("Course saved successfully")
+                .data(academicService.saveCourse(course))
+                .build());
+    }
+
+    @PutMapping("/courses/{id}")
+    public ResponseEntity<ApiResponse<Course>> updateCourse(
+            @PathVariable String id,
+            @RequestBody Course course) {
+        course.setId(id);
+        return ResponseEntity.ok(ApiResponse.<Course>builder()
+                .success(true)
+                .message("Course updated successfully")
                 .data(academicService.saveCourse(course))
                 .build());
     }

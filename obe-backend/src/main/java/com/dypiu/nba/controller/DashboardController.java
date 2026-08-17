@@ -27,24 +27,39 @@ public class DashboardController {
     private final CourseRepository courseRepository;
     private final CourseOfferingRepository courseOfferingRepository;
     private final CourseAtrRepository courseAtrRepository;
+    private final UserRepository userRepository;
 
     @GetMapping("/director")
     public ResponseEntity<ApiResponse<Map<String, Object>>> getDirectorDashboard(
             @RequestParam(required = false) String schoolId,
+            @RequestParam(required = false) String directorEmail,
             Principal principal) {
         User user = reportAccessService.getAuthenticatedUser(principal);
+        String targetEmail = directorEmail != null && !directorEmail.isBlank() ? directorEmail : (user != null ? user.getEmail() : null);
         String sId = schoolId != null ? schoolId : (user != null ? user.getSchoolId() : null);
 
-        School school = sId != null ? schoolRepository.findById(sId).orElse(null) : schoolRepository.findAll().stream().findFirst().orElse(null);
-        String targetSchoolId = school != null ? school.getId() : "school-1";
+        School school = null;
+        if (targetEmail != null && !targetEmail.isBlank()) {
+            school = schoolRepository.findByDirectorEmailIgnoreCase(targetEmail.trim()).orElse(null);
+        }
+        if (school == null && sId != null && !sId.isBlank()) {
+            school = schoolRepository.findById(sId).orElse(null);
+        }
+        if (school == null && user != null && user.getId() != null) {
+            school = schoolRepository.findByDirectorId(user.getId()).orElse(null);
+        }
+
+        String targetSchoolId = school != null ? school.getId() : (sId != null ? sId : "sch-1");
 
         List<Department> depts = departmentRepository.findBySchoolId(targetSchoolId);
-        Set<String> deptIds = depts.stream().map(Department::getId).collect(Collectors.toSet());
-        List<Programme> progs = programmeRepository.findAll().stream().filter(p -> deptIds.contains(p.getDepartmentId())).collect(Collectors.toList());
-        Set<String> progIds = progs.stream().map(Programme::getId).collect(Collectors.toSet());
-        List<Batch> activeBatches = batchRepository.findAll().stream().filter(b -> progIds.contains(b.getProgrammeId()) && "ACTIVE".equalsIgnoreCase(b.getStatus())).collect(Collectors.toList());
+        List<String> deptIds = depts.stream().map(Department::getId).toList();
+        List<Programme> progs = deptIds.isEmpty() ? Collections.emptyList() : programmeRepository.findByDepartmentIdIn(deptIds);
+        List<String> progIds = progs.stream().map(Programme::getId).toList();
+        List<Batch> activeBatches = progIds.isEmpty() ? Collections.emptyList() : batchRepository.findAll().stream()
+                .filter(b -> progIds.contains(b.getProgrammeId()) && "ACTIVE".equalsIgnoreCase(b.getStatus()))
+                .collect(Collectors.toList());
 
-        DirectorSetupProgressDto progress = academicService.getDirectorSetupProgress(targetSchoolId, user != null ? user.getEmail() : null);
+        DirectorSetupProgressDto progress = academicService.getDirectorSetupProgress(targetSchoolId, targetEmail);
 
         Map<String, Object> stats = new LinkedHashMap<>();
         stats.put("departments", depts.size());
@@ -62,20 +77,40 @@ public class DashboardController {
     @GetMapping("/hod")
     public ResponseEntity<ApiResponse<Map<String, Object>>> getHodDashboard(
             @RequestParam(required = false) String departmentId,
+            @RequestParam(required = false) String hodEmail,
             Principal principal) {
         User user = reportAccessService.getAuthenticatedUser(principal);
+        String targetEmail = hodEmail != null && !hodEmail.isBlank() ? hodEmail : (user != null ? user.getEmail() : null);
         String dId = departmentId != null ? departmentId : (user != null ? user.getDepartmentId() : null);
 
-        Department dept = dId != null ? departmentRepository.findById(dId).orElse(null) : departmentRepository.findAll().stream().findFirst().orElse(null);
-        String targetDeptId = dept != null ? dept.getId() : "dept-1";
+        Department dept = null;
+        if (targetEmail != null && !targetEmail.isBlank()) {
+            dept = departmentRepository.findByHodEmailIgnoreCase(targetEmail.trim()).orElse(null);
+        }
+        if (dept == null && dId != null && !dId.isBlank()) {
+            dept = departmentRepository.findById(dId).orElse(null);
+        }
+        if (dept == null && targetEmail != null && !targetEmail.isBlank()) {
+            User u = userRepository.findByEmail(targetEmail.trim()).orElse(null);
+            if (u != null && u.getDepartment() != null && !u.getDepartment().isBlank()) {
+                dept = departmentRepository.findByName(u.getDepartment().trim()).orElse(null);
+            }
+        }
+        if (dept == null) {
+            dept = departmentRepository.findAll().stream().findFirst().orElse(null);
+        }
+
+        String targetDeptId = dept != null ? dept.getId() : (dId != null ? dId : "dept-1");
 
         List<Programme> progs = programmeRepository.findByDepartmentId(targetDeptId);
         Set<String> progIds = progs.stream().map(Programme::getId).collect(Collectors.toSet());
-        List<Batch> activeBatches = batchRepository.findAll().stream().filter(b -> progIds.contains(b.getProgrammeId()) && "ACTIVE".equalsIgnoreCase(b.getStatus())).collect(Collectors.toList());
+        List<Batch> activeBatches = progIds.isEmpty() ? Collections.emptyList() : batchRepository.findAll().stream()
+                .filter(b -> progIds.contains(b.getProgrammeId()) && "ACTIVE".equalsIgnoreCase(b.getStatus()))
+                .collect(Collectors.toList());
         Set<String> batchIds = activeBatches.stream().map(Batch::getId).collect(Collectors.toSet());
-        List<CourseOffering> offerings = courseOfferingRepository.findByBatchIdIn(batchIds);
+        List<CourseOffering> offerings = batchIds.isEmpty() ? Collections.emptyList() : courseOfferingRepository.findByBatchIdIn(batchIds);
 
-        HodSetupProgressDto progress = academicService.getHodSetupProgress(targetDeptId, user != null ? user.getEmail() : null);
+        HodSetupProgressDto progress = academicService.getHodSetupProgress(targetDeptId, targetEmail);
 
         Map<String, Object> stats = new LinkedHashMap<>();
         stats.put("programmes", progs.size());

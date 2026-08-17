@@ -37,6 +37,7 @@ public class AtrService {
 
     @Transactional(readOnly = true)
     public List<CourseAtr> getCourseAtrs(String courseOfferingOrCourseId) {
+        System.out.println("[AtrService] getCourseAtrs called | courseOfferingOrCourseId: " + courseOfferingOrCourseId);
         List<CourseAtr> list = courseAtrRepository.findByCourseOfferingId(courseOfferingOrCourseId);
         if (!list.isEmpty()) return list;
 
@@ -50,6 +51,7 @@ public class AtrService {
 
     @Transactional
     public List<CourseAtr> saveCourseAtrs(String courseOfferingId, List<CourseAtr> atrs) {
+        System.out.println("[AtrService] saveCourseAtrs called | courseOfferingId: " + courseOfferingId + " | count: " + (atrs != null ? atrs.size() : 0));
         atrs.forEach(a -> {
             a.setCourseOfferingId(courseOfferingId);
             if (a.getId() == null || a.getId().isBlank()) {
@@ -64,11 +66,13 @@ public class AtrService {
 
     @Transactional(readOnly = true)
     public Optional<ProgrammeAtr> getProgrammeAtr(String programmeId) {
+        System.out.println("[AtrService] getProgrammeAtr called | programmeId: " + programmeId);
         return programmeAtrRepository.findByProgrammeId(programmeId);
     }
 
     @Transactional(readOnly = true)
     public Optional<ProgrammeAtr> getProgrammeAtrByBatch(String programmeId, String batchId) {
+        System.out.println("[AtrService] getProgrammeAtrByBatch called | programmeId: " + programmeId + " | batchId: " + batchId);
         if (batchId != null && !batchId.isBlank()) {
             return programmeAtrRepository.findByProgrammeIdAndBatchId(programmeId, batchId);
         }
@@ -77,6 +81,7 @@ public class AtrService {
 
     @Transactional(readOnly = true)
     public Optional<ProgrammeAtr> getPreviousBatchProgrammeAtr(String batchId) {
+        System.out.println("[AtrService] getPreviousBatchProgrammeAtr called | batchId: " + batchId);
         if (batchId == null || batchId.isBlank()) return Optional.empty();
         Batch currentBatch = batchRepository.findById(batchId).orElse(null);
         if (currentBatch == null || currentBatch.getPreviousBatchId() == null) return Optional.empty();
@@ -85,6 +90,7 @@ public class AtrService {
 
     @Transactional
     public ProgrammeAtr saveProgrammeAtr(ProgrammeAtr atr) {
+        System.out.println("[AtrService] saveProgrammeAtr called | id: " + (atr != null ? atr.getId() : "null") + " | programmeId: " + (atr != null ? atr.getProgrammeId() : "null"));
         if (atr.getId() == null || atr.getId().isBlank()) {
             atr.setId("patr-" + UUID.randomUUID().toString().substring(0, 8));
         }
@@ -100,6 +106,7 @@ public class AtrService {
 
     @Transactional(readOnly = true)
     public CourseAtrReportDto getCourseAtrReport(String courseOfferingId) {
+        System.out.println("[AtrService] getCourseAtrReport called | courseOfferingId: " + courseOfferingId);
         CourseOffering offering = courseOfferingRepository.findById(courseOfferingId)
                 .orElseThrow(() -> new ResourceNotFoundException("Course Offering not found: " + courseOfferingId));
 
@@ -181,6 +188,7 @@ public class AtrService {
 
     @Transactional
     public CourseAtrReportDto saveCourseAtrReport(CourseAtrReportDto dto) {
+        System.out.println("[AtrService] saveCourseAtrReport called | courseOfferingId: " + (dto != null && dto.getCourseOffering() != null ? dto.getCourseOffering().getId() : "null"));
         if (dto == null || dto.getCourseOffering() == null || dto.getCourseOffering().getId() == null) {
             throw new IllegalArgumentException("Invalid Course ATR payload: CourseOffering is required.");
         }
@@ -218,6 +226,7 @@ public class AtrService {
 
     @Transactional
     public CourseAtr submitCourseAtr(String courseOfferingId, String submittedBy) {
+        System.out.println("[AtrService] submitCourseAtr called | courseOfferingId: " + courseOfferingId + " | submittedBy: " + submittedBy);
         List<CourseAtr> atrs = courseAtrRepository.findByCourseOfferingId(courseOfferingId);
         if (atrs.isEmpty()) {
             getCourseAtrReport(courseOfferingId); // generates default entries
@@ -238,6 +247,7 @@ public class AtrService {
 
     @Transactional(readOnly = true)
     public ProgrammeAtrReportDto getProgrammeAtrReport(String programmeId, String batchId) {
+        System.out.println("[AtrService] getProgrammeAtrReport called | programmeId: " + programmeId + " | batchId: " + batchId);
         Programme prog = programmeRepository.findById(programmeId)
                 .orElseThrow(() -> new ResourceNotFoundException("Programme not found: " + programmeId));
         Batch batch = batchRepository.findById(batchId)
@@ -298,6 +308,7 @@ public class AtrService {
 
     @Transactional
     public ProgrammeAtrReportDto saveProgrammeAtrReport(ProgrammeAtrReportDto dto) {
+        System.out.println("[AtrService] saveProgrammeAtrReport called | programmeId: " + (dto != null && dto.getProgramme() != null ? dto.getProgramme().getId() : "null"));
         if (dto == null || dto.getProgramme() == null || dto.getBatch() == null) {
             throw new IllegalArgumentException("Invalid Programme ATR payload.");
         }
@@ -328,6 +339,7 @@ public class AtrService {
 
     @Transactional
     public ProgrammeAtr submitProgrammeAtr(String programmeId, String batchId, String submittedBy) {
+        System.out.println("[AtrService] submitProgrammeAtr called | programmeId: " + programmeId + " | batchId: " + batchId + " | submittedBy: " + submittedBy);
         ProgrammeAtr atr = programmeAtrRepository.findByProgrammeIdAndBatchId(programmeId, batchId)
                 .orElseGet(() -> ProgrammeAtr.builder()
                         .id("patr-" + UUID.randomUUID().toString().substring(0, 8))
@@ -347,6 +359,7 @@ public class AtrService {
 
     @Transactional(readOnly = true)
     public BatchComparisonDto getProgrammeBatchComparison(String programmeId, List<String> batchIds) {
+        System.out.println("[AtrService] getProgrammeBatchComparison called | programmeId: " + programmeId);
         List<Batch> batches = (batchIds != null && !batchIds.isEmpty())
                 ? batchRepository.findAllById(batchIds)
                 : batchRepository.findByProgrammeId(programmeId);

@@ -52,6 +52,7 @@ public class AttainmentReportExportService {
      */
     @Transactional(readOnly = true)
     public byte[] generateAttainmentExcel(String courseId, String batchId) {
+        System.out.println("[AttainmentReportExportService] generateAttainmentExcel called | courseId: " + courseId + " | batchId: " + batchId);
         log.info("[AttainmentReportExportService] Generating Attainment Excel for courseId: {}, batchId: {}", courseId, batchId);
 
         Course course = courseRepository.findById(courseId).orElse(null);
@@ -432,6 +433,7 @@ public class AttainmentReportExportService {
      */
     @Transactional(readOnly = true)
     public byte[] generateAttainmentPdf(String courseId, String batchId) {
+        System.out.println("[AttainmentReportExportService] generateAttainmentPdf called | courseId: " + courseId + " | batchId: " + batchId);
         log.info("[AttainmentReportExportService] Generating Attainment PDF for courseId: {}, batchId: {}", courseId, batchId);
 
         Course course = courseRepository.findById(courseId).orElse(null);

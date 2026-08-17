@@ -21,6 +21,7 @@ public class AuthService {
 
     @Transactional(readOnly = true)
     public AuthResponse login(LoginRequest request) {
+        System.out.println("[AuthService] login called | identifier: " + (request != null ? (request.getUsername() != null ? request.getUsername() : request.getEmail()) : "null"));
         String rawIdentifier = request.getUsername() != null ? request.getUsername() : request.getEmail();
         if (rawIdentifier == null || rawIdentifier.isBlank()) {
             throw new BadRequestException("Username or email is required");
@@ -53,6 +54,7 @@ public class AuthService {
 
     @Transactional
     public AuthResponse register(RegisterRequest request) {
+        System.out.println("[AuthService] register called | username: " + (request != null ? request.getUsername() : "null") + " | email: " + (request != null ? request.getEmail() : "null"));
         if (userRepository.existsByUsername(request.getUsername())) {
             throw new BadRequestException("Username is already taken");
         }
@@ -82,6 +84,7 @@ public class AuthService {
 
     @Transactional(readOnly = true)
     public AuthResponse refreshToken(RefreshTokenRequest request) {
+        System.out.println("[AuthService] refreshToken called");
         String refreshToken = request.getRefreshToken();
         if (refreshToken == null || !tokenProvider.validateRefreshToken(refreshToken)) {
             throw new BadRequestException("Invalid or expired refresh token");
@@ -95,14 +98,17 @@ public class AuthService {
     }
 
     public String requestPasswordReset(String email) {
+        System.out.println("[AuthService] requestPasswordReset called | email: " + email);
         return "Password reset link has been sent to " + email + ". Please check your inbox.";
     }
 
     public String resetPassword(String token, String newPassword) {
+        System.out.println("[AuthService] resetPassword called | token: " + token);
         return "Password reset successfully. Please login with your new credentials.";
     }
 
     public AuthResponse verifyOtp(String loginSessionId, String code) {
+        System.out.println("[AuthService] verifyOtp called | loginSessionId: " + loginSessionId + " | code: " + code);
         User defaultUser = User.builder()
                 .id(1L)
                 .name("Verified User")

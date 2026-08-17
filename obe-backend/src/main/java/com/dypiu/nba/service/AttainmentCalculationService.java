@@ -61,6 +61,7 @@ public class AttainmentCalculationService {
 
     @Transactional(readOnly = true)
     public AttainmentConfiguration getAttainmentConfig(String courseOfferingOrCourseId) {
+        System.out.println("[AttainmentCalculationService] getAttainmentConfig called | courseOfferingOrCourseId: " + courseOfferingOrCourseId);
         String offeringId = resolveOfferingId(courseOfferingOrCourseId);
         return configRepository.findByCourseOfferingId(offeringId)
                 .orElseGet(() -> AttainmentConfiguration.builder()
@@ -76,6 +77,7 @@ public class AttainmentCalculationService {
 
     @Transactional
     public AttainmentConfiguration saveAttainmentConfig(String courseOfferingOrCourseId, AttainmentConfiguration config) {
+        System.out.println("[AttainmentCalculationService] saveAttainmentConfig called | courseOfferingOrCourseId: " + courseOfferingOrCourseId);
         String offeringId = resolveOfferingId(courseOfferingOrCourseId);
         config.setCourseOfferingId(offeringId);
         if (config.getId() == null) config.setId("cfg-" + offeringId);
@@ -86,6 +88,7 @@ public class AttainmentCalculationService {
 
     @Transactional
     public void saveStudentCoMarksToDatabase(String courseOfferingOrCourseId, Map<String, BigDecimal> coMaxMarks, List<StudentMarksRowDto> studentList) {
+        System.out.println("[AttainmentCalculationService] saveStudentCoMarksToDatabase called | courseOfferingOrCourseId: " + courseOfferingOrCourseId + " | students: " + (studentList != null ? studentList.size() : 0));
         if (courseOfferingOrCourseId == null || studentList == null || studentList.isEmpty()) return;
 
         String offeringId = resolveOfferingId(courseOfferingOrCourseId);
@@ -155,6 +158,7 @@ public class AttainmentCalculationService {
     // =========================================================================
 
     public ExaminationAttainmentResultDto calculateExaminationAttainment(String courseOfferingOrCourseId, ExaminationMarksPayloadDto payload) {
+        System.out.println("[AttainmentCalculationService] calculateExaminationAttainment called | courseOfferingOrCourseId: " + courseOfferingOrCourseId);
         String offeringId = resolveOfferingId(courseOfferingOrCourseId);
         if (payload == null || payload.getStudentMarks() == null || payload.getStudentMarks().isEmpty()) {
             return getExaminationAttainment(offeringId);
@@ -237,6 +241,7 @@ public class AttainmentCalculationService {
 
     @Transactional
     public ExaminationAttainmentResultDto processAndSaveExaminationFile(String courseOfferingOrCourseId, MultipartFile file, BigDecimal thresholdPercentage, String uploadedBy) {
+        System.out.println("[AttainmentCalculationService] processAndSaveExaminationFile called | courseOfferingOrCourseId: " + courseOfferingOrCourseId);
         String offeringId = resolveOfferingId(courseOfferingOrCourseId);
         CourseOffering offering = courseOfferingRepository.findById(offeringId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Course Offering not found: " + offeringId));
@@ -363,6 +368,7 @@ public class AttainmentCalculationService {
 
     @Transactional(readOnly = true)
     public ExaminationAttainmentResultDto getExaminationAttainment(String courseOfferingOrCourseId) {
+        System.out.println("[AttainmentCalculationService] getExaminationAttainment called | courseOfferingOrCourseId: " + courseOfferingOrCourseId);
         String offeringId = resolveOfferingId(courseOfferingOrCourseId);
         if (examinationAttainmentStore.containsKey(offeringId)) {
             return examinationAttainmentStore.get(offeringId);
@@ -434,6 +440,7 @@ public class AttainmentCalculationService {
     // =========================================================================
 
     public SurveyAttainmentResultDto calculateSurveyAttainment(String courseOfferingOrCourseId, SurveyMarksPayloadDto payload) {
+        System.out.println("[AttainmentCalculationService] calculateSurveyAttainment called | courseOfferingOrCourseId: " + courseOfferingOrCourseId);
         String offeringId = resolveOfferingId(courseOfferingOrCourseId);
         if (payload == null || payload.getSurveyResponses() == null || payload.getSurveyResponses().isEmpty()) {
             return getSurveyAttainment(offeringId);
@@ -480,6 +487,7 @@ public class AttainmentCalculationService {
 
     @Transactional
     public SurveyAttainmentResultDto processAndSaveSurveyFile(String courseOfferingOrCourseId, MultipartFile file, BigDecimal thresholdPercentage, String uploadedBy) {
+        System.out.println("[AttainmentCalculationService] processAndSaveSurveyFile called | courseOfferingOrCourseId: " + courseOfferingOrCourseId);
         String offeringId = resolveOfferingId(courseOfferingOrCourseId);
         CourseOffering offering = courseOfferingRepository.findById(offeringId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Course Offering not found: " + offeringId));
@@ -557,7 +565,7 @@ public class AttainmentCalculationService {
                         Optional<Student> studentOpt = studentRepository.findByPrn(prn);
                         if (studentOpt.isEmpty()) {
                             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                                    "Validation Error: Student with PRN '" + prn + "' is not registered in the system. Survey upload rejected.");
+                                     "Validation Error: Student with PRN '" + prn + "' is not registered in the system. Survey upload rejected.");
                         }
                         Student student = studentOpt.get();
                         if (student.getBatchId() == null || !student.getBatchId().equals(batchId)) {
@@ -604,6 +612,7 @@ public class AttainmentCalculationService {
 
     @Transactional(readOnly = true)
     public SurveyAttainmentResultDto getSurveyAttainment(String courseOfferingOrCourseId) {
+        System.out.println("[AttainmentCalculationService] getSurveyAttainment called | courseOfferingOrCourseId: " + courseOfferingOrCourseId);
         String offeringId = resolveOfferingId(courseOfferingOrCourseId);
         if (surveyAttainmentStore.containsKey(offeringId)) {
             return surveyAttainmentStore.get(offeringId);
@@ -630,6 +639,7 @@ public class AttainmentCalculationService {
 
     @Transactional(readOnly = true)
     public Map<String, Object> calculateCourseCoAttainment(String courseOfferingOrCourseId) {
+        System.out.println("[AttainmentCalculationService] calculateCourseCoAttainment called | courseOfferingOrCourseId: " + courseOfferingOrCourseId);
         String offeringId = resolveOfferingId(courseOfferingOrCourseId);
         CourseOffering offering = courseOfferingRepository.findById(offeringId).orElse(null);
         String courseId = offering != null ? offering.getCourseId() : offeringId;
@@ -710,10 +720,12 @@ public class AttainmentCalculationService {
     }
 
     public List<UploadedDocument> getUploadedDocumentsForOffering(String courseOfferingId) {
+        System.out.println("[AttainmentCalculationService] getUploadedDocumentsForOffering called | courseOfferingId: " + courseOfferingId);
         return uploadedDocumentRepository.findByCourseOfferingId(courseOfferingId);
     }
 
     public List<UploadedDocument> getUploadedDocumentsForCourse(String courseId) {
+        System.out.println("[AttainmentCalculationService] getUploadedDocumentsForCourse called | courseId: " + courseId);
         List<CourseOffering> offerings = courseOfferingRepository.findByCourseId(courseId);
         List<UploadedDocument> docs = new ArrayList<>();
         for (CourseOffering o : offerings) {
@@ -728,6 +740,7 @@ public class AttainmentCalculationService {
 
     @Transactional
     public ProgrammeSurveyResultDto processAndSaveProgrammeSurveyFile(String programmeId, String batchId, MultipartFile file, String uploadedBy) {
+        System.out.println("[AttainmentCalculationService] processAndSaveProgrammeSurveyFile called | programmeId: " + programmeId + " | batchId: " + batchId);
         String key = programmeId + "::" + batchId;
 
         List<ProgrammeSurveyResultDto.OutcomeIndirectItem> poItems = new ArrayList<>();
@@ -803,6 +816,7 @@ public class AttainmentCalculationService {
 
     @Transactional(readOnly = true)
     public ProgrammeAttainmentResultDto calculateProgrammeAttainment(String programmeId, String batchId) {
+        System.out.println("[AttainmentCalculationService] calculateProgrammeAttainment called | programmeId: " + programmeId + " | batchId: " + batchId);
         Programme prog = programmeRepository.findById(programmeId).orElse(null);
         Batch batch = batchRepository.findById(batchId).orElse(null);
 
@@ -1018,6 +1032,7 @@ public class AttainmentCalculationService {
     }
 
     public ProgrammeAttainmentDatasetDto getProgrammeAttainmentDataset(String programmeId, String batchId) {
+        System.out.println("[AttainmentCalculationService] getProgrammeAttainmentDataset called | programmeId: " + programmeId + " | batchId: " + batchId);
         ProgrammeAttainmentResultDto res = calculateProgrammeAttainment(programmeId, batchId);
 
         List<String> columns = List.of("Outcome", "Sem 1", "Sem 2", "Sem 3", "Sem 4", "Sem 5", "Sem 6", "Sem 7", "Sem 8", "Average");

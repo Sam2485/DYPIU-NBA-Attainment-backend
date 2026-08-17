@@ -458,6 +458,7 @@ public class OutcomeService {
 
     @Transactional(readOnly = true)
     public List<CourseOutcome> getCOsByCourse(String courseIdOrOfferingId) {
+        System.out.println("[OutcomeService] getCOsByCourse called | courseIdOrOfferingId: " + courseIdOrOfferingId);
         String targetOfferingId = resolveOfferingId(courseIdOrOfferingId);
         List<CourseOutcome> list = coRepository.findByCourseOfferingId(targetOfferingId);
         list.sort(Comparator.comparing(CourseOutcome::getCode, NATURAL_CODE_COMPARATOR));
@@ -466,6 +467,7 @@ public class OutcomeService {
 
     @Transactional
     public List<CourseOutcome> saveCOs(String courseIdOrOfferingId, List<CourseOutcome> cos) {
+        System.out.println("[OutcomeService] saveCOs called | courseIdOrOfferingId: " + courseIdOrOfferingId + " | count: " + (cos != null ? cos.size() : 0));
         String targetOfferingId = resolveOfferingId(courseIdOrOfferingId);
         List<CourseOutcome> existing = coRepository.findByCourseOfferingId(targetOfferingId);
         Map<String, CourseOutcome> existingByCode = existing.stream()
@@ -520,6 +522,7 @@ public class OutcomeService {
     // --- Programme Target Benchmark Levels ---
     @Transactional(readOnly = true)
     public ProgrammeTargetDto getProgrammeTargets(String programmeId) {
+        System.out.println("[OutcomeService] getProgrammeTargets called | programmeId: " + programmeId);
         List<Batch> batches = batchRepository.findByProgrammeId(programmeId);
         List<String> batchIds = batches.stream().map(Batch::getId).collect(Collectors.toList());
         List<ProgrammeTarget> list = batchIds.isEmpty() ? Collections.emptyList() : targetRepository.findByBatchIdIn(batchIds);
@@ -546,6 +549,7 @@ public class OutcomeService {
 
     @Transactional(readOnly = true)
     public ProgrammeTargetDto getBatchProgrammeTargets(String batchId) {
+        System.out.println("[OutcomeService] getBatchProgrammeTargets called | batchId: " + batchId);
         Batch batch = batchRepository.findById(batchId).orElse(null);
         String progId = batch != null ? batch.getProgrammeId() : null;
         List<ProgrammeTarget> list = targetRepository.findByBatchId(batchId);
@@ -573,6 +577,7 @@ public class OutcomeService {
 
     @Transactional
     public ProgrammeTargetDto saveProgrammeTargets(String programmeId, ProgrammeTargetDto dto) {
+        System.out.println("[OutcomeService] saveProgrammeTargets called | programmeId: " + programmeId);
         if (dto == null) return getProgrammeTargets(programmeId);
 
         List<Batch> batches = batchRepository.findByProgrammeId(programmeId);
@@ -608,6 +613,7 @@ public class OutcomeService {
 
     @Transactional
     public CourseMappingMatrixDto getCourseMappings(String courseIdOrOfferingId) {
+        System.out.println("[OutcomeService] getCourseMappings called | courseIdOrOfferingId: " + courseIdOrOfferingId);
         String targetOfferingId = resolveOfferingId(courseIdOrOfferingId);
         CourseOffering offering = courseOfferingRepository.findById(targetOfferingId).orElse(null);
         String courseId = offering != null ? offering.getCourseId() : targetOfferingId;
@@ -661,6 +667,7 @@ public class OutcomeService {
 
     @Transactional
     public CourseMappingMatrixDto saveCourseMappings(String courseIdOrOfferingId, CourseMappingMatrixDto dto) {
+        System.out.println("[OutcomeService] saveCourseMappings called | courseIdOrOfferingId: " + courseIdOrOfferingId);
         String targetOfferingId = resolveOfferingId(courseIdOrOfferingId);
         CourseOffering offering = courseOfferingRepository.findById(targetOfferingId).orElse(null);
         String courseId = offering != null ? offering.getCourseId() : targetOfferingId;
@@ -765,6 +772,7 @@ public class OutcomeService {
 
     @Transactional(readOnly = true)
     public List<CourseOutcome> getOutcomesByOffering(String offeringId) {
+        System.out.println("[OutcomeService] getOutcomesByOffering called | offeringId: " + offeringId);
         CourseOffering offering = courseOfferingRepository.findById(offeringId)
                 .orElseThrow(() -> new com.dypiu.nba.exception.ResourceNotFoundException("Course Offering not found: " + offeringId));
         return getCOsByCourse(offering.getId());
@@ -773,6 +781,7 @@ public class OutcomeService {
 
     @Transactional
     public List<CourseOutcome> saveOutcomesByOffering(String offeringId, List<CourseOutcome> cos) {
+        System.out.println("[OutcomeService] saveOutcomesByOffering called | offeringId: " + offeringId);
         CourseOffering offering = courseOfferingRepository.findById(offeringId)
                 .orElseThrow(() -> new com.dypiu.nba.exception.ResourceNotFoundException("Course Offering not found: " + offeringId));
         return saveCOs(offering.getCourseId(), cos);
@@ -780,6 +789,7 @@ public class OutcomeService {
 
     @Transactional
     public CourseMappingMatrixDto getMappingsByOffering(String offeringId) {
+        System.out.println("[OutcomeService] getMappingsByOffering called | offeringId: " + offeringId);
         CourseOffering offering = courseOfferingRepository.findById(offeringId)
                 .orElseThrow(() -> new com.dypiu.nba.exception.ResourceNotFoundException("Course Offering not found: " + offeringId));
         return getCourseMappings(offering.getCourseId());
@@ -787,6 +797,7 @@ public class OutcomeService {
 
     @Transactional
     public CourseMappingMatrixDto saveMappingsByOffering(String offeringId, CourseMappingMatrixDto dto) {
+        System.out.println("[OutcomeService] saveMappingsByOffering called | offeringId: " + offeringId);
         CourseOffering offering = courseOfferingRepository.findById(offeringId)
                 .orElseThrow(() -> new com.dypiu.nba.exception.ResourceNotFoundException("Course Offering not found: " + offeringId));
         return saveCourseMappings(offering.getCourseId(), dto);

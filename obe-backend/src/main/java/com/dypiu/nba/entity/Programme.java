@@ -48,12 +48,12 @@ public class Programme {
     @Column(name = "updated_at", insertable = false, updatable = false)
     private ZonedDateTime updatedAt;
 
-    @Transient
+    @Column(name = "coordinator", length = 150)
     private String coordinator;
 
-    @Transient
+    @Column(name = "coordinator_email", length = 150)
     private String coordinatorEmail;
 
-    @Transient
+    @Column(name = "department_name", length = 255)
     private String departmentName;
 }

@@ -23,6 +23,7 @@ public class ApprovalService {
 
     @Transactional(readOnly = true)
     public List<ApprovalRequest> getDirectorApprovals(String schoolId) {
+        System.out.println("[ApprovalService] getDirectorApprovals called | schoolId: " + schoolId);
         if (schoolId != null) {
             return approvalRequestRepository.findBySchoolId(schoolId);
         }
@@ -31,6 +32,7 @@ public class ApprovalService {
 
     @Transactional(readOnly = true)
     public List<ApprovalRequest> getHodApprovals(String programmeId) {
+        System.out.println("[ApprovalService] getHodApprovals called | programmeId: " + programmeId);
         if (programmeId != null) {
             return approvalRequestRepository.findByProgrammeId(programmeId);
         }
@@ -39,6 +41,7 @@ public class ApprovalService {
 
     @Transactional
     public ApprovalRequest submitApprovalRequest(ApprovalRequest request) {
+        System.out.println("[ApprovalService] submitApprovalRequest called | type: " + (request != null ? request.getType() : "null") + " | resourceId: " + (request != null ? request.getResourceId() : "null"));
         if (request.getId() == null) request.setId("app-" + UUID.randomUUID().toString().substring(0, 8));
         request.setStatus(ApprovalStatus.PENDING);
         request.setSubmittedAt(ZonedDateTime.now());
@@ -58,6 +61,7 @@ public class ApprovalService {
 
     @Transactional
     public ApprovalRequest approveRequest(String id, String approverName, String approverRole) {
+        System.out.println("[ApprovalService] approveRequest called | id: " + id + " | approver: " + approverName);
         ApprovalRequest req = approvalRequestRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Approval request not found: " + id));
 
@@ -80,6 +84,7 @@ public class ApprovalService {
 
     @Transactional
     public ApprovalRequest rejectRequest(String id, String remarks, String actorName, String actorRole) {
+        System.out.println("[ApprovalService] rejectRequest called | id: " + id + " | actorName: " + actorName);
         ApprovalRequest req = approvalRequestRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Approval request not found: " + id));
 
@@ -101,17 +106,20 @@ public class ApprovalService {
 
     @Transactional(readOnly = true)
     public ApprovalRequest getApprovalById(String id) {
+        System.out.println("[ApprovalService] getApprovalById called | id: " + id);
         return approvalRequestRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Approval request not found: " + id));
     }
 
     @Transactional(readOnly = true)
     public List<ApprovalHistory> getApprovalHistory(String approvalRequestId) {
+        System.out.println("[ApprovalService] getApprovalHistory called | approvalRequestId: " + approvalRequestId);
         return approvalHistoryRepository.findByApprovalRequestId(approvalRequestId);
     }
 
     @Transactional(readOnly = true)
     public List<ApprovalRequest> getPendingApprovals(String role, String schoolId, String programmeId) {
+        System.out.println("[ApprovalService] getPendingApprovals called | role: " + role + " | schoolId: " + schoolId + " | programmeId: " + programmeId);
         if ("DIRECTOR".equalsIgnoreCase(role)) {
             return getDirectorApprovals(schoolId);
         } else if ("HOD".equalsIgnoreCase(role) || "PROGRAMME_COORDINATOR".equalsIgnoreCase(role)) {

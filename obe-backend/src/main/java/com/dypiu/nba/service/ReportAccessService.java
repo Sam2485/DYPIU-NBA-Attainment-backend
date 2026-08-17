@@ -29,6 +29,7 @@ public class ReportAccessService {
 
     @Transactional(readOnly = true)
     public User getAuthenticatedUser(Principal principal) {
+        System.out.println("[ReportAccessService] getAuthenticatedUser called | principal: " + (principal != null ? principal.getName() : "null"));
         String usernameOrEmail = null;
         if (principal != null) {
             usernameOrEmail = principal.getName();
@@ -50,6 +51,7 @@ public class ReportAccessService {
 
     @Transactional(readOnly = true)
     public void validateProgrammeAccess(User user, String programmeId) {
+        System.out.println("[ReportAccessService] validateProgrammeAccess called | user: " + (user != null ? user.getEmail() : "null") + " | programmeId: " + programmeId);
         if (user == null || programmeId == null) return;
         if (user.getRole() == UserRole.IQAC) return;
 
@@ -80,6 +82,7 @@ public class ReportAccessService {
 
     @Transactional(readOnly = true)
     public void validateBatchAccess(User user, String batchId) {
+        System.out.println("[ReportAccessService] validateBatchAccess called | user: " + (user != null ? user.getEmail() : "null") + " | batchId: " + batchId);
         if (user == null || batchId == null) return;
         if (user.getRole() == UserRole.IQAC) return;
 
@@ -91,6 +94,7 @@ public class ReportAccessService {
 
     @Transactional(readOnly = true)
     public void validateCourseOfferingAccess(User user, String courseOfferingId) {
+        System.out.println("[ReportAccessService] validateCourseOfferingAccess called | user: " + (user != null ? user.getEmail() : "null") + " | courseOfferingId: " + courseOfferingId);
         if (user == null || courseOfferingId == null) return;
         if (user.getRole() == UserRole.IQAC) return;
 
@@ -112,11 +116,13 @@ public class ReportAccessService {
 
     @Transactional(readOnly = true)
     public void validateCourseAtrAccess(User user, String courseOfferingId) {
+        System.out.println("[ReportAccessService] validateCourseAtrAccess called | user: " + (user != null ? user.getEmail() : "null") + " | courseOfferingId: " + courseOfferingId);
         validateCourseOfferingAccess(user, courseOfferingId);
     }
 
     @Transactional(readOnly = true)
     public void validateProgrammeAtrAccess(User user, String programmeId, String batchId) {
+        System.out.println("[ReportAccessService] validateProgrammeAtrAccess called | user: " + (user != null ? user.getEmail() : "null") + " | programmeId: " + programmeId + " | batchId: " + batchId);
         if (user == null) return;
         if (user.getRole() == UserRole.FACULTY) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Course Coordinators / Faculty do not have permission to view or edit Programme ATRs.");
@@ -131,6 +137,7 @@ public class ReportAccessService {
 
     @Transactional(readOnly = true)
     public ReportFiltersDto getReportFilters(User user) {
+        System.out.println("[ReportAccessService] getReportFilters called | user: " + (user != null ? user.getEmail() : "null"));
         if (user == null) {
             return ReportFiltersDto.builder()
                     .role("GUEST")
