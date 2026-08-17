@@ -655,23 +655,17 @@ public class AcademicService {
                     || searchRole.equals("COORDINATOR")
                     || searchRole.equals("PC")
                     || searchRole.equals("PROGRAMME_COORD")) {
-                List<User> pcs = userRepository.findByRole(UserRole.PROGRAMME_COORDINATOR);
-                List<User> faculties = userRepository.findByRole(UserRole.FACULTY);
-                Set<Long> seenIds = new HashSet<>();
-                users = new ArrayList<>();
-                for (User u : pcs) {
-                    if (u.getId() != null && seenIds.add(u.getId())) {
-                        users.add(u);
-                    }
-                }
-                for (User u : faculties) {
-                    if (u.getId() != null && seenIds.add(u.getId())) {
-                        users.add(u);
-                    }
-                }
-                if (users.isEmpty()) {
-                    users = userRepository.findAll();
-                }
+                users = userRepository.findByRole(UserRole.PROGRAMME_COORDINATOR);
+            } else if (searchRole.equals("COURSE_COORDINATOR")
+                    || searchRole.equals("CC")
+                    || searchRole.equals("FACULTY")) {
+                users = userRepository.findByRole(UserRole.FACULTY);
+            } else if (searchRole.equals("HOD")) {
+                users = userRepository.findByRole(UserRole.HOD);
+            } else if (searchRole.equals("DIRECTOR")) {
+                users = userRepository.findByRole(UserRole.DIRECTOR);
+            } else if (searchRole.equals("IQAC")) {
+                users = userRepository.findByRole(UserRole.IQAC);
             } else {
                 try {
                     UserRole userRole = UserRole.valueOf(searchRole);
@@ -683,16 +677,28 @@ public class AcademicService {
         }
 
         List<UserDto> dtos = users.stream()
-                .map(u -> UserDto.builder()
-                        .id(u.getId())
-                        .name(u.getName())
-                        .email(u.getEmail())
-                        .role(u.getRole() != null
-                                ? u.getRole().name()
-                                : UserRole.FACULTY.name())
-                        .department(u.getDepartment())
-                        .programme(u.getProgramme())
-                        .build())
+                .map(u -> {
+                    String resolvedEmail = u.getEmail();
+                    if (resolvedEmail == null || resolvedEmail.isBlank()) {
+                        if (u.getUsername() != null && u.getUsername().contains("@")) {
+                            resolvedEmail = u.getUsername();
+                        } else if (u.getUsername() != null && !u.getUsername().isBlank()) {
+                            resolvedEmail = u.getUsername() + "@dypiu.ac.in";
+                        } else {
+                            resolvedEmail = "user" + u.getId() + "@dypiu.ac.in";
+                        }
+                    }
+                    return UserDto.builder()
+                            .id(u.getId())
+                            .name(u.getName() != null && !u.getName().isBlank() ? u.getName() : (u.getUsername() != null ? u.getUsername() : "User " + u.getId()))
+                            .email(resolvedEmail)
+                            .role(u.getRole() != null
+                                    ? u.getRole().name()
+                                    : UserRole.FACULTY.name())
+                            .department(u.getDepartment())
+                            .programme(u.getProgramme())
+                            .build();
+                })
                 .toList();
 
         System.out.println("[AcademicService] Fetched users by role (" + role + "): count=" + dtos.size());
