@@ -12,11 +12,15 @@ import com.dypiu.nba.repository.DepartmentRepository;
 import com.dypiu.nba.repository.ProgrammeRepository;
 import com.dypiu.nba.repository.SchoolRepository;
 import com.dypiu.nba.repository.UserRepository;
+import com.dypiu.nba.security.CurrentUserScope;
+import com.dypiu.nba.security.CurrentUserScopeService;
 import com.dypiu.nba.service.AcademicService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.Map;
@@ -26,12 +30,42 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class UserController {
 
+    private final CurrentUserScopeService currentUserScopeService;
     private final AcademicService academicService;
     private final UserRepository userRepository;
     private final SchoolRepository schoolRepository;
     private final DepartmentRepository departmentRepository;
     private final ProgrammeRepository programmeRepository;
     private final PasswordEncoder passwordEncoder;
+
+    private CurrentUserScope getScope() {
+        try {
+            return currentUserScopeService.getCurrentUserScope();
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private void enforceUserScope(User targetUser) {
+        CurrentUserScope scope = getScope();
+        if (scope == null || scope.isAdmin() || scope.isIqac()) return;
+        if (scope.isDirector()) {
+            String dirSchoolId = scope.getRequiredSchoolId();
+            if (targetUser.getSchoolId() != null && !targetUser.getSchoolId().equals(dirSchoolId)) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: User belongs to a different school.");
+            }
+        }
+        if (scope.isHod() || scope.isProgrammeCoordinator()) {
+            String deptId = scope.getRequiredDepartmentId();
+            if (targetUser.getDepartmentId() != null && !targetUser.getDepartmentId().equals(deptId)) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: User belongs to a different department.");
+            }
+            String schoolId = scope.getRequiredSchoolId();
+            if (targetUser.getSchoolId() != null && !targetUser.getSchoolId().equals(schoolId)) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: User belongs to a different school.");
+            }
+        }
+    }
 
     @GetMapping
     public ResponseEntity<ApiResponse<List<UserDto>>> getUsers(@RequestParam(required = false) String role) {
@@ -83,15 +117,27 @@ public class UserController {
         // Validate and resolve organizational scope
         ResolvedScope scope = validateAndResolveScope(body, role);
 
+        CurrentUserScope currentScope = getScope();
+        String finalSchoolId = scope.schoolId;
+        String finalDeptId = scope.departmentId;
+        String finalProgId = scope.programmeId;
+
+        if (currentScope != null && currentScope.isDirector()) {
+            finalSchoolId = currentScope.getRequiredSchoolId();
+        } else if (currentScope != null && currentScope.isHod()) {
+            finalSchoolId = currentScope.getRequiredSchoolId();
+            finalDeptId = currentScope.getRequiredDepartmentId();
+        }
+
         User user = User.builder()
                 .email(email)
                 .username(username)
                 .name(name)
                 .passwordHash(passwordEncoder.encode(rawPassword))
                 .role(role)
-                .schoolId(scope.schoolId)
-                .departmentId(scope.departmentId)
-                .programmeId(scope.programmeId)
+                .schoolId(finalSchoolId)
+                .departmentId(finalDeptId)
+                .programmeId(finalProgId)
                 .isActive(true)
                 .build();
 
@@ -108,6 +154,8 @@ public class UserController {
     public ResponseEntity<ApiResponse<UserDto>> updateUser(@PathVariable Long id, @RequestBody Map<String, Object> body) {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with ID: " + id));
+
+        enforceUserScope(user);
 
         String email = body.get("email") != null ? body.get("email").toString().trim() : user.getEmail();
         if (email.isBlank()) {
@@ -152,11 +200,22 @@ public class UserController {
         // Validate and resolve organizational scope
         ResolvedScope scope = validateAndResolveScope(body, user.getRole());
 
+        CurrentUserScope currentScope = getScope();
+        String finalSchoolId = scope.schoolId;
+        String finalDeptId = scope.departmentId;
+
+        if (currentScope != null && currentScope.isDirector()) {
+            finalSchoolId = currentScope.getRequiredSchoolId();
+        } else if (currentScope != null && currentScope.isHod()) {
+            finalSchoolId = currentScope.getRequiredSchoolId();
+            finalDeptId = currentScope.getRequiredDepartmentId();
+        }
+
         user.setEmail(email);
         user.setName(name);
         user.setUsername(username);
-        user.setSchoolId(scope.schoolId);
-        user.setDepartmentId(scope.departmentId);
+        user.setSchoolId(finalSchoolId);
+        user.setDepartmentId(finalDeptId);
         user.setProgrammeId(scope.programmeId);
 
         User saved = userRepository.save(user);
@@ -172,6 +231,8 @@ public class UserController {
     public ResponseEntity<ApiResponse<UserDto>> getUserById(@PathVariable Long id) {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with ID: " + id));
+
+        enforceUserScope(user);
 
         return ResponseEntity.ok(ApiResponse.<UserDto>builder()
                 .success(true)

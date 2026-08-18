@@ -348,6 +348,14 @@ public class AcademicController {
                 .build());
     }
 
+    @GetMapping("/departments/{id}")
+    public ResponseEntity<ApiResponse<Department>> getDepartmentById(@PathVariable String id) {
+        return ResponseEntity.ok(ApiResponse.<Department>builder()
+                .success(true)
+                .data(academicService.getDepartmentById(id))
+                .build());
+    }
+
     @PostMapping("/departments")
     public ResponseEntity<ApiResponse<Department>> saveDepartment(@RequestBody Department department) {
         return ResponseEntity.ok(ApiResponse.<Department>builder()
@@ -475,7 +483,7 @@ public class AcademicController {
     public ResponseEntity<ApiResponse<Batch>> getBatchById(@PathVariable String id) {
         return ResponseEntity.ok(ApiResponse.<Batch>builder()
                 .success(true)
-                .data(academicService.getAllBatches().stream().filter(b -> b.getId().equals(id)).findFirst().orElse(null))
+                .data(academicService.getBatchById(id))
                 .build());
     }
 
@@ -569,7 +577,7 @@ public class AcademicController {
     public ResponseEntity<ApiResponse<com.dypiu.nba.entity.CourseOffering>> getCourseOfferingById(@PathVariable String offeringId) {
         return ResponseEntity.ok(ApiResponse.<com.dypiu.nba.entity.CourseOffering>builder()
                 .success(true)
-                .data(academicService.getCourseOfferingsByBatch(null).stream().filter(o -> o.getId().equals(offeringId)).findFirst().orElse(null))
+                .data(academicService.getCourseOfferingById(offeringId))
                 .build());
     }
 

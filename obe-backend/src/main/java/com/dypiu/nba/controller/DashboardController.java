@@ -3,11 +3,15 @@ package com.dypiu.nba.controller;
 import com.dypiu.nba.dto.*;
 import com.dypiu.nba.entity.*;
 import com.dypiu.nba.repository.*;
+import com.dypiu.nba.security.CurrentUserScope;
+import com.dypiu.nba.security.CurrentUserScopeService;
 import com.dypiu.nba.service.AcademicService;
 import com.dypiu.nba.service.ReportAccessService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.security.Principal;
 import java.util.*;
@@ -20,6 +24,7 @@ public class DashboardController {
 
     private final AcademicService academicService;
     private final ReportAccessService reportAccessService;
+    private final CurrentUserScopeService currentUserScopeService;
     private final SchoolRepository schoolRepository;
     private final DepartmentRepository departmentRepository;
     private final ProgrammeRepository programmeRepository;
@@ -42,32 +47,45 @@ public class DashboardController {
             @RequestParam(required = false) String schoolId,
             @RequestParam(required = false) String directorEmail,
             Principal principal) {
-        User user = reportAccessService.getAuthenticatedUser(principal);
-        String targetEmail = directorEmail != null && !directorEmail.isBlank() ? directorEmail : (user != null ? user.getEmail() : null);
-        String sId = schoolId != null ? schoolId : (user != null ? user.getSchoolId() : null);
+        CurrentUserScope scope = currentUserScopeService.getCurrentUserScope(principal);
+        String targetSchoolId = null;
 
-        School school = null;
-        if (targetEmail != null && !targetEmail.isBlank()) {
-            school = schoolRepository.findByDirectorEmailIgnoreCase(targetEmail.trim()).orElse(null);
-        }
-        if (school == null && sId != null && !sId.isBlank()) {
-            school = schoolRepository.findById(sId).orElse(null);
-        }
-        if (school == null) {
-            school = schoolRepository.findAll().stream().findFirst().orElse(null);
+        if (scope.isDirector()) {
+            targetSchoolId = scope.getRequiredSchoolId();
+        } else if (scope.isAdmin() || scope.isIqac()) {
+            if (schoolId != null && !schoolId.isBlank()) {
+                targetSchoolId = schoolId.trim();
+            } else if (directorEmail != null && !directorEmail.isBlank()) {
+                targetSchoolId = schoolRepository.findByDirectorEmailIgnoreCase(directorEmail.trim())
+                        .map(School::getId).orElse(null);
+            }
+            if (targetSchoolId == null) {
+                targetSchoolId = scope.getSchoolId();
+            }
+        } else if (scope.getSchoolId() != null) {
+            targetSchoolId = scope.getSchoolId();
         }
 
-        String targetSchoolId = school != null ? school.getId() : (sId != null && !sId.isBlank() ? sId : null);
+        if (targetSchoolId == null || targetSchoolId.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "School scope cannot be determined for Director dashboard.");
+        }
 
-        List<Department> depts = targetSchoolId != null ? departmentRepository.findBySchoolId(targetSchoolId) : departmentRepository.findAll();
+        final String finalSchoolId = targetSchoolId;
+        School school = schoolRepository.findById(finalSchoolId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "School not found: " + finalSchoolId));
+
+        List<Department> depts = departmentRepository.findBySchoolId(finalSchoolId);
         List<String> deptIds = depts.stream().map(Department::getId).toList();
         List<Programme> progs = deptIds.isEmpty() ? Collections.emptyList() : programmeRepository.findByDepartmentIdIn(deptIds);
         List<String> progIds = progs.stream().map(Programme::getId).toList();
-        List<Batch> activeBatches = progIds.isEmpty() ? Collections.emptyList() : batchRepository.findAll().stream()
-                .filter(b -> progIds.contains(b.getProgrammeId()) && "ACTIVE".equalsIgnoreCase(b.getStatus()))
+        List<Batch> activeBatches = progIds.isEmpty() ? Collections.emptyList() : batchRepository.findByProgrammeIdIn(progIds).stream()
+                .filter(b -> "ACTIVE".equalsIgnoreCase(b.getStatus()))
                 .collect(Collectors.toList());
 
-        DirectorSetupProgressDto progress = academicService.getDirectorSetupProgress(targetSchoolId, targetEmail);
+        String targetEmail = school.getDirectorEmail() != null && !school.getDirectorEmail().isBlank()
+                ? school.getDirectorEmail()
+                : (scope.getEmail() != null ? scope.getEmail() : directorEmail);
+        DirectorSetupProgressDto progress = academicService.getDirectorSetupProgress(finalSchoolId, targetEmail);
 
         Map<String, Object> stats = new LinkedHashMap<>();
         stats.put("departments", depts.size());
@@ -97,48 +115,61 @@ public class DashboardController {
             @RequestParam(required = false) String departmentId,
             @RequestParam(required = false) String hodEmail,
             Principal principal) {
-        User user = reportAccessService.getAuthenticatedUser(principal);
-        String targetEmail = hodEmail != null && !hodEmail.isBlank() ? hodEmail : (user != null ? user.getEmail() : null);
-        String dId = departmentId != null ? departmentId : (user != null ? user.getDepartmentId() : null);
+        CurrentUserScope scope = currentUserScopeService.getCurrentUserScope(principal);
+        String targetDeptId = null;
+        String targetSchoolId = null;
 
-        List<Department> matchedDepts = new ArrayList<>();
-        if (dId != null && !dId.isBlank()) {
-            departmentRepository.findById(dId).ifPresent(matchedDepts::add);
-        }
-        if (matchedDepts.isEmpty() && targetEmail != null && !targetEmail.isBlank()) {
-            matchedDepts.addAll(departmentRepository.findByHodEmailIgnoreCase(targetEmail.trim()));
-        }
-        if (matchedDepts.isEmpty() && targetEmail != null && !targetEmail.isBlank()) {
-            User u = userRepository.findByEmail(targetEmail.trim()).orElse(null);
-            if (u != null && u.getDepartment() != null && !u.getDepartment().isBlank()) {
-                matchedDepts.addAll(departmentRepository.findByName(u.getDepartment().trim()));
+        if (scope.isHod()) {
+            targetSchoolId = scope.getRequiredSchoolId();
+            targetDeptId = scope.getRequiredDepartmentId();
+        } else if (scope.isAdmin() || scope.isIqac()) {
+            if (departmentId != null && !departmentId.isBlank()) {
+                targetDeptId = departmentId.trim();
+            } else if (hodEmail != null && !hodEmail.isBlank()) {
+                List<Department> depts = departmentRepository.findByHodEmailIgnoreCase(hodEmail.trim());
+                if (!depts.isEmpty()) targetDeptId = depts.get(0).getId();
+            }
+            if (targetDeptId == null) {
+                targetDeptId = scope.getDepartmentId();
+            }
+            targetSchoolId = scope.getSchoolId();
+        } else {
+            targetSchoolId = scope.getSchoolId();
+            targetDeptId = scope.getDepartmentId();
+            if (targetDeptId == null && departmentId != null && !departmentId.isBlank()) {
+                targetDeptId = departmentId.trim();
             }
         }
-        if (matchedDepts.isEmpty()) {
-            Department first = departmentRepository.findAll().stream().findFirst().orElse(null);
-            if (first != null) matchedDepts.add(first);
+
+        if (targetDeptId == null || targetDeptId.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Department scope cannot be determined for HOD dashboard.");
         }
 
-        Department primaryDept = !matchedDepts.isEmpty() ? matchedDepts.get(0) : null;
-        String targetDeptId = primaryDept != null ? primaryDept.getId() : (dId != null ? dId : "dept-1");
+        final String finalDeptId = targetDeptId;
+        Department primaryDept = departmentRepository.findById(finalDeptId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Department not found: " + finalDeptId));
 
-        List<String> targetDeptIds = matchedDepts.stream().map(Department::getId).distinct().toList();
-        List<Programme> progs = targetDeptIds.isEmpty() ? Collections.emptyList() : programmeRepository.findByDepartmentIdIn(targetDeptIds);
+        if (targetSchoolId != null && primaryDept.getSchoolId() != null && !primaryDept.getSchoolId().equals(targetSchoolId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Department does not belong to your school scope.");
+        }
+
+        List<Department> matchedDepts = List.of(primaryDept);
+        List<Programme> progs = programmeRepository.findByDepartmentId(finalDeptId);
         Set<String> progIds = progs.stream().map(Programme::getId).collect(Collectors.toSet());
-        List<Batch> activeBatches = progIds.isEmpty() ? Collections.emptyList() : batchRepository.findAll().stream()
-                .filter(b -> progIds.contains(b.getProgrammeId()) && "ACTIVE".equalsIgnoreCase(b.getStatus()))
+        List<Batch> activeBatches = progIds.isEmpty() ? Collections.emptyList() : batchRepository.findByProgrammeIdIn(progIds).stream()
+                .filter(b -> "ACTIVE".equalsIgnoreCase(b.getStatus()))
                 .collect(Collectors.toList());
         Set<String> batchIds = activeBatches.stream().map(Batch::getId).collect(Collectors.toSet());
         List<CourseOffering> offerings = batchIds.isEmpty() ? Collections.emptyList() : courseOfferingRepository.findByBatchIdIn(batchIds);
         List<Course> courses = progIds.isEmpty() ? Collections.emptyList() : courseRepository.findByProgrammeIdIn(new ArrayList<>(progIds));
 
-        long allocationsPending = approvalRequestRepository.findAll().stream()
+        long allocationsPending = progIds.isEmpty() ? 0 : approvalRequestRepository.findAll().stream()
                 .filter(a -> a.getType() == ApprovalType.COURSE_ALLOCATION && progIds.contains(a.getProgrammeId()) && a.getStatus() == ApprovalStatus.PENDING)
                 .count();
-        long targetsPending = approvalRequestRepository.findAll().stream()
+        long targetsPending = progIds.isEmpty() ? 0 : approvalRequestRepository.findAll().stream()
                 .filter(a -> a.getType() == ApprovalType.PO_PSO_TARGETS && progIds.contains(a.getProgrammeId()) && a.getStatus() == ApprovalStatus.PENDING)
                 .count();
-        long programmeAtrPending = programmeAtrRepository.findAll().stream()
+        long programmeAtrPending = progIds.isEmpty() ? 0 : programmeAtrRepository.findAll().stream()
                 .filter(p -> progIds.contains(p.getProgrammeId()) && p.getStatus() == ProgrammeAtrStatus.SUBMITTED_FOR_VERIFICATION)
                 .count();
         long pendingApprovalsCount = allocationsPending + targetsPending + programmeAtrPending;
@@ -148,7 +179,10 @@ public class DashboardController {
         pendingBreakdown.put("targetsPending", targetsPending);
         pendingBreakdown.put("programmeAtrPending", programmeAtrPending);
 
-        HodSetupProgressDto progress = academicService.getHodSetupProgress(targetDeptId, targetEmail);
+        String targetEmail = primaryDept.getHodEmail() != null && !primaryDept.getHodEmail().isBlank()
+                ? primaryDept.getHodEmail()
+                : (scope.getEmail() != null ? scope.getEmail() : hodEmail);
+        HodSetupProgressDto progress = academicService.getHodSetupProgress(finalDeptId, targetEmail);
 
         Map<String, Object> stats = new LinkedHashMap<>();
         stats.put("programmes", progs.size());
@@ -183,16 +217,71 @@ public class DashboardController {
     public ResponseEntity<ApiResponse<Map<String, Object>>> getProgrammeCoordinatorDashboard(
             @RequestParam(required = false) String programmeId,
             Principal principal) {
-        User user = reportAccessService.getAuthenticatedUser(principal);
-        String pId = programmeId != null ? programmeId : (user != null ? user.getProgrammeId() : null);
+        CurrentUserScope scope = currentUserScopeService.getCurrentUserScope(principal);
+        String targetProgId = null;
 
-        Programme prog = pId != null ? programmeRepository.findById(pId).orElse(null) : programmeRepository.findAll().stream().findFirst().orElse(null);
-        String targetProgId = prog != null ? prog.getId() : "prog-1";
+        if (scope.isProgrammeCoordinator()) {
+            if (programmeId != null && !programmeId.isBlank()) {
+                if (!programmeId.trim().equals(scope.getRequiredProgrammeId())) {
+                    throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Programme is outside your assigned scope.");
+                }
+            }
+            targetProgId = scope.getRequiredProgrammeId();
+        } else if (scope.isAdmin() || scope.isIqac()) {
+            if (programmeId != null && !programmeId.isBlank()) {
+                targetProgId = programmeId.trim();
+            } else if (scope.getProgrammeId() != null) {
+                targetProgId = scope.getProgrammeId();
+            }
+        } else if (scope.isHod()) {
+            if (programmeId != null && !programmeId.isBlank()) {
+                targetProgId = programmeId.trim();
+            }
+        } else if (scope.isDirector()) {
+            if (programmeId != null && !programmeId.isBlank()) {
+                targetProgId = programmeId.trim();
+            }
+        } else if (scope.getProgrammeId() != null) {
+            targetProgId = scope.getProgrammeId();
+        } else if (programmeId != null && !programmeId.isBlank()) {
+            targetProgId = programmeId.trim();
+        }
 
-        List<Batch> batches = batchRepository.findByProgrammeId(targetProgId);
+        if (targetProgId == null || targetProgId.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Programme scope cannot be determined for Programme Coordinator dashboard.");
+        }
+
+        final String finalProgId = targetProgId;
+        Programme prog = programmeRepository.findById(finalProgId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Programme not found: " + finalProgId));
+
+        if (scope.isProgrammeCoordinator()) {
+            if (scope.hasDepartmentScope() && prog.getDepartmentId() != null && !prog.getDepartmentId().equals(scope.getRequiredDepartmentId())) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Programme does not belong to your assigned department.");
+            }
+            if (scope.hasSchoolScope() && prog.getDepartmentId() != null) {
+                Department dept = departmentRepository.findById(prog.getDepartmentId()).orElse(null);
+                if (dept != null && dept.getSchoolId() != null && !dept.getSchoolId().equals(scope.getRequiredSchoolId())) {
+                    throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Programme does not belong to your assigned school.");
+                }
+            }
+        } else if (scope.isHod()) {
+            if (prog.getDepartmentId() != null && !prog.getDepartmentId().equals(scope.getRequiredDepartmentId())) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Programme does not belong to your assigned department.");
+            }
+        } else if (scope.isDirector()) {
+            if (prog.getDepartmentId() != null) {
+                Department dept = departmentRepository.findById(prog.getDepartmentId()).orElse(null);
+                if (dept != null && dept.getSchoolId() != null && !dept.getSchoolId().equals(scope.getRequiredSchoolId())) {
+                    throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Programme does not belong to your assigned school.");
+                }
+            }
+        }
+
+        List<Batch> batches = batchRepository.findByProgrammeId(finalProgId);
         Set<String> batchIds = batches.stream().map(Batch::getId).collect(Collectors.toSet());
         List<CourseOffering> offerings = batchIds.isEmpty() ? Collections.emptyList() : courseOfferingRepository.findByBatchIdIn(batchIds);
-        List<Course> courses = courseRepository.findByProgrammeId(targetProgId);
+        List<Course> courses = courseRepository.findByProgrammeId(finalProgId);
 
         List<String> offeringIds = offerings.stream().map(CourseOffering::getId).collect(Collectors.toList());
         long configPending = offeringIds.isEmpty() ? 0 : configRepository.findAll().stream()
@@ -211,7 +300,10 @@ public class DashboardController {
         pendingBreakdown.put("coTargetsPending", coTargetsPending);
         pendingBreakdown.put("courseAtrPending", courseAtrPending);
 
-        ProgrammeCoordinatorSetupProgressDto progress = academicService.getProgrammeCoordinatorSetupProgress(user != null ? user.getEmail() : null, targetProgId);
+        String targetEmail = prog.getCoordinatorEmail() != null && !prog.getCoordinatorEmail().isBlank()
+                ? prog.getCoordinatorEmail()
+                : (scope.getEmail() != null ? scope.getEmail() : null);
+        ProgrammeCoordinatorSetupProgressDto progress = academicService.getProgrammeCoordinatorSetupProgress(targetEmail, finalProgId);
 
         Map<String, Object> stats = new LinkedHashMap<>();
         stats.put("courses", courses.size());
@@ -230,6 +322,7 @@ public class DashboardController {
         workflowProgress.put("4", progress != null && progress.getOverallStatus() == SetupStepStatus.COMPLETED);
 
         Map<String, Object> data = new LinkedHashMap<>();
+        data.put("programmeId", prog.getId());
         data.put("programme", prog);
         data.put("setupProgress", progress);
         data.put("batches", batches);

@@ -50,6 +50,7 @@ com/dypiu/nba/entity/ApprovalHistory$ApprovalHistoryBuilder.class
 com/dypiu/nba/service/AttainmentReportExportService$PdfPageNumberHelper.class
 com/dypiu/nba/entity/Course$CourseBuilder.class
 com/dypiu/nba/entity/CourseOffering.class
+com/dypiu/nba/security/CurrentUserScope.class
 com/dypiu/nba/entity/DirectorSetupProgress$DirectorSetupProgressBuilder.class
 com/dypiu/nba/controller/UserController$ResolvedScope.class
 com/dypiu/nba/entity/User$UserBuilder.class
@@ -226,6 +227,7 @@ com/dypiu/nba/entity/ProgrammeAtrStatus.class
 com/dypiu/nba/service/AttainmentReportExportService.class
 com/dypiu/nba/controller/UserController.class
 com/dypiu/nba/dto/ProgrammeAttainmentResultDto$DirectAttainmentBreakdown$DirectAttainmentBreakdownBuilder.class
+com/dypiu/nba/security/CurrentUserScope$CurrentUserScopeBuilder.class
 com/dypiu/nba/repository/ProgrammeSpecificOutcomeRepository.class
 com/dypiu/nba/entity/HodSetupProgress.class
 com/dypiu/nba/entity/StudentCoMark$StudentCoMarkBuilder.class
@@ -237,6 +239,7 @@ com/dypiu/nba/entity/CoPsoMapping.class
 com/dypiu/nba/entity/Batch.class
 com/dypiu/nba/dto/CourseCoordinatorSetupProgressDto.class
 com/dypiu/nba/entity/CourseOutcome$CourseOutcomeBuilder.class
+com/dypiu/nba/security/CurrentUserScopeService.class
 com/dypiu/nba/repository/CourseOutcomeRepository.class
 com/dypiu/nba/controller/DashboardController.class
 com/dypiu/nba/dto/ExaminationAttainmentResultDto.class

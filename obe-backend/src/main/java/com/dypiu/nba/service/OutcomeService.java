@@ -4,11 +4,16 @@ import com.dypiu.nba.entity.*;
 import com.dypiu.nba.repository.*;
 import com.dypiu.nba.dto.ProgrammeTargetDto;
 import com.dypiu.nba.dto.CourseMappingMatrixDto;
+import com.dypiu.nba.exception.ResourceNotFoundException;
+import com.dypiu.nba.security.CurrentUserScope;
+import com.dypiu.nba.security.CurrentUserScopeService;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 import java.math.BigDecimal;
 import java.time.ZonedDateTime;
 import java.util.*;
@@ -32,6 +37,9 @@ public class OutcomeService {
     private final CoPsoMappingRepository coPsoMappingRepository;
     private final CourseMappingKeywordRepository courseMappingKeywordRepository;
     private final BatchRepository batchRepository;
+    private final DepartmentRepository departmentRepository;
+    private final SchoolRepository schoolRepository;
+    private final CurrentUserScopeService currentUserScopeService;
     private final ObjectMapper objectMapper;
 
     private static final Comparator<String> NATURAL_CODE_COMPARATOR = (c1, c2) -> {
@@ -52,10 +60,113 @@ public class OutcomeService {
     private final Map<String, Map<String, Object>> coursePoKeywordsMap = new java.util.concurrent.ConcurrentHashMap<>();
     private final Map<String, Map<String, Object>> coursePsoKeywordsMap = new java.util.concurrent.ConcurrentHashMap<>();
 
+    private CurrentUserScope getScope() {
+        try {
+            return currentUserScopeService.getCurrentUserScope();
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private void enforceSchoolScope(String schoolId) {
+        CurrentUserScope scope = getScope();
+        if (scope == null || scope.isAdmin() || scope.isIqac()) return;
+        if (scope.isDirector() || scope.isHod() || scope.isProgrammeCoordinator()) {
+            String requiredSchoolId = scope.getRequiredSchoolId();
+            if (schoolId != null && !schoolId.equals(requiredSchoolId)) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Resource is outside your assigned school scope.");
+            }
+        }
+    }
+
+    private void enforceDepartmentScope(String departmentId) {
+        CurrentUserScope scope = getScope();
+        if (scope == null || scope.isAdmin() || scope.isIqac()) return;
+        if (scope.isHod() || scope.isProgrammeCoordinator()) {
+            String requiredDeptId = scope.getRequiredDepartmentId();
+            if (departmentId != null && !departmentId.equals(requiredDeptId)) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Resource is outside your assigned department scope.");
+            }
+        }
+        if (scope.isDirector()) {
+            if (departmentId != null) {
+                Department dept = departmentRepository.findById(departmentId).orElse(null);
+                if (dept != null && dept.getSchoolId() != null && !dept.getSchoolId().equals(scope.getRequiredSchoolId())) {
+                    throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Department is outside your assigned school scope.");
+                }
+            }
+        }
+    }
+
+    private void enforceProgrammeScope(String programmeId) {
+        CurrentUserScope scope = getScope();
+        if (scope == null || scope.isAdmin() || scope.isIqac()) return;
+        if (programmeId == null || programmeId.isBlank()) return;
+
+        if (scope.isProgrammeCoordinator()) {
+            String requiredProgId = scope.getRequiredProgrammeId();
+            if (!programmeId.equals(requiredProgId)) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Resource is outside your assigned programme scope.");
+            }
+        }
+
+        Programme prog = programmeRepository.findById(programmeId)
+                .orElseThrow(() -> new ResourceNotFoundException("Programme not found: " + programmeId));
+        if (prog.getDepartmentId() != null) {
+            enforceDepartmentScope(prog.getDepartmentId());
+            Department dept = departmentRepository.findById(prog.getDepartmentId()).orElse(null);
+            if (dept != null && dept.getSchoolId() != null) {
+                enforceSchoolScope(dept.getSchoolId());
+            }
+        }
+    }
+
+    private void enforceBatchScope(String batchId) {
+        CurrentUserScope scope = getScope();
+        if (scope == null || scope.isAdmin() || scope.isIqac()) return;
+        if (batchId == null || batchId.isBlank()) return;
+        Batch batch = batchRepository.findById(batchId)
+                .orElseThrow(() -> new ResourceNotFoundException("Batch not found: " + batchId));
+        enforceProgrammeScope(batch.getProgrammeId());
+    }
+
+    private void enforceCourseScope(String courseId) {
+        CurrentUserScope scope = getScope();
+        if (scope == null || scope.isAdmin() || scope.isIqac()) return;
+        if (courseId == null || courseId.isBlank()) return;
+        Course course = courseRepository.findById(courseId)
+                .orElseThrow(() -> new ResourceNotFoundException("Course not found: " + courseId));
+        enforceProgrammeScope(course.getProgrammeId());
+    }
+
+    private void enforceOfferingScope(String offeringId) {
+        CurrentUserScope scope = getScope();
+        if (scope == null || scope.isAdmin() || scope.isIqac()) return;
+        if (offeringId == null || offeringId.isBlank()) return;
+        CourseOffering offering = courseOfferingRepository.findById(offeringId)
+                .orElseThrow(() -> new ResourceNotFoundException("Course offering not found: " + offeringId));
+        if (offering.getBatchId() != null) enforceBatchScope(offering.getBatchId());
+        if (offering.getCourseId() != null) enforceCourseScope(offering.getCourseId());
+    }
+
+    private void enforceCourseOrOfferingScope(String courseIdOrOfferingId) {
+        CurrentUserScope scope = getScope();
+        if (scope == null || scope.isAdmin() || scope.isIqac()) return;
+        if (courseIdOrOfferingId == null || courseIdOrOfferingId.isBlank()) return;
+        if (courseRepository.existsById(courseIdOrOfferingId)) {
+            enforceCourseScope(courseIdOrOfferingId);
+        } else if (courseOfferingRepository.existsById(courseIdOrOfferingId)) {
+            enforceOfferingScope(courseIdOrOfferingId);
+        }
+    }
+
     @Transactional
     public List<ProgrammeOutcome> getPOsByProgramme(String programmeId) {
         System.out.println("================================================================================");
         System.out.println("[OutcomeService] >>> getPOsByProgramme called | programmeId: " + programmeId);
+        if (programmeId != null && !programmeId.isBlank()) {
+            enforceProgrammeScope(programmeId);
+        }
         if (programmeId == null || programmeId.isBlank() || !programmeRepository.existsById(programmeId)) {
             System.out.println("[OutcomeService] Programme not found in DB: " + programmeId + ". Returning empty list.");
             return Collections.emptyList();
@@ -139,6 +250,9 @@ public class OutcomeService {
     @Transactional
     public List<ProgrammeOutcome> savePOs(String programmeId, List<ProgrammeOutcome> pos) {
         System.out.println("[OutcomeService] savePOs called | programmeId: " + programmeId + " | count: " + (pos != null ? pos.size() : 0));
+        if (programmeId != null && !programmeId.isBlank()) {
+            enforceProgrammeScope(programmeId);
+        }
         if (programmeId == null || programmeId.isBlank() || !programmeRepository.existsById(programmeId)) {
             throw new com.dypiu.nba.exception.ResourceNotFoundException("Programme not found: " + programmeId);
         }
@@ -197,6 +311,7 @@ public class OutcomeService {
         // Sync competencies for each saved PO
         for (ProgrammeOutcome po : saved) {
             poCompetencyRepository.deleteByPoId(po.getId());
+            poCompetencyRepository.flush();
             List<PoCompetency> rawComps = competenciesMap.get(po.getId());
             List<PoCompetency> compsToSave = new ArrayList<>();
             if (rawComps != null) {
@@ -223,6 +338,7 @@ public class OutcomeService {
             if (!compsToSave.isEmpty()) {
                 compsToSave.sort(Comparator.comparing(PoCompetency::getCode, NATURAL_CODE_COMPARATOR));
                 poCompetencyRepository.saveAll(compsToSave);
+                poCompetencyRepository.flush();
             }
             po.setCompetencies(compsToSave);
         }
@@ -236,6 +352,9 @@ public class OutcomeService {
     public List<ProgrammeSpecificOutcome> getPSOsByProgramme(String programmeId) {
         System.out.println("================================================================================");
         System.out.println("[OutcomeService] >>> getPSOsByProgramme called | programmeId: " + programmeId);
+        if (programmeId != null && !programmeId.isBlank()) {
+            enforceProgrammeScope(programmeId);
+        }
         if (programmeId == null || programmeId.isBlank() || !programmeRepository.existsById(programmeId)) {
             System.out.println("[OutcomeService] Programme not found in DB: " + programmeId + ". Returning empty list.");
             return Collections.emptyList();
@@ -310,6 +429,9 @@ public class OutcomeService {
     @Transactional
     public List<ProgrammeSpecificOutcome> savePSOs(String programmeId, List<ProgrammeSpecificOutcome> psos) {
         System.out.println("[OutcomeService] savePSOs called | programmeId: " + programmeId + " | count: " + (psos != null ? psos.size() : 0));
+        if (programmeId != null && !programmeId.isBlank()) {
+            enforceProgrammeScope(programmeId);
+        }
         if (programmeId == null || programmeId.isBlank() || !programmeRepository.existsById(programmeId)) {
             throw new com.dypiu.nba.exception.ResourceNotFoundException("Programme not found: " + programmeId);
         }
@@ -368,6 +490,7 @@ public class OutcomeService {
         // Sync competencies for each saved PSO
         for (ProgrammeSpecificOutcome pso : saved) {
             psoCompetencyRepository.deleteByPsoId(pso.getId());
+            psoCompetencyRepository.flush();
             List<PsoCompetency> rawComps = competenciesMap.get(pso.getId());
             List<PsoCompetency> compsToSave = new ArrayList<>();
             if (rawComps != null) {
@@ -394,6 +517,7 @@ public class OutcomeService {
             if (!compsToSave.isEmpty()) {
                 compsToSave.sort(Comparator.comparing(PsoCompetency::getCode, NATURAL_CODE_COMPARATOR));
                 psoCompetencyRepository.saveAll(compsToSave);
+                psoCompetencyRepository.flush();
             }
             pso.setCompetencies(compsToSave);
         }
@@ -406,6 +530,9 @@ public class OutcomeService {
     @Transactional(readOnly = true)
     public List<PeoOutcome> getPEOsByProgramme(String programmeId) {
         System.out.println("[OutcomeService] getPEOsByProgramme called | programmeId: " + programmeId);
+        if (programmeId != null && !programmeId.isBlank()) {
+            enforceProgrammeScope(programmeId);
+        }
         if (programmeId == null || programmeId.isBlank() || !programmeRepository.existsById(programmeId)) {
             System.out.println("[OutcomeService] Programme not found in DB: " + programmeId + ". Returning empty list.");
             return Collections.emptyList();
@@ -419,6 +546,9 @@ public class OutcomeService {
     @Transactional
     public List<PeoOutcome> savePEOs(String programmeId, List<PeoOutcome> peos) {
         System.out.println("[OutcomeService] savePEOs called | programmeId: " + programmeId + " | count: " + (peos != null ? peos.size() : 0));
+        if (programmeId != null && !programmeId.isBlank()) {
+            enforceProgrammeScope(programmeId);
+        }
         if (programmeId == null || programmeId.isBlank() || !programmeRepository.existsById(programmeId)) {
             throw new com.dypiu.nba.exception.ResourceNotFoundException("Programme not found: " + programmeId);
         }
@@ -487,6 +617,9 @@ public class OutcomeService {
     @Transactional(readOnly = true)
     public List<CourseOutcome> getCOsByCourse(String courseIdOrOfferingId) {
         System.out.println("[OutcomeService] getCOsByCourse called | courseIdOrOfferingId: " + courseIdOrOfferingId);
+        if (courseIdOrOfferingId != null && !courseIdOrOfferingId.isBlank()) {
+            enforceCourseOrOfferingScope(courseIdOrOfferingId);
+        }
         String targetOfferingId = resolveOfferingId(courseIdOrOfferingId);
         List<CourseOutcome> list = coRepository.findByCourseOfferingId(targetOfferingId);
         list.sort(Comparator.comparing(CourseOutcome::getCode, NATURAL_CODE_COMPARATOR));
@@ -496,6 +629,9 @@ public class OutcomeService {
     @Transactional
     public List<CourseOutcome> saveCOs(String courseIdOrOfferingId, List<CourseOutcome> cos) {
         System.out.println("[OutcomeService] saveCOs called | courseIdOrOfferingId: " + courseIdOrOfferingId + " | count: " + (cos != null ? cos.size() : 0));
+        if (courseIdOrOfferingId != null && !courseIdOrOfferingId.isBlank()) {
+            enforceCourseOrOfferingScope(courseIdOrOfferingId);
+        }
         String targetOfferingId = resolveOfferingId(courseIdOrOfferingId);
         List<CourseOutcome> existing = coRepository.findByCourseOfferingId(targetOfferingId);
         Map<String, CourseOutcome> existingByCode = existing.stream()
@@ -551,6 +687,9 @@ public class OutcomeService {
     @Transactional(readOnly = true)
     public ProgrammeTargetDto getProgrammeTargets(String programmeId) {
         System.out.println("[OutcomeService] getProgrammeTargets called | programmeId: " + programmeId);
+        if (programmeId != null && !programmeId.isBlank()) {
+            enforceProgrammeScope(programmeId);
+        }
         if (programmeId == null || programmeId.isBlank() || !programmeRepository.existsById(programmeId)) {
             System.out.println("[OutcomeService] Programme not found in DB: " + programmeId + ". Returning empty targets.");
             return ProgrammeTargetDto.builder()
@@ -586,6 +725,9 @@ public class OutcomeService {
     @Transactional(readOnly = true)
     public ProgrammeTargetDto getBatchProgrammeTargets(String batchId) {
         System.out.println("[OutcomeService] getBatchProgrammeTargets called | batchId: " + batchId);
+        if (batchId != null && !batchId.isBlank()) {
+            enforceBatchScope(batchId);
+        }
         Batch batch = batchRepository.findById(batchId).orElse(null);
         String progId = batch != null ? batch.getProgrammeId() : null;
         List<ProgrammeTarget> list = targetRepository.findByBatchId(batchId);
@@ -614,6 +756,12 @@ public class OutcomeService {
     @Transactional
     public ProgrammeTargetDto saveProgrammeTargets(String programmeId, ProgrammeTargetDto dto) {
         System.out.println("[OutcomeService] saveProgrammeTargets called | programmeId: " + programmeId);
+        if (programmeId != null && !programmeId.isBlank()) {
+            enforceProgrammeScope(programmeId);
+        }
+        if (dto != null && dto.getBatchId() != null && !dto.getBatchId().isBlank()) {
+            enforceBatchScope(dto.getBatchId());
+        }
         if (programmeId == null || programmeId.isBlank() || !programmeRepository.existsById(programmeId)) {
             throw new com.dypiu.nba.exception.ResourceNotFoundException("Programme not found: " + programmeId);
         }
@@ -653,6 +801,9 @@ public class OutcomeService {
     @Transactional
     public CourseMappingMatrixDto getCourseMappings(String courseIdOrOfferingId) {
         System.out.println("[OutcomeService] getCourseMappings called | courseIdOrOfferingId: " + courseIdOrOfferingId);
+        if (courseIdOrOfferingId != null && !courseIdOrOfferingId.isBlank()) {
+            enforceCourseOrOfferingScope(courseIdOrOfferingId);
+        }
         String targetOfferingId = resolveOfferingId(courseIdOrOfferingId);
         CourseOffering offering = courseOfferingRepository.findById(targetOfferingId).orElse(null);
         String courseId = offering != null ? offering.getCourseId() : targetOfferingId;
@@ -752,6 +903,9 @@ public class OutcomeService {
     @Transactional
     public CourseMappingMatrixDto saveCourseMappings(String courseIdOrOfferingId, CourseMappingMatrixDto dto) {
         System.out.println("[OutcomeService] saveCourseMappings called | courseIdOrOfferingId: " + courseIdOrOfferingId);
+        if (courseIdOrOfferingId != null && !courseIdOrOfferingId.isBlank()) {
+            enforceCourseOrOfferingScope(courseIdOrOfferingId);
+        }
         String targetOfferingId = resolveOfferingId(courseIdOrOfferingId);
         CourseOffering offering = courseOfferingRepository.findById(targetOfferingId).orElse(null);
         String courseId = offering != null ? offering.getCourseId() : targetOfferingId;
@@ -857,6 +1011,9 @@ public class OutcomeService {
     @Transactional(readOnly = true)
     public List<CourseOutcome> getOutcomesByOffering(String offeringId) {
         System.out.println("[OutcomeService] getOutcomesByOffering called | offeringId: " + offeringId);
+        if (offeringId != null && !offeringId.isBlank()) {
+            enforceOfferingScope(offeringId);
+        }
         CourseOffering offering = courseOfferingRepository.findById(offeringId)
                 .orElseThrow(() -> new com.dypiu.nba.exception.ResourceNotFoundException("Course Offering not found: " + offeringId));
         return getCOsByCourse(offering.getId());
@@ -866,6 +1023,9 @@ public class OutcomeService {
     @Transactional
     public List<CourseOutcome> saveOutcomesByOffering(String offeringId, List<CourseOutcome> cos) {
         System.out.println("[OutcomeService] saveOutcomesByOffering called | offeringId: " + offeringId);
+        if (offeringId != null && !offeringId.isBlank()) {
+            enforceOfferingScope(offeringId);
+        }
         CourseOffering offering = courseOfferingRepository.findById(offeringId)
                 .orElseThrow(() -> new com.dypiu.nba.exception.ResourceNotFoundException("Course Offering not found: " + offeringId));
         return saveCOs(offering.getCourseId(), cos);
@@ -874,6 +1034,9 @@ public class OutcomeService {
     @Transactional
     public CourseMappingMatrixDto getMappingsByOffering(String offeringId) {
         System.out.println("[OutcomeService] getMappingsByOffering called | offeringId: " + offeringId);
+        if (offeringId != null && !offeringId.isBlank()) {
+            enforceOfferingScope(offeringId);
+        }
         CourseOffering offering = courseOfferingRepository.findById(offeringId)
                 .orElseThrow(() -> new com.dypiu.nba.exception.ResourceNotFoundException("Course Offering not found: " + offeringId));
         return getCourseMappings(offering.getCourseId());
@@ -882,6 +1045,9 @@ public class OutcomeService {
     @Transactional
     public CourseMappingMatrixDto saveMappingsByOffering(String offeringId, CourseMappingMatrixDto dto) {
         System.out.println("[OutcomeService] saveMappingsByOffering called | offeringId: " + offeringId);
+        if (offeringId != null && !offeringId.isBlank()) {
+            enforceOfferingScope(offeringId);
+        }
         CourseOffering offering = courseOfferingRepository.findById(offeringId)
                 .orElseThrow(() -> new com.dypiu.nba.exception.ResourceNotFoundException("Course Offering not found: " + offeringId));
         return saveCourseMappings(offering.getCourseId(), dto);

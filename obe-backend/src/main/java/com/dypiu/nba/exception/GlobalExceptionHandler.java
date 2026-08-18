@@ -49,6 +49,13 @@ public class GlobalExceptionHandler {
                         .build());
     }
 
+    @ExceptionHandler(org.springframework.web.server.ResponseStatusException.class)
+    public ResponseEntity<ApiResponse<Object>> handleResponseStatusException(org.springframework.web.server.ResponseStatusException ex) {
+        String msg = ex.getReason() != null ? ex.getReason() : ex.getMessage();
+        return ResponseEntity.status(ex.getStatusCode())
+                .body(ApiResponse.builder().success(false).message(msg).build());
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Object>> handleGenericException(Exception ex) {
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)

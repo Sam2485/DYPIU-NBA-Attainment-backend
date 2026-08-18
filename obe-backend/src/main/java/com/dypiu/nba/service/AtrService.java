@@ -4,11 +4,15 @@ import com.dypiu.nba.dto.*;
 import com.dypiu.nba.entity.*;
 import com.dypiu.nba.exception.ResourceNotFoundException;
 import com.dypiu.nba.repository.*;
+import com.dypiu.nba.security.CurrentUserScope;
+import com.dypiu.nba.security.CurrentUserScopeService;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -31,13 +35,119 @@ public class AtrService {
     private final ProgrammeSpecificOutcomeRepository programmeSpecificOutcomeRepository;
     private final ProgrammeTargetRepository programmeTargetRepository;
     private final AttainmentCalculationService attainmentCalculationService;
+    private final DepartmentRepository departmentRepository;
+    private final SchoolRepository schoolRepository;
+    private final CurrentUserScopeService currentUserScopeService;
     private final ObjectMapper objectMapper;
+
+    private CurrentUserScope getScope() {
+        try {
+            return currentUserScopeService.getCurrentUserScope();
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private void enforceSchoolScope(String schoolId) {
+        CurrentUserScope scope = getScope();
+        if (scope == null || scope.isAdmin() || scope.isIqac()) return;
+        if (scope.isDirector() || scope.isHod() || scope.isProgrammeCoordinator()) {
+            String requiredSchoolId = scope.getRequiredSchoolId();
+            if (schoolId != null && !schoolId.equals(requiredSchoolId)) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Resource is outside your assigned school scope.");
+            }
+        }
+    }
+
+    private void enforceDepartmentScope(String departmentId) {
+        CurrentUserScope scope = getScope();
+        if (scope == null || scope.isAdmin() || scope.isIqac()) return;
+        if (scope.isHod() || scope.isProgrammeCoordinator()) {
+            String requiredDeptId = scope.getRequiredDepartmentId();
+            if (departmentId != null && !departmentId.equals(requiredDeptId)) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Resource is outside your assigned department scope.");
+            }
+        }
+        if (scope.isDirector()) {
+            if (departmentId != null) {
+                Department dept = departmentRepository.findById(departmentId).orElse(null);
+                if (dept != null && dept.getSchoolId() != null && !dept.getSchoolId().equals(scope.getRequiredSchoolId())) {
+                    throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Department is outside your assigned school scope.");
+                }
+            }
+        }
+    }
+
+    private void enforceProgrammeScope(String programmeId) {
+        CurrentUserScope scope = getScope();
+        if (scope == null || scope.isAdmin() || scope.isIqac()) return;
+        if (programmeId == null || programmeId.isBlank()) return;
+
+        if (scope.isProgrammeCoordinator()) {
+            String requiredProgId = scope.getRequiredProgrammeId();
+            if (!programmeId.equals(requiredProgId)) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Resource is outside your assigned programme scope.");
+            }
+        }
+
+        Programme prog = programmeRepository.findById(programmeId)
+                .orElseThrow(() -> new ResourceNotFoundException("Programme not found: " + programmeId));
+        if (prog.getDepartmentId() != null) {
+            enforceDepartmentScope(prog.getDepartmentId());
+            Department dept = departmentRepository.findById(prog.getDepartmentId()).orElse(null);
+            if (dept != null && dept.getSchoolId() != null) {
+                enforceSchoolScope(dept.getSchoolId());
+            }
+        }
+    }
+
+    private void enforceBatchScope(String batchId) {
+        CurrentUserScope scope = getScope();
+        if (scope == null || scope.isAdmin() || scope.isIqac()) return;
+        if (batchId == null || batchId.isBlank()) return;
+        Batch batch = batchRepository.findById(batchId)
+                .orElseThrow(() -> new ResourceNotFoundException("Batch not found: " + batchId));
+        enforceProgrammeScope(batch.getProgrammeId());
+    }
+
+    private void enforceCourseScope(String courseId) {
+        CurrentUserScope scope = getScope();
+        if (scope == null || scope.isAdmin() || scope.isIqac()) return;
+        if (courseId == null || courseId.isBlank()) return;
+        Course course = courseRepository.findById(courseId)
+                .orElseThrow(() -> new ResourceNotFoundException("Course not found: " + courseId));
+        enforceProgrammeScope(course.getProgrammeId());
+    }
+
+    private void enforceOfferingScope(String offeringId) {
+        CurrentUserScope scope = getScope();
+        if (scope == null || scope.isAdmin() || scope.isIqac()) return;
+        if (offeringId == null || offeringId.isBlank()) return;
+        CourseOffering offering = courseOfferingRepository.findById(offeringId)
+                .orElseThrow(() -> new ResourceNotFoundException("Course offering not found: " + offeringId));
+        if (offering.getBatchId() != null) enforceBatchScope(offering.getBatchId());
+        if (offering.getCourseId() != null) enforceCourseScope(offering.getCourseId());
+    }
+
+    private void enforceCourseOrOfferingScope(String courseOfferingOrCourseId) {
+        CurrentUserScope scope = getScope();
+        if (scope == null || scope.isAdmin() || scope.isIqac()) return;
+        if (courseOfferingOrCourseId == null || courseOfferingOrCourseId.isBlank()) return;
+        if (courseOfferingRepository.existsById(courseOfferingOrCourseId)) {
+            enforceOfferingScope(courseOfferingOrCourseId);
+        } else if (courseRepository.existsById(courseOfferingOrCourseId)) {
+            enforceCourseScope(courseOfferingOrCourseId);
+        }
+    }
 
     // --- Legacy and Direct Offering Support ---
 
     @Transactional(readOnly = true)
     public List<CourseAtr> getCourseAtrs(String courseOfferingOrCourseId) {
         System.out.println("[AtrService] getCourseAtrs called | courseOfferingOrCourseId: " + courseOfferingOrCourseId);
+        if (courseOfferingOrCourseId != null && !courseOfferingOrCourseId.isBlank()) {
+            enforceCourseOrOfferingScope(courseOfferingOrCourseId);
+        }
         List<CourseAtr> list = courseAtrRepository.findByCourseOfferingId(courseOfferingOrCourseId);
         if (!list.isEmpty()) return list;
 
@@ -52,6 +162,9 @@ public class AtrService {
     @Transactional
     public List<CourseAtr> saveCourseAtrs(String courseOfferingId, List<CourseAtr> atrs) {
         System.out.println("[AtrService] saveCourseAtrs called | courseOfferingId: " + courseOfferingId + " | count: " + (atrs != null ? atrs.size() : 0));
+        if (courseOfferingId != null && !courseOfferingId.isBlank()) {
+            enforceCourseOrOfferingScope(courseOfferingId);
+        }
         atrs.forEach(a -> {
             a.setCourseOfferingId(courseOfferingId);
             if (a.getId() == null || a.getId().isBlank()) {
@@ -67,13 +180,20 @@ public class AtrService {
     @Transactional(readOnly = true)
     public Optional<ProgrammeAtr> getProgrammeAtr(String programmeId) {
         System.out.println("[AtrService] getProgrammeAtr called | programmeId: " + programmeId);
+        if (programmeId != null && !programmeId.isBlank()) {
+            enforceProgrammeScope(programmeId);
+        }
         return programmeAtrRepository.findByProgrammeId(programmeId);
     }
 
     @Transactional(readOnly = true)
     public Optional<ProgrammeAtr> getProgrammeAtrByBatch(String programmeId, String batchId) {
         System.out.println("[AtrService] getProgrammeAtrByBatch called | programmeId: " + programmeId + " | batchId: " + batchId);
+        if (programmeId != null && !programmeId.isBlank()) {
+            enforceProgrammeScope(programmeId);
+        }
         if (batchId != null && !batchId.isBlank()) {
+            enforceBatchScope(batchId);
             return programmeAtrRepository.findByProgrammeIdAndBatchId(programmeId, batchId);
         }
         return programmeAtrRepository.findByProgrammeId(programmeId);
@@ -83,6 +203,7 @@ public class AtrService {
     public Optional<ProgrammeAtr> getPreviousBatchProgrammeAtr(String batchId) {
         System.out.println("[AtrService] getPreviousBatchProgrammeAtr called | batchId: " + batchId);
         if (batchId == null || batchId.isBlank()) return Optional.empty();
+        enforceBatchScope(batchId);
         Batch currentBatch = batchRepository.findById(batchId).orElse(null);
         if (currentBatch == null || currentBatch.getPreviousBatchId() == null) return Optional.empty();
         return programmeAtrRepository.findByProgrammeIdAndBatchId(currentBatch.getProgrammeId(), currentBatch.getPreviousBatchId());
@@ -91,6 +212,12 @@ public class AtrService {
     @Transactional
     public ProgrammeAtr saveProgrammeAtr(ProgrammeAtr atr) {
         System.out.println("[AtrService] saveProgrammeAtr called | id: " + (atr != null ? atr.getId() : "null") + " | programmeId: " + (atr != null ? atr.getProgrammeId() : "null"));
+        if (atr != null && atr.getProgrammeId() != null) {
+            enforceProgrammeScope(atr.getProgrammeId());
+        }
+        if (atr != null && atr.getBatchId() != null) {
+            enforceBatchScope(atr.getBatchId());
+        }
         if (atr.getId() == null || atr.getId().isBlank()) {
             atr.setId("patr-" + UUID.randomUUID().toString().substring(0, 8));
         }
@@ -107,6 +234,9 @@ public class AtrService {
     @Transactional(readOnly = true)
     public CourseAtrReportDto getCourseAtrReport(String courseOfferingId) {
         System.out.println("[AtrService] getCourseAtrReport called | courseOfferingId: " + courseOfferingId);
+        if (courseOfferingId != null && !courseOfferingId.isBlank()) {
+            enforceOfferingScope(courseOfferingId);
+        }
         CourseOffering offering = courseOfferingRepository.findById(courseOfferingId)
                 .orElseThrow(() -> new ResourceNotFoundException("Course Offering not found: " + courseOfferingId));
 
@@ -193,6 +323,7 @@ public class AtrService {
             throw new IllegalArgumentException("Invalid Course ATR payload: CourseOffering is required.");
         }
         String offeringId = dto.getCourseOffering().getId();
+        enforceOfferingScope(offeringId);
         List<CourseAtr> toSave = new ArrayList<>();
 
         if (dto.getOutcomes() != null) {
@@ -227,6 +358,9 @@ public class AtrService {
     @Transactional
     public CourseAtr submitCourseAtr(String courseOfferingId, String submittedBy) {
         System.out.println("[AtrService] submitCourseAtr called | courseOfferingId: " + courseOfferingId + " | submittedBy: " + submittedBy);
+        if (courseOfferingId != null && !courseOfferingId.isBlank()) {
+            enforceOfferingScope(courseOfferingId);
+        }
         List<CourseAtr> atrs = courseAtrRepository.findByCourseOfferingId(courseOfferingId);
         if (atrs.isEmpty()) {
             getCourseAtrReport(courseOfferingId); // generates default entries
@@ -248,6 +382,12 @@ public class AtrService {
     @Transactional(readOnly = true)
     public ProgrammeAtrReportDto getProgrammeAtrReport(String programmeId, String batchId) {
         System.out.println("[AtrService] getProgrammeAtrReport called | programmeId: " + programmeId + " | batchId: " + batchId);
+        if (programmeId != null && !programmeId.isBlank()) {
+            enforceProgrammeScope(programmeId);
+        }
+        if (batchId != null && !batchId.isBlank()) {
+            enforceBatchScope(batchId);
+        }
         Programme prog = programmeRepository.findById(programmeId)
                 .orElseThrow(() -> new ResourceNotFoundException("Programme not found: " + programmeId));
         Batch batch = batchRepository.findById(batchId)
@@ -314,6 +454,8 @@ public class AtrService {
         }
         String progId = dto.getProgramme().getId();
         String batchId = dto.getBatch().getId();
+        enforceProgrammeScope(progId);
+        enforceBatchScope(batchId);
 
         ProgrammeAtr atr = programmeAtrRepository.findByProgrammeIdAndBatchId(progId, batchId)
                 .orElseGet(() -> ProgrammeAtr.builder()
@@ -340,6 +482,12 @@ public class AtrService {
     @Transactional
     public ProgrammeAtr submitProgrammeAtr(String programmeId, String batchId, String submittedBy) {
         System.out.println("[AtrService] submitProgrammeAtr called | programmeId: " + programmeId + " | batchId: " + batchId + " | submittedBy: " + submittedBy);
+        if (programmeId != null && !programmeId.isBlank()) {
+            enforceProgrammeScope(programmeId);
+        }
+        if (batchId != null && !batchId.isBlank()) {
+            enforceBatchScope(batchId);
+        }
         ProgrammeAtr atr = programmeAtrRepository.findByProgrammeIdAndBatchId(programmeId, batchId)
                 .orElseGet(() -> ProgrammeAtr.builder()
                         .id("patr-" + UUID.randomUUID().toString().substring(0, 8))
@@ -360,6 +508,16 @@ public class AtrService {
     @Transactional(readOnly = true)
     public BatchComparisonDto getProgrammeBatchComparison(String programmeId, List<String> batchIds) {
         System.out.println("[AtrService] getProgrammeBatchComparison called | programmeId: " + programmeId);
+        if (programmeId != null && !programmeId.isBlank()) {
+            enforceProgrammeScope(programmeId);
+        }
+        if (batchIds != null) {
+            for (String bId : batchIds) {
+                if (bId != null && !bId.isBlank()) {
+                    enforceBatchScope(bId);
+                }
+            }
+        }
         List<Batch> batches = (batchIds != null && !batchIds.isEmpty())
                 ? batchRepository.findAllById(batchIds)
                 : batchRepository.findByProgrammeId(programmeId);
