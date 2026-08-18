@@ -51,6 +51,7 @@ com/dypiu/nba/service/AttainmentReportExportService$PdfPageNumberHelper.class
 com/dypiu/nba/entity/Course$CourseBuilder.class
 com/dypiu/nba/entity/CourseOffering.class
 com/dypiu/nba/entity/DirectorSetupProgress$DirectorSetupProgressBuilder.class
+com/dypiu/nba/controller/UserController$ResolvedScope.class
 com/dypiu/nba/entity/User$UserBuilder.class
 com/dypiu/nba/service/ApprovalService.class
 com/dypiu/nba/controller/AuthController.class

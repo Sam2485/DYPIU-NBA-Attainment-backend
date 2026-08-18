@@ -415,4 +415,40 @@ public class FrontendContractHardeningIntegrationTest {
         assertNotNull(savedTargetsRes);
         assertTrue((Boolean) savedTargetsRes.get("success"));
     }
+
+    @Test
+    public void testGetApprovalsAndActionEndpoint() {
+        // Submit approval request
+        ApprovalRequest req = ApprovalRequest.builder()
+                .type(ApprovalType.COURSE_ALLOCATION)
+                .title("Allocations for " + testProg.getName())
+                .resourceId("allocation-" + testProg.getId())
+                .programmeId(testProg.getId())
+                .schoolId(testSchool.getId())
+                .submittedBy("Test PC")
+                .build();
+        ApprovalRequest submitted = approvalService.submitApprovalRequest(req);
+        assertNotNull(submitted.getId());
+        assertEquals(ApprovalStatus.PENDING, submitted.getStatus());
+
+        // Test GET /approvals with no params
+        List<ApprovalRequest> allApprovals = approvalService.getApprovals(null, null, null, null, null);
+        assertNotNull(allApprovals);
+        assertFalse(allApprovals.isEmpty());
+
+        // Test GET /approvals filtered by status
+        List<ApprovalRequest> pendingApprovals = approvalService.getApprovals(null, "PENDING", null, null, null);
+        assertNotNull(pendingApprovals);
+        assertTrue(pendingApprovals.stream().anyMatch(a -> a.getId().equals(submitted.getId())));
+
+        // Test action: APPROVE
+        ApprovalRequest approved = approvalService.actionRequest(submitted.getId(), "APPROVE", "Approved by HOD", "Test HOD", "HOD");
+        assertEquals(ApprovalStatus.APPROVED, approved.getStatus());
+        assertEquals("Test HOD", approved.getApprovedBy());
+
+        // Test action: REJECT / REQUEST_REVISION
+        ApprovalRequest revised = approvalService.actionRequest(submitted.getId(), "REQUEST_REVISION", "Please revise allocations", "Test HOD", "HOD");
+        assertEquals(ApprovalStatus.NEEDS_REVISION, revised.getStatus());
+        assertEquals("Please revise allocations", revised.getRemarks());
+    }
 }

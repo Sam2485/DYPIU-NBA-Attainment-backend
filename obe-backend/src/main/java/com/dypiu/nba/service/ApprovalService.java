@@ -28,6 +28,39 @@ public class ApprovalService {
     private final com.dypiu.nba.repository.CourseRepository courseRepository;
 
     @Transactional(readOnly = true)
+    public List<ApprovalRequest> getApprovals(String role, String status, String type, String schoolId, String programmeId) {
+        System.out.println("[ApprovalService] getApprovals called | role: " + role + " | status: " + status + " | type: " + type + " | schoolId: " + schoolId + " | programmeId: " + programmeId);
+        List<ApprovalRequest> list = approvalRequestRepository.findAll();
+
+        if (schoolId != null && !schoolId.isBlank()) {
+            list = list.stream().filter(a -> schoolId.equalsIgnoreCase(a.getSchoolId())).toList();
+        }
+        if (programmeId != null && !programmeId.isBlank()) {
+            list = list.stream().filter(a -> programmeId.equalsIgnoreCase(a.getProgrammeId())).toList();
+        }
+        if (status != null && !status.isBlank()) {
+            try {
+                ApprovalStatus targetStatus = ApprovalStatus.valueOf(status.trim().toUpperCase());
+                list = list.stream().filter(a -> a.getStatus() == targetStatus).toList();
+            } catch (IllegalArgumentException ignored) {}
+        }
+        if (type != null && !type.isBlank()) {
+            try {
+                ApprovalType targetType = ApprovalType.valueOf(type.trim().toUpperCase());
+                list = list.stream().filter(a -> a.getType() == targetType).toList();
+            } catch (IllegalArgumentException ignored) {}
+        }
+        if (role != null && !role.isBlank()) {
+            if ("DIRECTOR".equalsIgnoreCase(role)) {
+                list = list.stream().filter(a -> a.getType() == ApprovalType.OUTCOME_FRAMEWORK || a.getType() == ApprovalType.PROGRAMME_ATR).toList();
+            } else if ("HOD".equalsIgnoreCase(role)) {
+                list = list.stream().filter(a -> a.getType() == ApprovalType.COURSE_ALLOCATION || a.getType() == ApprovalType.PO_PSO_TARGETS).toList();
+            }
+        }
+        return list;
+    }
+
+    @Transactional(readOnly = true)
     public List<ApprovalRequest> getDirectorApprovals(String schoolId) {
         System.out.println("[ApprovalService] getDirectorApprovals called | schoolId: " + schoolId);
         if (schoolId != null) {
@@ -43,6 +76,18 @@ public class ApprovalService {
             return approvalRequestRepository.findByProgrammeId(programmeId);
         }
         return approvalRequestRepository.findAll();
+    }
+
+    @Transactional
+    public ApprovalRequest actionRequest(String id, String action, String comments, String actorName, String actorRole) {
+        System.out.println("[ApprovalService] actionRequest called | id: " + id + " | action: " + action);
+        if ("APPROVE".equalsIgnoreCase(action) || "APPROVED".equalsIgnoreCase(action)) {
+            return approveRequest(id, actorName != null ? actorName : "Approver", actorRole != null ? actorRole : "APPROVER");
+        } else if ("REJECT".equalsIgnoreCase(action) || "REJECTED".equalsIgnoreCase(action) || "REQUEST_REVISION".equalsIgnoreCase(action) || "NEEDS_REVISION".equalsIgnoreCase(action)) {
+            return rejectRequest(id, comments != null ? comments : "Revision requested.", actorName != null ? actorName : "Reviewer", actorRole != null ? actorRole : "REVIEWER");
+        } else {
+            throw new com.dypiu.nba.exception.BadRequestException("Invalid approval action: " + action + ". Allowed: APPROVE, REJECT, REQUEST_REVISION");
+        }
     }
 
     @Transactional

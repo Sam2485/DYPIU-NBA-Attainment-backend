@@ -18,6 +18,19 @@ public class ApprovalController {
 
     private final ApprovalService approvalService;
 
+    @GetMapping({"", "/"})
+    public ResponseEntity<ApiResponse<List<ApprovalRequest>>> getApprovals(
+            @RequestParam(required = false) String role,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String type,
+            @RequestParam(required = false) String schoolId,
+            @RequestParam(required = false) String programmeId) {
+        return ResponseEntity.ok(ApiResponse.<List<ApprovalRequest>>builder()
+                .success(true)
+                .data(approvalService.getApprovals(role, status, type, schoolId, programmeId))
+                .build());
+    }
+
     @GetMapping("/pending")
     public ResponseEntity<ApiResponse<List<ApprovalRequest>>> getPendingApprovals(
             @RequestParam(required = false) String role,
@@ -90,6 +103,19 @@ public class ApprovalController {
                 .success(true)
                 .message("Revision requested")
                 .data(approvalService.rejectRequest(id, remarks, actorName, actorRole))
+                .build());
+    }
+
+    @PostMapping("/{id}/action")
+    public ResponseEntity<ApiResponse<ApprovalRequest>> actionRequest(@PathVariable String id, @RequestBody(required = false) Map<String, String> body) {
+        String action = body != null && body.containsKey("action") ? body.get("action") : "APPROVE";
+        String comments = body != null && body.containsKey("comments") ? body.get("comments") : (body != null && body.containsKey("remarks") ? body.get("remarks") : "");
+        String actorName = body != null && body.containsKey("actorName") ? body.get("actorName") : "Actor";
+        String actorRole = body != null && body.containsKey("actorRole") ? body.get("actorRole") : "REVIEWER";
+        return ResponseEntity.ok(ApiResponse.<ApprovalRequest>builder()
+                .success(true)
+                .message("Action " + action + " executed successfully")
+                .data(approvalService.actionRequest(id, action, comments, actorName, actorRole))
                 .build());
     }
 

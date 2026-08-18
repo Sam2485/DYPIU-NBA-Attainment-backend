@@ -5,5 +5,6 @@ public enum UserRole {
     DIRECTOR,
     HOD,
     PROGRAMME_COORDINATOR,
-    FACULTY
+    FACULTY,
+    ADMIN
 }

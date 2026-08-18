@@ -10,5 +10,6 @@ public enum ApprovalType {
     PROGRAMME_ATR,
     COURSE_ATR,
     DIRECTOR_GOVERNANCE,
+    OUTCOME_FRAMEWORK,
     OTHER
 }
