@@ -156,6 +156,8 @@ com/dypiu/nba/dto/BatchContextDto$Statistics.class
 com/dypiu/nba/entity/UploadedDocument.class
 com/dypiu/nba/dto/ProgrammeAttainmentResultDto$SemesterValue$SemesterValueBuilder.class
 com/dypiu/nba/dto/CourseMappingMatrixDto$CourseMappingMatrixDtoBuilder.class
+com/dypiu/nba/service/AttainmentCalculationService$1.class
+com/dypiu/nba/service/AttainmentCalculationService$LevelBand.class
 com/dypiu/nba/dto/ProgrammeAttainmentDatasetDto$TableData.class
 com/dypiu/nba/repository/HodSetupProgressRepository.class
 com/dypiu/nba/entity/ApprovalRequest.class

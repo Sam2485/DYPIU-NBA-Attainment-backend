@@ -5,6 +5,8 @@ com/dypiu/nba/service/SchoolDirectorMappingTest.class
 com/dypiu/nba/security/ApprovalWorkflowSecurityTest.class
 com/dypiu/nba/security/CurrentUserScopeServiceTest.class
 com/dypiu/nba/security/DirectorAndHodScopeSecurityTest.class
+com/dypiu/nba/service/ProgrammeEndSurveyValidationIntegrationTest.class
+com/dypiu/nba/service/CourseAttainmentExcelParsingIntegrationTest.class
 com/dypiu/nba/ObeBackendApplicationTests.class
 com/dypiu/nba/service/AttainmentCalculationServiceTest.class
 com/dypiu/nba/security/BackendResponseAndErrorHardeningTest.class

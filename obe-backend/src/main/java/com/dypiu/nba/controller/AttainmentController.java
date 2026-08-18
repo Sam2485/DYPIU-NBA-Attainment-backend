@@ -120,6 +120,18 @@ public class AttainmentController {
             @RequestParam(value = "assessmentType", required = false) String assessmentType,
             @RequestParam(value = "toolType", required = false) String toolType,
             java.security.Principal principal) {
+        return uploadAssessmentDirect(file, courseId, courseOfferingId, batchId, null, assessmentType, toolType, principal);
+    }
+
+    public ResponseEntity<ApiResponse<ExaminationAttainmentResultDto>> uploadAssessmentDirect(
+            MultipartFile file,
+            String courseId,
+            String courseOfferingId,
+            String batchId,
+            BigDecimal thresholdPercentage,
+            String assessmentType,
+            String toolType,
+            java.security.Principal principal) {
         String targetId = courseOfferingId != null && !courseOfferingId.isBlank() ? courseOfferingId : courseId;
         if (targetId == null || targetId.isBlank()) {
             throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST, "Course or Course Offering ID is required.");
@@ -133,7 +145,7 @@ public class AttainmentController {
         return ResponseEntity.ok(ApiResponse.<ExaminationAttainmentResultDto>builder()
                 .success(true)
                 .message("Assessment marks uploaded and processed successfully.")
-                .data(calculationService.processAndSaveExaminationFile(targetId, file, new BigDecimal("60.00"), user != null ? user.getName() : "Course Coordinator"))
+                .data(calculationService.processAndSaveExaminationFile(targetId, file, thresholdPercentage, user != null ? user.getName() : "Course Coordinator"))
                 .build());
     }
 
@@ -143,6 +155,16 @@ public class AttainmentController {
             @RequestParam(value = "courseId", required = false) String courseId,
             @RequestParam(value = "courseOfferingId", required = false) String courseOfferingId,
             @RequestParam(value = "batchId", required = false) String batchId,
+            java.security.Principal principal) {
+        return uploadAssessmentIndirect(file, courseId, courseOfferingId, batchId, null, principal);
+    }
+
+    public ResponseEntity<ApiResponse<SurveyAttainmentResultDto>> uploadAssessmentIndirect(
+            MultipartFile file,
+            String courseId,
+            String courseOfferingId,
+            String batchId,
+            BigDecimal thresholdPercentage,
             java.security.Principal principal) {
         String targetId = courseOfferingId != null && !courseOfferingId.isBlank() ? courseOfferingId : courseId;
         if (targetId == null || targetId.isBlank()) {
@@ -157,7 +179,7 @@ public class AttainmentController {
         return ResponseEntity.ok(ApiResponse.<SurveyAttainmentResultDto>builder()
                 .success(true)
                 .message("Indirect survey responses uploaded and processed successfully.")
-                .data(calculationService.processAndSaveSurveyFile(targetId, file, new BigDecimal("60.00"), user != null ? user.getName() : "Course Coordinator"))
+                .data(calculationService.processAndSaveSurveyFile(targetId, file, thresholdPercentage, user != null ? user.getName() : "Course Coordinator"))
                 .build());
     }
 

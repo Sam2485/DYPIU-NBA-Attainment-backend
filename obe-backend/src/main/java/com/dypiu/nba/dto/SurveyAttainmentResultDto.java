@@ -22,6 +22,7 @@ public class SurveyAttainmentResultDto {
     private Map<String, BigDecimal> level3Percentages; // % of Substantial
     private Map<String, BigDecimal> overallIndirectPercentages; // (pct1 * 1/3) + (pct2 * 2/3) + (pct3 * 3/3)
     private Map<String, BigDecimal> indirectAttainmentScores; // Score out of 3.00
+    private Map<String, Integer> coAttainmentLevels; // Dynamic indirect attainment levels (1, 2, 3)
     private BigDecimal overallIndirectCoAttainment; // Average score across all COs
     private List<SurveyResponseRowDto> surveyResponses;
     private Map<String, Object> fileDetails;

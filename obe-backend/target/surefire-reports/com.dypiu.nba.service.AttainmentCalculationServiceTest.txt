@@ -1,4 +1,4 @@
 -------------------------------------------------------------------------------
 Test set: com.dypiu.nba.service.AttainmentCalculationServiceTest
 -------------------------------------------------------------------------------
-Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.323 s -- in com.dypiu.nba.service.AttainmentCalculationServiceTest
+Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.373 s -- in com.dypiu.nba.service.AttainmentCalculationServiceTest

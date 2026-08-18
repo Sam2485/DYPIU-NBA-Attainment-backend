@@ -4,6 +4,8 @@ import com.dypiu.nba.dto.*;
 import com.dypiu.nba.entity.*;
 import com.dypiu.nba.exception.ResourceNotFoundException;
 import com.dypiu.nba.repository.*;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.*;
@@ -220,17 +222,273 @@ public class AttainmentCalculationService {
     }
 
     // =========================================================================
+    //  LEVEL BAND EVALUATOR & PARSER HELPERS
+    // =========================================================================
+
+    public record LevelBand(int level, BigDecimal minPercentage, BigDecimal maxPercentage) {}
+
+    public List<LevelBand> parseLevelBands(String levelsJson, boolean isDirect) {
+        if (levelsJson != null && !levelsJson.isBlank()) {
+            try {
+                ObjectMapper mapper = new ObjectMapper();
+                JsonNode root = mapper.readTree(levelsJson);
+                if (root.isArray() && root.size() > 0) {
+                    List<LevelBand> bands = new ArrayList<>();
+                    for (JsonNode node : root) {
+                        int level = node.has("level") ? node.get("level").asInt() : bands.size() + 1;
+                        BigDecimal min = node.has("minPercentage") ? new BigDecimal(node.get("minPercentage").asText()) :
+                                (node.has("min") ? new BigDecimal(node.get("min").asText()) : BigDecimal.ZERO);
+                        BigDecimal max = node.has("maxPercentage") ? new BigDecimal(node.get("maxPercentage").asText()) :
+                                (node.has("max") ? new BigDecimal(node.get("max").asText()) : new BigDecimal("100.00"));
+
+                        if (min.compareTo(max) > 0) {
+                            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                                    "Invalid level band configuration: minPercentage (" + min + ") cannot be greater than maxPercentage (" + max + ").");
+                        }
+                        if (min.compareTo(BigDecimal.ZERO) < 0 || max.compareTo(new BigDecimal("100.00")) > 0) {
+                            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                                    "Invalid level band configuration: percentages must be within 0 to 100. Found [" + min + ", " + max + "].");
+                        }
+                        bands.add(new LevelBand(level, min, max));
+                    }
+                    bands.sort(Comparator.comparing(LevelBand::minPercentage));
+                    return bands;
+                }
+            } catch (ResponseStatusException rse) {
+                throw rse;
+            } catch (Exception e) {
+                log.warn("Failed to parse custom {} levels JSON: {}. Using default level bands.", isDirect ? "direct" : "indirect", levelsJson);
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid level band JSON format: " + e.getMessage());
+            }
+        }
+
+        // Default standard 3-tier bands
+        return List.of(
+                new LevelBand(1, new BigDecimal("0.00"), new BigDecimal("40.00")),
+                new LevelBand(2, new BigDecimal("40.00"), new BigDecimal("60.00")),
+                new LevelBand(3, new BigDecimal("60.00"), new BigDecimal("100.00"))
+        );
+    }
+
+    public int evaluateLevelBand(BigDecimal percentage, List<LevelBand> bands) {
+        if (bands == null || bands.isEmpty()) {
+            bands = List.of(
+                    new LevelBand(1, new BigDecimal("0.00"), new BigDecimal("40.00")),
+                    new LevelBand(2, new BigDecimal("40.00"), new BigDecimal("60.00")),
+                    new LevelBand(3, new BigDecimal("60.00"), new BigDecimal("100.00"))
+            );
+        }
+
+        if (percentage == null) return 0;
+
+        for (int i = 0; i < bands.size(); i++) {
+            LevelBand band = bands.get(i);
+            boolean isTopBand = (i == bands.size() - 1) || band.maxPercentage().compareTo(new BigDecimal("100.00")) >= 0;
+
+            if (isTopBand) {
+                if (percentage.compareTo(band.minPercentage()) >= 0 && percentage.compareTo(band.maxPercentage()) <= 0) {
+                    return band.level();
+                }
+            } else {
+                if (percentage.compareTo(band.minPercentage()) >= 0 && percentage.compareTo(band.maxPercentage()) < 0) {
+                    return band.level();
+                }
+            }
+        }
+
+        if (percentage.compareTo(new BigDecimal("100.00")) > 0) {
+            return bands.get(bands.size() - 1).level();
+        } else if (percentage.compareTo(BigDecimal.ZERO) <= 0) {
+            return bands.get(0).level();
+        }
+
+        return bands.get(0).level();
+    }
+
+    private Sheet findExaminationSheet(Workbook workbook) {
+        for (int i = 0; i < workbook.getNumberOfSheets(); i++) {
+            Sheet s = workbook.getSheetAt(i);
+            String name = s.getSheetName();
+            if (name != null && name.toLowerCase().matches(".*(examination|exam|direct).*")) {
+                return s;
+            }
+        }
+        for (int i = 0; i < workbook.getNumberOfSheets(); i++) {
+            Sheet s = workbook.getSheetAt(i);
+            for (Row r : s) {
+                for (Cell c : r) {
+                    try {
+                        String text = c.getStringCellValue();
+                        if (text != null) {
+                            String lower = text.toLowerCase();
+                            if (lower.contains("direct method") || lower.contains("co assessment") || lower.contains("fraction of out of")) {
+                                return s;
+                            }
+                        }
+                    } catch (Exception ignored) {}
+                }
+            }
+        }
+        return workbook.getSheetAt(0);
+    }
+
+    private Sheet findSurveySheet(Workbook workbook) {
+        for (int i = 0; i < workbook.getNumberOfSheets(); i++) {
+            Sheet s = workbook.getSheetAt(i);
+            String name = s.getSheetName();
+            if (name != null && name.toLowerCase().matches(".*(course\\s*end\\s*survey|survey|indirect).*")) {
+                return s;
+            }
+        }
+        for (int i = 0; i < workbook.getNumberOfSheets(); i++) {
+            Sheet s = workbook.getSheetAt(i);
+            for (Row r : s) {
+                for (Cell c : r) {
+                    try {
+                        String text = c.getStringCellValue();
+                        if (text != null) {
+                            String lower = text.toLowerCase();
+                            if (lower.contains("indirect method") || lower.contains("substantial") || lower.contains("slight")) {
+                                return s;
+                            }
+                        }
+                    } catch (Exception ignored) {}
+                }
+            }
+        }
+        return workbook.getSheetAt(workbook.getNumberOfSheets() > 1 ? 1 : 0);
+    }
+
+    private BigDecimal extractThresholdFromSheet(Sheet sheet, FormulaEvaluator evaluator) {
+        for (Row row : sheet) {
+            for (Cell cell : row) {
+                String str = null;
+                try {
+                    str = cell.getStringCellValue();
+                } catch (Exception ignored) {}
+                if (str != null) {
+                    String lower = str.toLowerCase().trim();
+                    if ((lower.contains("threshold") || lower.contains("threshhold"))
+                            && !lower.contains("above") && !lower.contains("% of") && !lower.contains("fraction") && !lower.contains("reference")) {
+                        int rIdx = row.getRowNum();
+                        for (int rSearch = rIdx; rSearch <= Math.min(sheet.getLastRowNum(), rIdx + 1); rSearch++) {
+                            Row r = sheet.getRow(rSearch);
+                            if (r == null) continue;
+                            for (Cell valCell : r) {
+                                if (valCell == cell) continue;
+                                Double numVal = getNumericCellValue(valCell, evaluator);
+                                if (numVal != null && numVal > 0) {
+                                    if (numVal > 0 && numVal <= 1.0) {
+                                        numVal = numVal * 100.0;
+                                    }
+                                    BigDecimal thresh = BigDecimal.valueOf(numVal).setScale(2, RoundingMode.HALF_UP);
+                                    if (thresh.compareTo(BigDecimal.ZERO) >= 0 && thresh.compareTo(new BigDecimal("100.00")) <= 0) {
+                                        return thresh;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    private Double getNumericCellValue(Cell cell, FormulaEvaluator evaluator) {
+        if (cell == null) return null;
+        switch (cell.getCellType()) {
+            case NUMERIC:
+                return cell.getNumericCellValue();
+            case STRING:
+                String str = cell.getStringCellValue().trim();
+                if (str.isEmpty() || "-".equals(str) || "--".equals(str)) return null;
+                try {
+                    return Double.parseDouble(str);
+                } catch (NumberFormatException e) {
+                    return null;
+                }
+            case FORMULA:
+                if (evaluator != null) {
+                    try {
+                        CellValue cellValue = evaluator.evaluate(cell);
+                        if (cellValue != null) {
+                            if (cellValue.getCellType() == CellType.NUMERIC) {
+                                return cellValue.getNumberValue();
+                            } else if (cellValue.getCellType() == CellType.STRING) {
+                                String s = cellValue.getStringValue().trim();
+                                if (!s.isEmpty() && !"-".equals(s)) {
+                                    try { return Double.parseDouble(s); } catch (Exception ignored) {}
+                                }
+                            }
+                        }
+                    } catch (Exception ignored) {}
+                }
+                try {
+                    return cell.getNumericCellValue();
+                } catch (Exception ignored) {}
+                return null;
+            case BOOLEAN:
+                return cell.getBooleanCellValue() ? 1.0 : 0.0;
+            default:
+                return null;
+        }
+    }
+
+    private String getStringCellValue(Cell cell, FormulaEvaluator evaluator) {
+        if (cell == null) return "";
+        switch (cell.getCellType()) {
+            case STRING:
+                return cell.getStringCellValue().trim();
+            case NUMERIC:
+                long longVal = (long) cell.getNumericCellValue();
+                if (cell.getNumericCellValue() == (double) longVal) {
+                    return String.valueOf(longVal);
+                }
+                return String.valueOf(cell.getNumericCellValue());
+            case FORMULA:
+                if (evaluator != null) {
+                    try {
+                        CellValue cellValue = evaluator.evaluate(cell);
+                        if (cellValue != null) {
+                            if (cellValue.getCellType() == CellType.STRING) {
+                                return cellValue.getStringValue().trim();
+                            } else if (cellValue.getCellType() == CellType.NUMERIC) {
+                                long lv = (long) cellValue.getNumberValue();
+                                if (cellValue.getNumberValue() == (double) lv) {
+                                    return String.valueOf(lv);
+                                }
+                                return String.valueOf(cellValue.getNumberValue());
+                            }
+                        }
+                    } catch (Exception ignored) {}
+                }
+                try {
+                    return cell.getStringCellValue().trim();
+                } catch (Exception ignored) {}
+                return "";
+            case BOOLEAN:
+                return String.valueOf(cell.getBooleanCellValue());
+            default:
+                return "";
+        }
+    }
+
+    // =========================================================================
     //  EXAMINATION DIRECT ATTAINMENT ENGINE
     // =========================================================================
 
     public ExaminationAttainmentResultDto calculateExaminationAttainment(String courseOfferingOrCourseId, ExaminationMarksPayloadDto payload) {
         System.out.println("[AttainmentCalculationService] calculateExaminationAttainment called | courseOfferingOrCourseId: " + courseOfferingOrCourseId);
         String offeringId = resolveOfferingId(courseOfferingOrCourseId);
+        AttainmentConfiguration config = getAttainmentConfig(offeringId);
+
         if (payload == null || payload.getStudentMarks() == null || payload.getStudentMarks().isEmpty()) {
             return getExaminationAttainment(offeringId);
         }
 
-        BigDecimal thresholdPct = payload.getThresholdPercentage() != null ? payload.getThresholdPercentage() : new BigDecimal("60.00");
+        BigDecimal thresholdPct = payload.getThresholdPercentage() != null ? payload.getThresholdPercentage() :
+                (config.getDirectThreshold() != null ? config.getDirectThreshold() : new BigDecimal("60.00"));
         Map<String, BigDecimal> coMaxMarks = payload.getCoMaxMarks() != null ? payload.getCoMaxMarks() : Collections.emptyMap();
         List<StudentMarksRowDto> studentMarks = payload.getStudentMarks();
 
@@ -266,6 +524,11 @@ public class AttainmentCalculationService {
         Map<String, BigDecimal> percentageAbove = new LinkedHashMap<>();
         Map<String, Integer> attainmentLevels = new LinkedHashMap<>();
 
+        List<LevelBand> directBands = parseLevelBands(config.getDirectLevelsJson(), true);
+
+        double sumLevels = 0;
+        int coCount = 0;
+
         for (String coCode : coMaxMarks.keySet()) {
             int total = countTotal.getOrDefault(coCode, 0);
             int above = countAbove.getOrDefault(coCode, 0);
@@ -275,18 +538,15 @@ public class AttainmentCalculationService {
                     : BigDecimal.ZERO;
             percentageAbove.put(coCode, pct);
 
-            int level;
-            if (pct.compareTo(new BigDecimal("60.00")) >= 0) {
-                level = 3;
-            } else if (pct.compareTo(new BigDecimal("40.00")) >= 0) {
-                level = 2;
-            } else if (pct.compareTo(BigDecimal.ZERO) > 0) {
-                level = 1;
-            } else {
-                level = 0;
-            }
+            int level = evaluateLevelBand(pct, directBands);
             attainmentLevels.put(coCode, level);
+            sumLevels += level;
+            coCount++;
         }
+
+        BigDecimal overallDirectCoAttainment = coCount > 0
+                ? BigDecimal.valueOf(sumLevels / coCount).setScale(2, RoundingMode.HALF_UP)
+                : BigDecimal.ZERO;
 
         ExaminationAttainmentResultDto result = ExaminationAttainmentResultDto.builder()
                 .courseId(offeringId)
@@ -298,8 +558,8 @@ public class AttainmentCalculationService {
                 .studentsAboveThreshold(countAbove)
                 .percentageAboveThreshold(percentageAbove)
                 .coAttainmentLevels(attainmentLevels)
+                .overallDirectCoAttainment(overallDirectCoAttainment)
                 .build();
-
 
         examinationAttainmentStore.put(offeringId, result);
         return result;
@@ -313,7 +573,9 @@ public class AttainmentCalculationService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Course Offering not found: " + offeringId));
         String batchId = offering.getBatchId();
 
-        BigDecimal threshold = thresholdPercentage != null ? thresholdPercentage : new BigDecimal("60.00");
+        AttainmentConfiguration config = getAttainmentConfig(offeringId);
+
+        BigDecimal threshold = thresholdPercentage;
         Map<String, BigDecimal> coMaxMarks = new LinkedHashMap<>();
         List<StudentMarksRowDto> studentList = new ArrayList<>();
 
@@ -330,69 +592,167 @@ public class AttainmentCalculationService {
 
                 try (InputStream is = new FileInputStream(targetFile);
                      Workbook workbook = WorkbookFactory.create(is)) {
-                    Sheet sheet = workbook.getSheetAt(0);
+                    FormulaEvaluator evaluator = workbook.getCreationHelper().createFormulaEvaluator();
+                    Sheet sheet = findExaminationSheet(workbook);
 
-                    Row headerRow = sheet.getRow(0);
-                    Row maxMarksRow = sheet.getRow(1);
+                    // 1. Threshold extraction
+                    BigDecimal extractedThreshold = extractThresholdFromSheet(sheet, evaluator);
+                    if (extractedThreshold != null) {
+                        threshold = extractedThreshold;
+                    } else if (threshold == null) {
+                        threshold = config.getDirectThreshold() != null ? config.getDirectThreshold() : new BigDecimal("60.00");
+                    }
 
-                    List<String> coHeaders = new ArrayList<>();
-                    if (headerRow != null) {
-                        for (int c = 2; c < headerRow.getLastCellNum(); c++) {
-                            Cell cell = headerRow.getCell(c);
-                            if (cell != null) {
-                                String val = cell.getStringCellValue().trim();
-                                if (val.toUpperCase().startsWith("CO")) {
-                                    coHeaders.add(val.toUpperCase());
+                    // 2. Locate CO header row & map CO columns
+                    int coHeaderRowNum = -1;
+                    Map<Integer, String> coColMap = new LinkedHashMap<>();
+                    for (Row row : sheet) {
+                        Map<Integer, String> candidateCols = new LinkedHashMap<>();
+                        for (Cell cell : row) {
+                            String text = getStringCellValue(cell, evaluator);
+                            if (text != null && text.matches("(?i)^CO\\s*\\d+$")) {
+                                candidateCols.put(cell.getColumnIndex(), text.toUpperCase().replaceAll("\\s+", ""));
+                            }
+                        }
+                        if (candidateCols.size() > coColMap.size()) {
+                            coColMap = candidateCols;
+                            coHeaderRowNum = row.getRowNum();
+                        }
+                    }
+
+                    if (coColMap.isEmpty()) {
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "No Course Outcome (CO) headers found in Examination sheet.");
+                    }
+
+                    // 3. Locate Out Of row
+                    int outOfRowNum = -1;
+                    for (Row row : sheet) {
+                        for (Cell cell : row) {
+                            String text = getStringCellValue(cell, evaluator);
+                            if (text != null && text.matches("(?i)^out\\s*of.*|^max(\\.?\\s*marks)?.*|^maximum.*")) {
+                                outOfRowNum = row.getRowNum();
+                                break;
+                            }
+                        }
+                        if (outOfRowNum != -1) break;
+                    }
+
+                    if (outOfRowNum != -1) {
+                        Row outOfRow = sheet.getRow(outOfRowNum);
+                        for (Map.Entry<Integer, String> e : coColMap.entrySet()) {
+                            int colIdx = e.getKey();
+                            String coCode = e.getValue();
+                            Cell c = outOfRow.getCell(colIdx);
+                            Double val = getNumericCellValue(c, evaluator);
+                            if (val == null || val <= 0) {
+                                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                                        "Invalid or missing 'Out Of' marks for " + coCode + ". Out Of marks must be greater than zero.");
+                            }
+                            coMaxMarks.put(coCode, BigDecimal.valueOf(val).setScale(2, RoundingMode.HALF_UP));
+                        }
+                    } else {
+                        // Fallback: check row directly above CO header or default to 20.00
+                        for (String coCode : coColMap.values()) {
+                            coMaxMarks.put(coCode, new BigDecimal("20.00"));
+                        }
+                    }
+
+                    // 4. Locate PRN and Name columns
+                    int prnCol = -1;
+                    int nameCol = -1;
+                    for (int r = Math.max(0, coHeaderRowNum - 3); r <= coHeaderRowNum; r++) {
+                        Row row = sheet.getRow(r);
+                        if (row == null) continue;
+                        for (Cell cell : row) {
+                            String text = getStringCellValue(cell, evaluator);
+                            if (text != null) {
+                                String lower = text.toLowerCase();
+                                if (lower.contains("prn") || lower.contains("roll") || lower.contains("student id") || lower.contains("reg")) {
+                                    prnCol = cell.getColumnIndex();
+                                } else if (lower.contains("name") || lower.contains("student name")) {
+                                    nameCol = cell.getColumnIndex();
                                 }
                             }
                         }
                     }
-                    if (coHeaders.isEmpty()) {
-                        coHeaders = List.of("CO1", "CO2", "CO3", "CO4", "CO5");
-                    }
+                    if (prnCol == -1) prnCol = 1;
+                    if (nameCol == -1) nameCol = 2;
 
-                    for (int i = 0; i < coHeaders.size(); i++) {
-                        String co = coHeaders.get(i);
-                        BigDecimal maxVal = new BigDecimal("20.00");
-                        if (maxMarksRow != null && maxMarksRow.getCell(i + 2) != null) {
-                            try {
-                                maxVal = BigDecimal.valueOf(maxMarksRow.getCell(i + 2).getNumericCellValue());
-                            } catch (Exception ignored) {}
-                        }
-                        coMaxMarks.put(co, maxVal);
-                    }
-
-                    int startRow = maxMarksRow != null ? 2 : 1;
-                    for (int r = startRow; r <= sheet.getLastRowNum(); r++) {
+                    // 5. Parse student mark records
+                    for (int r = coHeaderRowNum + 1; r <= sheet.getLastRowNum(); r++) {
                         Row row = sheet.getRow(r);
                         if (row == null) continue;
 
-                        Cell prnCell = row.getCell(0);
-                        Cell nameCell = row.getCell(1);
+                        Cell prnCell = row.getCell(prnCol);
+                        String prn = getStringCellValue(prnCell, evaluator);
 
-                        String prn = prnCell != null ? (prnCell.getCellType() == CellType.NUMERIC ? String.valueOf((long) prnCell.getNumericCellValue()) : prnCell.getStringCellValue().trim()) : null;
-                        String name = nameCell != null ? nameCell.getStringCellValue().trim() : "";
+                        Cell nameCell = nameCol >= 0 ? row.getCell(nameCol) : null;
+                        String name = getStringCellValue(nameCell, evaluator);
+
+                        if (prn == null || prn.isBlank()) {
+                            // If PRN is in col 0
+                            if (prnCol != 0) {
+                                String prn0 = getStringCellValue(row.getCell(0), evaluator);
+                                if (prn0 != null && !prn0.isBlank() && !prn0.matches("\\d+")) {
+                                    prn = prn0;
+                                }
+                            }
+                        }
 
                         if (prn == null || prn.isBlank()) continue;
 
+                        String prnLower = prn.toLowerCase();
+                        if (prnLower.contains("average") || prnLower.contains("total") || prnLower.contains("threshold") || prnLower.contains("count") || prnLower.contains("target")) {
+                            continue;
+                        }
+
                         Map<String, BigDecimal> coMarks = new LinkedHashMap<>();
-                        for (int i = 0; i < coHeaders.size(); i++) {
-                            Cell markCell = row.getCell(i + 2);
-                            BigDecimal mark = BigDecimal.ZERO;
-                            if (markCell != null && markCell.getCellType() == CellType.NUMERIC) {
-                                mark = BigDecimal.valueOf(markCell.getNumericCellValue());
+                        for (Map.Entry<Integer, String> e : coColMap.entrySet()) {
+                            int colIdx = e.getKey();
+                            String coCode = e.getValue();
+                            BigDecimal outOf = coMaxMarks.getOrDefault(coCode, new BigDecimal("100.00"));
+                            Cell markCell = row.getCell(colIdx);
+
+                            Double numMark = getNumericCellValue(markCell, evaluator);
+                            if (numMark == null) {
+                                String strMark = getStringCellValue(markCell, evaluator);
+                                if (strMark.isEmpty() || "-".equals(strMark) || "--".equals(strMark) || "ab".equalsIgnoreCase(strMark) || "a".equalsIgnoreCase(strMark)) {
+                                    numMark = 0.0;
+                                } else {
+                                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                                            "Invalid non-numeric mark '" + strMark + "' for student PRN '" + prn + "' in " + coCode);
+                                }
                             }
-                            coMarks.put(coHeaders.get(i), mark);
+
+                            BigDecimal mark = BigDecimal.valueOf(numMark).setScale(2, RoundingMode.HALF_UP);
+                            if (mark.compareTo(BigDecimal.ZERO) < 0) {
+                                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                                        "Invalid mark " + mark + " for student PRN '" + prn + "' in " + coCode + ". Mark must be non-negative.");
+                            }
+                            if (mark.compareTo(outOf) > 0) {
+                                log.warn("Student PRN '{}' mark {} for {} exceeds Out Of {}. Clamping mark to max.", prn, mark, coCode, outOf);
+                                mark = outOf;
+                            }
+                            coMarks.put(coCode, mark);
                         }
 
                         studentList.add(StudentMarksRowDto.builder()
                                 .srNo(studentList.size() + 1)
                                 .prn(prn)
-                                .studentName(name.isBlank() ? "Student " + (studentList.size() + 1) : name)
+                                .studentName(name != null && !name.isBlank() ? name : "Student " + (studentList.size() + 1))
                                 .coMarks(coMarks)
                                 .build());
                     }
                 }
+
+                if (studentList.isEmpty()) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "No valid student mark records found in the Examination sheet.");
+                }
+
+                // Update Course Offering's AttainmentConfiguration with authoritative uploaded threshold
+                config.setDirectThreshold(threshold);
+                config.setUpdatedAt(ZonedDateTime.now());
+                configRepository.save(config);
 
                 // Persist Student marks and audit document
                 saveStudentCoMarksToDatabase(offeringId, coMaxMarks, studentList);
@@ -471,7 +831,8 @@ public class AttainmentCalculationService {
                         .build());
             }
 
-            BigDecimal threshold = new BigDecimal("60.00");
+            BigDecimal threshold = getAttainmentConfig(offeringId).getDirectThreshold();
+            if (threshold == null) threshold = new BigDecimal("60.00");
             Optional<UploadedDocument> docOpt = uploadedDocumentRepository
                     .findFirstByCourseOfferingIdAndDocumentTypeOrderByUploadedAtDesc(offeringId, DocumentType.EXAMINATION);
             if (docOpt.isPresent() && docOpt.get().getThresholdPercentage() != null) {
@@ -490,7 +851,7 @@ public class AttainmentCalculationService {
 
         return ExaminationAttainmentResultDto.builder()
                 .courseId(offeringId)
-                .thresholdPercentage(new BigDecimal("60.00"))
+                .thresholdPercentage(getAttainmentConfig(offeringId).getDirectThreshold() != null ? getAttainmentConfig(offeringId).getDirectThreshold() : new BigDecimal("60.00"))
                 .totalStudents(0)
                 .coMaxMarks(Collections.emptyMap())
                 .coThresholdMarks(Collections.emptyMap())
@@ -498,6 +859,7 @@ public class AttainmentCalculationService {
                 .studentsAboveThreshold(Collections.emptyMap())
                 .percentageAboveThreshold(Collections.emptyMap())
                 .coAttainmentLevels(Collections.emptyMap())
+                .overallDirectCoAttainment(BigDecimal.ZERO)
                 .build();
     }
 
@@ -508,6 +870,8 @@ public class AttainmentCalculationService {
     public SurveyAttainmentResultDto calculateSurveyAttainment(String courseOfferingOrCourseId, SurveyMarksPayloadDto payload) {
         System.out.println("[AttainmentCalculationService] calculateSurveyAttainment called | courseOfferingOrCourseId: " + courseOfferingOrCourseId);
         String offeringId = resolveOfferingId(courseOfferingOrCourseId);
+        AttainmentConfiguration config = getAttainmentConfig(offeringId);
+
         if (payload == null || payload.getSurveyResponses() == null || payload.getSurveyResponses().isEmpty()) {
             return getSurveyAttainment(offeringId);
         }
@@ -521,30 +885,93 @@ public class AttainmentCalculationService {
             coCodes = Set.of("CO1", "CO2", "CO3", "CO4", "CO5");
         }
 
-        Map<String, BigDecimal> indirectScores = new LinkedHashMap<>();
-        Map<String, BigDecimal> indirectPercentages = new LinkedHashMap<>();
+        int totalStudents = responses.size();
+        Map<String, Integer> level1Counts = new LinkedHashMap<>();
+        Map<String, Integer> level2Counts = new LinkedHashMap<>();
+        Map<String, Integer> level3Counts = new LinkedHashMap<>();
+        Map<String, BigDecimal> level1Percentages = new LinkedHashMap<>();
+        Map<String, BigDecimal> level2Percentages = new LinkedHashMap<>();
+        Map<String, BigDecimal> level3Percentages = new LinkedHashMap<>();
+        Map<String, BigDecimal> overallIndirectPercentages = new LinkedHashMap<>();
+        Map<String, BigDecimal> indirectAttainmentScores = new LinkedHashMap<>();
+        Map<String, Integer> coAttainmentLevels = new LinkedHashMap<>();
+
+        List<LevelBand> indirectBands = parseLevelBands(config.getIndirectLevelsJson(), false);
+
+        double sumScores = 0;
+        int coCount = 0;
 
         for (String co : coCodes) {
-            double sum = 0;
-            int count = 0;
+            int count1 = 0;
+            int count2 = 0;
+            int count3 = 0;
+
             for (SurveyResponseRowDto r : responses) {
                 if (r.getCoRatings() != null && r.getCoRatings().containsKey(co)) {
-                    sum += r.getCoRatings().get(co).doubleValue();
-                    count++;
+                    BigDecimal rating = r.getCoRatings().get(co);
+                    if (rating != null) {
+                        int rInt = (int) Math.round(rating.doubleValue());
+                        if (rInt == 1) count1++;
+                        else if (rInt == 2) count2++;
+                        else if (rInt == 3) count3++;
+                    }
                 }
             }
-            BigDecimal avgScore = count > 0 ? BigDecimal.valueOf(sum / count).setScale(2, RoundingMode.HALF_UP) : new BigDecimal("2.50");
-            BigDecimal pct = avgScore.divide(new BigDecimal("3.00"), 4, RoundingMode.HALF_UP).multiply(new BigDecimal("100")).setScale(2, RoundingMode.HALF_UP);
 
-            indirectScores.put(co, avgScore);
-            indirectPercentages.put(co, pct);
+            int validResponses = count1 + count2 + count3;
+            int divisor = validResponses > 0 ? validResponses : (totalStudents > 0 ? totalStudents : 1);
+
+            double pct1Raw = (double) count1 * 100.0 / divisor;
+            double pct2Raw = (double) count2 * 100.0 / divisor;
+            double pct3Raw = (double) count3 * 100.0 / divisor;
+
+            BigDecimal pct1 = BigDecimal.valueOf(pct1Raw).setScale(2, RoundingMode.HALF_UP);
+            BigDecimal pct2 = BigDecimal.valueOf(pct2Raw).setScale(2, RoundingMode.HALF_UP);
+            BigDecimal pct3 = BigDecimal.valueOf(pct3Raw).setScale(2, RoundingMode.HALF_UP);
+
+            // Official workbook formula: overallIndirectPercentage = (pct1 * 0.33 + pct2 * 0.67 + pct3 * 1.0)
+            double overallIndirectPct = (pct1Raw * 0.33) + (pct2Raw * 0.67) + (pct3Raw * 1.0);
+            BigDecimal overallPct = BigDecimal.valueOf(overallIndirectPct).setScale(2, RoundingMode.HALF_UP);
+
+            // Indirect score out of 3.00
+            double scoreVal = (count1 * 1.0 + count2 * 2.0 + count3 * 3.0) / divisor;
+            BigDecimal indirectScore = BigDecimal.valueOf(scoreVal).setScale(2, RoundingMode.HALF_UP);
+
+            // Dynamic Level Band evaluation:
+            int level = evaluateLevelBand(overallPct, indirectBands);
+
+            level1Counts.put(co, count1);
+            level2Counts.put(co, count2);
+            level3Counts.put(co, count3);
+            level1Percentages.put(co, pct1);
+            level2Percentages.put(co, pct2);
+            level3Percentages.put(co, pct3);
+            overallIndirectPercentages.put(co, overallPct);
+            indirectAttainmentScores.put(co, indirectScore);
+            coAttainmentLevels.put(co, level);
+
+            sumScores += indirectScore.doubleValue();
+            coCount++;
         }
+
+        BigDecimal overallIndirectCoAttainment = coCount > 0
+                ? BigDecimal.valueOf(sumScores / coCount).setScale(2, RoundingMode.HALF_UP)
+                : BigDecimal.ZERO;
 
         SurveyAttainmentResultDto result = SurveyAttainmentResultDto.builder()
                 .courseId(offeringId)
+                .totalStudents(totalStudents)
+                .level1Counts(level1Counts)
+                .level2Counts(level2Counts)
+                .level3Counts(level3Counts)
+                .level1Percentages(level1Percentages)
+                .level2Percentages(level2Percentages)
+                .level3Percentages(level3Percentages)
+                .overallIndirectPercentages(overallIndirectPercentages)
+                .indirectAttainmentScores(indirectAttainmentScores)
+                .coAttainmentLevels(coAttainmentLevels)
+                .overallIndirectCoAttainment(overallIndirectCoAttainment)
                 .surveyResponses(responses)
-                .indirectAttainmentScores(indirectScores)
-                .overallIndirectPercentages(indirectPercentages)
                 .build();
 
         surveyAttainmentStore.put(offeringId, result);
@@ -574,64 +1001,139 @@ public class AttainmentCalculationService {
 
                 try (InputStream is = new FileInputStream(targetFile);
                      Workbook workbook = WorkbookFactory.create(is)) {
-                    Sheet sheet = workbook.getSheetAt(0);
+                    FormulaEvaluator evaluator = workbook.getCreationHelper().createFormulaEvaluator();
+                    Sheet sheet = findSurveySheet(workbook);
 
-                    Row headerRow = sheet.getRow(0);
-                    List<String> coHeaders = new ArrayList<>();
-                    if (headerRow != null) {
-                        for (int c = 2; c < headerRow.getLastCellNum(); c++) {
-                            Cell cell = headerRow.getCell(c);
-                            if (cell != null) {
-                                String val = cell.getStringCellValue().trim();
-                                if (val.toUpperCase().startsWith("CO")) {
-                                    coHeaders.add(val.toUpperCase());
+                    // Find CO header row (closest to student response rows)
+                    int coHeaderRowNum = -1;
+                    Map<Integer, String> coColMap = new LinkedHashMap<>();
+                    for (Row row : sheet) {
+                        Map<Integer, String> candidateCols = new LinkedHashMap<>();
+                        for (Cell cell : row) {
+                            String text = getStringCellValue(cell, evaluator);
+                            if (text != null && text.matches("(?i)^CO\\s*\\d+$")) {
+                                candidateCols.put(cell.getColumnIndex(), text.toUpperCase().replaceAll("\\s+", ""));
+                            }
+                        }
+                        if (candidateCols.size() >= coColMap.size() && !candidateCols.isEmpty()) {
+                            coColMap = candidateCols;
+                            coHeaderRowNum = row.getRowNum();
+                        }
+                    }
+
+                    if (coColMap.isEmpty()) {
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "No Course Outcome (CO) headers found in Survey sheet.");
+                    }
+
+                    // Check if any column header explicitly mentioned PRN or Name
+                    int prnColIdx = -1;
+                    int nameColIdx = -1;
+                    if (coHeaderRowNum >= 0) {
+                        Row hRow = sheet.getRow(coHeaderRowNum);
+                        if (hRow != null) {
+                            for (Cell cell : hRow) {
+                                String hText = getStringCellValue(cell, evaluator);
+                                if (hText != null) {
+                                    String clean = hText.toLowerCase().replaceAll("[^a-z]", "");
+                                    if (clean.contains("prn") || clean.contains("rollno") || clean.contains("studentid")) {
+                                        prnColIdx = cell.getColumnIndex();
+                                    } else if (clean.contains("name") || clean.contains("studentname")) {
+                                        nameColIdx = cell.getColumnIndex();
+                                    }
                                 }
                             }
                         }
                     }
-                    if (coHeaders.isEmpty()) {
-                        coHeaders = List.of("CO1", "CO2", "CO3", "CO4", "CO5");
-                    }
 
-                    for (int r = 1; r <= sheet.getLastRowNum(); r++) {
+                    // Parse student response rows below CO header
+                    for (int r = coHeaderRowNum + 1; r <= sheet.getLastRowNum(); r++) {
                         Row row = sheet.getRow(r);
                         if (row == null) continue;
 
-                        Cell prnCell = row.getCell(0);
-                        Cell nameCell = row.getCell(1);
-
-                        String prn = prnCell != null ? (prnCell.getCellType() == CellType.NUMERIC ? String.valueOf((long) prnCell.getNumericCellValue()) : prnCell.getStringCellValue().trim()) : null;
-                        String name = nameCell != null ? nameCell.getStringCellValue().trim() : "";
-
-                        if (prn == null || prn.isBlank()) continue;
-
                         Map<String, BigDecimal> coRatings = new LinkedHashMap<>();
-                        for (int i = 0; i < coHeaders.size(); i++) {
-                            Cell ratingCell = row.getCell(i + 2);
-                            BigDecimal rating = new BigDecimal("3.00");
-                            if (ratingCell != null && ratingCell.getCellType() == CellType.NUMERIC) {
-                                rating = BigDecimal.valueOf(ratingCell.getNumericCellValue());
+                        Map<String, String> coFeedbacks = new LinkedHashMap<>();
+                        boolean hasAnyRating = false;
+
+                        for (Map.Entry<Integer, String> e : coColMap.entrySet()) {
+                            int colIdx = e.getKey();
+                            String coCode = e.getValue();
+                            Cell cell = row.getCell(colIdx);
+
+                            Double numVal = getNumericCellValue(cell, evaluator);
+                            String strVal = getStringCellValue(cell, evaluator);
+
+                            if (numVal != null && numVal >= 1 && numVal <= 3) {
+                                int valInt = (int) Math.round(numVal);
+                                coRatings.put(coCode, BigDecimal.valueOf(valInt).setScale(2, RoundingMode.HALF_UP));
+                                String label = valInt == 3 ? "Substantial" : (valInt == 2 ? "Moderate" : "Slight");
+                                coFeedbacks.put(coCode, label);
+                                hasAnyRating = true;
+                            } else if (strVal != null && !strVal.isBlank()) {
+                                String trimmed = strVal.trim();
+                                if ("substantial".equalsIgnoreCase(trimmed) || "3".equals(trimmed) || "3.0".equals(trimmed) || "high".equalsIgnoreCase(trimmed) || "3 - substantial".equalsIgnoreCase(trimmed)) {
+                                    coRatings.put(coCode, new BigDecimal("3.00"));
+                                    coFeedbacks.put(coCode, "Substantial");
+                                    hasAnyRating = true;
+                                } else if ("moderate".equalsIgnoreCase(trimmed) || "2".equals(trimmed) || "2.0".equals(trimmed) || "medium".equalsIgnoreCase(trimmed) || "2 - moderate".equalsIgnoreCase(trimmed)) {
+                                    coRatings.put(coCode, new BigDecimal("2.00"));
+                                    coFeedbacks.put(coCode, "Moderate");
+                                    hasAnyRating = true;
+                                } else if ("slight".equalsIgnoreCase(trimmed) || "1".equals(trimmed) || "1.0".equals(trimmed) || "low".equalsIgnoreCase(trimmed) || "1 - slight".equalsIgnoreCase(trimmed)) {
+                                    coRatings.put(coCode, new BigDecimal("1.00"));
+                                    coFeedbacks.put(coCode, "Slight");
+                                    hasAnyRating = true;
+                                } else if ("-".equals(trimmed) || "--".equals(trimmed)) {
+                                    // Empty rating
+                                } else {
+                                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                                            "Invalid survey response '" + strVal + "' for " + coCode + ". Valid values are 'Slight', 'Moderate', 'Substantial' or 1, 2, 3.");
+                                }
                             }
-                            coRatings.put(coHeaders.get(i), rating);
                         }
 
+                        if (!hasAnyRating) continue; // Skip empty rows
+
+                        String prn = null;
+                        if (prnColIdx != -1) {
+                            Cell pCell = row.getCell(prnColIdx);
+                            String rawPrn = getStringCellValue(pCell, evaluator);
+                            if (rawPrn != null && !rawPrn.isBlank()) {
+                                prn = rawPrn.trim();
+                            }
+                        }
+
+                        String sName = null;
+                        if (nameColIdx != -1) {
+                            Cell nCell = row.getCell(nameColIdx);
+                            String rawName = getStringCellValue(nCell, evaluator);
+                            if (rawName != null && !rawName.isBlank()) {
+                                sName = rawName.trim();
+                            }
+                        }
+
+                        int srNo = surveyResponses.size() + 1;
                         surveyResponses.add(SurveyResponseRowDto.builder()
-                                .srNo(surveyResponses.size() + 1)
-                                .prn(prn)
-                                .studentName(name.isBlank() ? "Student " + (surveyResponses.size() + 1) : name)
+                                .srNo(srNo)
+                                .prn(prn != null && !prn.isBlank() ? prn : "SRV-" + srNo)
+                                .studentName(sName != null && !sName.isBlank() ? sName : "Student " + srNo)
                                 .coRatings(coRatings)
+                                .coFeedbacks(coFeedbacks)
                                 .build());
                     }
                 }
 
-                // Validate student PRNs against Course Offering's batch
+                if (surveyResponses.isEmpty()) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "No valid survey response rows found in the Survey sheet.");
+                }
+
+                // Validate student PRNs against Course Offering's batch if PRNs are provided
                 for (SurveyResponseRowDto sr : surveyResponses) {
                     String prn = sr.getPrn();
-                    if (prn != null && !prn.isBlank()) {
+                    if (prn != null && !prn.isBlank() && !prn.startsWith("SRV-")) {
                         Optional<Student> studentOpt = studentRepository.findByPrn(prn);
                         if (studentOpt.isEmpty()) {
                             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                                     "Validation Error: Student with PRN '" + prn + "' is not registered in the system. Survey upload rejected.");
+                                    "Validation Error: Student with PRN '" + prn + "' is not registered in the system. Survey upload rejected.");
                         }
                         Student student = studentOpt.get();
                         if (student.getBatchId() == null || !student.getBatchId().equals(batchId)) {
@@ -667,7 +1169,6 @@ public class AttainmentCalculationService {
             }
         }
 
-
         SurveyMarksPayloadDto payload = SurveyMarksPayloadDto.builder()
                 .courseId(offeringId)
                 .surveyResponses(surveyResponses)
@@ -686,9 +1187,11 @@ public class AttainmentCalculationService {
 
         Map<String, BigDecimal> defaultScores = new LinkedHashMap<>();
         Map<String, BigDecimal> defaultPcts = new LinkedHashMap<>();
+        Map<String, Integer> defaultLevels = new LinkedHashMap<>();
         for (int i = 1; i <= 5; i++) {
             defaultScores.put("CO" + i, new BigDecimal("2.50"));
             defaultPcts.put("CO" + i, new BigDecimal("83.33"));
+            defaultLevels.put("CO" + i, 3);
         }
 
         return SurveyAttainmentResultDto.builder()
@@ -696,6 +1199,8 @@ public class AttainmentCalculationService {
                 .surveyResponses(Collections.emptyList())
                 .indirectAttainmentScores(defaultScores)
                 .overallIndirectPercentages(defaultPcts)
+                .coAttainmentLevels(defaultLevels)
+                .overallIndirectCoAttainment(new BigDecimal("2.50"))
                 .build();
     }
 
@@ -741,12 +1246,12 @@ public class AttainmentCalculationService {
 
             BigDecimal directPct = getCoMapValue(examResult.getPercentageAboveThreshold(), coCode, i, new BigDecimal("75.00"));
             Integer directLevelObj = getCoMapValue(examResult.getCoAttainmentLevels(), coCode, i, 3);
-            int directLevel = directLevelObj != null ? directLevelObj : 3;
+            int directLevel = directLevelObj != null ? directLevelObj : evaluateLevelBand(directPct, parseLevelBands(config.getDirectLevelsJson(), true));
 
             BigDecimal indirectPct = getCoMapValue(surveyResult.getOverallIndirectPercentages(), coCode, i, new BigDecimal("83.33"));
             BigDecimal indirectScore = getCoMapValue(surveyResult.getIndirectAttainmentScores(), coCode, i, new BigDecimal("2.50"));
-
-            int indirectLevel = indirectScore.compareTo(new BigDecimal("2.50")) >= 0 ? 3 : (indirectScore.compareTo(new BigDecimal("1.50")) >= 0 ? 2 : 1);
+            Integer indirectLevelObj = getCoMapValue(surveyResult.getCoAttainmentLevels(), coCode, i, 3);
+            int indirectLevel = indirectLevelObj != null ? indirectLevelObj : evaluateLevelBand(indirectPct, parseLevelBands(config.getIndirectLevelsJson(), false));
 
             double directW = config.getDirectWeight() != null ? config.getDirectWeight().doubleValue() / 100.0 : 0.80;
             double indirectW = config.getIndirectWeight() != null ? config.getIndirectWeight().doubleValue() / 100.0 : 0.20;
@@ -822,16 +1327,75 @@ public class AttainmentCalculationService {
     //  PROGRAMME LEVEL INDIRECT SURVEY PROCESSING
     // =========================================================================
 
+    private Sheet findProgrammeSurveySheet(Workbook workbook) {
+        int numberOfSheets = workbook.getNumberOfSheets();
+        for (int i = 0; i < numberOfSheets; i++) {
+            String sheetName = workbook.getSheetName(i).trim();
+            if (sheetName.matches("(?i).*average\\s*attainment.*id.*|.*indirect.*|.*programme.*survey.*|.*exit.*survey.*|.*po.*pso.*survey.*")) {
+                return workbook.getSheetAt(i);
+            }
+        }
+        // Content inspection fallback
+        for (int i = 0; i < numberOfSheets; i++) {
+            Sheet s = workbook.getSheetAt(i);
+            for (Row r : s) {
+                for (Cell c : r) {
+                    String text = getStringCellValue(c, null);
+                    if (text != null && text.matches("(?i)^PO\\s*1$|^PSO\\s*1$")) {
+                        return s;
+                    }
+                }
+            }
+        }
+        return workbook.getSheetAt(0);
+    }
+
     @Transactional
     public ProgrammeSurveyResultDto processAndSaveProgrammeSurveyFile(String programmeId, String batchId, MultipartFile file, String uploadedBy) {
         System.out.println("[AttainmentCalculationService] processAndSaveProgrammeSurveyFile called | programmeId: " + programmeId + " | batchId: " + batchId);
         String key = programmeId + "::" + batchId;
+
+        // Load authoritative configured POs and PSOs for the programme
+        List<ProgrammeOutcome> pos = programmeOutcomeRepository.findByProgrammeIdOrderByCodeAsc(programmeId);
+        if (pos == null || pos.isEmpty()) {
+            List<ProgrammeOutcome> defaultPos = new ArrayList<>();
+            for (int i = 1; i <= 12; i++) {
+                defaultPos.add(ProgrammeOutcome.builder()
+                        .id("po-def-" + i)
+                        .programmeId(programmeId)
+                        .code("PO" + i)
+                        .statement("Program Outcome " + i)
+                        .build());
+            }
+            pos = defaultPos;
+        }
+        List<ProgrammeSpecificOutcome> psos = programmeSpecificOutcomeRepository.findByProgrammeIdOrderByCodeAsc(programmeId);
+        if (psos == null || psos.isEmpty()) {
+            List<ProgrammeSpecificOutcome> defaultPsos = new ArrayList<>();
+            for (int i = 1; i <= 3; i++) {
+                defaultPsos.add(ProgrammeSpecificOutcome.builder()
+                        .id("pso-def-" + i)
+                        .programmeId(programmeId)
+                        .code("PSO" + i)
+                        .statement("Program Specific Outcome " + i)
+                        .build());
+            }
+            psos = defaultPsos;
+        }
+
+        Set<String> configuredPOCodes = pos.stream()
+                .map(p -> p.getCode().toUpperCase().replaceAll("\\s+", ""))
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        Set<String> configuredPSOCodes = psos.stream()
+                .map(p -> p.getCode().toUpperCase().replaceAll("\\s+", ""))
+                .collect(Collectors.toCollection(LinkedHashSet::new));
 
         List<ProgrammeSurveyResultDto.OutcomeIndirectItem> poItems = new ArrayList<>();
         List<ProgrammeSurveyResultDto.OutcomeIndirectItem> psoItems = new ArrayList<>();
         int rowsProcessed = 0;
 
         if (file != null && !file.isEmpty()) {
+            File targetFile = null;
             try {
                 String uploadDir = (baseUploadDir != null ? baseUploadDir : "uploads") + "/programme_survey/" + programmeId + "/" + batchId;
                 File dir = new File(uploadDir);
@@ -839,44 +1403,224 @@ public class AttainmentCalculationService {
 
                 String originalFileName = file.getOriginalFilename() != null ? file.getOriginalFilename() : "programme_survey.xlsx";
                 String savedFileName = System.currentTimeMillis() + "_" + originalFileName;
-                File targetFile = new File(dir, savedFileName);
+                targetFile = new File(dir, savedFileName);
                 file.transferTo(targetFile);
-
-                UploadedDocument doc = UploadedDocument.builder()
-                        .id("doc-" + UUID.randomUUID().toString().substring(0, 8))
-                        .batchId(batchId)
-                        .documentType(DocumentType.SURVEY)
-                        .fileName(originalFileName)
-                        .savedFileName(savedFileName)
-                        .savedPath(targetFile.getAbsolutePath())
-                        .fileSize(file.getSize())
-                        .recordsProcessed(0)
-                        .uploadedBy(uploadedBy != null ? uploadedBy : "Programme Coordinator")
-                        .uploadedAt(ZonedDateTime.now())
-                        .build();
 
                 try (InputStream is = new FileInputStream(targetFile);
                      Workbook workbook = WorkbookFactory.create(is)) {
-                    Sheet sheet = workbook.getSheetAt(0);
-                    rowsProcessed = Math.max(0, sheet.getLastRowNum());
-                    doc.setRecordsProcessed(rowsProcessed);
-                } catch (Exception ignored) {}
+                    FormulaEvaluator evaluator = workbook.getCreationHelper().createFormulaEvaluator();
+                    Sheet sheet = findProgrammeSurveySheet(workbook);
 
-                uploadedDocumentRepository.save(doc);
+                    // 1. Locate PO/PSO header row
+                    int headerRowNum = -1;
+                    Map<Integer, String> poColMap = new LinkedHashMap<>();
+                    Map<Integer, String> psoColMap = new LinkedHashMap<>();
+                    Set<String> duplicateCodes = new LinkedHashSet<>();
+                    Set<String> unknownCodes = new LinkedHashSet<>();
+
+                    for (Row row : sheet) {
+                        Map<Integer, String> rowPoCols = new LinkedHashMap<>();
+                        Map<Integer, String> rowPsoCols = new LinkedHashMap<>();
+                        Set<String> rowSeen = new HashSet<>();
+                        Set<String> rowDups = new LinkedHashSet<>();
+                        Set<String> rowUnk = new LinkedHashSet<>();
+
+                        for (Cell cell : row) {
+                            String text = getStringCellValue(cell, evaluator);
+                            if (text == null || text.isBlank()) continue;
+                            String clean = text.trim().toUpperCase().replaceAll("\\s+", "");
+
+                            if (clean.matches("^PO\\d+$")) {
+                                if (!rowSeen.add(clean)) rowDups.add(clean);
+                                if (!configuredPOCodes.contains(clean)) rowUnk.add(clean);
+                                rowPoCols.put(cell.getColumnIndex(), clean);
+                            } else if (clean.matches("^PSO\\d+$")) {
+                                if (!rowSeen.add(clean)) rowDups.add(clean);
+                                if (!configuredPSOCodes.contains(clean)) rowUnk.add(clean);
+                                rowPsoCols.put(cell.getColumnIndex(), clean);
+                            } else if (clean.matches("^(PO|PSO).*") && !clean.contains("AVERAGE") && !clean.contains("ATTAINMENT") && !clean.contains("DIRECT") && !clean.contains("INDIRECT") && !clean.contains("TARGET") && !clean.contains("MAPPING") && !clean.contains("FRAMEWORK")) {
+                                rowUnk.add(clean);
+                            }
+                        }
+
+                        if ((rowPoCols.size() + rowPsoCols.size()) > (poColMap.size() + psoColMap.size())) {
+                            poColMap = rowPoCols;
+                            psoColMap = rowPsoCols;
+                            duplicateCodes = rowDups;
+                            unknownCodes = rowUnk;
+                            headerRowNum = row.getRowNum();
+                        }
+                    }
+
+                    if (headerRowNum == -1 || (poColMap.isEmpty() && psoColMap.isEmpty())) {
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "No Program Outcome (PO/PSO) headers found in Programme End Survey sheet.");
+                    }
+
+                    // 2. Strict Exact Outcome Validation Rules
+                    // Duplicate Check (A6)
+                    if (!duplicateCodes.isEmpty()) {
+                        String dup = duplicateCodes.iterator().next();
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Programme End Survey contains duplicate outcome " + dup + ".");
+                    }
+
+                    // Extra / Unknown Outcome Check (A4 & A5)
+                    if (!unknownCodes.isEmpty()) {
+                        String unk = unknownCodes.iterator().next();
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Programme End Survey contains unconfigured outcome " + unk + ".");
+                    }
+
+                    // Missing PO Check (A3 & A7)
+                    for (String cfgPo : configuredPOCodes) {
+                        if (!poColMap.containsValue(cfgPo)) {
+                            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Programme End Survey is missing configured outcome " + cfgPo + ".");
+                        }
+                    }
+
+                    // Missing PSO Check (A3 & A7)
+                    for (String cfgPso : configuredPSOCodes) {
+                        if (!psoColMap.containsValue(cfgPso)) {
+                            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Programme End Survey is missing configured outcome " + cfgPso + ".");
+                        }
+                    }
+
+                    // 3. Dynamic Student Response Rows Processing (A9)
+                    Map<String, List<Double>> poRatingsMap = new LinkedHashMap<>();
+                    Map<String, List<Double>> psoRatingsMap = new LinkedHashMap<>();
+                    for (String po : configuredPOCodes) poRatingsMap.put(po, new ArrayList<>());
+                    for (String pso : configuredPSOCodes) psoRatingsMap.put(pso, new ArrayList<>());
+
+                    for (int r = headerRowNum + 1; r <= sheet.getLastRowNum(); r++) {
+                        Row row = sheet.getRow(r);
+                        if (row == null) continue;
+
+                        boolean hasData = false;
+                        Map<String, Double> rowPoVals = new HashMap<>();
+                        Map<String, Double> rowPsoVals = new HashMap<>();
+
+                        for (Map.Entry<Integer, String> entry : poColMap.entrySet()) {
+                            Cell c = row.getCell(entry.getKey());
+                            Double num = getNumericCellValue(c, evaluator);
+                            if (num == null) {
+                                String s = getStringCellValue(c, evaluator);
+                                if (s != null && !s.isBlank()) {
+                                    String tr = s.trim().toLowerCase();
+                                    if (tr.contains("substantial") || tr.equals("3") || tr.equals("3.0") || tr.equals("high")) num = 3.0;
+                                    else if (tr.contains("moderate") || tr.equals("2") || tr.equals("2.0") || tr.equals("medium")) num = 2.0;
+                                    else if (tr.contains("slight") || tr.equals("1") || tr.equals("1.0") || tr.equals("low")) num = 1.0;
+                                }
+                            }
+                            if (num != null && num >= 0) {
+                                if (num > 3.0 && num <= 100.0) {
+                                    num = (num / 100.0) * 3.0;
+                                }
+                                rowPoVals.put(entry.getValue(), Math.min(3.0, num));
+                                hasData = true;
+                            }
+                        }
+
+                        for (Map.Entry<Integer, String> entry : psoColMap.entrySet()) {
+                            Cell c = row.getCell(entry.getKey());
+                            Double num = getNumericCellValue(c, evaluator);
+                            if (num == null) {
+                                String s = getStringCellValue(c, evaluator);
+                                if (s != null && !s.isBlank()) {
+                                    String tr = s.trim().toLowerCase();
+                                    if (tr.contains("substantial") || tr.equals("3") || tr.equals("3.0") || tr.equals("high")) num = 3.0;
+                                    else if (tr.contains("moderate") || tr.equals("2") || tr.equals("2.0") || tr.equals("medium")) num = 2.0;
+                                    else if (tr.contains("slight") || tr.equals("1") || tr.equals("1.0") || tr.equals("low")) num = 1.0;
+                                }
+                            }
+                            if (num != null && num >= 0) {
+                                if (num > 3.0 && num <= 100.0) {
+                                    num = (num / 100.0) * 3.0;
+                                }
+                                rowPsoVals.put(entry.getValue(), Math.min(3.0, num));
+                                hasData = true;
+                            }
+                        }
+
+                        if (hasData) {
+                            rowsProcessed++;
+                            for (Map.Entry<String, Double> e : rowPoVals.entrySet()) {
+                                poRatingsMap.get(e.getKey()).add(e.getValue());
+                            }
+                            for (Map.Entry<String, Double> e : rowPsoVals.entrySet()) {
+                                psoRatingsMap.get(e.getKey()).add(e.getValue());
+                            }
+                        }
+                    }
+
+                    if (rowsProcessed == 0) {
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "No valid survey response rows found in the Programme End Survey sheet.");
+                    }
+
+                    // Compute average indirect attainment for each PO & PSO
+                    for (String poCode : configuredPOCodes) {
+                        List<Double> ratings = poRatingsMap.get(poCode);
+                        BigDecimal avgVal;
+                        if (ratings != null && !ratings.isEmpty()) {
+                            double avg = ratings.stream().mapToDouble(Double::doubleValue).average().orElse(2.30);
+                            avgVal = BigDecimal.valueOf(avg).setScale(2, RoundingMode.HALF_UP);
+                        } else {
+                            avgVal = new BigDecimal("2.30");
+                        }
+                        poItems.add(ProgrammeSurveyResultDto.OutcomeIndirectItem.builder()
+                                .outcomeCode(poCode)
+                                .indirectAttainment(avgVal)
+                                .build());
+                    }
+
+                    for (String psoCode : configuredPSOCodes) {
+                        List<Double> ratings = psoRatingsMap.get(psoCode);
+                        BigDecimal avgVal;
+                        if (ratings != null && !ratings.isEmpty()) {
+                            double avg = ratings.stream().mapToDouble(Double::doubleValue).average().orElse(2.20);
+                            avgVal = BigDecimal.valueOf(avg).setScale(2, RoundingMode.HALF_UP);
+                        } else {
+                            avgVal = new BigDecimal("2.20");
+                        }
+                        psoItems.add(ProgrammeSurveyResultDto.OutcomeIndirectItem.builder()
+                                .outcomeCode(psoCode)
+                                .indirectAttainment(avgVal)
+                                .build());
+                    }
+
+                    // 4. Persist uploaded document record only after successful validation
+                    UploadedDocument doc = UploadedDocument.builder()
+                            .id("doc-" + UUID.randomUUID().toString().substring(0, 8))
+                            .batchId(batchId)
+                            .documentType(DocumentType.SURVEY)
+                            .fileName(originalFileName)
+                            .savedFileName(savedFileName)
+                            .savedPath(targetFile.getAbsolutePath())
+                            .fileSize(file.getSize())
+                            .recordsProcessed(rowsProcessed)
+                            .uploadedBy(uploadedBy != null ? uploadedBy : "Programme Coordinator")
+                            .uploadedAt(ZonedDateTime.now())
+                            .build();
+                    uploadedDocumentRepository.save(doc);
+                }
+            } catch (ResponseStatusException rse) {
+                if (targetFile != null && targetFile.exists()) targetFile.delete();
+                throw rse;
             } catch (Exception e) {
-                System.err.println("[AttainmentCalculationService] Failed to parse programme survey file: " + e.getMessage());
+                if (targetFile != null && targetFile.exists()) targetFile.delete();
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Failed to parse Programme End Survey file: " + e.getMessage());
             }
-        }
-
-        for (int i = 1; i <= 12; i++) {
-            String code = "PO" + i;
-            BigDecimal val = new BigDecimal("2.30").add(BigDecimal.valueOf((i % 3) * 0.10)).setScale(2, RoundingMode.HALF_UP);
-            poItems.add(ProgrammeSurveyResultDto.OutcomeIndirectItem.builder().outcomeCode(code).indirectAttainment(val).build());
-        }
-        for (int i = 1; i <= 3; i++) {
-            String code = "PSO" + i;
-            BigDecimal val = new BigDecimal("2.20").add(BigDecimal.valueOf((i % 2) * 0.10)).setScale(2, RoundingMode.HALF_UP);
-            psoItems.add(ProgrammeSurveyResultDto.OutcomeIndirectItem.builder().outcomeCode(code).indirectAttainment(val).build());
+        } else {
+            // Default calculated values for configured outcomes
+            int idx = 1;
+            for (String poCode : configuredPOCodes) {
+                BigDecimal val = new BigDecimal("2.30").add(BigDecimal.valueOf((idx % 3) * 0.10)).setScale(2, RoundingMode.HALF_UP);
+                poItems.add(ProgrammeSurveyResultDto.OutcomeIndirectItem.builder().outcomeCode(poCode).indirectAttainment(val).build());
+                idx++;
+            }
+            idx = 1;
+            for (String psoCode : configuredPSOCodes) {
+                BigDecimal val = new BigDecimal("2.20").add(BigDecimal.valueOf((idx % 2) * 0.10)).setScale(2, RoundingMode.HALF_UP);
+                psoItems.add(ProgrammeSurveyResultDto.OutcomeIndirectItem.builder().outcomeCode(psoCode).indirectAttainment(val).build());
+                idx++;
+            }
         }
 
         ProgrammeSurveyResultDto result = ProgrammeSurveyResultDto.builder()
@@ -906,7 +1650,31 @@ public class AttainmentCalculationService {
 
         List<CourseOffering> offerings = courseOfferingRepository.findByBatchId(batchId);
         List<ProgrammeOutcome> pos = programmeOutcomeRepository.findByProgrammeIdOrderByCodeAsc(programmeId);
+        if (pos == null || pos.isEmpty()) {
+            List<ProgrammeOutcome> defaultPos = new ArrayList<>();
+            for (int i = 1; i <= 12; i++) {
+                defaultPos.add(ProgrammeOutcome.builder()
+                        .id("po-def-" + i)
+                        .programmeId(programmeId)
+                        .code("PO" + i)
+                        .statement("Program Outcome " + i)
+                        .build());
+            }
+            pos = defaultPos;
+        }
         List<ProgrammeSpecificOutcome> psos = programmeSpecificOutcomeRepository.findByProgrammeIdOrderByCodeAsc(programmeId);
+        if (psos == null || psos.isEmpty()) {
+            List<ProgrammeSpecificOutcome> defaultPsos = new ArrayList<>();
+            for (int i = 1; i <= 3; i++) {
+                defaultPsos.add(ProgrammeSpecificOutcome.builder()
+                        .id("pso-def-" + i)
+                        .programmeId(programmeId)
+                        .code("PSO" + i)
+                        .statement("Program Specific Outcome " + i)
+                        .build());
+            }
+            psos = defaultPsos;
+        }
 
         List<ProgrammeTarget> targets = programmeTargetRepository.findByBatchId(batchId);
         if (targets.isEmpty()) {
@@ -933,9 +1701,8 @@ public class AttainmentCalculationService {
         List<ProgrammeAttainmentResultDto.OutcomeMappingItem> poMappingBreakdown = new ArrayList<>();
         List<ProgrammeAttainmentResultDto.OutcomeDirectItem> poDirectBreakdown = new ArrayList<>();
 
-
-        for (int i = 1; i <= 12; i++) {
-            String poCode = "PO" + i;
+        for (int i = 0; i < pos.size(); i++) {
+            String poCode = pos.get(i).getCode();
             List<ProgrammeAttainmentResultDto.SemesterValue> semMapValues = new ArrayList<>();
             List<ProgrammeAttainmentResultDto.SemesterValue> semDirectValues = new ArrayList<>();
             double totalMap = 0;
@@ -954,8 +1721,8 @@ public class AttainmentCalculationService {
                 semCount++;
             }
 
-            BigDecimal avgMap = semCount > 0 ? BigDecimal.valueOf(totalMap / semCount).setScale(2, RoundingMode.HALF_UP) : new BigDecimal("2.30");
-            BigDecimal avgDirect = semCount > 0 ? BigDecimal.valueOf(totalDirect / semCount).setScale(2, RoundingMode.HALF_UP) : new BigDecimal("2.35");
+            BigDecimal avgMap = semCount > 0 ? BigDecimal.valueOf(totalMap / semCount).setScale(2, RoundingMode.HALF_UP) : new BigDecimal("2.50");
+            BigDecimal avgDirect = semCount > 0 ? BigDecimal.valueOf(totalDirect / semCount).setScale(2, RoundingMode.HALF_UP) : new BigDecimal("2.20");
 
             poMappingBreakdown.add(ProgrammeAttainmentResultDto.OutcomeMappingItem.builder()
                     .poCode(poCode)
@@ -973,8 +1740,8 @@ public class AttainmentCalculationService {
         List<ProgrammeAttainmentResultDto.OutcomeMappingItem> psoMappingBreakdown = new ArrayList<>();
         List<ProgrammeAttainmentResultDto.OutcomeDirectItem> psoDirectBreakdown = new ArrayList<>();
 
-        for (int i = 1; i <= 3; i++) {
-            String psoCode = "PSO" + i;
+        for (int i = 0; i < psos.size(); i++) {
+            String psoCode = psos.get(i).getCode();
             List<ProgrammeAttainmentResultDto.SemesterValue> semMapValues = new ArrayList<>();
             List<ProgrammeAttainmentResultDto.SemesterValue> semDirectValues = new ArrayList<>();
             double totalMap = 0;
