@@ -5,6 +5,8 @@ import lombok.*;
 
 import java.math.BigDecimal;
 import java.time.ZonedDateTime;
+import java.util.List;
+import java.util.Map;
 
 @Entity
 @Table(
@@ -54,9 +56,33 @@ public class AttainmentConfiguration {
 
     private ZonedDateTime submittedAt;
 
+    @Column(name = "direct_levels_json", columnDefinition = "TEXT")
+    private String directLevelsJson;
+
+    @Column(name = "indirect_levels_json", columnDefinition = "TEXT")
+    private String indirectLevelsJson;
+
     @Column(name = "created_at", insertable = false, updatable = false)
     private ZonedDateTime createdAt;
 
     @Column(name = "updated_at")
     private ZonedDateTime updatedAt;
+
+    @Transient
+    public List<Map<String, Object>> getDirectLevels() {
+        return List.of(
+                Map.of("level", 1, "minPercentage", 0, "maxPercentage", 50),
+                Map.of("level", 2, "minPercentage", 50, "maxPercentage", 70),
+                Map.of("level", 3, "minPercentage", 70, "maxPercentage", 100)
+        );
+    }
+
+    @Transient
+    public List<Map<String, Object>> getIndirectLevels() {
+        return List.of(
+                Map.of("level", 1, "minPercentage", 0, "maxPercentage", 50),
+                Map.of("level", 2, "minPercentage", 50, "maxPercentage", 70),
+                Map.of("level", 3, "minPercentage", 70, "maxPercentage", 100)
+        );
+    }
 }

@@ -30,6 +30,8 @@ public class ReportController {
     private final BatchRepository batchRepository;
     private final CourseAtrRepository courseAtrRepository;
     private final ProgrammeAtrRepository programmeAtrRepository;
+    private final com.dypiu.nba.service.AttainmentReportExportService exportService;
+    private final com.dypiu.nba.service.OutcomeService outcomeService;
 
     @GetMapping("/filters")
     public ResponseEntity<ApiResponse<ReportFiltersDto>> getReportFilters(Principal principal) {
@@ -281,5 +283,78 @@ public class ReportController {
                 .success(true)
                 .data(attainmentCalculationService.calculateCourseCoAttainment(offering.getCourseId()))
                 .build());
+    }
+
+    // --- Summary Endpoint ---
+    @GetMapping("/summary")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getReportsSummary(
+            @RequestParam(required = false) String programmeId,
+            @RequestParam(required = false) String courseId,
+            @RequestParam(required = false) String batchId,
+            Principal principal) {
+        String pId = programmeId != null && !programmeId.isBlank() ? programmeId : "prog-1";
+        String bId = batchId != null && !batchId.isBlank() ? batchId : "batch-comp-2025-29";
+        String cId = courseId != null && !courseId.isBlank() ? courseId : "crs-1";
+
+        Map<String, Object> coAtt = attainmentCalculationService.calculateCourseCoAttainment(cId);
+        com.dypiu.nba.dto.CourseMappingMatrixDto matrixDto = outcomeService.getCourseMappings(cId);
+        com.dypiu.nba.dto.ProgrammeAttainmentResultDto progAtt = attainmentCalculationService.calculateProgrammeAttainment(pId, bId);
+
+        Map<String, Object> courseAttainment = new LinkedHashMap<>();
+        courseAttainment.put("courseId", cId);
+        courseAttainment.put("batchId", bId);
+        courseAttainment.put("directAttainment", coAtt.get("directAttainment"));
+        courseAttainment.put("indirectAttainment", coAtt.get("indirectAttainment"));
+        courseAttainment.put("overallAttainment", coAtt.get("overallCoAttainment"));
+        courseAttainment.put("coList", coAtt.get("coAttainments"));
+        courseAttainment.put("matrix", matrixDto.getMatrix());
+
+        Map<String, Object> programmeAttainment = new LinkedHashMap<>();
+        programmeAttainment.put("programmeId", pId);
+        programmeAttainment.put("batchId", bId);
+        programmeAttainment.put("poAttainment", progAtt != null ? progAtt.getPoAttainments() : Collections.emptyMap());
+        programmeAttainment.put("psoAttainment", progAtt != null ? progAtt.getPsoAttainments() : Collections.emptyMap());
+
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("courseAttainment", courseAttainment);
+        data.put("programmeAttainment", programmeAttainment);
+
+        return ResponseEntity.ok(ApiResponse.<Map<String, Object>>builder()
+                .success(true)
+                .data(data)
+                .build());
+    }
+
+    // --- Generic Reports Export ---
+    @GetMapping(value = "/export/excel", produces = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    public ResponseEntity<byte[]> exportReportsExcel(
+            @RequestParam(required = false) String programmeId,
+            @RequestParam(required = false) String courseId,
+            @RequestParam(required = false) String batchId,
+            @RequestParam(required = false) String reportType) {
+        String targetCourseId = courseId != null && !courseId.isBlank() ? courseId : "crs-1";
+        byte[] excelBytes = exportService.generateAttainmentExcel(targetCourseId, batchId);
+        String filename = "Attainment_Report_" + targetCourseId + ".xlsx";
+
+        return ResponseEntity.ok()
+                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
+                .contentType(org.springframework.http.MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .body(excelBytes);
+    }
+
+    @GetMapping(value = "/export/pdf", produces = org.springframework.http.MediaType.APPLICATION_PDF_VALUE)
+    public ResponseEntity<byte[]> exportReportsPdf(
+            @RequestParam(required = false) String programmeId,
+            @RequestParam(required = false) String courseId,
+            @RequestParam(required = false) String batchId,
+            @RequestParam(required = false) String reportType) {
+        String targetCourseId = courseId != null && !courseId.isBlank() ? courseId : "crs-1";
+        byte[] pdfBytes = exportService.generateAttainmentPdf(targetCourseId, batchId);
+        String filename = "Attainment_Report_" + targetCourseId + ".pdf";
+
+        return ResponseEntity.ok()
+                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + filename + "\"")
+                .contentType(org.springframework.http.MediaType.APPLICATION_PDF)
+                .body(pdfBytes);
     }
 }

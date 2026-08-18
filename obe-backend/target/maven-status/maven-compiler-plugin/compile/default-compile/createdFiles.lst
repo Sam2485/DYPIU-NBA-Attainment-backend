@@ -223,6 +223,7 @@ com/dypiu/nba/entity/CourseMappingKeyword$CourseMappingKeywordBuilder.class
 com/dypiu/nba/repository/CourseCoordinatorSetupProgressRepository.class
 com/dypiu/nba/entity/ProgrammeAtrStatus.class
 com/dypiu/nba/service/AttainmentReportExportService.class
+com/dypiu/nba/controller/UserController.class
 com/dypiu/nba/dto/ProgrammeAttainmentResultDto$DirectAttainmentBreakdown$DirectAttainmentBreakdownBuilder.class
 com/dypiu/nba/repository/ProgrammeSpecificOutcomeRepository.class
 com/dypiu/nba/entity/HodSetupProgress.class

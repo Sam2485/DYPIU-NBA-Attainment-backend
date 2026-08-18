@@ -651,6 +651,48 @@ public class OutcomeService {
             psoKw = coursePsoKeywordsMap.get(targetOfferingId);
         }
 
+        Map<String, Map<String, Integer>> matrix = new LinkedHashMap<>();
+        Map<String, List<Integer>> poVals = new LinkedHashMap<>();
+        Map<String, List<Integer>> psoVals = new LinkedHashMap<>();
+
+        Map<String, String> coIdToCode = cos.stream().collect(Collectors.toMap(CourseOutcome::getId, CourseOutcome::getCode, (a, b) -> a));
+
+        for (CourseOutcome co : cos) {
+            matrix.put(co.getCode(), new LinkedHashMap<>());
+        }
+
+        for (CoPoMapping m : poMappings) {
+            String coCode = coIdToCode.get(m.getCourseOutcomeId());
+            if (coCode != null && matrix.containsKey(coCode)) {
+                matrix.get(coCode).put(m.getPoCode(), m.getMappingLevel());
+            }
+            if (m.getMappingLevel() != null && m.getMappingLevel() > 0) {
+                poVals.computeIfAbsent(m.getPoCode(), k -> new ArrayList<>()).add(m.getMappingLevel());
+            }
+        }
+
+        for (CoPsoMapping m : psoMappings) {
+            String coCode = coIdToCode.get(m.getCourseOutcomeId());
+            if (coCode != null && matrix.containsKey(coCode)) {
+                matrix.get(coCode).put(m.getPsoCode(), m.getMappingLevel());
+            }
+            if (m.getMappingLevel() != null && m.getMappingLevel() > 0) {
+                psoVals.computeIfAbsent(m.getPsoCode(), k -> new ArrayList<>()).add(m.getMappingLevel());
+            }
+        }
+
+        Map<String, BigDecimal> poAverages = new LinkedHashMap<>();
+        for (Map.Entry<String, List<Integer>> e : poVals.entrySet()) {
+            double avg = e.getValue().stream().mapToInt(Integer::intValue).average().orElse(0.0);
+            poAverages.put(e.getKey(), BigDecimal.valueOf(avg).setScale(2, java.math.RoundingMode.HALF_UP));
+        }
+
+        Map<String, BigDecimal> psoAverages = new LinkedHashMap<>();
+        for (Map.Entry<String, List<Integer>> e : psoVals.entrySet()) {
+            double avg = e.getValue().stream().mapToInt(Integer::intValue).average().orElse(0.0);
+            psoAverages.put(e.getKey(), BigDecimal.valueOf(avg).setScale(2, java.math.RoundingMode.HALF_UP));
+        }
+
         return CourseMappingMatrixDto.builder()
                 .courseId(courseId)
                 .programmeId(progId)
@@ -661,6 +703,9 @@ public class OutcomeService {
                 .psoMappings(psoMappings)
                 .poKeywordsStore(poKw)
                 .psoKeywordsStore(psoKw)
+                .matrix(matrix)
+                .poAverages(poAverages)
+                .psoAverages(psoAverages)
                 .build();
     }
 

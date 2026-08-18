@@ -25,4 +25,7 @@ public class CourseMappingMatrixDto {
     private List<CoPsoMapping> psoMappings;
     private Map<String, Object> poKeywordsStore;
     private Map<String, Object> psoKeywordsStore;
+    private Map<String, Map<String, Integer>> matrix;
+    private Map<String, java.math.BigDecimal> poAverages;
+    private Map<String, java.math.BigDecimal> psoAverages;
 }

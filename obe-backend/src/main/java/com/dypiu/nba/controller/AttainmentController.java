@@ -23,16 +23,21 @@ public class AttainmentController {
     private final com.dypiu.nba.service.ReportAccessService reportAccessService;
     private final com.dypiu.nba.repository.CourseOfferingRepository courseOfferingRepository;
 
-    @GetMapping("/config/{courseId}")
-    public ResponseEntity<ApiResponse<AttainmentConfiguration>> getConfig(@PathVariable String courseId) {
+    @GetMapping({"/config/{courseId}", "/configs/{courseId}"})
+    public ResponseEntity<ApiResponse<AttainmentConfiguration>> getConfig(
+            @PathVariable String courseId,
+            @RequestParam(required = false) String batchId) {
         return ResponseEntity.ok(ApiResponse.<AttainmentConfiguration>builder()
                 .success(true)
                 .data(calculationService.getAttainmentConfig(courseId))
                 .build());
     }
 
-    @PostMapping("/config/{courseId}")
-    public ResponseEntity<ApiResponse<AttainmentConfiguration>> saveConfig(@PathVariable String courseId, @RequestBody AttainmentConfiguration config) {
+    @RequestMapping(value = {"/config/{courseId}", "/configs/{courseId}"}, method = {RequestMethod.POST, RequestMethod.PUT})
+    public ResponseEntity<ApiResponse<AttainmentConfiguration>> saveConfig(
+            @PathVariable String courseId,
+            @RequestBody AttainmentConfiguration config,
+            @RequestParam(required = false) String batchId) {
         return ResponseEntity.ok(ApiResponse.<AttainmentConfiguration>builder()
                 .success(true)
                 .message("Attainment configuration saved")
@@ -40,8 +45,10 @@ public class AttainmentController {
                 .build());
     }
 
-    @GetMapping("/course/{courseId}")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> getCourseCoAttainment(@PathVariable String courseId) {
+    @GetMapping({"/course/{courseId}", "/courses/{courseId}", "/calculate/course/{courseId}"})
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getCourseCoAttainment(
+            @PathVariable String courseId,
+            @RequestParam(required = false) String batchId) {
         return ResponseEntity.ok(ApiResponse.<Map<String, Object>>builder()
                 .success(true)
                 .message("CO Attainment calculated successfully")
@@ -49,12 +56,51 @@ public class AttainmentController {
                 .build());
     }
 
-    @GetMapping("/calculate/course/{courseId}")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> calculateCourseCoAttainment(@PathVariable String courseId) {
-        return ResponseEntity.ok(ApiResponse.<Map<String, Object>>builder()
+    @GetMapping({"/courses/{courseId}/direct", "/course/{courseId}/direct"})
+    public ResponseEntity<ApiResponse<ExaminationAttainmentResultDto>> getDirectAttainment(
+            @PathVariable String courseId,
+            @RequestParam(required = false) String batchId) {
+        return ResponseEntity.ok(ApiResponse.<ExaminationAttainmentResultDto>builder()
                 .success(true)
-                .message("CO Attainment calculated successfully")
-                .data(calculationService.calculateCourseCoAttainment(courseId))
+                .data(calculationService.getExaminationAttainment(courseId))
+                .build());
+    }
+
+    @GetMapping({"/courses/{courseId}/indirect", "/course/{courseId}/indirect"})
+    public ResponseEntity<ApiResponse<SurveyAttainmentResultDto>> getIndirectAttainment(
+            @PathVariable String courseId,
+            @RequestParam(required = false) String batchId) {
+        return ResponseEntity.ok(ApiResponse.<SurveyAttainmentResultDto>builder()
+                .success(true)
+                .data(calculationService.getSurveyAttainment(courseId))
+                .build());
+    }
+
+    @PostMapping({"/assessment/direct/upload", "/assessment/internal/upload"})
+    public ResponseEntity<ApiResponse<ExaminationAttainmentResultDto>> uploadAssessmentDirect(
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "courseId", required = false) String courseId,
+            @RequestParam(value = "batchId", required = false) String batchId,
+            @RequestParam(value = "assessmentType", required = false) String assessmentType,
+            @RequestParam(value = "toolType", required = false) String toolType) {
+        String targetId = courseId != null ? courseId : "off-101";
+        return ResponseEntity.ok(ApiResponse.<ExaminationAttainmentResultDto>builder()
+                .success(true)
+                .message("Assessment marks uploaded and processed successfully.")
+                .data(calculationService.processAndSaveExaminationFile(targetId, file, new BigDecimal("60.00"), "Course Coordinator"))
+                .build());
+    }
+
+    @PostMapping("/assessment/indirect/upload")
+    public ResponseEntity<ApiResponse<SurveyAttainmentResultDto>> uploadAssessmentIndirect(
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "courseId", required = false) String courseId,
+            @RequestParam(value = "batchId", required = false) String batchId) {
+        String targetId = courseId != null ? courseId : "off-101";
+        return ResponseEntity.ok(ApiResponse.<SurveyAttainmentResultDto>builder()
+                .success(true)
+                .message("Indirect survey responses uploaded and processed successfully.")
+                .data(calculationService.processAndSaveSurveyFile(targetId, file, new BigDecimal("60.00"), "Course Coordinator"))
                 .build());
     }
 

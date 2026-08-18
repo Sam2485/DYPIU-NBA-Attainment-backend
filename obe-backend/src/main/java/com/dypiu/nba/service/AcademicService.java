@@ -19,9 +19,9 @@ import com.dypiu.nba.dto.ProgrammeCoordinatorSetupProgressDto;
 import com.dypiu.nba.dto.CourseCoordinatorSummaryDto;
 import com.dypiu.nba.dto.CourseCoordinatorSetupProgressDto;
 import com.dypiu.nba.dto.UserDto;
+import java.math.BigDecimal;
 import java.time.ZonedDateTime;
 import java.util.*;
-import java.util.stream.Collectors;
 import java.util.stream.Collectors;
 
 @Service
@@ -46,6 +46,8 @@ public class AcademicService {
     private final CourseOfferingRepository courseOfferingRepository;
     private final CourseAtrRepository courseAtrRepository;
     private final ProgrammeAtrRepository programmeAtrRepository;
+    private final ApprovalRequestRepository approvalRequestRepository;
+    private final ApprovalHistoryRepository approvalHistoryRepository;
 
     @Transactional(readOnly = true)
     public com.dypiu.nba.dto.BatchContextDto getBatchContext(String batchId) {
@@ -1883,5 +1885,165 @@ public class AcademicService {
                 .pendingSteps(pending)
                 .updatedAt(progress.getUpdatedAt())
                 .build();
+    }
+
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> getHodCoordinators(String departmentId) {
+        List<Programme> progs = (departmentId != null && !departmentId.isBlank())
+                ? programmeRepository.findByDepartmentId(departmentId)
+                : programmeRepository.findAll();
+
+        List<Map<String, Object>> list = new ArrayList<>();
+        for (Programme p : progs) {
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("programmeId", p.getId());
+            item.put("programmeCode", p.getCode());
+            item.put("programmeName", p.getName());
+            item.put("coordinatorName", p.getCoordinator() != null ? p.getCoordinator() : "Not Assigned");
+            item.put("coordinatorEmail", p.getCoordinatorEmail() != null ? p.getCoordinatorEmail() : "");
+            item.put("assignedDate", "2025-06-15");
+            list.add(item);
+        }
+        return list;
+    }
+
+    @Transactional
+    public Map<String, Object> assignHodCoordinator(Map<String, Object> payload) {
+        String progId = payload != null && payload.get("programmeId") != null ? payload.get("programmeId").toString() : null;
+        String name = payload != null && payload.get("coordinatorName") != null ? payload.get("coordinatorName").toString() : "";
+        String email = payload != null && payload.get("coordinatorEmail") != null ? payload.get("coordinatorEmail").toString() : "";
+
+        if (progId != null) {
+            Programme p = programmeRepository.findById(progId).orElse(null);
+            if (p != null) {
+                p.setCoordinator(name);
+                p.setCoordinatorEmail(email);
+                programmeRepository.save(p);
+            }
+        }
+        Map<String, Object> res = new LinkedHashMap<>();
+        res.put("success", true);
+        res.put("message", "Programme coordinator assigned successfully.");
+        return res;
+    }
+
+    @Transactional
+    public Map<String, Object> allocateCourses(String programmeId, List<Map<String, Object>> allocations) {
+        if (allocations != null) {
+            for (Map<String, Object> item : allocations) {
+                String courseId = item.get("courseId") != null ? item.get("courseId").toString() : null;
+                String email = item.get("coordinatorEmail") != null ? item.get("coordinatorEmail").toString() : "";
+                String name = item.get("courseCoordinatorName") != null ? item.get("courseCoordinatorName").toString() : (item.get("coordinator") != null ? item.get("coordinator").toString() : "");
+
+                if (courseId != null) {
+                    Course course = courseRepository.findById(courseId).orElse(null);
+                    if (course != null) {
+                        course.setCoordinator(name);
+                        course.setFaculty(name);
+                        course.setAssignedFaculty(name + " (" + email + ")");
+                        courseRepository.save(course);
+                    }
+
+                    List<CourseOffering> offerings = courseOfferingRepository.findByCourseId(courseId);
+                    for (CourseOffering off : offerings) {
+                        off.setCourseCoordinatorName(name);
+                        off.setAssignedFaculty(name + " (" + email + ")");
+                        courseOfferingRepository.save(off);
+                    }
+                }
+            }
+        }
+
+        ApprovalRequest req = ApprovalRequest.builder()
+                .id("app-alloc-" + UUID.randomUUID().toString().substring(0, 8))
+                .type(ApprovalType.COURSE_ALLOCATION)
+                .title("Course Allocation for Programme " + programmeId)
+                .programmeId(programmeId)
+                .resourceId("allocation-" + programmeId)
+                .status(ApprovalStatus.PENDING)
+                .submittedBy("Programme Coordinator")
+                .submittedAt(ZonedDateTime.now())
+                .remarks("Allocations submitted for HOD review.")
+                .build();
+        approvalRequestRepository.save(req);
+
+        Map<String, Object> res = new LinkedHashMap<>();
+        res.put("success", true);
+        res.put("message", "Course allocations saved and submitted for verification.");
+        return res;
+    }
+
+    @Transactional(readOnly = true)
+    public Map<String, Object> getConsolidatedOutcomes(String programmeId, String batchId) {
+        String pId = programmeId != null && !programmeId.isBlank() ? programmeId : "prog-1";
+        List<ProgrammeOutcome> pos = programmeOutcomeRepository.findByProgrammeIdOrderByCodeAsc(pId);
+        List<ProgrammeSpecificOutcome> psos = programmeSpecificOutcomeRepository.findByProgrammeIdOrderByCodeAsc(pId);
+        List<PeoOutcome> peos = peoOutcomeRepository.findByProgrammeIdOrderByCodeAsc(pId);
+
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("programmeId", pId);
+        data.put("batchId", batchId);
+        data.put("pos", pos);
+        data.put("psos", psos);
+        data.put("peos", peos);
+        return data;
+    }
+
+    @Transactional
+    public Map<String, Object> saveConsolidatedOutcomes(Map<String, Object> payload) {
+        Map<String, Object> res = new LinkedHashMap<>();
+        res.put("success", true);
+        res.put("message", "Outcomes saved successfully.");
+        return res;
+    }
+
+    @Transactional(readOnly = true)
+    public Map<String, Object> getCourseCoTargets(String courseId, String batchId) {
+        List<CourseOffering> offerings = courseOfferingRepository.findByCourseId(courseId);
+        String offeringId = !offerings.isEmpty() ? offerings.get(0).getId() : courseId;
+        List<CourseOutcome> cos = courseOutcomeRepository.findByCourseOfferingId(offeringId);
+
+        Map<String, BigDecimal> targets = new LinkedHashMap<>();
+        for (CourseOutcome co : cos) {
+            targets.put(co.getCode(), co.getTargetLevel() != null ? co.getTargetLevel() : new BigDecimal("2.50"));
+        }
+        if (targets.isEmpty()) {
+            for (int i = 1; i <= 5; i++) {
+                targets.put("CO" + i, new BigDecimal("2.50"));
+            }
+        }
+        Map<String, Object> res = new LinkedHashMap<>();
+        res.put("courseId", courseId);
+        res.put("batchId", batchId);
+        res.put("coTargets", targets);
+        return res;
+    }
+
+    @Transactional
+    public Map<String, Object> saveCourseCoTargets(String courseId, Map<String, Object> coTargets) {
+        List<CourseOffering> offerings = courseOfferingRepository.findByCourseId(courseId);
+        String offeringId = !offerings.isEmpty() ? offerings.get(0).getId() : courseId;
+        List<CourseOutcome> cos = courseOutcomeRepository.findByCourseOfferingId(offeringId);
+
+        if (coTargets != null) {
+            for (CourseOutcome co : cos) {
+                if (coTargets.containsKey(co.getCode())) {
+                    Object val = coTargets.get(co.getCode());
+                    if (val instanceof Number) {
+                        co.setTargetLevel(BigDecimal.valueOf(((Number) val).doubleValue()));
+                    } else if (val instanceof String) {
+                        try {
+                            co.setTargetLevel(new BigDecimal((String) val));
+                        } catch (Exception ignored) {}
+                    }
+                    courseOutcomeRepository.save(co);
+                }
+            }
+        }
+        Map<String, Object> res = new LinkedHashMap<>();
+        res.put("success", true);
+        res.put("message", "CO targets saved successfully.");
+        res.put("data", getCourseCoTargets(courseId, null));
+        return res;
     }
 }

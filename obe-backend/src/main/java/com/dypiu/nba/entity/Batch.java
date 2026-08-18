@@ -61,4 +61,8 @@ public class Batch {
 
     @Transient
     private String programmeCode;
+
+    @Transient
+    @Builder.Default
+    private Integer currentSemester = 1;
 }

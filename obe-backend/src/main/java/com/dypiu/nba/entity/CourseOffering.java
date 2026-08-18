@@ -52,4 +52,25 @@ public class CourseOffering {
 
     @Column(name = "updated_at", insertable = false, updatable = false)
     private ZonedDateTime updatedAt;
+
+    @Transient
+    private String coordinatorEmail;
+
+    @Transient
+    private String courseCode;
+
+    @Transient
+    private String courseName;
+
+    @Transient
+    private String academicYear;
+
+    @Transient
+    public String getCoordinator() {
+        return courseCoordinatorName;
+    }
+
+    public void setCoordinator(String coordinator) {
+        this.courseCoordinatorName = coordinator;
+    }
 }

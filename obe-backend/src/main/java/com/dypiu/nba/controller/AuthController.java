@@ -7,6 +7,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Map;
+
 @RestController
 @RequestMapping("/auth")
 @RequiredArgsConstructor
@@ -72,6 +74,15 @@ public class AuthController {
                 .success(true)
                 .message("OTP verified successfully")
                 .data(response)
+                .build());
+    }
+
+    @PostMapping("/logout")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> logout() {
+        return ResponseEntity.ok(ApiResponse.<Map<String, Object>>builder()
+                .success(true)
+                .message("Successfully logged out.")
+                .data(Map.of("loggedOut", true))
                 .build());
     }
 }

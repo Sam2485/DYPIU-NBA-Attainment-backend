@@ -690,15 +690,22 @@ public class AttainmentCalculationService {
             sumCoAttainment = sumCoAttainment.add(roundedAttainment);
             countCOs++;
 
+            BigDecimal target = co.getTargetLevel() != null ? co.getTargetLevel() : new BigDecimal("2.50");
+            boolean targetMet = roundedAttainment.compareTo(target) >= 0;
+
             Map<String, Object> coRes = new LinkedHashMap<>();
             coRes.put("coCode", coCode);
             coRes.put("statement", statement);
             coRes.put("directPct", directPct);
             coRes.put("directLevel", directLevel);
+            coRes.put("directScore", BigDecimal.valueOf(directLevel).setScale(2, RoundingMode.HALF_UP));
             coRes.put("indirectPct", indirectPct);
             coRes.put("indirectLevel", indirectLevel);
             coRes.put("indirectScore", indirectScore);
             coRes.put("combinedAttainment", roundedAttainment);
+            coRes.put("finalAttainment", roundedAttainment);
+            coRes.put("target", target);
+            coRes.put("targetMet", targetMet);
 
             coResults.add(coRes);
         }
@@ -707,12 +714,22 @@ public class AttainmentCalculationService {
                 ? sumCoAttainment.divide(BigDecimal.valueOf(countCOs), 2, RoundingMode.HALF_UP)
                 : BigDecimal.ZERO;
 
+        double avgDirect = coResults.stream().mapToDouble(c -> ((Number) c.get("directLevel")).doubleValue()).average().orElse(2.50);
+        double avgIndirect = coResults.stream().mapToDouble(c -> ((BigDecimal) c.get("indirectScore")).doubleValue()).average().orElse(2.50);
+
+        BigDecimal directAttainment = BigDecimal.valueOf(avgDirect).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal indirectAttainment = BigDecimal.valueOf(avgIndirect).setScale(2, RoundingMode.HALF_UP);
+
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("courseOfferingId", offeringId);
         response.put("courseId", courseId);
         response.put("config", config);
-        response.put("coAttainments", coResults);
+        response.put("directAttainment", directAttainment);
+        response.put("indirectAttainment", indirectAttainment);
         response.put("overallCoAttainment", overallCoAttainment);
+        response.put("overallCOAttainment", overallCoAttainment);
+        response.put("coAttainments", coResults);
+        response.put("coDetails", coResults);
         response.put("examDetails", examResult);
         response.put("surveyDetails", surveyResult);
 

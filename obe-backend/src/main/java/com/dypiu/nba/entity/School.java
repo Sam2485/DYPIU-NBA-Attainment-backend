@@ -42,11 +42,35 @@ public class School {
     private ZonedDateTime updatedAt;
 
     @Transient
+    private Integer totalDepartments;
+
+    @Transient
+    private Integer totalProgrammes;
+
+    @Transient
     public String getDirector() {
         return directorName;
     }
 
     public void setDirector(String director) {
         this.directorName = director;
+    }
+
+    @Transient
+    public String getDean() {
+        return directorName;
+    }
+
+    public void setDean(String dean) {
+        this.directorName = dean;
+    }
+
+    @Transient
+    public String getDeanEmail() {
+        return directorEmail;
+    }
+
+    public void setDeanEmail(String deanEmail) {
+        this.directorEmail = deanEmail;
     }
 }

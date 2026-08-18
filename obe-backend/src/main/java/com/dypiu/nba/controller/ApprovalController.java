@@ -83,7 +83,6 @@ public class ApprovalController {
 
     @PostMapping({"/{id}/reject", "/{id}/request-revision"})
     public ResponseEntity<ApiResponse<ApprovalRequest>> rejectRequest(@PathVariable String id, @RequestBody(required = false) Map<String, String> body) {
-
         String remarks = body != null && body.containsKey("remarks") ? body.get("remarks") : (body != null && body.containsKey("comments") ? body.get("comments") : "Revision requested.");
         String actorName = body != null && body.containsKey("actorName") ? body.get("actorName") : "Reviewer";
         String actorRole = body != null && body.containsKey("actorRole") ? body.get("actorRole") : "REVIEWER";
@@ -91,6 +90,47 @@ public class ApprovalController {
                 .success(true)
                 .message("Revision requested")
                 .data(approvalService.rejectRequest(id, remarks, actorName, actorRole))
+                .build());
+    }
+
+    @GetMapping("/verification-status")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getVerificationStatus(
+            @RequestParam(value = "key", required = false) String key,
+            @RequestParam(value = "id", required = false) String id) {
+        String targetKey = (key != null && !key.isBlank()) ? key : id;
+        return ResponseEntity.ok(ApiResponse.<Map<String, Object>>builder()
+                .success(true)
+                .data(approvalService.getVerificationStatus(targetKey))
+                .build());
+    }
+
+    @RequestMapping(value = "/verify", method = {RequestMethod.PUT, RequestMethod.POST})
+    public ResponseEntity<ApiResponse<Map<String, Object>>> verifyStatus(@RequestBody Map<String, String> body) {
+        String key = body != null ? (body.containsKey("key") ? body.get("key") : body.get("id")) : "";
+        String statusType = body != null ? body.get("statusType") : "status";
+        String statusValue = body != null ? body.get("statusValue") : "APPROVED";
+        String remarksValue = body != null ? (body.containsKey("remarksValue") ? body.get("remarksValue") : body.get("remarks")) : "";
+        String verifierName = body != null ? body.get("verifierName") : "Verifier";
+
+        return ResponseEntity.ok(ApiResponse.<Map<String, Object>>builder()
+                .success(true)
+                .message("Status updated successfully.")
+                .data(approvalService.verifyStatus(key, statusType, statusValue, remarksValue, verifierName))
+                .build());
+    }
+
+    @RequestMapping(value = "/request-revision", method = {RequestMethod.PUT, RequestMethod.POST})
+    public ResponseEntity<ApiResponse<Map<String, Object>>> requestRevisionDirect(@RequestBody Map<String, String> body) {
+        String key = body != null ? (body.containsKey("key") ? body.get("key") : body.get("id")) : "";
+        String statusType = body != null ? body.get("statusType") : "status";
+        String statusValue = body != null ? body.get("statusValue") : "REVISION_REQUESTED";
+        String remarksValue = body != null ? (body.containsKey("remarksValue") ? body.get("remarksValue") : body.get("remarks")) : "Please revise.";
+        String verifierName = body != null ? body.get("verifierName") : "Reviewer";
+
+        return ResponseEntity.ok(ApiResponse.<Map<String, Object>>builder()
+                .success(true)
+                .message("Revision request recorded. Coordinator notified.")
+                .data(approvalService.requestRevisionStatus(key, statusType, statusValue, remarksValue, verifierName))
                 .build());
     }
 }

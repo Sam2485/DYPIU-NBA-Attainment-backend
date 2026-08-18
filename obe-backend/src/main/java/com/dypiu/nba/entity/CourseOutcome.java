@@ -39,9 +39,24 @@ public class CourseOutcome {
     @Builder.Default
     private BigDecimal targetLevel = new BigDecimal("2.50");
 
+    @Column(name = "blooms_level", length = 50)
+    @Builder.Default
+    private String bloomsLevel = "L3 - Apply";
+
     @Column(name = "created_at", insertable = false, updatable = false)
     private ZonedDateTime createdAt;
 
     @Column(name = "updated_at", insertable = false, updatable = false)
     private ZonedDateTime updatedAt;
+
+    @Transient
+    public BigDecimal getTarget() {
+        return targetLevel;
+    }
+
+    public void setTarget(BigDecimal target) {
+        if (target != null) {
+            this.targetLevel = target;
+        }
+    }
 }

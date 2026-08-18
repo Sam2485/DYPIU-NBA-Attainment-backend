@@ -44,4 +44,13 @@ public class Department {
 
     @Column(name = "updated_at", insertable = false, updatable = false)
     private ZonedDateTime updatedAt;
+
+    @Transient
+    public String getHodName() {
+        return hod;
+    }
+
+    public void setHodName(String hodName) {
+        this.hod = hodName;
+    }
 }

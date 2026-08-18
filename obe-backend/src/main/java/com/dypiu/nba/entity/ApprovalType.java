@@ -2,8 +2,13 @@ package com.dypiu.nba.entity;
 
 public enum ApprovalType {
     COURSE_OFFERING,
+    COURSE_ALLOCATION,
+    PO_PSO_TARGETS,
+    CO_DEFINITION,
+    CO_TARGETS,
     ATTAINMENT_CONFIGURATION,
     PROGRAMME_ATR,
     COURSE_ATR,
+    DIRECTOR_GOVERNANCE,
     OTHER
 }

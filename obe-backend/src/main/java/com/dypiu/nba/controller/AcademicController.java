@@ -17,7 +17,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/academic")
@@ -634,5 +636,146 @@ public class AcademicController {
     public ResponseEntity<ApiResponse<Void>> deleteStudent(@PathVariable String id) {
         academicService.deleteStudent(id);
         return ResponseEntity.ok(ApiResponse.<Void>builder().success(true).message("Student deleted").build());
+    }
+
+    // --- HOD Coordinators Management ---
+    @GetMapping("/hod/coordinators")
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getHodCoordinators(@RequestParam(required = false) String departmentId) {
+        return ResponseEntity.ok(ApiResponse.<List<Map<String, Object>>>builder()
+                .success(true)
+                .data(academicService.getHodCoordinators(departmentId))
+                .build());
+    }
+
+    @RequestMapping(value = "/hod/coordinators", method = {RequestMethod.POST, RequestMethod.PUT})
+    public ResponseEntity<ApiResponse<Map<String, Object>>> assignHodCoordinator(@RequestBody Map<String, Object> body) {
+        return ResponseEntity.ok(ApiResponse.<Map<String, Object>>builder()
+                .success(true)
+                .message("Programme coordinator assigned successfully.")
+                .data(academicService.assignHodCoordinator(body))
+                .build());
+    }
+
+    // --- Batch Course Allocation ---
+    @PostMapping("/courses/allocate")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> allocateCourses(@RequestBody Map<String, Object> body) {
+        String programmeId = body != null && body.get("programmeId") != null ? body.get("programmeId").toString() : "prog-1";
+        List<Map<String, Object>> allocations = body != null && body.get("allocations") instanceof List
+                ? (List<Map<String, Object>>) body.get("allocations")
+                : Collections.emptyList();
+
+        return ResponseEntity.ok(ApiResponse.<Map<String, Object>>builder()
+                .success(true)
+                .message("Course allocations saved and submitted for review.")
+                .data(academicService.allocateCourses(programmeId, allocations))
+                .build());
+    }
+
+    // --- Consolidated Outcomes ---
+    @GetMapping("/outcomes")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getConsolidatedOutcomes(
+            @RequestParam(required = false) String programmeId,
+            @RequestParam(required = false) String batchId) {
+        return ResponseEntity.ok(ApiResponse.<Map<String, Object>>builder()
+                .success(true)
+                .data(academicService.getConsolidatedOutcomes(programmeId, batchId))
+                .build());
+    }
+
+    @RequestMapping(value = "/outcomes", method = {RequestMethod.POST, RequestMethod.PUT})
+    public ResponseEntity<ApiResponse<Map<String, Object>>> saveConsolidatedOutcomes(@RequestBody Map<String, Object> body) {
+        return ResponseEntity.ok(ApiResponse.<Map<String, Object>>builder()
+                .success(true)
+                .message("Outcomes updated successfully.")
+                .data(academicService.saveConsolidatedOutcomes(body))
+                .build());
+    }
+
+    // --- CO Targets ---
+    @GetMapping("/courses/{courseId}/co-targets")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getCourseCoTargets(
+            @PathVariable String courseId,
+            @RequestParam(required = false) String batchId) {
+        return ResponseEntity.ok(ApiResponse.<Map<String, Object>>builder()
+                .success(true)
+                .data(academicService.getCourseCoTargets(courseId, batchId))
+                .build());
+    }
+
+    @RequestMapping(value = "/courses/{courseId}/co-targets", method = {RequestMethod.POST, RequestMethod.PUT})
+    public ResponseEntity<ApiResponse<Map<String, Object>>> saveCourseCoTargets(
+            @PathVariable String courseId,
+            @RequestBody Map<String, Object> body) {
+        return ResponseEntity.ok(ApiResponse.<Map<String, Object>>builder()
+                .success(true)
+                .message("Course CO targets updated.")
+                .data(academicService.saveCourseCoTargets(courseId, body))
+                .build());
+    }
+
+    // --- Course Outcomes by Course ID ---
+    @GetMapping("/courses/{courseId}/outcomes")
+    public ResponseEntity<ApiResponse<List<CourseOutcome>>> getCourseOutcomesByCourseId(
+            @PathVariable String courseId,
+            @RequestParam(required = false) String batchId) {
+        return ResponseEntity.ok(ApiResponse.<List<CourseOutcome>>builder()
+                .success(true)
+                .data(outcomeService.getCOsByCourse(courseId))
+                .build());
+    }
+
+    @RequestMapping(value = "/courses/{courseId}/outcomes", method = {RequestMethod.POST, RequestMethod.PUT})
+    public ResponseEntity<ApiResponse<List<CourseOutcome>>> saveCourseOutcomesByCourseId(
+            @PathVariable String courseId,
+            @RequestBody List<CourseOutcome> outcomes) {
+        return ResponseEntity.ok(ApiResponse.<List<CourseOutcome>>builder()
+                .success(true)
+                .message("Course outcomes saved successfully.")
+                .data(outcomeService.saveCOs(courseId, outcomes))
+                .build());
+    }
+
+    // --- Course Mapping Matrix by Course ID ---
+    @GetMapping("/courses/{courseId}/mapping")
+    public ResponseEntity<ApiResponse<com.dypiu.nba.dto.CourseMappingMatrixDto>> getCourseMappingByCourseId(
+            @PathVariable String courseId,
+            @RequestParam(required = false) String batchId) {
+        return ResponseEntity.ok(ApiResponse.<com.dypiu.nba.dto.CourseMappingMatrixDto>builder()
+                .success(true)
+                .data(outcomeService.getCourseMappings(courseId))
+                .build());
+    }
+
+    @RequestMapping(value = "/courses/{courseId}/mapping", method = {RequestMethod.POST, RequestMethod.PUT})
+    public ResponseEntity<ApiResponse<com.dypiu.nba.dto.CourseMappingMatrixDto>> saveCourseMappingByCourseId(
+            @PathVariable String courseId,
+            @RequestBody com.dypiu.nba.dto.CourseMappingMatrixDto dto) {
+        return ResponseEntity.ok(ApiResponse.<com.dypiu.nba.dto.CourseMappingMatrixDto>builder()
+                .success(true)
+                .message("Course mappings updated.")
+                .data(outcomeService.saveCourseMappings(courseId, dto))
+                .build());
+    }
+
+    // --- Programme Targets by Programme ID ---
+    @GetMapping("/programmes/{programmeId}/targets")
+    public ResponseEntity<ApiResponse<com.dypiu.nba.dto.ProgrammeTargetDto>> getProgrammeTargetsByProgrammeId(
+            @PathVariable String programmeId,
+            @RequestParam(required = false) String batchId) {
+        return ResponseEntity.ok(ApiResponse.<com.dypiu.nba.dto.ProgrammeTargetDto>builder()
+                .success(true)
+                .data(outcomeService.getProgrammeTargets(programmeId))
+                .build());
+    }
+
+    @RequestMapping(value = "/programmes/{programmeId}/targets", method = {RequestMethod.POST, RequestMethod.PUT})
+    public ResponseEntity<ApiResponse<com.dypiu.nba.dto.ProgrammeTargetDto>> saveProgrammeTargetsByProgrammeId(
+            @PathVariable String programmeId,
+            @RequestBody com.dypiu.nba.dto.ProgrammeTargetDto dto) {
+        return ResponseEntity.ok(ApiResponse.<com.dypiu.nba.dto.ProgrammeTargetDto>builder()
+                .success(true)
+                .message("Programme targets saved.")
+                .data(outcomeService.saveProgrammeTargets(programmeId, dto))
+                .build());
     }
 }

@@ -17,16 +17,21 @@ public class AtrController {
 
     private final AtrService atrService;
 
-    @GetMapping("/course/{courseId}")
-    public ResponseEntity<ApiResponse<List<CourseAtr>>> getCourseAtrs(@PathVariable String courseId) {
+    @GetMapping({"/course/{courseId}", "/courses/{courseId}"})
+    public ResponseEntity<ApiResponse<List<CourseAtr>>> getCourseAtrs(
+            @PathVariable String courseId,
+            @RequestParam(required = false) String batchId) {
         return ResponseEntity.ok(ApiResponse.<List<CourseAtr>>builder()
                 .success(true)
                 .data(atrService.getCourseAtrs(courseId))
                 .build());
     }
 
-    @PostMapping("/course/{courseId}")
-    public ResponseEntity<ApiResponse<List<CourseAtr>>> saveCourseAtrs(@PathVariable String courseId, @RequestBody List<CourseAtr> atrs) {
+    @RequestMapping(value = {"/course/{courseId}", "/courses/{courseId}"}, method = {RequestMethod.POST, RequestMethod.PUT})
+    public ResponseEntity<ApiResponse<List<CourseAtr>>> saveCourseAtrs(
+            @PathVariable String courseId,
+            @RequestBody List<CourseAtr> atrs,
+            @RequestParam(required = false) String batchId) {
         return ResponseEntity.ok(ApiResponse.<List<CourseAtr>>builder()
                 .success(true)
                 .message("Course ATR saved successfully")
@@ -34,7 +39,7 @@ public class AtrController {
                 .build());
     }
 
-    @GetMapping("/programme/{programmeId}")
+    @GetMapping({"/programme/{programmeId}", "/programmes/{programmeId}"})
     public ResponseEntity<ApiResponse<ProgrammeAtr>> getProgrammeAtr(
             @PathVariable String programmeId,
             @RequestParam(value = "batchId", required = false) String batchId) {
@@ -44,7 +49,7 @@ public class AtrController {
                 .build());
     }
 
-    @GetMapping("/programme/previous-batch/{batchId}")
+    @GetMapping({"/programme/previous-batch/{batchId}", "/programmes/previous-batch/{batchId}"})
     public ResponseEntity<ApiResponse<ProgrammeAtr>> getPreviousBatchProgrammeAtr(@PathVariable String batchId) {
         return ResponseEntity.ok(ApiResponse.<ProgrammeAtr>builder()
                 .success(true)
@@ -52,9 +57,15 @@ public class AtrController {
                 .build());
     }
 
-    @PostMapping("/programme/{programmeId}")
-    public ResponseEntity<ApiResponse<ProgrammeAtr>> saveProgrammeAtr(@PathVariable String programmeId, @RequestBody ProgrammeAtr atr) {
+    @RequestMapping(value = {"/programme/{programmeId}", "/programmes/{programmeId}"}, method = {RequestMethod.POST, RequestMethod.PUT})
+    public ResponseEntity<ApiResponse<ProgrammeAtr>> saveProgrammeAtr(
+            @PathVariable String programmeId,
+            @RequestBody ProgrammeAtr atr,
+            @RequestParam(required = false) String batchId) {
         atr.setProgrammeId(programmeId);
+        if (batchId != null && (atr.getBatchId() == null || atr.getBatchId().isBlank())) {
+            atr.setBatchId(batchId);
+        }
         return ResponseEntity.ok(ApiResponse.<ProgrammeAtr>builder()
                 .success(true)
                 .message("Programme ATR saved successfully")

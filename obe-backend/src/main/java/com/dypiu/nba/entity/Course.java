@@ -54,6 +54,9 @@ public class Course {
     private String coordinator;
 
     @Transient
+    private String coordinatorEmail;
+
+    @Transient
     private String faculty;
 
     @Transient
@@ -64,4 +67,18 @@ public class Course {
 
     @Transient
     private String academicYear;
+
+    @Transient
+    private java.util.List<CourseOutcome> courseOutcomes;
+
+    @Transient
+    public String getType() {
+        return courseType;
+    }
+
+    public void setType(String type) {
+        if (type != null) {
+            this.courseType = type;
+        }
+    }
 }

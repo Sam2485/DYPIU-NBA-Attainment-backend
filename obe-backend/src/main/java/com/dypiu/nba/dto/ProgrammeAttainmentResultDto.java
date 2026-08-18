@@ -96,4 +96,26 @@ public class ProgrammeAttainmentResultDto {
         private String observation;
         private List<String> actions;
     }
+
+    public Map<String, BigDecimal> getPoAttainments() {
+        Map<String, BigDecimal> map = new java.util.LinkedHashMap<>();
+        if (overallAttainment != null && overallAttainment.getPos() != null) {
+            for (OutcomeAttainmentItem item : overallAttainment.getPos()) {
+                String code = item.getPoCode() != null ? item.getPoCode() : item.getOutcomeCode();
+                if (code != null) map.put(code, item.getOverallAttainment());
+            }
+        }
+        return map;
+    }
+
+    public Map<String, BigDecimal> getPsoAttainments() {
+        Map<String, BigDecimal> map = new java.util.LinkedHashMap<>();
+        if (overallAttainment != null && overallAttainment.getPsos() != null) {
+            for (OutcomeAttainmentItem item : overallAttainment.getPsos()) {
+                String code = item.getPsoCode() != null ? item.getPsoCode() : item.getOutcomeCode();
+                if (code != null) map.put(code, item.getOverallAttainment());
+            }
+        }
+        return map;
+    }
 }
