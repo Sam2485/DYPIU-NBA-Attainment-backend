@@ -1993,9 +1993,87 @@ public class AcademicService {
 
     @Transactional
     public Map<String, Object> saveConsolidatedOutcomes(Map<String, Object> payload) {
+        String progId = payload != null && payload.get("programmeId") != null ? payload.get("programmeId").toString() : "prog-1";
+
+        // 1. Process and save POs
+        if (payload != null && payload.get("pos") instanceof List<?> poList) {
+            List<ProgrammeOutcome> existingPOs = programmeOutcomeRepository.findByProgrammeIdOrderByCodeAsc(progId);
+            if (!existingPOs.isEmpty()) {
+                programmeOutcomeRepository.deleteAll(existingPOs);
+                programmeOutcomeRepository.flush();
+            }
+
+            for (Object obj : poList) {
+                if (obj instanceof Map<?, ?> poMap) {
+                    String code = poMap.get("code") != null ? poMap.get("code").toString() : null;
+                    String statement = poMap.get("statement") != null ? poMap.get("statement").toString() : "";
+                    if (code != null && !code.isBlank()) {
+                        ProgrammeOutcome po = ProgrammeOutcome.builder()
+                                .id("po-" + progId + "-" + code.toLowerCase().replaceAll("[^a-z0-9]", "-") + "-" + UUID.randomUUID().toString().substring(0, 6))
+                                .programmeId(progId)
+                                .code(code.trim().toUpperCase())
+                                .statement(statement.trim())
+                                .build();
+                        programmeOutcomeRepository.save(po);
+                    }
+                }
+            }
+        }
+
+        // 2. Process and save PSOs
+        if (payload != null && payload.get("psos") instanceof List<?> psoList) {
+            List<ProgrammeSpecificOutcome> existingPSOs = programmeSpecificOutcomeRepository.findByProgrammeIdOrderByCodeAsc(progId);
+            if (!existingPSOs.isEmpty()) {
+                programmeSpecificOutcomeRepository.deleteAll(existingPSOs);
+                programmeSpecificOutcomeRepository.flush();
+            }
+
+            for (Object obj : psoList) {
+                if (obj instanceof Map<?, ?> psoMap) {
+                    String code = psoMap.get("code") != null ? psoMap.get("code").toString() : null;
+                    String statement = psoMap.get("statement") != null ? psoMap.get("statement").toString() : "";
+                    if (code != null && !code.isBlank()) {
+                        ProgrammeSpecificOutcome pso = ProgrammeSpecificOutcome.builder()
+                                .id("pso-" + progId + "-" + code.toLowerCase().replaceAll("[^a-z0-9]", "-") + "-" + UUID.randomUUID().toString().substring(0, 6))
+                                .programmeId(progId)
+                                .code(code.trim().toUpperCase())
+                                .statement(statement.trim())
+                                .build();
+                        programmeSpecificOutcomeRepository.save(pso);
+                    }
+                }
+            }
+        }
+
+        // 3. Process and save PEOs
+        if (payload != null && payload.get("peos") instanceof List<?> peoList) {
+            List<PeoOutcome> existingPEOs = peoOutcomeRepository.findByProgrammeIdOrderByCodeAsc(progId);
+            if (!existingPEOs.isEmpty()) {
+                peoOutcomeRepository.deleteAll(existingPEOs);
+                peoOutcomeRepository.flush();
+            }
+
+            for (Object obj : peoList) {
+                if (obj instanceof Map<?, ?> peoMap) {
+                    String code = peoMap.get("code") != null ? peoMap.get("code").toString() : null;
+                    String statement = peoMap.get("statement") != null ? peoMap.get("statement").toString() : "";
+                    if (code != null && !code.isBlank()) {
+                        PeoOutcome peo = PeoOutcome.builder()
+                                .id("peo-" + progId + "-" + code.toLowerCase().replaceAll("[^a-z0-9]", "-") + "-" + UUID.randomUUID().toString().substring(0, 6))
+                                .programmeId(progId)
+                                .code(code.trim().toUpperCase())
+                                .statement(statement.trim())
+                                .build();
+                        peoOutcomeRepository.save(peo);
+                    }
+                }
+            }
+        }
+
         Map<String, Object> res = new LinkedHashMap<>();
         res.put("success", true);
         res.put("message", "Outcomes saved successfully.");
+        res.put("data", getConsolidatedOutcomes(progId, null));
         return res;
     }
 

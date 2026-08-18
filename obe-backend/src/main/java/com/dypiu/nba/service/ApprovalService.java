@@ -94,6 +94,9 @@ public class ApprovalService {
     public ApprovalRequest submitApprovalRequest(ApprovalRequest request) {
         System.out.println("[ApprovalService] submitApprovalRequest called | type: " + (request != null ? request.getType() : "null") + " | resourceId: " + (request != null ? request.getResourceId() : "null"));
         if (request.getId() == null) request.setId("app-" + UUID.randomUUID().toString().substring(0, 8));
+        if (request.getSubmittedBy() == null || request.getSubmittedBy().isBlank()) {
+            request.setSubmittedBy("Director");
+        }
         request.setStatus(ApprovalStatus.PENDING);
         request.setSubmittedAt(ZonedDateTime.now());
         ApprovalRequest saved = approvalRequestRepository.save(request);
