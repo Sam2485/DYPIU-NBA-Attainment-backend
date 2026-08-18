@@ -127,6 +127,20 @@ public class OutcomeService {
         if (batchId == null || batchId.isBlank()) return;
         Batch batch = batchRepository.findById(batchId)
                 .orElseThrow(() -> new ResourceNotFoundException("Batch not found: " + batchId));
+
+        if (scope.isFaculty()) {
+            List<CourseOffering> offerings = courseOfferingRepository.findByBatchId(batchId);
+            boolean hasAssigned = offerings.stream().anyMatch(o -> {
+                boolean isCoord = (o.getCourseCoordinatorId() != null && Objects.equals(o.getCourseCoordinatorId(), scope.getUserId()))
+                        || (o.getCourseCoordinatorId() == null && o.getCourseCoordinatorName() != null && o.getCourseCoordinatorName().equalsIgnoreCase(scope.getName()));
+                return isCoord || (o.getAssignedFaculty() != null && (o.getAssignedFaculty().contains(scope.getEmail()) || o.getAssignedFaculty().contains(scope.getName())));
+            });
+            if (!hasAssigned) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: You are not assigned to any Course Offering in this Batch.");
+            }
+            return;
+        }
+
         enforceProgrammeScope(batch.getProgrammeId());
     }
 
@@ -136,6 +150,20 @@ public class OutcomeService {
         if (courseId == null || courseId.isBlank()) return;
         Course course = courseRepository.findById(courseId)
                 .orElseThrow(() -> new ResourceNotFoundException("Course not found: " + courseId));
+
+        if (scope.isFaculty()) {
+            List<CourseOffering> offerings = courseOfferingRepository.findByCourseId(courseId);
+            boolean hasAssigned = offerings.stream().anyMatch(o -> {
+                boolean isCoord = (o.getCourseCoordinatorId() != null && Objects.equals(o.getCourseCoordinatorId(), scope.getUserId()))
+                        || (o.getCourseCoordinatorId() == null && o.getCourseCoordinatorName() != null && o.getCourseCoordinatorName().equalsIgnoreCase(scope.getName()));
+                return isCoord || (o.getAssignedFaculty() != null && (o.getAssignedFaculty().contains(scope.getEmail()) || o.getAssignedFaculty().contains(scope.getName())));
+            });
+            if (!hasAssigned) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: You are not assigned to this Course.");
+            }
+            return;
+        }
+
         enforceProgrammeScope(course.getProgrammeId());
     }
 
@@ -145,6 +173,17 @@ public class OutcomeService {
         if (offeringId == null || offeringId.isBlank()) return;
         CourseOffering offering = courseOfferingRepository.findById(offeringId)
                 .orElseThrow(() -> new ResourceNotFoundException("Course offering not found: " + offeringId));
+
+        if (scope.isFaculty()) {
+            boolean isCoordinator = (offering.getCourseCoordinatorId() != null && Objects.equals(offering.getCourseCoordinatorId(), scope.getUserId()))
+                    || (offering.getCourseCoordinatorId() == null && offering.getCourseCoordinatorName() != null && offering.getCourseCoordinatorName().equalsIgnoreCase(scope.getName()));
+            boolean isAssigned = isCoordinator || (offering.getAssignedFaculty() != null && (offering.getAssignedFaculty().contains(scope.getEmail()) || offering.getAssignedFaculty().contains(scope.getName())));
+            if (!isAssigned) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: You are not assigned to this Course Offering.");
+            }
+            return;
+        }
+
         if (offering.getBatchId() != null) enforceBatchScope(offering.getBatchId());
         if (offering.getCourseId() != null) enforceCourseScope(offering.getCourseId());
     }
@@ -153,10 +192,10 @@ public class OutcomeService {
         CurrentUserScope scope = getScope();
         if (scope == null || scope.isAdmin() || scope.isIqac()) return;
         if (courseIdOrOfferingId == null || courseIdOrOfferingId.isBlank()) return;
-        if (courseRepository.existsById(courseIdOrOfferingId)) {
-            enforceCourseScope(courseIdOrOfferingId);
-        } else if (courseOfferingRepository.existsById(courseIdOrOfferingId)) {
+        if (courseOfferingRepository.existsById(courseIdOrOfferingId)) {
             enforceOfferingScope(courseIdOrOfferingId);
+        } else if (courseRepository.existsById(courseIdOrOfferingId)) {
+            enforceCourseScope(courseIdOrOfferingId);
         }
     }
 

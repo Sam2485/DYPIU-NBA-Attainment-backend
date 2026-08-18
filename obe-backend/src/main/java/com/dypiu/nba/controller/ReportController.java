@@ -331,7 +331,16 @@ public class ReportController {
             @RequestParam(required = false) String programmeId,
             @RequestParam(required = false) String courseId,
             @RequestParam(required = false) String batchId,
-            @RequestParam(required = false) String reportType) {
+            @RequestParam(required = false) String reportType,
+            Principal principal) {
+        User user = reportAccessService.getAuthenticatedUser(principal);
+        if (courseId != null && !courseId.isBlank()) {
+            if (courseOfferingRepository.existsById(courseId)) {
+                reportAccessService.validateCourseOfferingAccess(user, courseId);
+            } else {
+                reportAccessService.validateCourseAccess(user, courseId);
+            }
+        }
         String targetCourseId = courseId != null && !courseId.isBlank() ? courseId : "crs-1";
         byte[] excelBytes = exportService.generateAttainmentExcel(targetCourseId, batchId);
         String filename = "Attainment_Report_" + targetCourseId + ".xlsx";
@@ -347,7 +356,16 @@ public class ReportController {
             @RequestParam(required = false) String programmeId,
             @RequestParam(required = false) String courseId,
             @RequestParam(required = false) String batchId,
-            @RequestParam(required = false) String reportType) {
+            @RequestParam(required = false) String reportType,
+            Principal principal) {
+        User user = reportAccessService.getAuthenticatedUser(principal);
+        if (courseId != null && !courseId.isBlank()) {
+            if (courseOfferingRepository.existsById(courseId)) {
+                reportAccessService.validateCourseOfferingAccess(user, courseId);
+            } else {
+                reportAccessService.validateCourseAccess(user, courseId);
+            }
+        }
         String targetCourseId = courseId != null && !courseId.isBlank() ? courseId : "crs-1";
         byte[] pdfBytes = exportService.generateAttainmentPdf(targetCourseId, batchId);
         String filename = "Attainment_Report_" + targetCourseId + ".pdf";

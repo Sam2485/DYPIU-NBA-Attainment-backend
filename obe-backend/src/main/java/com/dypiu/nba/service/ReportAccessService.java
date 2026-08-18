@@ -96,15 +96,15 @@ public class ReportAccessService {
     public void validateCourseOfferingAccess(User user, String courseOfferingId) {
         System.out.println("[ReportAccessService] validateCourseOfferingAccess called | user: " + (user != null ? user.getEmail() : "null") + " | courseOfferingId: " + courseOfferingId);
         if (user == null || courseOfferingId == null) return;
-        if (user.getRole() == UserRole.IQAC) return;
+        if (user.getRole() == UserRole.ADMIN || user.getRole() == UserRole.IQAC) return;
 
         CourseOffering offering = courseOfferingRepository.findById(courseOfferingId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Course Offering not found: " + courseOfferingId));
 
         if (user.getRole() == UserRole.FACULTY) {
-            boolean isAssigned = (offering.getCourseCoordinatorId() != null && Objects.equals(offering.getCourseCoordinatorId(), user.getId()))
-                    || (offering.getCourseCoordinatorName() != null && offering.getCourseCoordinatorName().equalsIgnoreCase(user.getName()))
-                    || (offering.getAssignedFaculty() != null && (offering.getAssignedFaculty().contains(user.getEmail()) || offering.getAssignedFaculty().contains(user.getName())));
+            boolean isCoordinator = (offering.getCourseCoordinatorId() != null && Objects.equals(offering.getCourseCoordinatorId(), user.getId()))
+                    || (offering.getCourseCoordinatorId() == null && offering.getCourseCoordinatorName() != null && offering.getCourseCoordinatorName().equalsIgnoreCase(user.getName()));
+            boolean isAssigned = isCoordinator || (offering.getAssignedFaculty() != null && (offering.getAssignedFaculty().contains(user.getEmail()) || offering.getAssignedFaculty().contains(user.getName())));
             if (!isAssigned) {
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: You are not assigned to this Course Offering.");
             }
@@ -112,6 +112,50 @@ public class ReportAccessService {
         }
 
         validateBatchAccess(user, offering.getBatchId());
+    }
+
+    @Transactional(readOnly = true)
+    public void validateCourseCoordinatorAccess(User user, String courseOfferingId) {
+        System.out.println("[ReportAccessService] validateCourseCoordinatorAccess called | user: " + (user != null ? user.getEmail() : "null") + " | courseOfferingId: " + courseOfferingId);
+        if (user == null || courseOfferingId == null) return;
+        if (user.getRole() == UserRole.ADMIN || user.getRole() == UserRole.IQAC || user.getRole() == UserRole.DIRECTOR || user.getRole() == UserRole.HOD || user.getRole() == UserRole.PROGRAMME_COORDINATOR) {
+            validateCourseOfferingAccess(user, courseOfferingId);
+            return;
+        }
+
+        CourseOffering offering = courseOfferingRepository.findById(courseOfferingId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Course Offering not found: " + courseOfferingId));
+
+        boolean isCoordinator = (offering.getCourseCoordinatorId() != null && Objects.equals(offering.getCourseCoordinatorId(), user.getId()))
+                || (offering.getCourseCoordinatorId() == null && offering.getCourseCoordinatorName() != null && offering.getCourseCoordinatorName().equalsIgnoreCase(user.getName()));
+        if (!isCoordinator) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Only the assigned Course Coordinator can perform this action.");
+        }
+    }
+
+    @Transactional(readOnly = true)
+    public void validateCourseAccess(User user, String courseId) {
+        System.out.println("[ReportAccessService] validateCourseAccess called | user: " + (user != null ? user.getEmail() : "null") + " | courseId: " + courseId);
+        if (user == null || courseId == null) return;
+        if (user.getRole() == UserRole.ADMIN || user.getRole() == UserRole.IQAC) return;
+
+        Course course = courseRepository.findById(courseId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Course not found: " + courseId));
+
+        if (user.getRole() == UserRole.FACULTY) {
+            List<CourseOffering> offerings = courseOfferingRepository.findByCourseId(courseId);
+            boolean hasAssignedOffering = offerings.stream().anyMatch(o -> {
+                boolean isCoord = (o.getCourseCoordinatorId() != null && Objects.equals(o.getCourseCoordinatorId(), user.getId()))
+                        || (o.getCourseCoordinatorId() == null && o.getCourseCoordinatorName() != null && o.getCourseCoordinatorName().equalsIgnoreCase(user.getName()));
+                return isCoord || (o.getAssignedFaculty() != null && (o.getAssignedFaculty().contains(user.getEmail()) || o.getAssignedFaculty().contains(user.getName())));
+            });
+            if (!hasAssignedOffering) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: You are not assigned to any offering of this Course.");
+            }
+            return;
+        }
+
+        validateProgrammeAccess(user, course.getProgrammeId());
     }
 
     @Transactional(readOnly = true)

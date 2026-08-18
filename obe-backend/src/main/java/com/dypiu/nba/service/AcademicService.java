@@ -119,6 +119,20 @@ public class AcademicService {
         if (batchId == null || batchId.isBlank()) return;
         Batch batch = batchRepository.findById(batchId)
                 .orElseThrow(() -> new ResourceNotFoundException("Batch not found: " + batchId));
+
+        if (scope.isFaculty()) {
+            List<CourseOffering> offerings = courseOfferingRepository.findByBatchId(batchId);
+            boolean hasAssigned = offerings.stream().anyMatch(o -> {
+                boolean isCoord = (o.getCourseCoordinatorId() != null && Objects.equals(o.getCourseCoordinatorId(), scope.getUserId()))
+                        || (o.getCourseCoordinatorId() == null && o.getCourseCoordinatorName() != null && o.getCourseCoordinatorName().equalsIgnoreCase(scope.getName()));
+                return isCoord || (o.getAssignedFaculty() != null && (o.getAssignedFaculty().contains(scope.getEmail()) || o.getAssignedFaculty().contains(scope.getName())));
+            });
+            if (!hasAssigned) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: You are not assigned to any Course Offering in this Batch.");
+            }
+            return;
+        }
+
         enforceProgrammeScope(batch.getProgrammeId());
     }
 
@@ -128,7 +142,64 @@ public class AcademicService {
         if (courseId == null || courseId.isBlank()) return;
         Course course = courseRepository.findById(courseId)
                 .orElseThrow(() -> new ResourceNotFoundException("Course not found: " + courseId));
+
+        if (scope.isFaculty()) {
+            List<CourseOffering> offerings = courseOfferingRepository.findByCourseId(courseId);
+            boolean hasAssigned = offerings.stream().anyMatch(o -> {
+                boolean isCoord = (o.getCourseCoordinatorId() != null && Objects.equals(o.getCourseCoordinatorId(), scope.getUserId()))
+                        || (o.getCourseCoordinatorId() == null && o.getCourseCoordinatorName() != null && o.getCourseCoordinatorName().equalsIgnoreCase(scope.getName()));
+                return isCoord || (o.getAssignedFaculty() != null && (o.getAssignedFaculty().contains(scope.getEmail()) || o.getAssignedFaculty().contains(scope.getName())));
+            });
+            if (!hasAssigned) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: You are not assigned to this Course.");
+            }
+            return;
+        }
+
         enforceProgrammeScope(course.getProgrammeId());
+    }
+
+    private void enforceCourseOfferingScope(String offeringId) {
+        CurrentUserScope scope = getScope();
+        if (scope == null || scope.isAdmin() || scope.isIqac()) return;
+        if (offeringId == null || offeringId.isBlank()) return;
+
+        CourseOffering offering = courseOfferingRepository.findById(offeringId)
+                .orElseThrow(() -> new ResourceNotFoundException("Course offering not found: " + offeringId));
+
+        if (scope.isFaculty()) {
+            boolean isCoordinator = (offering.getCourseCoordinatorId() != null && Objects.equals(offering.getCourseCoordinatorId(), scope.getUserId()))
+                    || (offering.getCourseCoordinatorId() == null && offering.getCourseCoordinatorName() != null && offering.getCourseCoordinatorName().equalsIgnoreCase(scope.getName()));
+            boolean isFacultyAssigned = isCoordinator || (offering.getAssignedFaculty() != null && (offering.getAssignedFaculty().contains(scope.getEmail()) || offering.getAssignedFaculty().contains(scope.getName())));
+            if (!isFacultyAssigned) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: You are not assigned to this Course Offering.");
+            }
+            return;
+        }
+
+        if (offering.getCourseId() != null) enforceCourseScope(offering.getCourseId());
+        if (offering.getBatchId() != null) enforceBatchScope(offering.getBatchId());
+    }
+
+    private void enforceCourseCoordinatorScope(String offeringOrCourseId) {
+        CurrentUserScope scope = getScope();
+        if (scope == null || scope.isAdmin() || scope.isIqac() || scope.isDirector() || scope.isHod() || scope.isProgrammeCoordinator()) {
+            return;
+        }
+        if (offeringOrCourseId == null || offeringOrCourseId.isBlank()) return;
+        CourseOffering offering = courseOfferingRepository.findById(offeringOrCourseId).orElse(null);
+        if (offering == null) {
+            List<CourseOffering> offerings = courseOfferingRepository.findByCourseId(offeringOrCourseId);
+            offering = offerings.stream().findFirst().orElse(null);
+        }
+        if (offering == null) {
+            throw new ResourceNotFoundException("Course offering not found: " + offeringOrCourseId);
+        }
+        boolean isCoordinator = (offering.getCourseCoordinatorId() != null && Objects.equals(offering.getCourseCoordinatorId(), scope.getUserId()))
+                || (offering.getCourseCoordinatorId() == null && offering.getCourseCoordinatorName() != null && offering.getCourseCoordinatorName().equalsIgnoreCase(scope.getName()));
+        if (!isCoordinator) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Only the assigned Course Coordinator can perform this action.");
+        }
     }
 
     @Transactional(readOnly = true)
@@ -194,11 +265,23 @@ public class AcademicService {
     @Transactional(readOnly = true)
     public List<CourseOffering> getCourseOfferingsByBatch(String batchId) {
         System.out.println("[AcademicService] getCourseOfferingsByBatch called | batchId: " + batchId);
+        CurrentUserScope scope = getScope();
+        if (scope != null && scope.isFaculty()) {
+            List<CourseOffering> offerings = (batchId != null && !batchId.isBlank())
+                    ? courseOfferingRepository.findByBatchId(batchId)
+                    : courseOfferingRepository.findAll();
+            return offerings.stream()
+                    .filter(o -> {
+                        boolean isCoord = (o.getCourseCoordinatorId() != null && Objects.equals(o.getCourseCoordinatorId(), scope.getUserId()))
+                                || (o.getCourseCoordinatorId() == null && o.getCourseCoordinatorName() != null && o.getCourseCoordinatorName().equalsIgnoreCase(scope.getName()));
+                        return isCoord || (o.getAssignedFaculty() != null && (o.getAssignedFaculty().contains(scope.getEmail()) || o.getAssignedFaculty().contains(scope.getName())));
+                    })
+                    .collect(Collectors.toList());
+        }
         if (batchId != null && !batchId.isBlank()) {
             enforceBatchScope(batchId);
             return courseOfferingRepository.findByBatchId(batchId);
         }
-        CurrentUserScope scope = getScope();
         if (scope != null && scope.isProgrammeCoordinator()) {
             List<Batch> batches = batchRepository.findByProgrammeId(scope.getRequiredProgrammeId());
             Set<String> bIds = batches.stream().map(Batch::getId).collect(Collectors.toSet());
@@ -1001,31 +1084,37 @@ public class AcademicService {
     @Transactional(readOnly = true)
     public CourseCoordinatorSummaryDto getCourseCoordinatorSummary(String coordinatorEmail) {
         System.out.println("[AcademicService] getCourseCoordinatorSummary called | coordinatorEmail: " + coordinatorEmail);
-        String name = "Course Coordinator";
-        String email = coordinatorEmail != null ? coordinatorEmail.trim() : "";
+        CurrentUserScope scope = getScope();
+        String name = scope != null && scope.getName() != null ? scope.getName() : "Course Coordinator";
+        String email = scope != null && scope.getEmail() != null ? scope.getEmail() : (coordinatorEmail != null ? coordinatorEmail.trim() : "");
+        Long userId = scope != null ? scope.getUserId() : null;
 
-        if (!email.isBlank()) {
-            Optional<User> uOpt = userRepository.findByEmail(email);
-            if (uOpt.isPresent()) {
-                name = uOpt.get().getName();
+        if (scope == null || !scope.isFaculty()) {
+            if (!email.isBlank()) {
+                Optional<User> uOpt = userRepository.findByEmail(email);
+                if (uOpt.isPresent()) {
+                    name = uOpt.get().getName();
+                    userId = uOpt.get().getId();
+                }
             }
         }
 
-        List<Course> allCourses = courseRepository.findAll();
+        List<CourseOffering> allOfferings = courseOfferingRepository.findAll();
         final String searchEmail = email.toLowerCase();
         final String searchName = name.toLowerCase();
+        final Long searchUserId = userId;
 
-        List<Course> assigned = allCourses.stream()
-                .filter(c -> {
-                    if (searchEmail.isBlank()) return true;
-                    boolean matchCoord = (c.getCoordinator() != null && (c.getCoordinator().toLowerCase().contains(searchEmail) || (!searchName.isBlank() && c.getCoordinator().toLowerCase().contains(searchName))));
-                    boolean matchFaculty = (c.getFaculty() != null && (c.getFaculty().toLowerCase().contains(searchEmail) || (!searchName.isBlank() && c.getFaculty().toLowerCase().contains(searchName))));
-                    boolean matchAssigned = (c.getAssignedFaculty() != null && (c.getAssignedFaculty().toLowerCase().contains(searchEmail) || (!searchName.isBlank() && c.getAssignedFaculty().toLowerCase().contains(searchName))));
-                    return matchCoord || matchFaculty || matchAssigned;
+        List<CourseOffering> assignedOfferings = allOfferings.stream()
+                .filter(o -> {
+                    boolean matchCoord = (o.getCourseCoordinatorId() != null && Objects.equals(o.getCourseCoordinatorId(), searchUserId))
+                            || (o.getCourseCoordinatorId() == null && o.getCourseCoordinatorName() != null && o.getCourseCoordinatorName().equalsIgnoreCase(searchName));
+                    boolean matchFaculty = (o.getAssignedFaculty() != null && (o.getAssignedFaculty().toLowerCase().contains(searchEmail) || (!searchName.isBlank() && o.getAssignedFaculty().toLowerCase().contains(searchName))));
+                    return matchCoord || matchFaculty;
                 })
                 .toList();
 
-        List<Course> finalCourses = assigned.isEmpty() ? allCourses : assigned;
+        Set<String> assignedCourseIds = assignedOfferings.stream().map(CourseOffering::getCourseId).filter(Objects::nonNull).collect(Collectors.toSet());
+        List<Course> finalCourses = assignedCourseIds.isEmpty() ? Collections.emptyList() : courseRepository.findAllById(assignedCourseIds);
 
         Course primaryCourse = !finalCourses.isEmpty() ? finalCourses.get(0) : null;
 
@@ -1074,6 +1163,13 @@ public class AcademicService {
     public CourseCoordinatorSetupProgressDto getCourseCoordinatorSetupProgress(String coordinatorEmail, String courseId) {
         String targetCourseId = resolveTargetCourseId(courseId);
         System.out.println("[AcademicService] getCourseCoordinatorSetupProgress called | courseId: " + courseId + " -> targetCourseId: " + targetCourseId);
+        if (targetCourseId != null && !targetCourseId.isBlank()) {
+            if (courseOfferingRepository.existsById(targetCourseId)) {
+                enforceCourseOfferingScope(targetCourseId);
+            } else if (courseRepository.existsById(targetCourseId)) {
+                enforceCourseScope(targetCourseId);
+            }
+        }
         CourseCoordinatorSetupProgress progress = ccSetupProgressRepository.findByCourseOfferingId(targetCourseId)
                 .orElseGet(() -> CourseCoordinatorSetupProgress.builder()
                         .id("ccprog-" + UUID.randomUUID().toString().substring(0, 8))
@@ -1107,6 +1203,13 @@ public class AcademicService {
     public CourseCoordinatorSetupProgressDto updateCourseCoordinatorSetupProgress(String coordinatorEmail, String courseId, Integer currentStep) {
         String targetCourseId = resolveTargetCourseId(courseId);
         System.out.println("[AcademicService] updateCourseCoordinatorSetupProgress called | courseId: " + courseId + " -> targetCourseId: " + targetCourseId + " | stepNumber: " + currentStep);
+        if (targetCourseId != null && !targetCourseId.isBlank()) {
+            if (courseOfferingRepository.existsById(targetCourseId)) {
+                enforceCourseOfferingScope(targetCourseId);
+            } else if (courseRepository.existsById(targetCourseId)) {
+                enforceCourseScope(targetCourseId);
+            }
+        }
         CourseCoordinatorSetupProgress progress = ccSetupProgressRepository.findByCourseOfferingId(targetCourseId)
                 .orElseGet(() -> CourseCoordinatorSetupProgress.builder()
                         .id("ccprog-" + UUID.randomUUID().toString().substring(0, 8))
@@ -1131,13 +1234,21 @@ public class AcademicService {
     public CourseCoordinatorSetupProgressDto completeCourseCoordinatorSetup(String coordinatorEmail, String courseId) {
         String targetCourseId = resolveTargetCourseId(courseId);
         System.out.println("[AcademicService] completeCourseCoordinatorSetup called | courseId: " + courseId + " -> targetCourseId: " + targetCourseId);
+        if (targetCourseId != null && !targetCourseId.isBlank()) {
+            if (courseOfferingRepository.existsById(targetCourseId)) {
+                enforceCourseOfferingScope(targetCourseId);
+                enforceCourseCoordinatorScope(targetCourseId);
+            } else if (courseRepository.existsById(targetCourseId)) {
+                enforceCourseScope(targetCourseId);
+                enforceCourseCoordinatorScope(targetCourseId);
+            }
+        }
         CourseCoordinatorSetupProgress progress = ccSetupProgressRepository.findByCourseOfferingId(targetCourseId)
                 .orElseGet(() -> CourseCoordinatorSetupProgress.builder()
                         .id("ccprog-" + UUID.randomUUID().toString().substring(0, 8))
                         .courseOfferingId(targetCourseId)
                         .coordinatorEmail(coordinatorEmail)
                         .build());
-
 
         progress.setOverallStatus(SetupStepStatus.COMPLETED);
         progress.setCompletedSteps("cos,co_mapping,direct,indirect,attainment,course_atr");
@@ -1355,6 +1466,19 @@ public class AcademicService {
         if (scope != null && scope.isProgrammeCoordinator()) {
             return batchRepository.findByProgrammeId(scope.getRequiredProgrammeId());
         }
+        if (scope != null && scope.isFaculty()) {
+            List<CourseOffering> allOfferings = courseOfferingRepository.findAll();
+            Set<String> assignedBatchIds = allOfferings.stream()
+                    .filter(o -> {
+                        boolean isCoord = (o.getCourseCoordinatorId() != null && Objects.equals(o.getCourseCoordinatorId(), scope.getUserId()))
+                                || (o.getCourseCoordinatorId() == null && o.getCourseCoordinatorName() != null && o.getCourseCoordinatorName().equalsIgnoreCase(scope.getName()));
+                        return isCoord || (o.getAssignedFaculty() != null && (o.getAssignedFaculty().contains(scope.getEmail()) || o.getAssignedFaculty().contains(scope.getName())));
+                    })
+                    .map(CourseOffering::getBatchId)
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toSet());
+            return assignedBatchIds.isEmpty() ? Collections.emptyList() : batchRepository.findAllById(assignedBatchIds);
+        }
         List<Batch> list = batchRepository.findAll();
         System.out.println("[AcademicService] Fetched all batches (" + list.size() + " items)");
         return list;
@@ -1372,9 +1496,9 @@ public class AcademicService {
     @Transactional(readOnly = true)
     public Batch getBatchById(String id) {
         System.out.println("[AcademicService] getBatchById called | id: " + id);
+        enforceBatchScope(id);
         Batch batch = batchRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Batch not found with id: " + id));
-        enforceProgrammeScope(batch.getProgrammeId());
         return batch;
     }
 
@@ -1465,6 +1589,19 @@ public class AcademicService {
         if (scope != null && scope.isProgrammeCoordinator()) {
             return courseRepository.findByProgrammeId(scope.getRequiredProgrammeId());
         }
+        if (scope != null && scope.isFaculty()) {
+            List<CourseOffering> allOfferings = courseOfferingRepository.findAll();
+            Set<String> assignedCourseIds = allOfferings.stream()
+                    .filter(o -> {
+                        boolean isCoord = (o.getCourseCoordinatorId() != null && Objects.equals(o.getCourseCoordinatorId(), scope.getUserId()))
+                                || (o.getCourseCoordinatorId() == null && o.getCourseCoordinatorName() != null && o.getCourseCoordinatorName().equalsIgnoreCase(scope.getName()));
+                        return isCoord || (o.getAssignedFaculty() != null && (o.getAssignedFaculty().contains(scope.getEmail()) || o.getAssignedFaculty().contains(scope.getName())));
+                    })
+                    .map(CourseOffering::getCourseId)
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toSet());
+            return assignedCourseIds.isEmpty() ? Collections.emptyList() : courseRepository.findAllById(assignedCourseIds);
+        }
         List<Course> list = courseRepository.findAll();
         System.out.println("[AcademicService] Fetched all courses (" + list.size() + " items)");
         return list;
@@ -1475,7 +1612,7 @@ public class AcademicService {
         System.out.println("[AcademicService] getCourseById called | id: " + id);
         Course course = courseRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Course not found with id: " + id));
-        enforceProgrammeScope(course.getProgrammeId());
+        enforceCourseScope(id);
         return course;
     }
 
@@ -2290,6 +2427,12 @@ public class AcademicService {
 
     @Transactional(readOnly = true)
     public Map<String, Object> getCourseCoTargets(String courseId, String batchId) {
+        if (courseId != null && !courseId.isBlank()) {
+            enforceCourseScope(courseId);
+        }
+        if (batchId != null && !batchId.isBlank()) {
+            enforceBatchScope(batchId);
+        }
         List<CourseOffering> offerings = courseOfferingRepository.findByCourseId(courseId);
         String offeringId = !offerings.isEmpty() ? offerings.get(0).getId() : courseId;
         List<CourseOutcome> cos = courseOutcomeRepository.findByCourseOfferingId(offeringId);
@@ -2312,6 +2455,9 @@ public class AcademicService {
 
     @Transactional
     public Map<String, Object> saveCourseCoTargets(String courseId, Map<String, Object> coTargets) {
+        if (courseId != null && !courseId.isBlank()) {
+            enforceCourseScope(courseId);
+        }
         List<CourseOffering> offerings = courseOfferingRepository.findByCourseId(courseId);
         String offeringId = !offerings.isEmpty() ? offerings.get(0).getId() : courseId;
         List<CourseOutcome> cos = courseOutcomeRepository.findByCourseOfferingId(offeringId);

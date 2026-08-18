@@ -10,6 +10,8 @@ import org.apache.poi.ss.usermodel.*;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.dypiu.nba.security.CurrentUserScope;
+import com.dypiu.nba.security.CurrentUserScopeService;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -42,6 +44,10 @@ public class AttainmentCalculationService {
     private final ProgrammeTargetRepository programmeTargetRepository;
     private final CoPoMappingRepository coPoMappingRepository;
     private final CoPsoMappingRepository coPsoMappingRepository;
+    private final com.dypiu.nba.security.CurrentUserScopeService currentUserScopeService;
+
+    @org.springframework.beans.factory.annotation.Value("${app.upload.dir:uploads}")
+    private String baseUploadDir;
 
     private final Map<String, ExaminationAttainmentResultDto> examinationAttainmentStore = new ConcurrentHashMap<>();
     private final Map<String, SurveyAttainmentResultDto> surveyAttainmentStore = new ConcurrentHashMap<>();
@@ -59,9 +65,68 @@ public class AttainmentCalculationService {
         return offeringOrCourseId;
     }
 
+    private CurrentUserScope getScope() {
+        try {
+            return currentUserScopeService != null ? currentUserScopeService.getCurrentUserScope() : null;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private void enforceOfferingOrCourseScope(String courseOfferingOrCourseId) {
+        if (courseOfferingOrCourseId == null || courseOfferingOrCourseId.isBlank()) return;
+        com.dypiu.nba.security.CurrentUserScope scope = getScope();
+        if (scope == null || scope.isAdmin() || scope.isIqac()) return;
+
+        String offeringId = resolveOfferingId(courseOfferingOrCourseId);
+        if (offeringId != null && courseOfferingRepository.existsById(offeringId)) {
+            CourseOffering offering = courseOfferingRepository.findById(offeringId).orElse(null);
+            if (offering != null) {
+                if (scope.isFaculty()) {
+                    boolean isCoord = (offering.getCourseCoordinatorId() != null && Objects.equals(offering.getCourseCoordinatorId(), scope.getUserId()))
+                            || (offering.getCourseCoordinatorId() == null && offering.getCourseCoordinatorName() != null && offering.getCourseCoordinatorName().equalsIgnoreCase(scope.getName()));
+                    boolean isAssigned = isCoord || (offering.getAssignedFaculty() != null && (offering.getAssignedFaculty().contains(scope.getEmail()) || offering.getAssignedFaculty().contains(scope.getName())));
+                    if (!isAssigned) {
+                        throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: You are not assigned to this Course Offering.");
+                    }
+                    return;
+                }
+                if (scope.isProgrammeCoordinator() && offering.getCourseId() != null) {
+                    Course course = courseRepository.findById(offering.getCourseId()).orElse(null);
+                    if (course != null && !scope.getRequiredProgrammeId().equals(course.getProgrammeId())) {
+                        throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Resource is outside your assigned programme scope.");
+                    }
+                }
+                return;
+            }
+        }
+
+        if (courseRepository.existsById(courseOfferingOrCourseId)) {
+            Course course = courseRepository.findById(courseOfferingOrCourseId).orElse(null);
+            if (course != null) {
+                if (scope.isFaculty()) {
+                    List<CourseOffering> offerings = courseOfferingRepository.findByCourseId(course.getId());
+                    boolean hasAssigned = offerings.stream().anyMatch(o -> {
+                        boolean isCoord = (o.getCourseCoordinatorId() != null && Objects.equals(o.getCourseCoordinatorId(), scope.getUserId()))
+                                || (o.getCourseCoordinatorId() == null && o.getCourseCoordinatorName() != null && o.getCourseCoordinatorName().equalsIgnoreCase(scope.getName()));
+                        return isCoord || (o.getAssignedFaculty() != null && (o.getAssignedFaculty().contains(scope.getEmail()) || o.getAssignedFaculty().contains(scope.getName())));
+                    });
+                    if (!hasAssigned) {
+                        throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: You are not assigned to this Course.");
+                    }
+                    return;
+                }
+                if (scope.isProgrammeCoordinator() && !course.getProgrammeId().equals(scope.getRequiredProgrammeId())) {
+                    throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Resource is outside your assigned programme scope.");
+                }
+            }
+        }
+    }
+
     @Transactional(readOnly = true)
     public AttainmentConfiguration getAttainmentConfig(String courseOfferingOrCourseId) {
         System.out.println("[AttainmentCalculationService] getAttainmentConfig called | courseOfferingOrCourseId: " + courseOfferingOrCourseId);
+        enforceOfferingOrCourseScope(courseOfferingOrCourseId);
         String offeringId = resolveOfferingId(courseOfferingOrCourseId);
         return configRepository.findByCourseOfferingId(offeringId)
                 .orElseGet(() -> AttainmentConfiguration.builder()
@@ -78,6 +143,7 @@ public class AttainmentCalculationService {
     @Transactional
     public AttainmentConfiguration saveAttainmentConfig(String courseOfferingOrCourseId, AttainmentConfiguration config) {
         System.out.println("[AttainmentCalculationService] saveAttainmentConfig called | courseOfferingOrCourseId: " + courseOfferingOrCourseId);
+        enforceOfferingOrCourseScope(courseOfferingOrCourseId);
         String offeringId = resolveOfferingId(courseOfferingOrCourseId);
         config.setCourseOfferingId(offeringId);
         if (config.getId() == null) config.setId("cfg-" + offeringId);
@@ -253,7 +319,7 @@ public class AttainmentCalculationService {
 
         if (file != null && !file.isEmpty()) {
             try {
-                String uploadDir = "uploads/examination/" + offeringId;
+                String uploadDir = (baseUploadDir != null ? baseUploadDir : "uploads") + "/examination/" + offeringId;
                 File dir = new File(uploadDir);
                 if (!dir.exists()) dir.mkdirs();
 
@@ -497,7 +563,7 @@ public class AttainmentCalculationService {
 
         if (file != null && !file.isEmpty()) {
             try {
-                String uploadDir = "uploads/survey/" + offeringId;
+                String uploadDir = (baseUploadDir != null ? baseUploadDir : "uploads") + "/survey/" + offeringId;
                 File dir = new File(uploadDir);
                 if (!dir.exists()) dir.mkdirs();
 
@@ -640,6 +706,7 @@ public class AttainmentCalculationService {
     @Transactional(readOnly = true)
     public Map<String, Object> calculateCourseCoAttainment(String courseOfferingOrCourseId) {
         System.out.println("[AttainmentCalculationService] calculateCourseCoAttainment called | courseOfferingOrCourseId: " + courseOfferingOrCourseId);
+        enforceOfferingOrCourseScope(courseOfferingOrCourseId);
         String offeringId = resolveOfferingId(courseOfferingOrCourseId);
         CourseOffering offering = courseOfferingRepository.findById(offeringId).orElse(null);
         String courseId = offering != null ? offering.getCourseId() : offeringId;
@@ -766,7 +833,7 @@ public class AttainmentCalculationService {
 
         if (file != null && !file.isEmpty()) {
             try {
-                String uploadDir = "uploads/programme_survey/" + programmeId + "/" + batchId;
+                String uploadDir = (baseUploadDir != null ? baseUploadDir : "uploads") + "/programme_survey/" + programmeId + "/" + batchId;
                 File dir = new File(uploadDir);
                 if (!dir.exists()) dir.mkdirs();
 

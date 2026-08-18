@@ -1,4 +1,5 @@
 com/dypiu/nba/entity/CourseAtr$CourseAtrBuilder.class
+com/dypiu/nba/security/JwtAccessDeniedHandler.class
 com/dypiu/nba/dto/ProgrammeAttainmentResultDto$OutcomeAttainmentItem.class
 com/dypiu/nba/entity/AttainmentConfigStatus.class
 com/dypiu/nba/dto/ProgrammeTargetDto$ProgrammeTargetDtoBuilder.class
@@ -81,6 +82,7 @@ com/dypiu/nba/dto/CourseAtrReportDto$CourseOfferingSummary.class
 com/dypiu/nba/entity/CoPoMapping.class
 com/dypiu/nba/dto/ProgrammeTargetDto.class
 com/dypiu/nba/entity/Course.class
+com/dypiu/nba/service/ApprovalService$ActorInfo.class
 com/dypiu/nba/repository/CoPoMappingRepository.class
 com/dypiu/nba/dto/ProgrammeAttainmentResultDto$OutcomeMappingItem.class
 com/dypiu/nba/repository/PsoCompetencyRepository.class
@@ -176,6 +178,7 @@ com/dypiu/nba/entity/SetupStepStatus.class
 com/dypiu/nba/entity/ProgrammeOutcome.class
 com/dypiu/nba/entity/ProgrammeAtr$ProgrammeAtrBuilder.class
 com/dypiu/nba/dto/CourseCoordinatorSummaryDto$CourseCoordinatorSummaryDtoBuilder.class
+com/dypiu/nba/controller/CustomErrorController.class
 com/dypiu/nba/exception/BadRequestException.class
 com/dypiu/nba/dto/ReportFiltersDto$OfferingItem$OfferingItemBuilder.class
 com/dypiu/nba/dto/RefreshTokenRequest.class

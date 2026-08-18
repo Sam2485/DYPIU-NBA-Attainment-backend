@@ -339,40 +339,53 @@ public class DashboardController {
             @RequestParam(required = false) String batchId,
             Principal principal) {
         User user = reportAccessService.getAuthenticatedUser(principal);
+        CurrentUserScope scope = currentUserScopeService.getCurrentUserScope(principal);
 
-        List<CourseOffering> assignedOfferings = courseOfferingRepository.findAll().stream()
+        List<CourseOffering> allOfferings = courseOfferingRepository.findAll();
+        List<CourseOffering> assignedOfferings = allOfferings.stream()
                 .filter(o -> user != null && ((o.getCourseCoordinatorId() != null && java.util.Objects.equals(o.getCourseCoordinatorId(), user.getId()))
-                        || (o.getCourseCoordinatorName() != null && o.getCourseCoordinatorName().equalsIgnoreCase(user.getName()))
+                        || (o.getCourseCoordinatorId() == null && o.getCourseCoordinatorName() != null && o.getCourseCoordinatorName().equalsIgnoreCase(user.getName()))
                         || (o.getAssignedFaculty() != null && (o.getAssignedFaculty().contains(user.getEmail()) || o.getAssignedFaculty().contains(user.getName())))))
                 .collect(Collectors.toList());
 
         CourseOffering targetOffering = null;
         if (courseId != null && !courseId.isBlank()) {
-            targetOffering = courseOfferingRepository.findByCourseId(courseId).stream().findFirst().orElse(null);
+            if (scope != null && scope.isFaculty()) {
+                boolean assignedToCourse = assignedOfferings.stream().anyMatch(o -> 
+                        (o.getCourseId() != null && o.getCourseId().equalsIgnoreCase(courseId.trim())) || 
+                        (o.getId() != null && o.getId().equalsIgnoreCase(courseId.trim())));
+                if (!assignedToCourse) {
+                    throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: You are not assigned to this Course / Course Offering.");
+                }
+            }
+            targetOffering = courseOfferingRepository.findByCourseId(courseId.trim()).stream()
+                    .filter(o -> scope == null || !scope.isFaculty() || assignedOfferings.contains(o))
+                    .findFirst()
+                    .orElse(null);
+            if (targetOffering == null) {
+                targetOffering = courseOfferingRepository.findById(courseId.trim()).orElse(null);
+            }
         }
         if (targetOffering == null && !assignedOfferings.isEmpty()) {
             targetOffering = assignedOfferings.get(0);
         }
 
         Course course = null;
-        String offeringId = targetOffering != null ? targetOffering.getId() : (courseId != null ? courseId : "off-101");
+        String offeringId = targetOffering != null ? targetOffering.getId() : null;
         String targetCrsId = targetOffering != null ? targetOffering.getCourseId() : courseId;
         if (targetCrsId != null && !targetCrsId.isBlank()) {
             course = courseRepository.findById(targetCrsId).orElse(null);
         }
-        if (course == null) {
-            course = Course.builder().id(targetCrsId != null ? targetCrsId : "crs-1").code("310244").name("Computer Network & Security").credits(4).courseType("Theory").build();
-        }
 
-        List<CourseOutcome> cos = courseOutcomeRepository.findByCourseOfferingId(offeringId);
+        List<CourseOutcome> cos = (offeringId != null) ? courseOutcomeRepository.findByCourseOfferingId(offeringId) : Collections.emptyList();
         List<String> coIds = cos.stream().map(CourseOutcome::getId).toList();
 
         boolean outcomesDone = !cos.isEmpty();
         boolean targetsDone = outcomesDone && cos.stream().allMatch(c -> c.getTargetLevel() != null);
         boolean mappingDone = !coIds.isEmpty() && (!coPoMappingRepository.findByCourseOutcomeIdIn(coIds).isEmpty() || !coPsoMappingRepository.findByCourseOutcomeIdIn(coIds).isEmpty());
-        boolean configDone = configRepository.findByCourseOfferingId(offeringId).isPresent();
-        boolean marksDone = !studentCoMarkRepository.findByCourseOfferingId(offeringId).isEmpty() || !uploadedDocumentRepository.findByCourseOfferingId(offeringId).isEmpty();
-        boolean atrDone = !courseAtrRepository.findByCourseOfferingId(offeringId).isEmpty();
+        boolean configDone = (offeringId != null) && configRepository.findByCourseOfferingId(offeringId).isPresent();
+        boolean marksDone = (offeringId != null) && (!studentCoMarkRepository.findByCourseOfferingId(offeringId).isEmpty() || !uploadedDocumentRepository.findByCourseOfferingId(offeringId).isEmpty());
+        boolean atrDone = (offeringId != null) && !courseAtrRepository.findByCourseOfferingId(offeringId).isEmpty();
 
         Map<String, Boolean> workflowProgress = new LinkedHashMap<>();
         workflowProgress.put("/outcomes", outcomesDone);
@@ -382,11 +395,11 @@ public class DashboardController {
         workflowProgress.put("/marks-upload", marksDone);
         workflowProgress.put("/course-atr", atrDone);
 
-        boolean isConfigRevision = approvalRequestRepository.findAll().stream()
+        boolean isConfigRevision = (offeringId != null) && approvalRequestRepository.findAll().stream()
                 .anyMatch(a -> a.getType() == ApprovalType.ATTAINMENT_CONFIGURATION && offeringId.equalsIgnoreCase(a.getCourseOfferingId()) && a.getStatus() == ApprovalStatus.NEEDS_REVISION);
-        boolean isCoRevision = approvalRequestRepository.findAll().stream()
+        boolean isCoRevision = (offeringId != null) && approvalRequestRepository.findAll().stream()
                 .anyMatch(a -> (a.getType() == ApprovalType.CO_DEFINITION || a.getType() == ApprovalType.CO_TARGETS) && offeringId.equalsIgnoreCase(a.getCourseOfferingId()) && a.getStatus() == ApprovalStatus.NEEDS_REVISION);
-        boolean isAtrRevision = courseAtrRepository.findByCourseOfferingId(offeringId).stream()
+        boolean isAtrRevision = (offeringId != null) && courseAtrRepository.findByCourseOfferingId(offeringId).stream()
                 .anyMatch(a -> a.getStatus() == CourseAtrStatus.NEEDS_REVISION);
         boolean hasRevision = isConfigRevision || isCoRevision || isAtrRevision;
 
