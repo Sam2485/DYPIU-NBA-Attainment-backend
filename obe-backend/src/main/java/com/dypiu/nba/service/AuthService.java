@@ -136,6 +136,11 @@ public class AuthService {
                         .email(user.getEmail())
                         .username(user.getUsername())
                         .role(user.getRole() != null ? user.getRole().name() : "FACULTY")
+                        .schoolId(user.getSchoolId())
+                        .departmentId(user.getDepartmentId())
+                        .programmeId(user.getProgrammeId())
+                        .department(user.getDepartment())
+                        .programme(user.getProgramme())
                         .build())
                 .build();
     }

@@ -27,5 +27,10 @@ public class AuthResponse {
         private String email;
         private String username;
         private String role;
+        private String schoolId;
+        private String departmentId;
+        private String programmeId;
+        private String department;
+        private String programme;
     }
 }

@@ -53,13 +53,13 @@ public class DashboardController {
         if (school == null && sId != null && !sId.isBlank()) {
             school = schoolRepository.findById(sId).orElse(null);
         }
-        if (school == null && user != null && user.getId() != null) {
-            school = schoolRepository.findByDirectorId(user.getId()).orElse(null);
+        if (school == null) {
+            school = schoolRepository.findAll().stream().findFirst().orElse(null);
         }
 
-        String targetSchoolId = school != null ? school.getId() : (sId != null ? sId : "sch-1");
+        String targetSchoolId = school != null ? school.getId() : (sId != null && !sId.isBlank() ? sId : null);
 
-        List<Department> depts = departmentRepository.findBySchoolId(targetSchoolId);
+        List<Department> depts = targetSchoolId != null ? departmentRepository.findBySchoolId(targetSchoolId) : departmentRepository.findAll();
         List<String> deptIds = depts.stream().map(Department::getId).toList();
         List<Programme> progs = deptIds.isEmpty() ? Collections.emptyList() : programmeRepository.findByDepartmentIdIn(deptIds);
         List<String> progIds = progs.stream().map(Programme::getId).toList();

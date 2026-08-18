@@ -150,7 +150,11 @@ public class AcademicService {
         }
 
         if (schoolOpt.isEmpty()) {
-            System.out.println("[AcademicService] No school found under Director email: " + directorEmail);
+            schoolOpt = schoolRepository.findAll().stream().findFirst();
+        }
+
+        if (schoolOpt.isEmpty()) {
+            System.out.println("[AcademicService] No school found in database.");
             return DirectorSchoolSummaryDto.builder()
                     .schoolId(null)
                     .schoolName(null)
@@ -209,16 +213,19 @@ public class AcademicService {
         System.out.println("[AcademicService] getDepartmentSummary called | schoolId: " + schoolId + " | directorEmail: " + directorEmail);
         String targetSchoolId = schoolId;
         if ((targetSchoolId == null || targetSchoolId.isBlank() || targetSchoolId.equals("sch-1")) && directorEmail != null && !directorEmail.isBlank()) {
-            Optional<School> schOpt = schoolRepository.findByDirectorEmailIgnoreCase(directorEmail);
+            Optional<School> schOpt = schoolRepository.findByDirectorEmailIgnoreCase(directorEmail.trim());
             if (schOpt.isPresent()) {
                 targetSchoolId = schOpt.get().getId();
             }
         }
-        if (targetSchoolId == null || targetSchoolId.isBlank()) {
-            targetSchoolId = "sch-1";
+        if (targetSchoolId == null || targetSchoolId.isBlank() || targetSchoolId.equals("sch-1")) {
+            targetSchoolId = schoolRepository.findAll().stream().findFirst().map(School::getId).orElse("sch-1");
         }
 
         List<Department> departments = departmentRepository.findBySchoolId(targetSchoolId);
+        if (departments.isEmpty()) {
+            departments = departmentRepository.findAll();
+        }
 
         List<DepartmentSummaryDto> list = new ArrayList<>();
         for (Department dept : departments) {
@@ -245,13 +252,13 @@ public class AcademicService {
         System.out.println("[AcademicService] getDirectorSetupProgress called | schoolId: " + schoolId + " | directorEmail: " + directorEmail);
         String targetSchoolId = schoolId;
         if ((targetSchoolId == null || targetSchoolId.isBlank() || targetSchoolId.equals("sch-1")) && directorEmail != null && !directorEmail.isBlank()) {
-            Optional<School> schOpt = schoolRepository.findByDirectorEmailIgnoreCase(directorEmail);
+            Optional<School> schOpt = schoolRepository.findByDirectorEmailIgnoreCase(directorEmail.trim());
             if (schOpt.isPresent()) {
                 targetSchoolId = schOpt.get().getId();
             }
         }
-        if (targetSchoolId == null || targetSchoolId.isBlank()) {
-            targetSchoolId = "sch-1";
+        if (targetSchoolId == null || targetSchoolId.isBlank() || targetSchoolId.equals("sch-1")) {
+            targetSchoolId = schoolRepository.findAll().stream().findFirst().map(School::getId).orElse("sch-1");
         }
 
         final String finalSchoolId = targetSchoolId;
@@ -272,16 +279,44 @@ public class AcademicService {
         return dto;
     }
 
+    private String normalizeDirectorStepName(Object obj) {
+        if (obj == null) return null;
+        String s = String.valueOf(obj).trim().toLowerCase();
+        if (s.equals("1") || s.equals("school") || s.equals("school_structure")) return "school";
+        if (s.equals("2") || s.equals("department") || s.equals("department_management")) return "department";
+        if (s.equals("3") || s.equals("programme") || s.equals("programme_overview")) return "programme";
+        if (s.equals("4") || s.equals("review") || s.equals("governance")) return "review";
+        return s;
+    }
+
+    private DirectorSetupStep toDirectorSetupStep(int stepNumber) {
+        switch (stepNumber) {
+            case 2: return DirectorSetupStep.DEPARTMENT;
+            case 3: return DirectorSetupStep.PROGRAMME;
+            case 4: return DirectorSetupStep.REVIEW;
+            default: return DirectorSetupStep.SCHOOL;
+        }
+    }
+
     @Transactional
     public DirectorSetupProgressDto updateDirectorSetupProgress(
             String schoolId,
             Integer stepNumber) {
-        System.out.println("[AcademicService] updateDirectorSetupProgress called | schoolId: " + schoolId + " | stepNumber: " + stepNumber);
+        return updateDirectorSetupProgress(schoolId, stepNumber, null, null);
+    }
+
+    @Transactional
+    public DirectorSetupProgressDto updateDirectorSetupProgress(
+            String schoolId,
+            Integer targetStep,
+            String completedStep,
+            List<String> completedStepsList) {
+        System.out.println("[AcademicService] updateDirectorSetupProgress called | schoolId: " + schoolId + " | targetStep: " + targetStep + " | completedStep: " + completedStep + " | completedStepsList: " + completedStepsList);
 
         String targetSchoolId =
-                (schoolId != null && !schoolId.isBlank())
+                (schoolId != null && !schoolId.isBlank() && !schoolId.equals("sch-1"))
                         ? schoolId
-                        : "sch-1";
+                        : schoolRepository.findAll().stream().findFirst().map(School::getId).orElse("sch-1");
 
         DirectorSetupProgress progress =
                 directorSetupProgressRepository
@@ -291,131 +326,64 @@ public class AcademicService {
                                 .schoolId(targetSchoolId)
                                 .build());
 
-        // Valid steps: 1 = School, 2 = Department,
-        // 3 = Programme, 4 = Review
-        int currentStep =
-                (stepNumber != null && stepNumber >= 1 && stepNumber <= 4)
-                        ? stepNumber
-                        : 1;
-
-        DirectorSetupStep stepEnum;
-
-        SetupStepStatus overallStatus = SetupStepStatus.IN_PROGRESS;
-
-        List<String> completed = new ArrayList<>();
-        List<String> pending = new ArrayList<>();
-
-        switch (currentStep) {
-
-            // ─────────────────────────────
-            // STEP 1 → SCHOOL
-            // ─────────────────────────────
-            case 1:
-
-                stepEnum = DirectorSetupStep.SCHOOL;
-
-                pending.addAll(List.of(
-                        "school",
-                        "department",
-                        "programme",
-                        "review"
-                ));
-
-                break;
-
-
-            // ─────────────────────────────
-            // STEP 2 → DEPARTMENT
-            // ─────────────────────────────
-            case 2:
-
-                stepEnum = DirectorSetupStep.DEPARTMENT;
-
-                completed.add("school");
-
-                pending.addAll(List.of(
-                        "department",
-                        "programme",
-                        "review"
-                ));
-
-                break;
-
-
-            // ─────────────────────────────
-            // STEP 3 → PROGRAMME
-            // ─────────────────────────────
-            case 3:
-
-                stepEnum = DirectorSetupStep.PROGRAMME;
-
-                completed.addAll(List.of(
-                        "school",
-                        "department"
-                ));
-
-                pending.addAll(List.of(
-                        "programme",
-                        "review"
-                ));
-
-                break;
-
-
-            // ─────────────────────────────
-            // STEP 4 → REVIEW & COMPLETE
-            // ─────────────────────────────
-            case 4:
-
-                stepEnum = DirectorSetupStep.REVIEW;
-
-                completed.addAll(List.of(
-                        "school",
-                        "department",
-                        "programme",
-                        "review"
-                ));
-
-                overallStatus = SetupStepStatus.COMPLETED;
-
-                break;
-
-
-            default:
-                throw new IllegalArgumentException(
-                        "Invalid Director setup step: " + currentStep
-                );
+        Set<String> existingCompleted = new LinkedHashSet<>();
+        if (progress.getCompletedSteps() != null && !progress.getCompletedSteps().isBlank()) {
+            for (String s : progress.getCompletedSteps().split(",")) {
+                String norm = normalizeDirectorStepName(s);
+                if (norm != null && !norm.isBlank()) existingCompleted.add(norm);
+            }
         }
 
-        // ─────────────────────────────
-        // UPDATE PROGRESS
-        // ─────────────────────────────
+        // Add newly completed step(s)
+        if (completedStepsList != null && !completedStepsList.isEmpty()) {
+            for (Object item : completedStepsList) {
+                String norm = normalizeDirectorStepName(item);
+                if (norm != null && !norm.isBlank()) existingCompleted.add(norm);
+            }
+        } else if (completedStep != null && !completedStep.isBlank()) {
+            String norm = normalizeDirectorStepName(completedStep);
+            if (norm != null && !norm.isBlank()) existingCompleted.add(norm);
+        } else if (targetStep != null) {
+            String norm = normalizeDirectorStepName(targetStep);
+            if (norm != null && !norm.isBlank()) existingCompleted.add(norm);
+        }
+
+        List<String> ALL_STEPS = List.of("school", "department", "programme", "review");
+        List<String> completed = ALL_STEPS.stream().filter(existingCompleted::contains).toList();
+        List<String> pending = ALL_STEPS.stream().filter(s -> !existingCompleted.contains(s)).toList();
+
+        int currentStep = (targetStep != null && targetStep >= 1 && targetStep <= 4)
+                ? targetStep
+                : (progress.getCurrentStep() != null ? progress.getCurrentStep() : 1);
+
+        DirectorSetupStep stepEnum = toDirectorSetupStep(currentStep);
+
+        SetupStepStatus overallStatus;
+        if (completed.size() == ALL_STEPS.size()) {
+            overallStatus = SetupStepStatus.COMPLETED;
+        } else if (completed.isEmpty()) {
+            overallStatus = SetupStepStatus.NOT_STARTED;
+        } else {
+            overallStatus = SetupStepStatus.IN_PROGRESS;
+        }
 
         progress.setCurrentStep(currentStep);
         progress.setCurrentStepEnum(stepEnum);
         progress.setOverallStatus(overallStatus);
-
-        progress.setCompletedSteps(
-                String.join(",", completed)
-        );
-
-        progress.setPendingSteps(
-                String.join(",", pending)
-        );
-
+        progress.setCompletedSteps(String.join(",", completed));
+        progress.setPendingSteps(String.join(",", pending));
         progress.setUpdatedAt(ZonedDateTime.now());
 
         directorSetupProgressRepository.save(progress);
 
-        DirectorSetupProgressDto dto =
-                buildSetupProgressDto(progress);
-
+        DirectorSetupProgressDto dto = buildSetupProgressDto(progress);
         System.out.println(
                 "[AcademicService] Director setup progress updated | " +
                         "schoolId=" + targetSchoolId +
                         " | currentStep=" + currentStep +
                         " | completed=" + completed +
-                        " | pending=" + pending
+                        " | pending=" + pending +
+                        " | overallStatus=" + overallStatus
         );
 
         return dto;
@@ -697,6 +665,9 @@ public class AcademicService {
                             .role(u.getRole() != null
                                     ? u.getRole().name()
                                     : UserRole.FACULTY.name())
+                            .schoolId(u.getSchoolId())
+                            .departmentId(u.getDepartmentId())
+                            .programmeId(u.getProgrammeId())
                             .department(u.getDepartment())
                             .programme(u.getProgramme())
                             .build();

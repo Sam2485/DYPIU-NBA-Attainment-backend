@@ -92,22 +92,36 @@ public class AcademicController {
             @RequestParam(required = false) String id,
             @RequestParam(required = false) Integer step,
             @RequestParam(required = false) Integer currentStep,
+            @RequestParam(required = false) String completedStep,
             @RequestBody(required = false) java.util.Map<String, Object> body,
             java.security.Principal principal) {
         String targetSchool = schoolId != null ? schoolId : id;
         Integer targetStep = step != null ? step : currentStep;
+        String finalCompletedStep = completedStep;
+        java.util.List<String> completedStepsList = null;
+
         if (body != null) {
             if (targetSchool == null && body.containsKey("identifier")) targetSchool = String.valueOf(body.get("identifier"));
             if (targetSchool == null && body.containsKey("schoolId")) targetSchool = String.valueOf(body.get("schoolId"));
             if (targetStep == null && body.containsKey("step")) {
                 try { targetStep = Integer.parseInt(String.valueOf(body.get("step"))); } catch (Exception ignored) {}
             }
+            if (targetStep == null && body.containsKey("currentStep")) {
+                try { targetStep = Integer.parseInt(String.valueOf(body.get("currentStep"))); } catch (Exception ignored) {}
+            }
+            if (finalCompletedStep == null && body.containsKey("completedStep")) {
+                finalCompletedStep = String.valueOf(body.get("completedStep"));
+            }
+            if (body.containsKey("completedSteps") && body.get("completedSteps") instanceof java.util.List) {
+                completedStepsList = ((java.util.List<?>) body.get("completedSteps")).stream()
+                        .map(String::valueOf)
+                        .toList();
+            }
         }
-        if (targetStep == null) targetStep = 1;
         return ResponseEntity.ok(ApiResponse.<DirectorSetupProgressDto>builder()
                 .success(true)
                 .message("Director setup progress updated successfully")
-                .data(academicService.updateDirectorSetupProgress(targetSchool, targetStep))
+                .data(academicService.updateDirectorSetupProgress(targetSchool, targetStep, finalCompletedStep, completedStepsList))
                 .build());
     }
 
