@@ -1273,9 +1273,9 @@ public class AcademicService {
             String search = hodEmail.trim();
 
             // 1. First search department repository by hodEmail
-            Optional<Department> deptOpt = departmentRepository.findByHodEmailIgnoreCase(search);
-            if (deptOpt.isPresent()) {
-                dept = deptOpt.get();
+            List<Department> deptList = departmentRepository.findByHodEmailIgnoreCase(search);
+            if (!deptList.isEmpty()) {
+                dept = deptList.get(0);
             }
 
             // 2. Search department by HOD display name
@@ -1310,8 +1310,10 @@ public class AcademicService {
                     }
                     if (dept == null && u.getDepartment() != null && !u.getDepartment().isBlank()) {
                         String userDeptName = u.getDepartment().trim();
-                        dept = departmentRepository.findByName(userDeptName).orElse(null);
-                        if (dept == null) {
+                        List<Department> namedDepts = departmentRepository.findByName(userDeptName);
+                        if (!namedDepts.isEmpty()) {
+                            dept = namedDepts.get(0);
+                        } else {
                             List<Department> matches = departmentRepository.findAll().stream()
                                     .filter(d -> d.getName() != null && d.getName().trim().equalsIgnoreCase(userDeptName))
                                     .toList();
@@ -1414,9 +1416,9 @@ public class AcademicService {
 
         if (search != null && !search.isBlank()) {
             // 1. Search by hodEmail
-            Optional<Department> deptOpt = departmentRepository.findByHodEmailIgnoreCase(search);
-            if (deptOpt.isPresent()) {
-                return deptOpt.get().getId();
+            List<Department> deptList = departmentRepository.findByHodEmailIgnoreCase(search);
+            if (!deptList.isEmpty()) {
+                return deptList.get(0).getId();
             }
 
             // 2. Search by HOD display name
@@ -1448,9 +1450,9 @@ public class AcademicService {
                 }
                 if (u.getDepartment() != null && !u.getDepartment().isBlank()) {
                     String userDeptName = u.getDepartment().trim();
-                    Optional<Department> dOpt = departmentRepository.findByName(userDeptName);
-                    if (dOpt.isPresent()) {
-                        return dOpt.get().getId();
+                    List<Department> namedDepts = departmentRepository.findByName(userDeptName);
+                    if (!namedDepts.isEmpty()) {
+                        return namedDepts.get(0).getId();
                     }
                     List<Department> matches = departmentRepository.findAll().stream()
                             .filter(d -> d.getName() != null && d.getName().trim().equalsIgnoreCase(userDeptName))

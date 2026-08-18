@@ -101,26 +101,29 @@ public class DashboardController {
         String targetEmail = hodEmail != null && !hodEmail.isBlank() ? hodEmail : (user != null ? user.getEmail() : null);
         String dId = departmentId != null ? departmentId : (user != null ? user.getDepartmentId() : null);
 
-        Department dept = null;
-        if (targetEmail != null && !targetEmail.isBlank()) {
-            dept = departmentRepository.findByHodEmailIgnoreCase(targetEmail.trim()).orElse(null);
+        List<Department> matchedDepts = new ArrayList<>();
+        if (dId != null && !dId.isBlank()) {
+            departmentRepository.findById(dId).ifPresent(matchedDepts::add);
         }
-        if (dept == null && dId != null && !dId.isBlank()) {
-            dept = departmentRepository.findById(dId).orElse(null);
+        if (matchedDepts.isEmpty() && targetEmail != null && !targetEmail.isBlank()) {
+            matchedDepts.addAll(departmentRepository.findByHodEmailIgnoreCase(targetEmail.trim()));
         }
-        if (dept == null && targetEmail != null && !targetEmail.isBlank()) {
+        if (matchedDepts.isEmpty() && targetEmail != null && !targetEmail.isBlank()) {
             User u = userRepository.findByEmail(targetEmail.trim()).orElse(null);
             if (u != null && u.getDepartment() != null && !u.getDepartment().isBlank()) {
-                dept = departmentRepository.findByName(u.getDepartment().trim()).orElse(null);
+                matchedDepts.addAll(departmentRepository.findByName(u.getDepartment().trim()));
             }
         }
-        if (dept == null) {
-            dept = departmentRepository.findAll().stream().findFirst().orElse(null);
+        if (matchedDepts.isEmpty()) {
+            Department first = departmentRepository.findAll().stream().findFirst().orElse(null);
+            if (first != null) matchedDepts.add(first);
         }
 
-        String targetDeptId = dept != null ? dept.getId() : (dId != null ? dId : "dept-1");
+        Department primaryDept = !matchedDepts.isEmpty() ? matchedDepts.get(0) : null;
+        String targetDeptId = primaryDept != null ? primaryDept.getId() : (dId != null ? dId : "dept-1");
 
-        List<Programme> progs = programmeRepository.findByDepartmentId(targetDeptId);
+        List<String> targetDeptIds = matchedDepts.stream().map(Department::getId).distinct().toList();
+        List<Programme> progs = targetDeptIds.isEmpty() ? Collections.emptyList() : programmeRepository.findByDepartmentIdIn(targetDeptIds);
         Set<String> progIds = progs.stream().map(Programme::getId).collect(Collectors.toSet());
         List<Batch> activeBatches = progIds.isEmpty() ? Collections.emptyList() : batchRepository.findAll().stream()
                 .filter(b -> progIds.contains(b.getProgrammeId()) && "ACTIVE".equalsIgnoreCase(b.getStatus()))
@@ -166,7 +169,8 @@ public class DashboardController {
         workflowProgress.put("4", progress != null && progress.getOverallStatus() == SetupStepStatus.COMPLETED);
 
         Map<String, Object> data = new LinkedHashMap<>();
-        data.put("department", dept);
+        data.put("department", primaryDept);
+        data.put("departments", matchedDepts);
         data.put("setupProgress", progress);
         data.put("activeBatch", activeBatch != null ? activeBatch.getName() : "");
         data.put("workflowProgress", workflowProgress);

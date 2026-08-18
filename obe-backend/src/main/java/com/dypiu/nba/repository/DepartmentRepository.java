@@ -8,6 +8,6 @@ import java.util.List;
 @Repository
 public interface DepartmentRepository extends JpaRepository<Department, String> {
     List<Department> findBySchoolId(String schoolId);
-    java.util.Optional<Department> findByHodEmailIgnoreCase(String hodEmail);
-    java.util.Optional<Department> findByName(String name);
+    List<Department> findByHodEmailIgnoreCase(String hodEmail);
+    List<Department> findByName(String name);
 }

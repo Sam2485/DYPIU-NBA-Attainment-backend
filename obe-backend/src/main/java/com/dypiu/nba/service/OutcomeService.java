@@ -18,6 +18,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class OutcomeService {
 
+    private final ProgrammeRepository programmeRepository;
     private final ProgrammeOutcomeRepository poRepository;
     private final ProgrammeSpecificOutcomeRepository psoRepository;
     private final PeoOutcomeRepository peoRepository;
@@ -32,8 +33,6 @@ public class OutcomeService {
     private final CourseMappingKeywordRepository courseMappingKeywordRepository;
     private final BatchRepository batchRepository;
     private final ObjectMapper objectMapper;
-
-
 
     private static final Comparator<String> NATURAL_CODE_COMPARATOR = (c1, c2) -> {
         if (c1 == null) return -1;
@@ -57,6 +56,10 @@ public class OutcomeService {
     public List<ProgrammeOutcome> getPOsByProgramme(String programmeId) {
         System.out.println("================================================================================");
         System.out.println("[OutcomeService] >>> getPOsByProgramme called | programmeId: " + programmeId);
+        if (programmeId == null || programmeId.isBlank() || !programmeRepository.existsById(programmeId)) {
+            System.out.println("[OutcomeService] Programme not found in DB: " + programmeId + ". Returning empty list.");
+            return Collections.emptyList();
+        }
         List<ProgrammeOutcome> list = poRepository.findByProgrammeIdOrderByCodeAsc(programmeId);
         if (list.isEmpty()) {
             System.out.println("[OutcomeService] No POs found in DB for programmeId: " + programmeId + ". Seeding default POs...");
@@ -78,7 +81,11 @@ public class OutcomeService {
     }
 
     private List<ProgrammeOutcome> seedDefaultPOs(String programmeId) {
-        String pId = (programmeId != null && !programmeId.isBlank()) ? programmeId : "prog-1";
+        if (programmeId == null || programmeId.isBlank() || !programmeRepository.existsById(programmeId)) {
+            System.out.println("[OutcomeService] Programme does not exist: " + programmeId + ". Skipping default PO seed.");
+            return Collections.emptyList();
+        }
+        String pId = programmeId;
         String[][] poDefs = {
             {"PO1", "Engineering Knowledge: Apply knowledge of mathematics, science, engineering fundamentals, and computer engineering to solve complex problems."},
             {"PO2", "Problem Analysis: Identify, formulate, review research literature, and analyze complex engineering problems reaching substantiated conclusions."},
@@ -132,6 +139,9 @@ public class OutcomeService {
     @Transactional
     public List<ProgrammeOutcome> savePOs(String programmeId, List<ProgrammeOutcome> pos) {
         System.out.println("[OutcomeService] savePOs called | programmeId: " + programmeId + " | count: " + (pos != null ? pos.size() : 0));
+        if (programmeId == null || programmeId.isBlank() || !programmeRepository.existsById(programmeId)) {
+            throw new com.dypiu.nba.exception.ResourceNotFoundException("Programme not found: " + programmeId);
+        }
         
         List<ProgrammeOutcome> existing = poRepository.findByProgrammeId(programmeId);
         Map<String, ProgrammeOutcome> existingByCodeAndYear = existing.stream()
@@ -226,6 +236,10 @@ public class OutcomeService {
     public List<ProgrammeSpecificOutcome> getPSOsByProgramme(String programmeId) {
         System.out.println("================================================================================");
         System.out.println("[OutcomeService] >>> getPSOsByProgramme called | programmeId: " + programmeId);
+        if (programmeId == null || programmeId.isBlank() || !programmeRepository.existsById(programmeId)) {
+            System.out.println("[OutcomeService] Programme not found in DB: " + programmeId + ". Returning empty list.");
+            return Collections.emptyList();
+        }
         List<ProgrammeSpecificOutcome> list = psoRepository.findByProgrammeIdOrderByCodeAsc(programmeId);
         if (list.isEmpty()) {
             System.out.println("[OutcomeService] No PSOs found in DB for programmeId: " + programmeId + ". Seeding default PSOs...");
@@ -247,7 +261,11 @@ public class OutcomeService {
     }
 
     private List<ProgrammeSpecificOutcome> seedDefaultPSOs(String programmeId) {
-        String pId = (programmeId != null && !programmeId.isBlank()) ? programmeId : "prog-1";
+        if (programmeId == null || programmeId.isBlank() || !programmeRepository.existsById(programmeId)) {
+            System.out.println("[OutcomeService] Programme does not exist: " + programmeId + ". Skipping default PSO seed.");
+            return Collections.emptyList();
+        }
+        String pId = programmeId;
         String[][] psoDefs = {
             {"PSO1", "Software System Design & Development: Ability to design, build, test and maintain scalable software applications using modern frameworks."},
             {"PSO2", "Data Analytics & AI Integration: Ability to apply data structures, machine learning algorithms and statistical models to extract insights."},
@@ -292,6 +310,9 @@ public class OutcomeService {
     @Transactional
     public List<ProgrammeSpecificOutcome> savePSOs(String programmeId, List<ProgrammeSpecificOutcome> psos) {
         System.out.println("[OutcomeService] savePSOs called | programmeId: " + programmeId + " | count: " + (psos != null ? psos.size() : 0));
+        if (programmeId == null || programmeId.isBlank() || !programmeRepository.existsById(programmeId)) {
+            throw new com.dypiu.nba.exception.ResourceNotFoundException("Programme not found: " + programmeId);
+        }
 
         List<ProgrammeSpecificOutcome> existing = psoRepository.findByProgrammeId(programmeId);
         Map<String, ProgrammeSpecificOutcome> existingByCodeAndYear = existing.stream()
@@ -385,6 +406,10 @@ public class OutcomeService {
     @Transactional(readOnly = true)
     public List<PeoOutcome> getPEOsByProgramme(String programmeId) {
         System.out.println("[OutcomeService] getPEOsByProgramme called | programmeId: " + programmeId);
+        if (programmeId == null || programmeId.isBlank() || !programmeRepository.existsById(programmeId)) {
+            System.out.println("[OutcomeService] Programme not found in DB: " + programmeId + ". Returning empty list.");
+            return Collections.emptyList();
+        }
         List<PeoOutcome> list = peoRepository.findByProgrammeIdOrderByCodeAsc(programmeId);
         list.sort(Comparator.comparing(PeoOutcome::getCode, NATURAL_CODE_COMPARATOR));
         System.out.println("[OutcomeService] Fetched PEOs (" + list.size() + " items) for programmeId: " + programmeId);
@@ -394,6 +419,9 @@ public class OutcomeService {
     @Transactional
     public List<PeoOutcome> savePEOs(String programmeId, List<PeoOutcome> peos) {
         System.out.println("[OutcomeService] savePEOs called | programmeId: " + programmeId + " | count: " + (peos != null ? peos.size() : 0));
+        if (programmeId == null || programmeId.isBlank() || !programmeRepository.existsById(programmeId)) {
+            throw new com.dypiu.nba.exception.ResourceNotFoundException("Programme not found: " + programmeId);
+        }
 
         List<PeoOutcome> existing = peoRepository.findByProgrammeId(programmeId);
         Map<String, PeoOutcome> existingByCodeAndYear = existing.stream()
@@ -523,6 +551,14 @@ public class OutcomeService {
     @Transactional(readOnly = true)
     public ProgrammeTargetDto getProgrammeTargets(String programmeId) {
         System.out.println("[OutcomeService] getProgrammeTargets called | programmeId: " + programmeId);
+        if (programmeId == null || programmeId.isBlank() || !programmeRepository.existsById(programmeId)) {
+            System.out.println("[OutcomeService] Programme not found in DB: " + programmeId + ". Returning empty targets.");
+            return ProgrammeTargetDto.builder()
+                    .programmeId(programmeId)
+                    .poTargets(Collections.emptyMap())
+                    .psoTargets(Collections.emptyMap())
+                    .build();
+        }
         List<Batch> batches = batchRepository.findByProgrammeId(programmeId);
         List<String> batchIds = batches.stream().map(Batch::getId).collect(Collectors.toList());
         List<ProgrammeTarget> list = batchIds.isEmpty() ? Collections.emptyList() : targetRepository.findByBatchIdIn(batchIds);
@@ -578,6 +614,9 @@ public class OutcomeService {
     @Transactional
     public ProgrammeTargetDto saveProgrammeTargets(String programmeId, ProgrammeTargetDto dto) {
         System.out.println("[OutcomeService] saveProgrammeTargets called | programmeId: " + programmeId);
+        if (programmeId == null || programmeId.isBlank() || !programmeRepository.existsById(programmeId)) {
+            throw new com.dypiu.nba.exception.ResourceNotFoundException("Programme not found: " + programmeId);
+        }
         if (dto == null) return getProgrammeTargets(programmeId);
 
         List<Batch> batches = batchRepository.findByProgrammeId(programmeId);
