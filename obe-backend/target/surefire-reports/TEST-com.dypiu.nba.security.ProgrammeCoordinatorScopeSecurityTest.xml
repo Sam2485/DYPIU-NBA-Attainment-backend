@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://maven.apache.org/surefire/maven-surefire-plugin/xsd/surefire-test-report-3.0.xsd" version="3.0" name="com.dypiu.nba.security.ProgrammeCoordinatorScopeSecurityTest" time="0.678" tests="25" errors="0" skipped="0" failures="0">
+<testsuite xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://maven.apache.org/surefire/maven-surefire-plugin/xsd/surefire-test-report-3.0.xsd" version="3.0" name="com.dypiu.nba.security.ProgrammeCoordinatorScopeSecurityTest" time="0.683" tests="25" errors="0" skipped="0" failures="0">
   <properties>
     <property name="java.specification.version" value="21"/>
     <property name="sun.jnu.encoding" value="UTF-8"/>
@@ -14,7 +14,7 @@
     <property name="sun.java.launcher" value="SUN_STANDARD"/>
     <property name="user.country" value="IN"/>
     <property name="sun.boot.library.path" value="/opt/homebrew/Cellar/openjdk@21/21.0.12/libexec/openjdk.jdk/Contents/Home/lib"/>
-    <property name="sun.java.command" value="/Users/rajshaikh/Desktop/DYPIU-NBA-Attainment-backend/obe-backend/target/surefire/surefirebooter-20260819025010977_3.jar /Users/rajshaikh/Desktop/DYPIU-NBA-Attainment-backend/obe-backend/target/surefire 2026-08-19T02-50-10_934-jvmRun1 surefire-20260819025010977_1tmp surefire_0-20260819025010977_2tmp"/>
+    <property name="sun.java.command" value="/Users/rajshaikh/Desktop/DYPIU-NBA-Attainment-backend/obe-backend/target/surefire/surefirebooter-20260819105416804_3.jar /Users/rajshaikh/Desktop/DYPIU-NBA-Attainment-backend/obe-backend/target/surefire 2026-08-19T10-54-16_745-jvmRun1 surefire-20260819105416804_1tmp surefire_0-20260819105416804_2tmp"/>
     <property name="http.nonProxyHosts" value="local|*.local|169.254/16|*.169.254/16"/>
     <property name="jdk.debug" value="release"/>
     <property name="surefire.test.class.path" value="/Users/rajshaikh/Desktop/DYPIU-NBA-Attainment-backend/obe-backend/target/test-classes:/Users/rajshaikh/Desktop/DYPIU-NBA-Attainment-backend/obe-backend/target/classes:/Users/rajshaikh/.m2/repository/org/springframework/boot/spring-boot-starter-web/3.3.2/spring-boot-starter-web-3.3.2.jar:/Users/rajshaikh/.m2/repository/org/springframework/boot/spring-boot-starter/3.3.2/spring-boot-starter-3.3.2.jar:/Users/rajshaikh/.m2/repository/org/springframework/boot/spring-boot/3.3.2/spring-boot-3.3.2.jar:/Users/rajshaikh/.m2/repository/org/springframework/boot/spring-boot-autoconfigure/3.3.2/spring-boot-autoconfigure-3.3.2.jar:/Users/rajshaikh/.m2/repository/org/springframework/boot/spring-boot-starter-logging/3.3.2/spring-boot-starter-logging-3.3.2.jar:/Users/rajshaikh/.m2/repository/ch/qos/logback/logback-classic/1.5.6/logback-classic-1.5.6.jar:/Users/rajshaikh/.m2/repository/ch/qos/logback/logback-core/1.5.6/logback-core-1.5.6.jar:/Users/rajshaikh/.m2/repository/org/apache/logging/log4j/log4j-to-slf4j/2.23.1/log4j-to-slf4j-2.23.1.jar:/Users/rajshaikh/.m2/repository/org/slf4j/jul-to-slf4j/2.0.13/jul-to-slf4j-2.0.13.jar:/Users/rajshaikh/.m2/repository/jakarta/annotation/jakarta.annotation-api/2.1.1/jakarta.annotation-api-2.1.1.jar:/Users/rajshaikh/.m2/repository/org/yaml/snakeyaml/2.2/snakeyaml-2.2.jar:/Users/rajshaikh/.m2/repository/org/springframework/boot/spring-boot-starter-json/3.3.2/spring-boot-starter-json-3.3.2.jar:/Users/rajshaikh/.m2/repository/com/fasterxml/jackson/datatype/jackson-datatype-jdk8/2.17.2/jackson-datatype-jdk8-2.17.2.jar:/Users/rajshaikh/.m2/repository/com/fasterxml/jackson/datatype/jackson-datatype-jsr310/2.17.2/jackson-datatype-jsr310-2.17.2.jar:/Users/rajshaikh/.m2/repository/com/fasterxml/jackson/module/jackson-module-parameter-names/2.17.2/jackson-module-parameter-names-2.17.2.jar:/Users/rajshaikh/.m2/repository/org/springframework/boot/spring-boot-starter-tomcat/3.3.2/spring-boot-starter-tomcat-3.3.2.jar:/Users/rajshaikh/.m2/repository/org/apache/tomcat/embed/tomcat-embed-core/10.1.26/tomcat-embed-core-10.1.26.jar:/Users/rajshaikh/.m2/repository/org/apache/tomcat/embed/tomcat-embed-websocket/10.1.26/tomcat-embed-websocket-10.1.26.jar:/Users/rajshaikh/.m2/repository/org/springframework/spring-web/6.1.11/spring-web-6.1.11.jar:/Users/rajshaikh/.m2/repository/org/springframework/spring-beans/6.1.11/spring-beans-6.1.11.jar:/Users/rajshaikh/.m2/repository/io/micrometer/micrometer-observation/1.13.2/micrometer-observation-1.13.2.jar:/Users/rajshaikh/.m2/repository/io/micrometer/micrometer-commons/1.13.2/micrometer-commons-1.13.2.jar:/Users/rajshaikh/.m2/repository/org/springframework/spring-webmvc/6.1.11/spring-webmvc-6.1.11.jar:/Users/rajshaikh/.m2/repository/org/springframework/spring-context/6.1.11/spring-context-6.1.11.jar:/Users/rajshaikh/.m2/repository/org/springframework/spring-expression/6.1.11/spring-expression-6.1.11.jar:/Users/rajshaikh/.m2/repository/org/springframework/boot/spring-boot-starter-data-jpa/3.3.2/spring-boot-starter-data-jpa-3.3.2.jar:/Users/rajshaikh/.m2/repository/org/springframework/boot/spring-boot-starter-aop/3.3.2/spring-boot-starter-aop-3.3.2.jar:/Users/rajshaikh/.m2/repository/org/aspectj/aspectjweaver/1.9.22.1/aspectjweaver-1.9.22.1.jar:/Users/rajshaikh/.m2/repository/org/springframework/boot/spring-boot-starter-jdbc/3.3.2/spring-boot-starter-jdbc-3.3.2.jar:/Users/rajshaikh/.m2/repository/com/zaxxer/HikariCP/5.1.0/HikariCP-5.1.0.jar:/Users/rajshaikh/.m2/repository/org/springframework/spring-jdbc/6.1.11/spring-jdbc-6.1.11.jar:/Users/rajshaikh/.m2/repository/org/hibernate/orm/hibernate-core/6.5.2.Final/hibernate-core-6.5.2.Final.jar:/Users/rajshaikh/.m2/repository/jakarta/persistence/jakarta.persistence-api/3.1.0/jakarta.persistence-api-3.1.0.jar:/Users/rajshaikh/.m2/repository/jakarta/transaction/jakarta.transaction-api/2.0.1/jakarta.transaction-api-2.0.1.jar:/Users/rajshaikh/.m2/repository/org/jboss/logging/jboss-logging/3.5.3.Final/jboss-logging-3.5.3.Final.jar:/Users/rajshaikh/.m2/repository/org/hibernate/common/hibernate-commons-annotations/6.0.6.Final/hibernate-commons-annotations-6.0.6.Final.jar:/Users/rajshaikh/.m2/repository/io/smallrye/jandex/3.1.2/jandex-3.1.2.jar:/Users/rajshaikh/.m2/repository/com/fasterxml/classmate/1.7.0/classmate-1.7.0.jar:/Users/rajshaikh/.m2/repository/net/bytebuddy/byte-buddy/1.14.18/byte-buddy-1.14.18.jar:/Users/rajshaikh/.m2/repository/org/glassfish/jaxb/jaxb-runtime/4.0.5/jaxb-runtime-4.0.5.jar:/Users/rajshaikh/.m2/repository/org/glassfish/jaxb/jaxb-core/4.0.5/jaxb-core-4.0.5.jar:/Users/rajshaikh/.m2/repository/org/eclipse/angus/angus-activation/2.0.2/angus-activation-2.0.2.jar:/Users/rajshaikh/.m2/repository/org/glassfish/jaxb/txw2/4.0.5/txw2-4.0.5.jar:/Users/rajshaikh/.m2/repository/com/sun/istack/istack-commons-runtime/4.1.2/istack-commons-runtime-4.1.2.jar:/Users/rajshaikh/.m2/repository/jakarta/inject/jakarta.inject-api/2.0.1/jakarta.inject-api-2.0.1.jar:/Users/rajshaikh/.m2/repository/org/antlr/antlr4-runtime/4.13.0/antlr4-runtime-4.13.0.jar:/Users/rajshaikh/.m2/repository/org/springframework/data/spring-data-jpa/3.3.2/spring-data-jpa-3.3.2.jar:/Users/rajshaikh/.m2/repository/org/springframework/data/spring-data-commons/3.3.2/spring-data-commons-3.3.2.jar:/Users/rajshaikh/.m2/repository/org/springframework/spring-orm/6.1.11/spring-orm-6.1.11.jar:/Users/rajshaikh/.m2/repository/org/springframework/spring-tx/6.1.11/spring-tx-6.1.11.jar:/Users/rajshaikh/.m2/repository/org/slf4j/slf4j-api/2.0.13/slf4j-api-2.0.13.jar:/Users/rajshaikh/.m2/repository/org/springframework/spring-aspects/6.1.11/spring-aspects-6.1.11.jar:/Users/rajshaikh/.m2/repository/org/springframework/boot/spring-boot-starter-security/3.3.2/spring-boot-starter-security-3.3.2.jar:/Users/rajshaikh/.m2/repository/org/springframework/spring-aop/6.1.11/spring-aop-6.1.11.jar:/Users/rajshaikh/.m2/repository/org/springframework/security/spring-security-config/6.3.1/spring-security-config-6.3.1.jar:/Users/rajshaikh/.m2/repository/org/springframework/security/spring-security-web/6.3.1/spring-security-web-6.3.1.jar:/Users/rajshaikh/.m2/repository/org/springframework/boot/spring-boot-starter-validation/3.3.2/spring-boot-starter-validation-3.3.2.jar:/Users/rajshaikh/.m2/repository/org/apache/tomcat/embed/tomcat-embed-el/10.1.26/tomcat-embed-el-10.1.26.jar:/Users/rajshaikh/.m2/repository/org/hibernate/validator/hibernate-validator/8.0.1.Final/hibernate-validator-8.0.1.Final.jar:/Users/rajshaikh/.m2/repository/jakarta/validation/jakarta.validation-api/3.0.2/jakarta.validation-api-3.0.2.jar:/Users/rajshaikh/.m2/repository/org/postgresql/postgresql/42.7.3/postgresql-42.7.3.jar:/Users/rajshaikh/.m2/repository/org/checkerframework/checker-qual/3.42.0/checker-qual-3.42.0.jar:/Users/rajshaikh/.m2/repository/org/flywaydb/flyway-core/10.10.0/flyway-core-10.10.0.jar:/Users/rajshaikh/.m2/repository/com/fasterxml/jackson/dataformat/jackson-dataformat-toml/2.17.2/jackson-dataformat-toml-2.17.2.jar:/Users/rajshaikh/.m2/repository/com/fasterxml/jackson/core/jackson-core/2.17.2/jackson-core-2.17.2.jar:/Users/rajshaikh/.m2/repository/com/google/code/gson/gson/2.10.1/gson-2.10.1.jar:/Users/rajshaikh/.m2/repository/org/flywaydb/flyway-database-postgresql/10.10.0/flyway-database-postgresql-10.10.0.jar:/Users/rajshaikh/.m2/repository/io/jsonwebtoken/jjwt-api/0.12.6/jjwt-api-0.12.6.jar:/Users/rajshaikh/.m2/repository/io/jsonwebtoken/jjwt-impl/0.12.6/jjwt-impl-0.12.6.jar:/Users/rajshaikh/.m2/repository/io/jsonwebtoken/jjwt-jackson/0.12.6/jjwt-jackson-0.12.6.jar:/Users/rajshaikh/.m2/repository/com/fasterxml/jackson/core/jackson-databind/2.17.2/jackson-databind-2.17.2.jar:/Users/rajshaikh/.m2/repository/com/fasterxml/jackson/core/jackson-annotations/2.17.2/jackson-annotations-2.17.2.jar:/Users/rajshaikh/.m2/repository/org/apache/poi/poi-ooxml/5.2.5/poi-ooxml-5.2.5.jar:/Users/rajshaikh/.m2/repository/org/apache/poi/poi/5.2.5/poi-5.2.5.jar:/Users/rajshaikh/.m2/repository/commons-codec/commons-codec/1.16.1/commons-codec-1.16.1.jar:/Users/rajshaikh/.m2/repository/org/apache/commons/commons-math3/3.6.1/commons-math3-3.6.1.jar:/Users/rajshaikh/.m2/repository/com/zaxxer/SparseBitSet/1.3/SparseBitSet-1.3.jar:/Users/rajshaikh/.m2/repository/org/apache/poi/poi-ooxml-lite/5.2.5/poi-ooxml-lite-5.2.5.jar:/Users/rajshaikh/.m2/repository/org/apache/xmlbeans/xmlbeans/5.2.0/xmlbeans-5.2.0.jar:/Users/rajshaikh/.m2/repository/org/apache/commons/commons-compress/1.25.0/commons-compress-1.25.0.jar:/Users/rajshaikh/.m2/repository/commons-io/commons-io/2.15.0/commons-io-2.15.0.jar:/Users/rajshaikh/.m2/repository/com/github/virtuald/curvesapi/1.08/curvesapi-1.08.jar:/Users/rajshaikh/.m2/repository/org/apache/logging/log4j/log4j-api/2.23.1/log4j-api-2.23.1.jar:/Users/rajshaikh/.m2/repository/org/apache/commons/commons-collections4/4.4/commons-collections4-4.4.jar:/Users/rajshaikh/.m2/repository/com/github/librepdf/openpdf/2.0.3/openpdf-2.0.3.jar:/Users/rajshaikh/.m2/repository/org/projectlombok/lombok/1.18.34/lombok-1.18.34.jar:/Users/rajshaikh/.m2/repository/org/springframework/boot/spring-boot-starter-test/3.3.2/spring-boot-starter-test-3.3.2.jar:/Users/rajshaikh/.m2/repository/org/springframework/boot/spring-boot-test/3.3.2/spring-boot-test-3.3.2.jar:/Users/rajshaikh/.m2/repository/org/springframework/boot/spring-boot-test-autoconfigure/3.3.2/spring-boot-test-autoconfigure-3.3.2.jar:/Users/rajshaikh/.m2/repository/com/jayway/jsonpath/json-path/2.9.0/json-path-2.9.0.jar:/Users/rajshaikh/.m2/repository/jakarta/xml/bind/jakarta.xml.bind-api/4.0.2/jakarta.xml.bind-api-4.0.2.jar:/Users/rajshaikh/.m2/repository/jakarta/activation/jakarta.activation-api/2.1.3/jakarta.activation-api-2.1.3.jar:/Users/rajshaikh/.m2/repository/net/minidev/json-smart/2.5.1/json-smart-2.5.1.jar:/Users/rajshaikh/.m2/repository/net/minidev/accessors-smart/2.5.1/accessors-smart-2.5.1.jar:/Users/rajshaikh/.m2/repository/org/ow2/asm/asm/9.6/asm-9.6.jar:/Users/rajshaikh/.m2/repository/org/assertj/assertj-core/3.25.3/assertj-core-3.25.3.jar:/Users/rajshaikh/.m2/repository/org/awaitility/awaitility/4.2.1/awaitility-4.2.1.jar:/Users/rajshaikh/.m2/repository/org/hamcrest/hamcrest/2.2/hamcrest-2.2.jar:/Users/rajshaikh/.m2/repository/org/junit/jupiter/junit-jupiter/5.10.3/junit-jupiter-5.10.3.jar:/Users/rajshaikh/.m2/repository/org/junit/jupiter/junit-jupiter-api/5.10.3/junit-jupiter-api-5.10.3.jar:/Users/rajshaikh/.m2/repository/org/opentest4j/opentest4j/1.3.0/opentest4j-1.3.0.jar:/Users/rajshaikh/.m2/repository/org/junit/platform/junit-platform-commons/1.10.3/junit-platform-commons-1.10.3.jar:/Users/rajshaikh/.m2/repository/org/apiguardian/apiguardian-api/1.1.2/apiguardian-api-1.1.2.jar:/Users/rajshaikh/.m2/repository/org/junit/jupiter/junit-jupiter-params/5.10.3/junit-jupiter-params-5.10.3.jar:/Users/rajshaikh/.m2/repository/org/junit/jupiter/junit-jupiter-engine/5.10.3/junit-jupiter-engine-5.10.3.jar:/Users/rajshaikh/.m2/repository/org/junit/platform/junit-platform-engine/1.10.3/junit-platform-engine-1.10.3.jar:/Users/rajshaikh/.m2/repository/org/mockito/mockito-core/5.11.0/mockito-core-5.11.0.jar:/Users/rajshaikh/.m2/repository/net/bytebuddy/byte-buddy-agent/1.14.18/byte-buddy-agent-1.14.18.jar:/Users/rajshaikh/.m2/repository/org/objenesis/objenesis/3.3/objenesis-3.3.jar:/Users/rajshaikh/.m2/repository/org/mockito/mockito-junit-jupiter/5.11.0/mockito-junit-jupiter-5.11.0.jar:/Users/rajshaikh/.m2/repository/org/skyscreamer/jsonassert/1.5.3/jsonassert-1.5.3.jar:/Users/rajshaikh/.m2/repository/com/vaadin/external/google/android-json/0.0.20131108.vaadin1/android-json-0.0.20131108.vaadin1.jar:/Users/rajshaikh/.m2/repository/org/springframework/spring-core/6.1.11/spring-core-6.1.11.jar:/Users/rajshaikh/.m2/repository/org/springframework/spring-jcl/6.1.11/spring-jcl-6.1.11.jar:/Users/rajshaikh/.m2/repository/org/springframework/spring-test/6.1.11/spring-test-6.1.11.jar:/Users/rajshaikh/.m2/repository/org/xmlunit/xmlunit-core/2.9.1/xmlunit-core-2.9.1.jar:/Users/rajshaikh/.m2/repository/org/springframework/security/spring-security-test/6.3.1/spring-security-test-6.3.1.jar:/Users/rajshaikh/.m2/repository/org/springframework/security/spring-security-core/6.3.1/spring-security-core-6.3.1.jar:/Users/rajshaikh/.m2/repository/org/springframework/security/spring-security-crypto/6.3.1/spring-security-crypto-6.3.1.jar:/Users/rajshaikh/.m2/repository/com/h2database/h2/2.2.224/h2-2.2.224.jar:"/>
@@ -33,7 +33,7 @@
     <property name="FILE_LOG_CHARSET" value="UTF-8"/>
     <property name="java.awt.headless" value="true"/>
     <property name="apple.awt.application.name" value="ForkedBooter"/>
-    <property name="surefire.real.class.path" value="/Users/rajshaikh/Desktop/DYPIU-NBA-Attainment-backend/obe-backend/target/surefire/surefirebooter-20260819025010977_3.jar"/>
+    <property name="surefire.real.class.path" value="/Users/rajshaikh/Desktop/DYPIU-NBA-Attainment-backend/obe-backend/target/surefire/surefirebooter-20260819105416804_3.jar"/>
     <property name="sun.management.compiler" value="HotSpot 64-Bit Tiered Compilers"/>
     <property name="ftp.nonProxyHosts" value="local|*.local|169.254/16|*.169.254/16"/>
     <property name="java.runtime.version" value="21.0.12"/>
@@ -53,7 +53,7 @@
     <property name="user.dir" value="/Users/rajshaikh/Desktop/DYPIU-NBA-Attainment-backend/obe-backend"/>
     <property name="os.arch" value="aarch64"/>
     <property name="java.vm.specification.name" value="Java Virtual Machine Specification"/>
-    <property name="PID" value="83993"/>
+    <property name="PID" value="61164"/>
     <property name="CONSOLE_LOG_CHARSET" value="UTF-8"/>
     <property name="native.encoding" value="UTF-8"/>
     <property name="java.library.path" value="/Users/rajshaikh/Library/Java/Extensions:/Library/Java/Extensions:/Network/Library/Java/Extensions:/System/Library/Java/Extensions:/usr/lib/java:."/>
@@ -66,96 +66,96 @@
     <property name="java.class.version" value="65.0"/>
     <property name="LOGGED_APPLICATION_NAME" value="[obe-backend] "/>
   </properties>
-  <testcase name="testCase8_PCGetProgrammeByIdOtherForbidden" classname="com.dypiu.nba.security.ProgrammeCoordinatorScopeSecurityTest" time="0.027">
-    <system-out><![CDATA[2026-08-19T02:50:15.923+05:30  INFO 83993 --- [obe-backend] [           main] t.c.s.AnnotationConfigContextLoaderUtils : Could not detect default configuration classes for test class [com.dypiu.nba.security.ProgrammeCoordinatorScopeSecurityTest]: ProgrammeCoordinatorScopeSecurityTest does not declare any static, non-private, non-final, nested classes annotated with @Configuration.
-2026-08-19T02:50:15.924+05:30  INFO 83993 --- [obe-backend] [           main] .b.t.c.SpringBootTestContextBootstrapper : Found @SpringBootConfiguration com.dypiu.nba.ObeBackendApplication for test class com.dypiu.nba.security.ProgrammeCoordinatorScopeSecurityTest
-[AcademicService] getProgrammeById called | id: prog-pc-a2-96774849915916
-[AcademicService] getProgrammeById called | id: prog-pc-b1-96774850480583
+  <testcase name="testCase8_PCGetProgrammeByIdOtherForbidden" classname="com.dypiu.nba.security.ProgrammeCoordinatorScopeSecurityTest" time="0.047">
+    <system-out><![CDATA[2026-08-19T10:54:23.155+05:30  INFO 61164 --- [obe-backend] [           main] t.c.s.AnnotationConfigContextLoaderUtils : Could not detect default configuration classes for test class [com.dypiu.nba.security.ProgrammeCoordinatorScopeSecurityTest]: ProgrammeCoordinatorScopeSecurityTest does not declare any static, non-private, non-final, nested classes annotated with @Configuration.
+2026-08-19T10:54:23.158+05:30  INFO 61164 --- [obe-backend] [           main] .b.t.c.SpringBootTestContextBootstrapper : Found @SpringBootConfiguration com.dypiu.nba.ObeBackendApplication for test class com.dypiu.nba.security.ProgrammeCoordinatorScopeSecurityTest
+[AcademicService] getProgrammeById called | id: prog-pc-a2-122215211714041
+[AcademicService] getProgrammeById called | id: prog-pc-b1-122215212619916
 ]]></system-out>
   </testcase>
-  <testcase name="testCase25_PCProgrammeAtrScopeEnforcement" classname="com.dypiu.nba.security.ProgrammeCoordinatorScopeSecurityTest" time="0.088">
-    <system-out><![CDATA[[AtrService] getProgrammeAtrReport called | programmeId: prog-pc-a1-96774874748291 | batchId: batch-pc-a1-96774875999208
-[AttainmentCalculationService] calculateProgrammeAttainment called | programmeId: prog-pc-a1-96774874748291 | batchId: batch-pc-a1-96774875999208
-[AttainmentCalculationService] processAndSaveProgrammeSurveyFile called | programmeId: prog-pc-a1-96774874748291 | batchId: batch-pc-a1-96774875999208
-[AtrService] saveProgrammeAtrReport called | programmeId: prog-pc-a1-96774874748291
-[AtrService] getProgrammeAtrReport called | programmeId: prog-pc-a1-96774874748291 | batchId: batch-pc-a1-96774875999208
-[AttainmentCalculationService] calculateProgrammeAttainment called | programmeId: prog-pc-a1-96774874748291 | batchId: batch-pc-a1-96774875999208
-[AtrService] getProgrammeAtrReport called | programmeId: prog-pc-b1-96774875663083 | batchId: batch-pc-b1-96774876703833
-[AtrService] saveProgrammeAtrReport called | programmeId: prog-pc-b1-96774875663083
+  <testcase name="testCase25_PCProgrammeAtrScopeEnforcement" classname="com.dypiu.nba.security.ProgrammeCoordinatorScopeSecurityTest" time="0.071">
+    <system-out><![CDATA[[AtrService] getProgrammeAtrReport called | programmeId: prog-pc-a1-122215256027416 | batchId: batch-pc-a1-122215256616958
+[AttainmentCalculationService] calculateProgrammeAttainment called | programmeId: prog-pc-a1-122215256027416 | batchId: batch-pc-a1-122215256616958
+[AttainmentCalculationService] processAndSaveProgrammeSurveyFile called | programmeId: prog-pc-a1-122215256027416 | batchId: batch-pc-a1-122215256616958
+[AtrService] saveProgrammeAtrReport called | programmeId: prog-pc-a1-122215256027416
+[AtrService] getProgrammeAtrReport called | programmeId: prog-pc-a1-122215256027416 | batchId: batch-pc-a1-122215256616958
+[AttainmentCalculationService] calculateProgrammeAttainment called | programmeId: prog-pc-a1-122215256027416 | batchId: batch-pc-a1-122215256616958
+[AtrService] getProgrammeAtrReport called | programmeId: prog-pc-b1-122215256459291 | batchId: batch-pc-b1-122215256961333
+[AtrService] saveProgrammeAtrReport called | programmeId: prog-pc-b1-122215256459291
 ]]></system-out>
   </testcase>
-  <testcase name="testCase20_PCCreatesCourseForOtherProgrammeForbidden" classname="com.dypiu.nba.security.ProgrammeCoordinatorScopeSecurityTest" time="0.011">
+  <testcase name="testCase20_PCCreatesCourseForOtherProgrammeForbidden" classname="com.dypiu.nba.security.ProgrammeCoordinatorScopeSecurityTest" time="0.031">
     <system-out><![CDATA[[AcademicService] saveCourse called | name: Marketing Management
 ]]></system-out>
   </testcase>
-  <testcase name="testCase6_PCGetAllProgrammesReturnsOnlyAssigned" classname="com.dypiu.nba.security.ProgrammeCoordinatorScopeSecurityTest" time="0.013">
+  <testcase name="testCase6_PCGetAllProgrammesReturnsOnlyAssigned" classname="com.dypiu.nba.security.ProgrammeCoordinatorScopeSecurityTest" time="0.011">
     <system-out><![CDATA[[AcademicService] getAllProgrammes called
 ]]></system-out>
   </testcase>
-  <testcase name="testCase14_PCCreatesBatchForAssignedProgramme" classname="com.dypiu.nba.security.ProgrammeCoordinatorScopeSecurityTest" time="0.022">
+  <testcase name="testCase14_PCCreatesBatchForAssignedProgramme" classname="com.dypiu.nba.security.ProgrammeCoordinatorScopeSecurityTest" time="0.02">
     <system-out><![CDATA[[AcademicService] saveBatch called | name: Batch CS 2024-2028
-[AcademicService] Saved batch with id: batch-42335aad
+[AcademicService] Saved batch with id: batch-e0690048
 ]]></system-out>
   </testcase>
-  <testcase name="testCase1_PCAccessesOwnDashboard" classname="com.dypiu.nba.security.ProgrammeCoordinatorScopeSecurityTest" time="0.023">
-    <system-out><![CDATA[[AcademicService] getProgrammeCoordinatorSetupProgress called | coordinatorEmail: pc.a1@dypiu.ac.in | programmeId: prog-pc-a1-96775001905000
+  <testcase name="testCase1_PCAccessesOwnDashboard" classname="com.dypiu.nba.security.ProgrammeCoordinatorScopeSecurityTest" time="0.021">
+    <system-out><![CDATA[[AcademicService] getProgrammeCoordinatorSetupProgress called | coordinatorEmail: pc.a1@dypiu.ac.in | programmeId: prog-pc-a1-122215391472791
 ]]></system-out>
   </testcase>
-  <testcase name="testCase9_PCGetAllBatchesReturnsOnlyAssigned" classname="com.dypiu.nba.security.ProgrammeCoordinatorScopeSecurityTest" time="0.022">
+  <testcase name="testCase9_PCGetAllBatchesReturnsOnlyAssigned" classname="com.dypiu.nba.security.ProgrammeCoordinatorScopeSecurityTest" time="0.017">
     <system-out><![CDATA[[AcademicService] getAllBatches called
 ]]></system-out>
   </testcase>
   <testcase name="testCase4_PCUpdatesSetupProgressOwnProgramme" classname="com.dypiu.nba.security.ProgrammeCoordinatorScopeSecurityTest" time="0.015">
-    <system-out><![CDATA[[AcademicService] updateProgrammeCoordinatorSetupProgress called | programmeId: prog-pc-a1-96775044913583 | stepNumber: 2 | coordinatorEmail: pc.a1@dypiu.ac.in
+    <system-out><![CDATA[[AcademicService] updateProgrammeCoordinatorSetupProgress called | programmeId: prog-pc-a1-122215430201583 | stepNumber: 2 | coordinatorEmail: pc.a1@dypiu.ac.in
 ]]></system-out>
   </testcase>
-  <testcase name="testCase5_PCUpdatesSetupProgressOtherProgrammeForbidden" classname="com.dypiu.nba.security.ProgrammeCoordinatorScopeSecurityTest" time="0.012">
-    <system-out><![CDATA[[AcademicService] updateProgrammeCoordinatorSetupProgress called | programmeId: prog-pc-b1-96775060784291 | stepNumber: 2 | coordinatorEmail: pc.a1@dypiu.ac.in
-[AcademicService] updateProgrammeCoordinatorSetupProgress called | programmeId: prog-pc-a2-96775060606041 | stepNumber: 2 | coordinatorEmail: pc.a1@dypiu.ac.in
+  <testcase name="testCase5_PCUpdatesSetupProgressOtherProgrammeForbidden" classname="com.dypiu.nba.security.ProgrammeCoordinatorScopeSecurityTest" time="0.021">
+    <system-out><![CDATA[[AcademicService] updateProgrammeCoordinatorSetupProgress called | programmeId: prog-pc-b1-122215446553708 | stepNumber: 2 | coordinatorEmail: pc.a1@dypiu.ac.in
+[AcademicService] updateProgrammeCoordinatorSetupProgress called | programmeId: prog-pc-a2-122215446322083 | stepNumber: 2 | coordinatorEmail: pc.a1@dypiu.ac.in
 ]]></system-out>
   </testcase>
-  <testcase name="testCase12_PCGetBatchByIdAssigned" classname="com.dypiu.nba.security.ProgrammeCoordinatorScopeSecurityTest" time="0.021">
-    <system-out><![CDATA[[AcademicService] getBatchById called | id: batch-pc-a1-96775072850916
+  <testcase name="testCase12_PCGetBatchByIdAssigned" classname="com.dypiu.nba.security.ProgrammeCoordinatorScopeSecurityTest" time="0.012">
+    <system-out><![CDATA[[AcademicService] getBatchById called | id: batch-pc-a1-122215466644458
 ]]></system-out>
   </testcase>
-  <testcase name="testCase11_PCGetBatchesByOtherProgrammeForbidden" classname="com.dypiu.nba.security.ProgrammeCoordinatorScopeSecurityTest" time="0.012">
-    <system-out><![CDATA[[AcademicService] getBatchesByProgramme called | programmeId: prog-pc-a2-96775094105833
-[AcademicService] getBatchesByProgramme called | programmeId: prog-pc-b1-96775094326000
+  <testcase name="testCase11_PCGetBatchesByOtherProgrammeForbidden" classname="com.dypiu.nba.security.ProgrammeCoordinatorScopeSecurityTest" time="0.017">
+    <system-out><![CDATA[[AcademicService] getBatchesByProgramme called | programmeId: prog-pc-a2-122215478303166
+[AcademicService] getBatchesByProgramme called | programmeId: prog-pc-b1-122215478449083
 ]]></system-out>
   </testcase>
   <testcase name="testCase19_PCCreatesCourseForAssignedProgramme" classname="com.dypiu.nba.security.ProgrammeCoordinatorScopeSecurityTest" time="0.011">
     <system-out><![CDATA[[AcademicService] saveCourse called | name: Operating Systems
-[AcademicService] Saved course with id: crs-38f9e3b6
+[AcademicService] Saved course with id: crs-cea45441
 ]]></system-out>
   </testcase>
-  <testcase name="testCase24_PCAllocatesCoursesForOtherProgrammeOrCrossCourseForbidden" classname="com.dypiu.nba.security.ProgrammeCoordinatorScopeSecurityTest" time="0.029"/>
-  <testcase name="testCase22_PCAccessesAndSavesOutcomesForOtherProgrammeForbidden" classname="com.dypiu.nba.security.ProgrammeCoordinatorScopeSecurityTest" time="0.015">
+  <testcase name="testCase24_PCAllocatesCoursesForOtherProgrammeOrCrossCourseForbidden" classname="com.dypiu.nba.security.ProgrammeCoordinatorScopeSecurityTest" time="0.019"/>
+  <testcase name="testCase22_PCAccessesAndSavesOutcomesForOtherProgrammeForbidden" classname="com.dypiu.nba.security.ProgrammeCoordinatorScopeSecurityTest" time="0.014">
     <system-out><![CDATA[================================================================================
-[OutcomeService] >>> getPOsByProgramme called | programmeId: prog-pc-b1-96775146871125
-[OutcomeService] savePOs called | programmeId: prog-pc-b1-96775146871125 | count: 0
+[OutcomeService] >>> getPOsByProgramme called | programmeId: prog-pc-b1-122215527504583
+[OutcomeService] savePOs called | programmeId: prog-pc-b1-122215527504583 | count: 0
 ================================================================================
-[OutcomeService] >>> getPSOsByProgramme called | programmeId: prog-pc-b1-96775146871125
-[OutcomeService] savePSOs called | programmeId: prog-pc-b1-96775146871125 | count: 0
-[OutcomeService] getPEOsByProgramme called | programmeId: prog-pc-b1-96775146871125
-[OutcomeService] savePEOs called | programmeId: prog-pc-b1-96775146871125 | count: 0
-[OutcomeService] getProgrammeTargets called | programmeId: prog-pc-b1-96775146871125
-[OutcomeService] saveProgrammeTargets called | programmeId: prog-pc-b1-96775146871125
+[OutcomeService] >>> getPSOsByProgramme called | programmeId: prog-pc-b1-122215527504583
+[OutcomeService] savePSOs called | programmeId: prog-pc-b1-122215527504583 | count: 0
+[OutcomeService] getPEOsByProgramme called | programmeId: prog-pc-b1-122215527504583
+[OutcomeService] savePEOs called | programmeId: prog-pc-b1-122215527504583 | count: 0
+[OutcomeService] getProgrammeTargets called | programmeId: prog-pc-b1-122215527504583
+[OutcomeService] saveProgrammeTargets called | programmeId: prog-pc-b1-122215527504583
 ]]></system-out>
   </testcase>
-  <testcase name="testCase3_PCAccessesSummaryAndProgressWithoutParams" classname="com.dypiu.nba.security.ProgrammeCoordinatorScopeSecurityTest" time="0.027">
+  <testcase name="testCase3_PCAccessesSummaryAndProgressWithoutParams" classname="com.dypiu.nba.security.ProgrammeCoordinatorScopeSecurityTest" time="0.035">
     <system-out><![CDATA[[AcademicService] getProgrammeCoordinatorSummary called | coordinatorEmail: null | programmeId: null
-[AcademicService] getProgrammeCoordinatorSetupProgress called | coordinatorEmail: null | programmeId: prog-pc-a1-96775162203375
+[AcademicService] getProgrammeCoordinatorSetupProgress called | coordinatorEmail: null | programmeId: prog-pc-a1-122215541261291
 [AcademicService] getProgrammeCoordinatorSetupProgress called | coordinatorEmail: null | programmeId: null
 ]]></system-out>
   </testcase>
-  <testcase name="testCase16_PCGetAllCoursesReturnsOnlyAssigned" classname="com.dypiu.nba.security.ProgrammeCoordinatorScopeSecurityTest" time="0.011">
+  <testcase name="testCase16_PCGetAllCoursesReturnsOnlyAssigned" classname="com.dypiu.nba.security.ProgrammeCoordinatorScopeSecurityTest" time="0.01">
     <system-out><![CDATA[[AcademicService] getAllCourses called
 ]]></system-out>
   </testcase>
-  <testcase name="testCase21_PCAccessesAndSavesOutcomesForAssignedProgramme" classname="com.dypiu.nba.security.ProgrammeCoordinatorScopeSecurityTest" time="0.172">
+  <testcase name="testCase21_PCAccessesAndSavesOutcomesForAssignedProgramme" classname="com.dypiu.nba.security.ProgrammeCoordinatorScopeSecurityTest" time="0.175">
     <system-out><![CDATA[================================================================================
-[OutcomeService] >>> getPOsByProgramme called | programmeId: prog-pc-a1-96775219035375
-[OutcomeService] No POs found in DB for programmeId: prog-pc-a1-96775219035375. Seeding default POs...
+[OutcomeService] >>> getPOsByProgramme called | programmeId: prog-pc-a1-122215586916666
+[OutcomeService] No POs found in DB for programmeId: prog-pc-a1-122215586916666. Seeding default POs...
   [PO ENTRY] Code: PO1 | Statement: Engineering Knowledge: Apply knowledge of mathematics, science, engineering fundamentals, and computer engineering to solve complex problems.
       -> Competency Code: PO1.1 | Statement: Demonstrate core competency and analytical skills for PO1
       -> Competency Code: PO1.2 | Statement: Apply contextual knowledge and modern methods for PO1
@@ -192,13 +192,13 @@
   [PO ENTRY] Code: PO12 | Statement: Life-long Learning: Recognize the need for, and have the preparation and ability to engage in independent and life-long learning in the broadest context of technological change.
       -> Competency Code: PO12.1 | Statement: Demonstrate core competency and analytical skills for PO12
       -> Competency Code: PO12.2 | Statement: Apply contextual knowledge and modern methods for PO12
-[OutcomeService] <<< OUTGOING POs Payload (12 items) for programmeId: prog-pc-a1-96775219035375
+[OutcomeService] <<< OUTGOING POs Payload (12 items) for programmeId: prog-pc-a1-122215586916666
 ================================================================================
-[OutcomeService] savePOs called | programmeId: prog-pc-a1-96775219035375 | count: 12
-[OutcomeService] Saved POs (12 items) with competencies for programmeId: prog-pc-a1-96775219035375
+[OutcomeService] savePOs called | programmeId: prog-pc-a1-122215586916666 | count: 12
+[OutcomeService] Saved POs (12 items) with competencies for programmeId: prog-pc-a1-122215586916666
 ================================================================================
-[OutcomeService] >>> getPSOsByProgramme called | programmeId: prog-pc-a1-96775219035375
-[OutcomeService] No PSOs found in DB for programmeId: prog-pc-a1-96775219035375. Seeding default PSOs...
+[OutcomeService] >>> getPSOsByProgramme called | programmeId: prog-pc-a1-122215586916666
+[OutcomeService] No PSOs found in DB for programmeId: prog-pc-a1-122215586916666. Seeding default PSOs...
   [PSO ENTRY] Code: PSO1 | Statement: Software System Design & Development: Ability to design, build, test and maintain scalable software applications using modern frameworks.
       -> Competency Code: PSO1.1 | Statement: Demonstrate specialized domain skill statement 1 for PSO1
       -> Competency Code: PSO1.2 | Statement: Implement practical design and architecture solutions for PSO1
@@ -208,45 +208,45 @@
   [PSO ENTRY] Code: PSO3 | Statement: Network Architecture & Security: Ability to configure, analyze and secure computer networks, cloud infrastructure and distributed systems.
       -> Competency Code: PSO3.1 | Statement: Demonstrate specialized domain skill statement 1 for PSO3
       -> Competency Code: PSO3.2 | Statement: Implement practical design and architecture solutions for PSO3
-[OutcomeService] <<< OUTGOING PSOs Payload (3 items) for programmeId: prog-pc-a1-96775219035375
+[OutcomeService] <<< OUTGOING PSOs Payload (3 items) for programmeId: prog-pc-a1-122215586916666
 ================================================================================
-[OutcomeService] savePSOs called | programmeId: prog-pc-a1-96775219035375 | count: 3
-[OutcomeService] Saved PSOs (3 items) with competencies for programmeId: prog-pc-a1-96775219035375
-[OutcomeService] getPEOsByProgramme called | programmeId: prog-pc-a1-96775219035375
-[OutcomeService] Fetched PEOs (0 items) for programmeId: prog-pc-a1-96775219035375
-[OutcomeService] savePEOs called | programmeId: prog-pc-a1-96775219035375 | count: 0
-[OutcomeService] Saved PEOs (0 items) for programmeId: prog-pc-a1-96775219035375
-[OutcomeService] saveProgrammeTargets called | programmeId: prog-pc-a1-96775219035375
-[OutcomeService] getProgrammeTargets called | programmeId: prog-pc-a1-96775219035375
+[OutcomeService] savePSOs called | programmeId: prog-pc-a1-122215586916666 | count: 3
+[OutcomeService] Saved PSOs (3 items) with competencies for programmeId: prog-pc-a1-122215586916666
+[OutcomeService] getPEOsByProgramme called | programmeId: prog-pc-a1-122215586916666
+[OutcomeService] Fetched PEOs (0 items) for programmeId: prog-pc-a1-122215586916666
+[OutcomeService] savePEOs called | programmeId: prog-pc-a1-122215586916666 | count: 0
+[OutcomeService] Saved PEOs (0 items) for programmeId: prog-pc-a1-122215586916666
+[OutcomeService] saveProgrammeTargets called | programmeId: prog-pc-a1-122215586916666
+[OutcomeService] getProgrammeTargets called | programmeId: prog-pc-a1-122215586916666
 ]]></system-out>
   </testcase>
-  <testcase name="testCase18_PCGetCourseByIdOtherForbidden" classname="com.dypiu.nba.security.ProgrammeCoordinatorScopeSecurityTest" time="0.026">
-    <system-out><![CDATA[[AcademicService] getCourseById called | id: crs-pc-a2-96775388017958
-[AcademicService] getCourseById called | id: crs-pc-b1-96775388620500
+  <testcase name="testCase18_PCGetCourseByIdOtherForbidden" classname="com.dypiu.nba.security.ProgrammeCoordinatorScopeSecurityTest" time="0.018">
+    <system-out><![CDATA[[AcademicService] getCourseById called | id: crs-pc-a2-122215764174500
+[AcademicService] getCourseById called | id: crs-pc-b1-122215764311125
 ]]></system-out>
   </testcase>
-  <testcase name="testCase2_PCAccessesOtherProgrammeDashboardForbidden" classname="com.dypiu.nba.security.ProgrammeCoordinatorScopeSecurityTest" time="0.013"/>
+  <testcase name="testCase2_PCAccessesOtherProgrammeDashboardForbidden" classname="com.dypiu.nba.security.ProgrammeCoordinatorScopeSecurityTest" time="0.01"/>
   <testcase name="testCase15_PCCreatesBatchForOtherProgrammeForbidden" classname="com.dypiu.nba.security.ProgrammeCoordinatorScopeSecurityTest" time="0.01">
     <system-out><![CDATA[[AcademicService] saveBatch called | name: Batch MBA 2024-2026
 ]]></system-out>
   </testcase>
-  <testcase name="testCase23_PCAllocatesCoursesForAssignedProgramme" classname="com.dypiu.nba.security.ProgrammeCoordinatorScopeSecurityTest" time="0.031"/>
-  <testcase name="testCase10_PCGetBatchesByAssignedProgramme" classname="com.dypiu.nba.security.ProgrammeCoordinatorScopeSecurityTest" time="0.009">
-    <system-out><![CDATA[[AcademicService] getBatchesByProgramme called | programmeId: prog-pc-a1-96775455002541
-[AcademicService] Fetched batches (1 items) for programmeId: prog-pc-a1-96775455002541
+  <testcase name="testCase23_PCAllocatesCoursesForAssignedProgramme" classname="com.dypiu.nba.security.ProgrammeCoordinatorScopeSecurityTest" time="0.023"/>
+  <testcase name="testCase10_PCGetBatchesByAssignedProgramme" classname="com.dypiu.nba.security.ProgrammeCoordinatorScopeSecurityTest" time="0.01">
+    <system-out><![CDATA[[AcademicService] getBatchesByProgramme called | programmeId: prog-pc-a1-122215826381166
+[AcademicService] Fetched batches (1 items) for programmeId: prog-pc-a1-122215826381166
 ]]></system-out>
   </testcase>
-  <testcase name="testCase13_PCGetBatchByIdOtherForbidden" classname="com.dypiu.nba.security.ProgrammeCoordinatorScopeSecurityTest" time="0.011">
-    <system-out><![CDATA[[AcademicService] getBatchById called | id: batch-pc-a2-96775465054500
-[AcademicService] getBatchById called | id: batch-pc-b1-96775465157208
+  <testcase name="testCase13_PCGetBatchByIdOtherForbidden" classname="com.dypiu.nba.security.ProgrammeCoordinatorScopeSecurityTest" time="0.014">
+    <system-out><![CDATA[[AcademicService] getBatchById called | id: batch-pc-a2-122215839248125
+[AcademicService] getBatchById called | id: batch-pc-b1-122215839384166
 ]]></system-out>
   </testcase>
-  <testcase name="testCase17_PCGetCourseByIdAssigned" classname="com.dypiu.nba.security.ProgrammeCoordinatorScopeSecurityTest" time="0.009">
-    <system-out><![CDATA[[AcademicService] getCourseById called | id: crs-pc-a1-96775476623000
+  <testcase name="testCase17_PCGetCourseByIdAssigned" classname="com.dypiu.nba.security.ProgrammeCoordinatorScopeSecurityTest" time="0.019">
+    <system-out><![CDATA[[AcademicService] getCourseById called | id: crs-pc-a1-122215862830041
 ]]></system-out>
   </testcase>
-  <testcase name="testCase7_PCGetProgrammeByIdOwn" classname="com.dypiu.nba.security.ProgrammeCoordinatorScopeSecurityTest" time="0.021">
-    <system-out><![CDATA[[AcademicService] getProgrammeById called | id: prog-pc-a1-96775485346208
+  <testcase name="testCase7_PCGetProgrammeByIdOwn" classname="com.dypiu.nba.security.ProgrammeCoordinatorScopeSecurityTest" time="0.009">
+    <system-out><![CDATA[[AcademicService] getProgrammeById called | id: prog-pc-a1-122215872340416
 ]]></system-out>
   </testcase>
 </testsuite>

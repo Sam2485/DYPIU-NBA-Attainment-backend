@@ -221,8 +221,8 @@ public class DirectorAndHodScopeSecurityTest {
                 .build());
 
         adminUser = userRepository.save(User.builder()
-                .username("admin_user")
-                .email("admin@dypiu.ac.in")
+                .username("admin_user_dh")
+                .email("admin.dh@dypiu.ac.in")
                 .passwordHash("test_hash")
                 .name("Global Admin")
                 .role(UserRole.ADMIN)

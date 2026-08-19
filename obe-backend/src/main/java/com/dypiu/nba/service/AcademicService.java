@@ -1010,6 +1010,7 @@ public class AcademicService {
                     }
                     return UserDto.builder()
                             .id(u.getId())
+                            .username(u.getUsername())
                             .name(u.getName() != null && !u.getName().isBlank() ? u.getName() : (u.getUsername() != null ? u.getUsername() : "User " + u.getId()))
                             .email(resolvedEmail)
                             .role(u.getRole() != null

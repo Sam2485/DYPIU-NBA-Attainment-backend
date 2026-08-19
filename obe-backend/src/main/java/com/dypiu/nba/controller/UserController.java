@@ -4,6 +4,7 @@ import com.dypiu.nba.dto.ApiResponse;
 import com.dypiu.nba.dto.UserDto;
 import com.dypiu.nba.entity.Department;
 import com.dypiu.nba.entity.Programme;
+import com.dypiu.nba.entity.School;
 import com.dypiu.nba.entity.User;
 import com.dypiu.nba.entity.UserRole;
 import com.dypiu.nba.exception.BadRequestException;
@@ -24,6 +25,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 @RestController
 @RequestMapping("/users")
@@ -201,8 +203,15 @@ public class UserController {
         ResolvedScope scope = validateAndResolveScope(body, user.getRole());
 
         CurrentUserScope currentScope = getScope();
-        String finalSchoolId = scope.schoolId;
-        String finalDeptId = scope.departmentId;
+        String finalSchoolId = scope.schoolId != null
+                ? scope.schoolId
+                : (body.containsKey("schoolId") && body.get("schoolId") == null ? null : user.getSchoolId());
+        String finalDeptId = scope.departmentId != null
+                ? scope.departmentId
+                : (body.containsKey("departmentId") && body.get("departmentId") == null ? null : user.getDepartmentId());
+        String finalProgId = scope.programmeId != null
+                ? scope.programmeId
+                : (body.containsKey("programmeId") && body.get("programmeId") == null ? null : user.getProgrammeId());
 
         if (currentScope != null && currentScope.isDirector()) {
             finalSchoolId = currentScope.getRequiredSchoolId();
@@ -216,9 +225,21 @@ public class UserController {
         user.setUsername(username);
         user.setSchoolId(finalSchoolId);
         user.setDepartmentId(finalDeptId);
-        user.setProgrammeId(scope.programmeId);
+        user.setProgrammeId(finalProgId);
 
         User saved = userRepository.save(user);
+
+        // Sync leadership mapping if Director
+        if (saved.getRole() == UserRole.DIRECTOR && finalSchoolId != null) {
+            schoolRepository.findById(finalSchoolId).ifPresent(s -> {
+                s.setDirectorId(saved.getId());
+                s.setDirectorName(saved.getName());
+                s.setDirectorEmail(saved.getEmail());
+                s.setDean(saved.getName());
+                s.setDeanEmail(saved.getEmail());
+                schoolRepository.save(s);
+            });
+        }
 
         return ResponseEntity.ok(ApiResponse.<UserDto>builder()
                 .success(true)
@@ -260,14 +281,30 @@ public class UserController {
         // 1. Validate School if provided
         if (schoolId != null) {
             if (!schoolRepository.existsById(schoolId)) {
-                throw new BadRequestException("Invalid School: School with ID '" + schoolId + "' does not exist.");
+                // Check if schoolId matches code or name
+                Optional<School> matched = schoolRepository.findAll().stream()
+                        .filter(s -> (s.getCode() != null && s.getCode().equalsIgnoreCase(rawSchoolId))
+                                || (s.getName() != null && s.getName().equalsIgnoreCase(rawSchoolId))
+                                || (s.getId() != null && s.getId().equalsIgnoreCase(rawSchoolId)))
+                        .findFirst();
+                if (matched.isPresent()) {
+                    schoolId = matched.get().getId();
+                } else {
+                    throw new BadRequestException("Invalid School: School with ID '" + rawSchoolId + "' does not exist.");
+                }
             }
         }
 
         // 2. Validate Department if provided
         if (rawDeptId != null) {
             Department dept = departmentRepository.findById(rawDeptId)
-                    .orElseThrow(() -> new BadRequestException("Invalid Department: Department with ID '" + rawDeptId + "' does not exist."));
+                    .orElseGet(() -> departmentRepository.findAll().stream()
+                            .filter(d -> (d.getName() != null && d.getName().equalsIgnoreCase(rawDeptId))
+                                    || (d.getCode() != null && d.getCode().equalsIgnoreCase(rawDeptId)))
+                            .findFirst()
+                            .orElseThrow(() -> new BadRequestException("Invalid Department: Department with ID '" + rawDeptId + "' does not exist.")));
+
+            departmentId = dept.getId();
 
             // Check School-Department relationship integrity
             if (dept.getSchoolId() != null) {
@@ -282,7 +319,13 @@ public class UserController {
         // 3. Validate Programme if provided
         if (rawProgId != null) {
             Programme prog = programmeRepository.findById(rawProgId)
-                    .orElseThrow(() -> new BadRequestException("Invalid Programme: Programme with ID '" + rawProgId + "' does not exist."));
+                    .orElseGet(() -> programmeRepository.findAll().stream()
+                            .filter(p -> (p.getName() != null && p.getName().equalsIgnoreCase(rawProgId))
+                                    || (p.getCode() != null && p.getCode().equalsIgnoreCase(rawProgId)))
+                            .findFirst()
+                            .orElseThrow(() -> new BadRequestException("Invalid Programme: Programme with ID '" + rawProgId + "' does not exist.")));
+
+            programmeId = prog.getId();
 
             // Check Department-Programme relationship integrity
             if (prog.getDepartmentId() != null) {
