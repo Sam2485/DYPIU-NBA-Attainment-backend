@@ -45,6 +45,12 @@ class AttainmentCalculationServiceTest {
     @Mock
     private CourseOfferingRepository courseOfferingRepository;
 
+    @Mock
+    private CoPoMappingRepository coPoMappingRepository;
+
+    @Mock
+    private CoPsoMappingRepository coPsoMappingRepository;
+
     @InjectMocks
     private AttainmentCalculationService calculationService;
 

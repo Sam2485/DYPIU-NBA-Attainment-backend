@@ -118,8 +118,7 @@ public class ApprovalService {
             if (req.getCourseOfferingId() != null) {
                 CourseOffering off = courseOfferingRepository.findById(req.getCourseOfferingId()).orElse(null);
                 if (off != null) {
-                    boolean isCoord = (off.getCourseCoordinatorId() != null && off.getCourseCoordinatorId().equals(scope.getUserId()))
-                            || (off.getCourseCoordinatorName() != null && (off.getCourseCoordinatorName().equalsIgnoreCase(scope.getName()) || off.getCourseCoordinatorName().equalsIgnoreCase(scope.getEmail())));
+                    boolean isCoord = (off.getCourseCoordinatorId() != null && off.getCourseCoordinatorId().equals(scope.getUserId()));
                     boolean assigned = isCoord || (off.getAssignedFaculty() != null && (off.getAssignedFaculty().contains(scope.getEmail()) || off.getAssignedFaculty().contains(scope.getName())));
                     if (!assigned) {
                         throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: You are not assigned to this course offering.");
@@ -225,8 +224,7 @@ public class ApprovalService {
                     if (a.getCourseOfferingId() == null) return false;
                     CourseOffering off = courseOfferingRepository.findById(a.getCourseOfferingId()).orElse(null);
                     if (off == null) return false;
-                    boolean isCoord = (off.getCourseCoordinatorId() != null && off.getCourseCoordinatorId().equals(scope.getUserId()))
-                            || (off.getCourseCoordinatorName() != null && (off.getCourseCoordinatorName().equalsIgnoreCase(scope.getName()) || off.getCourseCoordinatorName().equalsIgnoreCase(scope.getEmail())));
+                    boolean isCoord = (off.getCourseCoordinatorId() != null && off.getCourseCoordinatorId().equals(scope.getUserId()));
                     return isCoord || (off.getAssignedFaculty() != null && (off.getAssignedFaculty().contains(scope.getEmail()) || off.getAssignedFaculty().contains(scope.getName())));
                 }).toList();
             }

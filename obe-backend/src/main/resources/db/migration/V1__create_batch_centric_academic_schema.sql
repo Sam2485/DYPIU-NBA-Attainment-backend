@@ -26,7 +26,7 @@
 -- 1. SCHOOLS
 -- ============================================================
 
-CREATE TABLE schools (
+CREATE TABLE IF NOT EXISTS schools (
                          id VARCHAR(50) PRIMARY KEY,
 
                          code VARCHAR(20) NOT NULL UNIQUE,
@@ -48,7 +48,7 @@ CREATE TABLE schools (
 -- 2. DEPARTMENTS
 -- ============================================================
 
-CREATE TABLE departments (
+CREATE TABLE IF NOT EXISTS departments (
                              id VARCHAR(50) PRIMARY KEY,
 
                              school_id VARCHAR(50) NOT NULL
@@ -74,7 +74,7 @@ CREATE TABLE departments (
 -- 3. PROGRAMMES
 -- ============================================================
 
-CREATE TABLE programmes (
+CREATE TABLE IF NOT EXISTS programmes (
                             id VARCHAR(50) PRIMARY KEY,
 
                             department_id VARCHAR(50) NOT NULL
@@ -109,7 +109,7 @@ CREATE TABLE programmes (
 -- FACULTY           -> course offering(s)
 -- ============================================================
 
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
                        id BIGSERIAL PRIMARY KEY,
 
                        username VARCHAR(100) NOT NULL UNIQUE,
@@ -140,6 +140,18 @@ CREATE TABLE users (
                        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'users_department_id_fkey') THEN
+        ALTER TABLE users ADD CONSTRAINT users_department_id_fkey
+            FOREIGN KEY (department_id) REFERENCES departments(id) ON DELETE SET NULL NOT VALID;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'users_programme_id_fkey') THEN
+        ALTER TABLE users ADD CONSTRAINT users_programme_id_fkey
+            FOREIGN KEY (programme_id) REFERENCES programmes(id) ON DELETE SET NULL NOT VALID;
+    END IF;
+END $$;
+
 
 
 -- ============================================================
@@ -157,7 +169,7 @@ CREATE TABLE users (
 -- 2025-29 -> previous_batch_id -> 2024-28
 -- ============================================================
 
-CREATE TABLE batches (
+CREATE TABLE IF NOT EXISTS batches (
                          id VARCHAR(50) PRIMARY KEY,
 
                          programme_id VARCHAR(50) NOT NULL
@@ -207,7 +219,7 @@ CREATE TABLE batches (
 --   Semester 8
 -- ============================================================
 
-CREATE TABLE semesters (
+CREATE TABLE IF NOT EXISTS semesters (
                            id VARCHAR(50) PRIMARY KEY,
 
                            batch_id VARCHAR(50) NOT NULL
@@ -242,7 +254,7 @@ CREATE TABLE semesters (
 --
 -- Those belong to CourseOffering.
 -- ============================================================
-CREATE TABLE courses (
+CREATE TABLE IF NOT EXISTS courses (
                          id VARCHAR(50) PRIMARY KEY,
 
                          code VARCHAR(50) NOT NULL,
@@ -279,7 +291,7 @@ CREATE TABLE courses (
 -- These are separate offerings.
 -- ============================================================
 
-CREATE TABLE course_offerings (
+CREATE TABLE IF NOT EXISTS course_offerings (
                                   id VARCHAR(50) PRIMARY KEY,
 
                                   course_id VARCHAR(50) NOT NULL
@@ -313,7 +325,7 @@ CREATE TABLE course_offerings (
 -- 8. STUDENTS
 -- ============================================================
 
-CREATE TABLE students (
+CREATE TABLE IF NOT EXISTS students (
                           id VARCHAR(50) PRIMARY KEY,
 
                           batch_id VARCHAR(50) NOT NULL
@@ -336,41 +348,41 @@ CREATE TABLE students (
 -- INDEXES
 -- ============================================================
 
-CREATE INDEX idx_departments_school
+CREATE INDEX IF NOT EXISTS idx_departments_school
     ON departments(school_id);
 
-CREATE INDEX idx_programmes_department
+CREATE INDEX IF NOT EXISTS idx_programmes_department
     ON programmes(department_id);
 
-CREATE INDEX idx_batches_programme
+CREATE INDEX IF NOT EXISTS idx_batches_programme
     ON batches(programme_id);
 
-CREATE INDEX idx_batches_previous
+CREATE INDEX IF NOT EXISTS idx_batches_previous
     ON batches(previous_batch_id);
 
-CREATE INDEX idx_semesters_batch
+CREATE INDEX IF NOT EXISTS idx_semesters_batch
     ON semesters(batch_id);
 
-CREATE INDEX idx_courses_programme
+CREATE INDEX IF NOT EXISTS idx_courses_programme
     ON courses(programme_id);
 
-CREATE INDEX idx_course_offerings_course
+CREATE INDEX IF NOT EXISTS idx_course_offerings_course
     ON course_offerings(course_id);
 
-CREATE INDEX idx_course_offerings_batch
+CREATE INDEX IF NOT EXISTS idx_course_offerings_batch
     ON course_offerings(batch_id);
 
-CREATE INDEX idx_course_offerings_coordinator
+CREATE INDEX IF NOT EXISTS idx_course_offerings_coordinator
     ON course_offerings(course_coordinator_id);
 
-CREATE INDEX idx_students_batch
+CREATE INDEX IF NOT EXISTS idx_students_batch
     ON students(batch_id);
 
-CREATE INDEX idx_users_username
+CREATE INDEX IF NOT EXISTS idx_users_username
     ON users(username);
 
-CREATE INDEX idx_users_email
+CREATE INDEX IF NOT EXISTS idx_users_email
     ON users(email);
 
-CREATE INDEX idx_users_scope
+CREATE INDEX IF NOT EXISTS idx_users_scope
     ON users(school_id, department_id, programme_id);

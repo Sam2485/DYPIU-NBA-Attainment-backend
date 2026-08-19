@@ -102,10 +102,8 @@ public class ReportAccessService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Course Offering not found: " + courseOfferingId));
 
         if (user.getRole() == UserRole.FACULTY) {
-            boolean isCoordinator = (offering.getCourseCoordinatorId() != null && Objects.equals(offering.getCourseCoordinatorId(), user.getId()))
-                    || (offering.getCourseCoordinatorId() == null && offering.getCourseCoordinatorName() != null && offering.getCourseCoordinatorName().equalsIgnoreCase(user.getName()));
-            boolean isAssigned = isCoordinator || (offering.getAssignedFaculty() != null && (offering.getAssignedFaculty().contains(user.getEmail()) || offering.getAssignedFaculty().contains(user.getName())));
-            if (!isAssigned) {
+            boolean isCoordinator = (offering.getCourseCoordinatorId() != null && Objects.equals(offering.getCourseCoordinatorId(), user.getId()));
+            if (!isCoordinator) {
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: You are not assigned to this Course Offering.");
             }
             return;
@@ -126,8 +124,7 @@ public class ReportAccessService {
         CourseOffering offering = courseOfferingRepository.findById(courseOfferingId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Course Offering not found: " + courseOfferingId));
 
-        boolean isCoordinator = (offering.getCourseCoordinatorId() != null && Objects.equals(offering.getCourseCoordinatorId(), user.getId()))
-                || (offering.getCourseCoordinatorId() == null && offering.getCourseCoordinatorName() != null && offering.getCourseCoordinatorName().equalsIgnoreCase(user.getName()));
+        boolean isCoordinator = (offering.getCourseCoordinatorId() != null && Objects.equals(offering.getCourseCoordinatorId(), user.getId()));
         if (!isCoordinator) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Only the assigned Course Coordinator can perform this action.");
         }
@@ -144,11 +141,9 @@ public class ReportAccessService {
 
         if (user.getRole() == UserRole.FACULTY) {
             List<CourseOffering> offerings = courseOfferingRepository.findByCourseId(courseId);
-            boolean hasAssignedOffering = offerings.stream().anyMatch(o -> {
-                boolean isCoord = (o.getCourseCoordinatorId() != null && Objects.equals(o.getCourseCoordinatorId(), user.getId()))
-                        || (o.getCourseCoordinatorId() == null && o.getCourseCoordinatorName() != null && o.getCourseCoordinatorName().equalsIgnoreCase(user.getName()));
-                return isCoord || (o.getAssignedFaculty() != null && (o.getAssignedFaculty().contains(user.getEmail()) || o.getAssignedFaculty().contains(user.getName())));
-            });
+            boolean hasAssignedOffering = offerings.stream().anyMatch(o -> 
+                (o.getCourseCoordinatorId() != null && Objects.equals(o.getCourseCoordinatorId(), user.getId()))
+            );
             if (!hasAssignedOffering) {
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: You are not assigned to any offering of this Course.");
             }
@@ -226,9 +221,7 @@ public class ReportAccessService {
         } else if (user.getRole() == UserRole.FACULTY) {
             // Course Coordinator
             List<CourseOffering> offerings = courseOfferingRepository.findAll().stream()
-                    .filter(o -> (o.getCourseCoordinatorId() != null && Objects.equals(o.getCourseCoordinatorId(), user.getId()))
-                            || (o.getCourseCoordinatorName() != null && o.getCourseCoordinatorName().equalsIgnoreCase(user.getName()))
-                            || (o.getAssignedFaculty() != null && (o.getAssignedFaculty().contains(user.getEmail()) || o.getAssignedFaculty().contains(user.getName()))))
+                    .filter(o -> o.getCourseCoordinatorId() != null && Objects.equals(o.getCourseCoordinatorId(), user.getId()))
                     .collect(Collectors.toList());
             allowedOfferings = offerings;
             Set<String> batchIds = offerings.stream().map(CourseOffering::getBatchId).collect(Collectors.toSet());

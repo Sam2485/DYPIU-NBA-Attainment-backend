@@ -593,7 +593,7 @@ public class ProgrammeCoordinatorScopeSecurityTest {
         allocItem.put("batchId", batchA1.getId());
         allocations.add(allocItem);
 
-        Map<String, Object> res = academicService.allocateCourses(progA1.getId(), allocations);
+        Map<String, Object> res = academicService.allocateCourses(progA1.getId(), "batch-1", allocations);
         assertNotNull(res);
         assertTrue(Boolean.TRUE.equals(res.get("success")));
     }
@@ -612,7 +612,7 @@ public class ProgrammeCoordinatorScopeSecurityTest {
         allocB.add(itemB);
 
         assertThrows(ResponseStatusException.class, () ->
-                academicService.allocateCourses(progB1.getId(), allocB)
+                academicService.allocateCourses(progB1.getId(), "batch-1", allocB)
         );
 
         // Assigned programme, but cross-programme course (courseB1 inside progA1 call)
@@ -624,7 +624,7 @@ public class ProgrammeCoordinatorScopeSecurityTest {
         allocCross.add(itemCross);
 
         assertThrows(ResponseStatusException.class, () ->
-                academicService.allocateCourses(progA1.getId(), allocCross)
+                academicService.allocateCourses(progA1.getId(), "batch-1", allocCross)
         );
     }
 
