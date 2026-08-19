@@ -539,10 +539,13 @@ public class AcademicController {
         return ResponseEntity.ok(ApiResponse.<Void>builder().success(true).message("Batch deleted").build());
     }
 
-    // --- Courses ---
     @GetMapping("/courses")
-    public ResponseEntity<ApiResponse<List<Course>>> getCourses(@RequestParam(required = false) String programmeId) {
-        List<Course> courses = programmeId != null ? academicService.getCoursesByProgramme(programmeId) : academicService.getAllCourses();
+    public ResponseEntity<ApiResponse<List<Course>>> getCourses(
+            @RequestParam(required = false) String programmeId,
+            @RequestParam(required = false) String batchId) {
+        List<Course> courses = programmeId != null 
+            ? academicService.getCoursesByProgramme(programmeId, batchId) 
+            : academicService.getAllCourses();
         return ResponseEntity.ok(ApiResponse.<List<Course>>builder().success(true).data(courses).build());
     }
 

@@ -1627,10 +1627,34 @@ public class AcademicService {
     }
 
     @Transactional(readOnly = true)
-    public List<Course> getCoursesByProgramme(String programmeId) {
-        System.out.println("[AcademicService] getCoursesByProgramme called | programmeId: " + programmeId);
+    public List<Course> getCoursesByProgramme(String programmeId, String batchId) {
+        System.out.println("[AcademicService] getCoursesByProgramme called | programmeId: " + programmeId + " | batchId: " + batchId);
         enforceProgrammeScope(programmeId);
         List<Course> list = courseRepository.findByProgrammeId(programmeId);
+        
+        if (batchId != null && !batchId.isBlank()) {
+            for (Course course : list) {
+                List<CourseOffering> offerings = courseOfferingRepository.findByCourseId(course.getId());
+                CourseOffering targetOffering = offerings.stream()
+                        .filter(o -> batchId.equals(o.getBatchId()))
+                        .findFirst()
+                        .orElse(null);
+                
+                if (targetOffering != null) {
+                    course.setSemester(targetOffering.getSemester() != null ? String.valueOf(targetOffering.getSemester()) : null);
+                    course.setCoordinator(targetOffering.getCourseCoordinatorName());
+                    course.setFaculty(targetOffering.getCourseCoordinatorName());
+                    course.setAssignedFaculty(targetOffering.getAssignedFaculty());
+                    
+                    // We also need coordinatorEmail if we can extract it from assignedFaculty
+                    if (targetOffering.getAssignedFaculty() != null && targetOffering.getAssignedFaculty().contains("(")) {
+                        String emailPart = targetOffering.getAssignedFaculty().substring(targetOffering.getAssignedFaculty().indexOf("(") + 1, targetOffering.getAssignedFaculty().indexOf(")"));
+                        course.setCoordinatorEmail(emailPart);
+                    }
+                }
+            }
+        }
+        
         System.out.println("[AcademicService] Fetched courses (" + list.size() + " items) for programmeId: " + programmeId);
         return list;
     }

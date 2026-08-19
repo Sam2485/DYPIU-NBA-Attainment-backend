@@ -608,7 +608,12 @@ public class ApprovalService {
         ActorInfo actor = resolveActorInfo(clientVerifierName, "VERIFIER");
         String verifierName = actor.actorName();
 
-        ApprovalStatus status = "APPROVED".equalsIgnoreCase(statusValue) || "VERIFIED".equalsIgnoreCase(statusValue) ? ApprovalStatus.APPROVED : ApprovalStatus.PENDING;
+        ApprovalStatus status;
+        try {
+            status = ApprovalStatus.valueOf(statusValue.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            status = "APPROVED".equalsIgnoreCase(statusValue) || "VERIFIED".equalsIgnoreCase(statusValue) ? ApprovalStatus.APPROVED : ApprovalStatus.PENDING;
+        }
         ApprovalType type = ApprovalType.OTHER;
         String programmeId = null;
         String courseId = null;
@@ -670,7 +675,13 @@ public class ApprovalService {
                     .filter(p -> targetPId != null && (targetPId.equalsIgnoreCase(p.getProgrammeId()) || key.equalsIgnoreCase(p.getId())))
                     .findFirst().orElse(null);
             if (patr != null) {
-                patr.setStatus(com.dypiu.nba.entity.ProgrammeAtrStatus.APPROVED);
+                if (status == ApprovalStatus.APPROVED || status == ApprovalStatus.VERIFIED) {
+                    patr.setStatus(com.dypiu.nba.entity.ProgrammeAtrStatus.APPROVED);
+                } else if (status == ApprovalStatus.REJECTED || status == ApprovalStatus.REVISION_REQUESTED || status == ApprovalStatus.NEEDS_REVISION) {
+                    patr.setStatus(com.dypiu.nba.entity.ProgrammeAtrStatus.NEEDS_REVISION);
+                } else {
+                    patr.setStatus(com.dypiu.nba.entity.ProgrammeAtrStatus.DRAFT);
+                }
                 patr.setVerifiedBy(verifierName);
                 patr.setVerificationComments(remarksValue);
                 programmeAtrRepository.save(patr);

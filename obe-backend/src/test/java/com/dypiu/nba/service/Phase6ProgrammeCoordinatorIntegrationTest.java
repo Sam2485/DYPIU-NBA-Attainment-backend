@@ -175,7 +175,7 @@ public class Phase6ProgrammeCoordinatorIntegrationTest {
                 "coordinator", "Prof. Alice",
                 "coordinatorEmail", "alice@dypiu.ac.in"
         ));
-        Map<String, Object> draftRes = academicService.allocateCourses(progId1, "batch-1", allocations, false);
+        Map<String, Object> draftRes = academicService.allocateCourses(progId1, null, allocations, false);
         assertTrue((Boolean) draftRes.get("success"));
 
         // Verify NO approval request was created
@@ -183,7 +183,7 @@ public class Phase6ProgrammeCoordinatorIntegrationTest {
         assertEquals(initialApprovalCount, afterDraftApprovals.size(), "Draft save must NOT create ApprovalRequest");
 
         // 2. Explicit Submit (submit = true)
-        Map<String, Object> submitRes = academicService.allocateCourses(progId1, "batch-1", allocations, true);
+        Map<String, Object> submitRes = academicService.allocateCourses(progId1, null, allocations, true);
         assertTrue((Boolean) submitRes.get("success"));
 
         List<ApprovalRequest> afterSubmitApprovals = approvalRequestRepository.findByProgrammeId(progId1);

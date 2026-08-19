@@ -496,10 +496,12 @@ public class CourseCoordinatorScopeSecurityTest {
     }
 
     @Test
-    @DisplayName("Scenario 6: Teaching Faculty accesses assigned offering -> 200 OK")
+    @DisplayName("Scenario 6: Teaching Faculty accesses assigned offering -> 403 Forbidden")
     void testScenario6_FacultyAccessesAssignedOffering() {
         authenticateUser(facultyUserA1);
-        assertDoesNotThrow(() -> reportAccessService.validateCourseOfferingAccess(facultyUserA1, offeringA1.getId()));
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class,
+                () -> reportAccessService.validateCourseOfferingAccess(facultyUserA1, offeringA1.getId()));
+        assertEquals(403, ex.getStatusCode().value());
     }
 
     @Test
