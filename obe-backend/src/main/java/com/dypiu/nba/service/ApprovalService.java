@@ -357,7 +357,7 @@ public class ApprovalService {
             enforceApprovalScope(request);
         }
 
-        request.setStatus(ApprovalStatus.PENDING);
+        request.setStatus(request.getStatus() != null ? request.getStatus() : ApprovalStatus.PENDING_APPROVAL);
         request.setSubmittedAt(ZonedDateTime.now());
         request.setUpdatedAt(ZonedDateTime.now());
         ApprovalRequest saved = approvalRequestRepository.save(request);
@@ -673,7 +673,8 @@ public class ApprovalService {
             String targetPId = programmeId;
             com.dypiu.nba.entity.ProgrammeAtr patr = programmeAtrRepository.findAll().stream()
                     .filter(p -> targetPId != null && (targetPId.equalsIgnoreCase(p.getProgrammeId()) || key.equalsIgnoreCase(p.getId())))
-                    .findFirst().orElse(null);
+                    .max(Comparator.comparing(com.dypiu.nba.entity.ProgrammeAtr::getUpdatedAt, Comparator.nullsFirst(Comparator.naturalOrder())))
+                    .orElse(null);
             if (patr != null) {
                 if (status == ApprovalStatus.APPROVED || status == ApprovalStatus.VERIFIED) {
                     patr.setStatus(com.dypiu.nba.entity.ProgrammeAtrStatus.APPROVED);

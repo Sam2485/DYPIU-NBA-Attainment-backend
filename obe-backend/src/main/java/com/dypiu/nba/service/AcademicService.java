@@ -1126,6 +1126,24 @@ public class AcademicService {
         Set<String> assignedCourseIds = assignedOfferings.stream().map(CourseOffering::getCourseId).filter(Objects::nonNull).collect(Collectors.toSet());
         List<Course> finalCourses = assignedCourseIds.isEmpty() ? Collections.emptyList() : courseRepository.findAllById(assignedCourseIds);
 
+        for (Course course : finalCourses) {
+            CourseOffering offering = assignedOfferings.stream()
+                    .filter(o -> course.getId().equals(o.getCourseId()))
+                    .findFirst()
+                    .orElse(null);
+            if (offering != null) {
+                course.setCourseOfferingId(offering.getId());
+                course.setSemester(offering.getSemester() != null ? String.valueOf(offering.getSemester()) : null);
+                course.setCoordinator(offering.getCourseCoordinatorName());
+                course.setFaculty(offering.getCourseCoordinatorName());
+                course.setAssignedFaculty(offering.getAssignedFaculty());
+                if (offering.getAssignedFaculty() != null && offering.getAssignedFaculty().contains("(")) {
+                    String emailPart = offering.getAssignedFaculty().substring(offering.getAssignedFaculty().indexOf("(") + 1, offering.getAssignedFaculty().indexOf(")"));
+                    course.setCoordinatorEmail(emailPart);
+                }
+            }
+        }
+
         Course primaryCourse = !finalCourses.isEmpty() ? finalCourses.get(0) : null;
 
         CourseCoordinatorSetupProgressDto setupProgress = null;
@@ -1645,6 +1663,7 @@ public class AcademicService {
                     course.setCoordinator(targetOffering.getCourseCoordinatorName());
                     course.setFaculty(targetOffering.getCourseCoordinatorName());
                     course.setAssignedFaculty(targetOffering.getAssignedFaculty());
+                    course.setCourseOfferingId(targetOffering.getId());
                     
                     // We also need coordinatorEmail if we can extract it from assignedFaculty
                     if (targetOffering.getAssignedFaculty() != null && targetOffering.getAssignedFaculty().contains("(")) {
@@ -2445,17 +2464,24 @@ public class AcademicService {
                                 .findFirst()
                                 .orElse(null);
                                 
+                        String semStr = item.get("semester") != null ? item.get("semester").toString() : (course != null ? course.getSemester() : null);
+                        Integer parsedSem = (semStr != null && semStr.trim().matches("\\d+")) ? Integer.parseInt(semStr.trim()) : 1;
+
                         if (targetOffering == null) {
                             // Create exactly one CourseOffering
                             targetOffering = CourseOffering.builder()
                                     .id("off-" + UUID.randomUUID().toString().substring(0, 8))
                                     .courseId(courseId)
                                     .batchId(batchId)
-                                    .semester(course != null && course.getSemester() != null && course.getSemester().matches("\\d+") ? Integer.parseInt(course.getSemester()) : 1) // default to 1 if missing
+                                    .semester(parsedSem)
                                     .courseCoordinatorName(name)
                                     .assignedFaculty(name + " (" + email + ")")
                                     .status("ACTIVE")
                                     .build();
+                        } else {
+                            if (item.get("semester") != null || course != null && course.getSemester() != null) {
+                                targetOffering.setSemester(parsedSem);
+                            }
                         }
                         
                         // Update coordinator info
@@ -2468,10 +2494,15 @@ public class AcademicService {
                         courseOfferingRepository.save(targetOffering);
                     } else {
                         // Fallback to update existing offerings if batchId is not provided
+                        String semStr = item.get("semester") != null ? item.get("semester").toString() : (course != null ? course.getSemester() : null);
+                        Integer parsedSem = (semStr != null && semStr.trim().matches("\\d+")) ? Integer.parseInt(semStr.trim()) : null;
                         List<CourseOffering> offerings = courseOfferingRepository.findByCourseId(courseId);
                         for (CourseOffering off : offerings) {
                             off.setCourseCoordinatorName(name);
                             off.setAssignedFaculty(name + " (" + email + ")");
+                            if (parsedSem != null) {
+                                off.setSemester(parsedSem);
+                            }
                             if (!email.isBlank()) {
                                 userRepository.findByEmail(email).ifPresent(u -> off.setCourseCoordinatorId(u.getId()));
                             }

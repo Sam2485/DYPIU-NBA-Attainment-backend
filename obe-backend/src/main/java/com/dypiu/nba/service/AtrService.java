@@ -271,12 +271,28 @@ public class AtrService {
         if (atr != null && atr.getBatchId() != null) {
             enforceBatchScope(atr.getBatchId());
         }
+        if (atr != null && atr.getProgrammeId() != null && atr.getBatchId() != null) {
+            ProgrammeAtr existing = programmeAtrRepository.findByProgrammeIdAndBatchId(atr.getProgrammeId(), atr.getBatchId()).orElse(null);
+            if (existing != null) {
+                atr.setId(existing.getId());
+                if (atr.getStatus() == null) atr.setStatus(existing.getStatus());
+                if (atr.getSubmittedBy() == null) atr.setSubmittedBy(existing.getSubmittedBy());
+                if (atr.getSubmittedAt() == null) atr.setSubmittedAt(existing.getSubmittedAt());
+                if (atr.getVerifiedBy() == null) atr.setVerifiedBy(existing.getVerifiedBy());
+                if (atr.getVerifiedAt() == null) atr.setVerifiedAt(existing.getVerifiedAt());
+                if (atr.getVerificationComments() == null) atr.setVerificationComments(existing.getVerificationComments());
+                if (atr.getObservationsJson() == null || atr.getObservationsJson().isBlank()) {
+                    atr.setObservationsJson(existing.getObservationsJson());
+                }
+            }
+        }
         if (atr.getId() == null || atr.getId().isBlank()) {
             atr.setId("patr-" + UUID.randomUUID().toString().substring(0, 8));
         }
         if (atr.getStatus() == null) {
             atr.setStatus(ProgrammeAtrStatus.DRAFT);
         }
+        atr.setUpdatedAt(ZonedDateTime.now());
         return programmeAtrRepository.save(atr);
     }
 
