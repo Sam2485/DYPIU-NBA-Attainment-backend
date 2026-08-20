@@ -65,7 +65,7 @@ public class SecurityConfig {
         return http.build();
     }
 
-    @org.springframework.beans.factory.annotation.Value("${app.cors.allowed-origins:http://localhost:5173,http://localhost:3010,http://localhost:3000,http://localhost:80}")
+    @org.springframework.beans.factory.annotation.Value("${app.cors.allowed-origins:*}")
     private String allowedOrigins;
 
     @Bean
@@ -76,10 +76,10 @@ public class SecurityConfig {
                 .filter(s -> !s.isEmpty())
                 .toList();
 
-        if (origins.contains("*")) {
+        if (origins.isEmpty() || origins.contains("*") || allowedOrigins.equals("*")) {
             configuration.setAllowedOriginPatterns(List.of("*"));
         } else {
-            configuration.setAllowedOrigins(origins);
+            configuration.setAllowedOriginPatterns(origins);
         }
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("*"));
