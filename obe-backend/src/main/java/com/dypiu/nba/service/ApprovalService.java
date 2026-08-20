@@ -118,8 +118,7 @@ public class ApprovalService {
             if (req.getCourseOfferingId() != null) {
                 CourseOffering off = courseOfferingRepository.findById(req.getCourseOfferingId()).orElse(null);
                 if (off != null) {
-                    boolean isCoord = (off.getCourseCoordinatorId() != null && off.getCourseCoordinatorId().equals(scope.getUserId()))
-                            || (off.getCourseCoordinatorName() != null && (off.getCourseCoordinatorName().equalsIgnoreCase(scope.getName()) || off.getCourseCoordinatorName().equalsIgnoreCase(scope.getEmail())));
+                    boolean isCoord = (off.getCourseCoordinatorId() != null && off.getCourseCoordinatorId().equals(scope.getUserId()));
                     boolean assigned = isCoord || (off.getAssignedFaculty() != null && (off.getAssignedFaculty().contains(scope.getEmail()) || off.getAssignedFaculty().contains(scope.getName())));
                     if (!assigned) {
                         throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: You are not assigned to this course offering.");
@@ -225,8 +224,7 @@ public class ApprovalService {
                     if (a.getCourseOfferingId() == null) return false;
                     CourseOffering off = courseOfferingRepository.findById(a.getCourseOfferingId()).orElse(null);
                     if (off == null) return false;
-                    boolean isCoord = (off.getCourseCoordinatorId() != null && off.getCourseCoordinatorId().equals(scope.getUserId()))
-                            || (off.getCourseCoordinatorName() != null && (off.getCourseCoordinatorName().equalsIgnoreCase(scope.getName()) || off.getCourseCoordinatorName().equalsIgnoreCase(scope.getEmail())));
+                    boolean isCoord = (off.getCourseCoordinatorId() != null && off.getCourseCoordinatorId().equals(scope.getUserId()));
                     return isCoord || (off.getAssignedFaculty() != null && (off.getAssignedFaculty().contains(scope.getEmail()) || off.getAssignedFaculty().contains(scope.getName())));
                 }).toList();
             }
@@ -359,7 +357,7 @@ public class ApprovalService {
             enforceApprovalScope(request);
         }
 
-        request.setStatus(ApprovalStatus.PENDING);
+        request.setStatus(request.getStatus() != null ? request.getStatus() : ApprovalStatus.PENDING_APPROVAL);
         request.setSubmittedAt(ZonedDateTime.now());
         request.setUpdatedAt(ZonedDateTime.now());
         ApprovalRequest saved = approvalRequestRepository.save(request);
@@ -550,10 +548,6 @@ public class ApprovalService {
             result.put("verifiedBy", verifier);
         } else {
             String offeringId = key;
-            List<com.dypiu.nba.entity.CourseOffering> offerings = courseOfferingRepository.findByCourseId(key);
-            if (!offerings.isEmpty()) {
-                offeringId = offerings.get(0).getId();
-            }
 
             com.dypiu.nba.entity.AttainmentConfiguration config = configRepository.findByCourseOfferingId(offeringId).orElse(null);
             String finalOfferingId = offeringId;
@@ -610,7 +604,12 @@ public class ApprovalService {
         ActorInfo actor = resolveActorInfo(clientVerifierName, "VERIFIER");
         String verifierName = actor.actorName();
 
-        ApprovalStatus status = "APPROVED".equalsIgnoreCase(statusValue) || "VERIFIED".equalsIgnoreCase(statusValue) ? ApprovalStatus.APPROVED : ApprovalStatus.PENDING;
+        ApprovalStatus status;
+        try {
+            status = ApprovalStatus.valueOf(statusValue.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            status = "APPROVED".equalsIgnoreCase(statusValue) || "VERIFIED".equalsIgnoreCase(statusValue) ? ApprovalStatus.APPROVED : ApprovalStatus.PENDING;
+        }
         ApprovalType type = ApprovalType.OTHER;
         String programmeId = null;
         String courseId = null;
@@ -648,7 +647,13 @@ public class ApprovalService {
             courseOfferingId = key;
             com.dypiu.nba.entity.AttainmentConfiguration cfg = configRepository.findByCourseOfferingId(key).orElse(null);
             if (cfg != null) {
-                cfg.setStatus(com.dypiu.nba.entity.AttainmentConfigStatus.APPROVED);
+                if (status == ApprovalStatus.APPROVED || status == ApprovalStatus.VERIFIED) {
+                    cfg.setStatus(com.dypiu.nba.entity.AttainmentConfigStatus.APPROVED);
+                } else if (status == ApprovalStatus.REJECTED || status == ApprovalStatus.REVISION_REQUESTED || status == ApprovalStatus.NEEDS_REVISION) {
+                    cfg.setStatus(com.dypiu.nba.entity.AttainmentConfigStatus.NEEDS_REVISION);
+                } else {
+                    cfg.setStatus(com.dypiu.nba.entity.AttainmentConfigStatus.DRAFT);
+                }
                 configRepository.save(cfg);
             }
         } else if ("coStatus".equalsIgnoreCase(statusType)) {
@@ -659,7 +664,13 @@ public class ApprovalService {
             courseOfferingId = key;
             List<com.dypiu.nba.entity.CourseAtr> atrs = courseAtrRepository.findByCourseOfferingId(key);
             for (com.dypiu.nba.entity.CourseAtr a : atrs) {
-                a.setStatus(com.dypiu.nba.entity.CourseAtrStatus.APPROVED);
+                if (status == ApprovalStatus.APPROVED || status == ApprovalStatus.VERIFIED) {
+                    a.setStatus(com.dypiu.nba.entity.CourseAtrStatus.APPROVED);
+                } else if (status == ApprovalStatus.REJECTED || status == ApprovalStatus.REVISION_REQUESTED || status == ApprovalStatus.NEEDS_REVISION) {
+                    a.setStatus(com.dypiu.nba.entity.CourseAtrStatus.NEEDS_REVISION);
+                } else {
+                    a.setStatus(com.dypiu.nba.entity.CourseAtrStatus.DRAFT);
+                }
                 a.setVerifiedBy(verifierName);
                 a.setVerificationComments(remarksValue);
                 courseAtrRepository.save(a);
@@ -670,9 +681,16 @@ public class ApprovalService {
             String targetPId = programmeId;
             com.dypiu.nba.entity.ProgrammeAtr patr = programmeAtrRepository.findAll().stream()
                     .filter(p -> targetPId != null && (targetPId.equalsIgnoreCase(p.getProgrammeId()) || key.equalsIgnoreCase(p.getId())))
-                    .findFirst().orElse(null);
+                    .max(Comparator.comparing(com.dypiu.nba.entity.ProgrammeAtr::getUpdatedAt, Comparator.nullsFirst(Comparator.naturalOrder())))
+                    .orElse(null);
             if (patr != null) {
-                patr.setStatus(com.dypiu.nba.entity.ProgrammeAtrStatus.APPROVED);
+                if (status == ApprovalStatus.APPROVED || status == ApprovalStatus.VERIFIED) {
+                    patr.setStatus(com.dypiu.nba.entity.ProgrammeAtrStatus.APPROVED);
+                } else if (status == ApprovalStatus.REJECTED || status == ApprovalStatus.REVISION_REQUESTED || status == ApprovalStatus.NEEDS_REVISION) {
+                    patr.setStatus(com.dypiu.nba.entity.ProgrammeAtrStatus.NEEDS_REVISION);
+                } else {
+                    patr.setStatus(com.dypiu.nba.entity.ProgrammeAtrStatus.DRAFT);
+                }
                 patr.setVerifiedBy(verifierName);
                 patr.setVerificationComments(remarksValue);
                 programmeAtrRepository.save(patr);

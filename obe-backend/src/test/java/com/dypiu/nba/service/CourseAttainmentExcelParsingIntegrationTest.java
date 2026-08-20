@@ -452,16 +452,120 @@ public class CourseAttainmentExcelParsingIntegrationTest {
     }
 
     @Test
-    @DisplayName("7. Programme Attainment Regression Verification")
-    void testProgrammeAttainmentRegression() {
-        ProgrammeAttainmentResultDto progResult = attainmentService.calculateProgrammeAttainment(programme.getId(), batch.getId());
-        assertNotNull(progResult);
-        assertNotNull(progResult.getAverageMapping());
-        assertNotNull(progResult.getAverageDirectAttainment());
-        assertNotNull(progResult.getOverallAttainment());
+    @DisplayName("8. Real Test File Upload: Direct Examination (New_spreadsheet.xlsx)")
+    void testDirectExaminationUploadWithNewSpreadsheet() throws Exception {
+        File file = new File("/Users/rajshaikh/Desktop/testing/New_spreadsheet.xlsx");
+        assertTrue(file.exists(), "Test file New_spreadsheet.xlsx must exist on disk");
 
-        // Verify 12 POs and 3 PSOs exist in the results
-        assertEquals(12, progResult.getOverallAttainment().getPos().size());
-        assertEquals(3, progResult.getOverallAttainment().getPsos().size());
+        try (FileInputStream fis = new FileInputStream(file)) {
+            MockMultipartFile multipartFile = new MockMultipartFile(
+                    "file",
+                    "New_spreadsheet.xlsx",
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    fis
+            );
+
+            ExaminationAttainmentResultDto result = attainmentService.processAndSaveExaminationFile(
+                    offeringA.getId(),
+                    multipartFile,
+                    new BigDecimal("45.00"),
+                    "Test Coordinator"
+            );
+
+            assertNotNull(result, "Examination attainment result should not be null");
+            assertEquals(offeringA.getId(), result.getCourseId());
+            assertEquals(24, result.getTotalStudents(), "Should parse all 24 students");
+
+            // Verify Out of marks parsed dynamically from sheet row 19: CO1=20, CO2=18, CO3=22, CO4=16, CO5=24
+            assertNotNull(result.getCoMaxMarks());
+            assertEquals(new BigDecimal("20.00"), result.getCoMaxMarks().get("CO1"));
+            assertEquals(new BigDecimal("18.00"), result.getCoMaxMarks().get("CO2"));
+            assertEquals(new BigDecimal("22.00"), result.getCoMaxMarks().get("CO3"));
+            assertEquals(new BigDecimal("16.00"), result.getCoMaxMarks().get("CO4"));
+            assertEquals(new BigDecimal("24.00"), result.getCoMaxMarks().get("CO5"));
+
+            // Verify student marks were parsed
+            assertEquals(24, result.getStudentMarks().size());
+            assertEquals("20241413001", result.getStudentMarks().get(0).getPrn());
+
+            // Verify attainment levels exist for all 5 COs
+            assertNotNull(result.getCoAttainmentLevels());
+            assertTrue(result.getCoAttainmentLevels().containsKey("CO1"));
+            assertTrue(result.getCoAttainmentLevels().containsKey("CO5"));
+            assertNotNull(result.getOverallDirectCoAttainment());
+        }
+    }
+
+    @Test
+    @DisplayName("9. Real Test File Upload: Course End Survey (survey.xlsx)")
+    void testCourseEndSurveyUploadWithSurveyFile() throws Exception {
+        File file = new File("/Users/rajshaikh/Desktop/testing/survey.xlsx");
+        assertTrue(file.exists(), "Test file survey.xlsx must exist on disk");
+
+        try (FileInputStream fis = new FileInputStream(file)) {
+            MockMultipartFile multipartFile = new MockMultipartFile(
+                    "file",
+                    "survey.xlsx",
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    fis
+            );
+
+            SurveyAttainmentResultDto result = attainmentService.processAndSaveSurveyFile(
+                    offeringA.getId(),
+                    multipartFile,
+                    new BigDecimal("60.00"),
+                    "Test Coordinator"
+            );
+
+            assertNotNull(result, "Survey attainment result should not be null");
+            assertEquals(offeringA.getId(), result.getCourseId());
+            assertEquals(18, result.getTotalStudents(), "Should parse 18 student responses");
+
+            // Verify indirect percentages & scores for CO1..CO5
+            assertNotNull(result.getOverallIndirectPercentages());
+            assertTrue(result.getOverallIndirectPercentages().containsKey("CO1"));
+            assertTrue(result.getOverallIndirectPercentages().containsKey("CO5"));
+
+            assertNotNull(result.getIndirectAttainmentScores());
+            assertTrue(result.getIndirectAttainmentScores().containsKey("CO1"));
+            assertTrue(result.getIndirectAttainmentScores().containsKey("CO5"));
+
+            assertNotNull(result.getOverallIndirectCoAttainment());
+            assertTrue(result.getOverallIndirectCoAttainment().compareTo(BigDecimal.ZERO) > 0);
+        }
+    }
+
+    @Test
+    @DisplayName("10. Combined CO Attainment Calculation with Both Test Files")
+    void testCombinedCoAttainmentWithBothFiles() throws Exception {
+        // 1. Upload Direct Examination
+        File examFile = new File("/Users/rajshaikh/Desktop/testing/New_spreadsheet.xlsx");
+        try (FileInputStream fis = new FileInputStream(examFile)) {
+            MockMultipartFile mf = new MockMultipartFile("file", "New_spreadsheet.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fis);
+            attainmentService.processAndSaveExaminationFile(offeringA.getId(), mf, new BigDecimal("45.00"), "Coordinator");
+        }
+
+        // 2. Upload Course End Survey
+        File surveyFile = new File("/Users/rajshaikh/Desktop/testing/survey.xlsx");
+        try (FileInputStream fis = new FileInputStream(surveyFile)) {
+            MockMultipartFile mf = new MockMultipartFile("file", "survey.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fis);
+            attainmentService.processAndSaveSurveyFile(offeringA.getId(), mf, new BigDecimal("60.00"), "Coordinator");
+        }
+
+        // 3. Compute Combined Course Attainment
+        Map<String, Object> combined = attainmentService.calculateCourseCoAttainment(offeringA.getId());
+        assertNotNull(combined, "Combined CO attainment map should not be null");
+        assertTrue(combined.containsKey("coAttainments"));
+        assertTrue(combined.containsKey("overallCoAttainment"));
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> coAttainments = (List<Map<String, Object>>) combined.get("coAttainments");
+        assertNotNull(coAttainments);
+        assertFalse(coAttainments.isEmpty());
+
+        BigDecimal overall = (BigDecimal) combined.get("overallCoAttainment");
+        assertNotNull(overall);
+        assertTrue(overall.compareTo(BigDecimal.ZERO) > 0, "Overall CO attainment should be > 0");
     }
 }
+

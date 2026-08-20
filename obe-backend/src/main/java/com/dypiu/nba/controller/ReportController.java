@@ -281,7 +281,7 @@ public class ReportController {
 
         return ResponseEntity.ok(ApiResponse.<Map<String, Object>>builder()
                 .success(true)
-                .data(attainmentCalculationService.calculateCourseCoAttainment(offering.getCourseId()))
+                .data(attainmentCalculationService.calculateCourseCoAttainment(offering.getId()))
                 .build());
     }
 

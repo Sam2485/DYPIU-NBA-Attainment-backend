@@ -343,9 +343,7 @@ public class DashboardController {
 
         List<CourseOffering> allOfferings = courseOfferingRepository.findAll();
         List<CourseOffering> assignedOfferings = allOfferings.stream()
-                .filter(o -> user != null && ((o.getCourseCoordinatorId() != null && java.util.Objects.equals(o.getCourseCoordinatorId(), user.getId()))
-                        || (o.getCourseCoordinatorId() == null && o.getCourseCoordinatorName() != null && o.getCourseCoordinatorName().equalsIgnoreCase(user.getName()))
-                        || (o.getAssignedFaculty() != null && (o.getAssignedFaculty().contains(user.getEmail()) || o.getAssignedFaculty().contains(user.getName())))))
+                .filter(o -> user != null && o.getCourseCoordinatorId() != null && java.util.Objects.equals(o.getCourseCoordinatorId(), user.getId()))
                 .collect(Collectors.toList());
 
         CourseOffering targetOffering = null;

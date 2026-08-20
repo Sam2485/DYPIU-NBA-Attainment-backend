@@ -25,7 +25,7 @@ spring:
     database-platform: org.hibernate.dialect.PostgreSQLDialect
     hibernate:
       ddl-auto: validate # Flyway is mandatory authority for DB schema evolution
-    show-sql: false
+    show-sql: true
     properties:
       hibernate:
         format_sql: true
@@ -64,4 +64,8 @@ logging:
   level:
     root: INFO
     com.dypiu.nba: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.hibernate.orm.jdbc.bind: TRACE
+    org.springframework.transaction: DEBUG
+    org.springframework.orm.jpa: DEBUG
     org.springframework.security: INFO

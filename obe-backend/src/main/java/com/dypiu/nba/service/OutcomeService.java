@@ -132,7 +132,7 @@ public class OutcomeService {
             List<CourseOffering> offerings = courseOfferingRepository.findByBatchId(batchId);
             boolean hasAssigned = offerings.stream().anyMatch(o -> {
                 boolean isCoord = (o.getCourseCoordinatorId() != null && Objects.equals(o.getCourseCoordinatorId(), scope.getUserId()))
-                        || (o.getCourseCoordinatorId() == null && o.getCourseCoordinatorName() != null && o.getCourseCoordinatorName().equalsIgnoreCase(scope.getName()));
+                        ;
                 return isCoord || (o.getAssignedFaculty() != null && (o.getAssignedFaculty().contains(scope.getEmail()) || o.getAssignedFaculty().contains(scope.getName())));
             });
             if (!hasAssigned) {
@@ -155,7 +155,7 @@ public class OutcomeService {
             List<CourseOffering> offerings = courseOfferingRepository.findByCourseId(courseId);
             boolean hasAssigned = offerings.stream().anyMatch(o -> {
                 boolean isCoord = (o.getCourseCoordinatorId() != null && Objects.equals(o.getCourseCoordinatorId(), scope.getUserId()))
-                        || (o.getCourseCoordinatorId() == null && o.getCourseCoordinatorName() != null && o.getCourseCoordinatorName().equalsIgnoreCase(scope.getName()));
+                        ;
                 return isCoord || (o.getAssignedFaculty() != null && (o.getAssignedFaculty().contains(scope.getEmail()) || o.getAssignedFaculty().contains(scope.getName())));
             });
             if (!hasAssigned) {
@@ -176,7 +176,7 @@ public class OutcomeService {
 
         if (scope.isFaculty()) {
             boolean isCoordinator = (offering.getCourseCoordinatorId() != null && Objects.equals(offering.getCourseCoordinatorId(), scope.getUserId()))
-                    || (offering.getCourseCoordinatorId() == null && offering.getCourseCoordinatorName() != null && offering.getCourseCoordinatorName().equalsIgnoreCase(scope.getName()));
+                    ;
             boolean isAssigned = isCoordinator || (offering.getAssignedFaculty() != null && (offering.getAssignedFaculty().contains(scope.getEmail()) || offering.getAssignedFaculty().contains(scope.getName())));
             if (!isAssigned) {
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: You are not assigned to this Course Offering.");

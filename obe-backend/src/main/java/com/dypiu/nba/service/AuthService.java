@@ -1,5 +1,6 @@
 package com.dypiu.nba.service;
 
+import org.springframework.security.authentication.BadCredentialsException;
 import com.dypiu.nba.dto.*;
 import com.dypiu.nba.entity.User;
 import com.dypiu.nba.entity.UserRole;
@@ -24,12 +25,12 @@ public class AuthService {
         System.out.println("[AuthService] login called | identifier: " + (request != null ? (request.getUsername() != null ? request.getUsername() : request.getEmail()) : "null"));
         String rawIdentifier = request.getUsername() != null ? request.getUsername() : request.getEmail();
         if (rawIdentifier == null || rawIdentifier.isBlank()) {
-            throw new BadRequestException("Username or email is required");
+            throw new BadCredentialsException("Username or email is required");
         }
 
         String rawPassword = request.getPassword();
         if (rawPassword == null || rawPassword.isBlank()) {
-            throw new BadRequestException("Password is required");
+            throw new BadCredentialsException("Password is required");
         }
 
         // Clean & trim email or username input
@@ -38,7 +39,7 @@ public class AuthService {
         // 1. Check if user exists by email or username
         User user = userRepository.findByUsernameIgnoreCaseOrEmailIgnoreCase(identifier, identifier)
                 .orElseGet(() -> userRepository.findByUsernameOrEmail(identifier, identifier)
-                .orElseThrow(() -> new BadRequestException("Invalid email/username or password")));
+                .orElseThrow(() -> new BadCredentialsException("Invalid email/username or password")));
 
         if (user.getIsActive() != null && !user.getIsActive()) {
             throw new BadRequestException("User account is deactivated");
@@ -46,7 +47,7 @@ public class AuthService {
 
         // 2. Verify hashed password against database passwordHash
         if (!passwordEncoder.matches(rawPassword.trim(), user.getPasswordHash())) {
-            throw new BadRequestException("Invalid email/username or password");
+            throw new BadCredentialsException("Invalid email/username or password");
         }
 
         return buildAuthResponse(user);

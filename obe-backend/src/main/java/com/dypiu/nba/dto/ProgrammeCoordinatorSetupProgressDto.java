@@ -13,6 +13,7 @@ import java.util.List;
 public class ProgrammeCoordinatorSetupProgressDto {
     private String id;
     private String programmeId;
+    private String batchId;
     private String coordinatorEmail;
     private Integer currentStep;
     private SetupStepStatus overallStatus;

@@ -33,7 +33,7 @@ public class CurrentUserScopeService {
      * @return Immutable CurrentUserScope containing verified user and scope metadata.
      * @throws ResponseStatusException HTTP 401 if unauthenticated or user record not found; HTTP 403 if deactivated.
      */
-    @Transactional(readOnly = true)
+    @Transactional(readOnly = true, noRollbackFor = ResponseStatusException.class)
     public CurrentUserScope getCurrentUserScope() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         return resolveScopeFromAuthentication(authentication);
@@ -45,7 +45,7 @@ public class CurrentUserScopeService {
      * @param principal Principal injected into controller method.
      * @return Immutable CurrentUserScope.
      */
-    @Transactional(readOnly = true)
+    @Transactional(readOnly = true, noRollbackFor = ResponseStatusException.class)
     public CurrentUserScope getCurrentUserScope(Principal principal) {
         if (principal != null && principal.getName() != null && !principal.getName().isBlank()) {
             return resolveScopeByIdentifier(principal.getName());
@@ -59,7 +59,7 @@ public class CurrentUserScopeService {
      * @param authentication Authentication from Spring Security.
      * @return Immutable CurrentUserScope.
      */
-    @Transactional(readOnly = true)
+    @Transactional(readOnly = true, noRollbackFor = ResponseStatusException.class)
     public CurrentUserScope getCurrentUserScope(Authentication authentication) {
         return resolveScopeFromAuthentication(authentication);
     }
@@ -70,7 +70,7 @@ public class CurrentUserScopeService {
      * @return Managed User entity.
      * @throws ResponseStatusException HTTP 401 if unauthenticated or user not found.
      */
-    @Transactional(readOnly = true)
+    @Transactional(readOnly = true, noRollbackFor = ResponseStatusException.class)
     public User getCurrentUser() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         return resolveUserFromAuthentication(authentication);

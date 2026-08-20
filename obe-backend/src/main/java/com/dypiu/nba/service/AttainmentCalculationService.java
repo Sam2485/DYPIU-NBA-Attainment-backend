@@ -86,7 +86,7 @@ public class AttainmentCalculationService {
             if (offering != null) {
                 if (scope.isFaculty()) {
                     boolean isCoord = (offering.getCourseCoordinatorId() != null && Objects.equals(offering.getCourseCoordinatorId(), scope.getUserId()))
-                            || (offering.getCourseCoordinatorId() == null && offering.getCourseCoordinatorName() != null && offering.getCourseCoordinatorName().equalsIgnoreCase(scope.getName()));
+                            ;
                     boolean isAssigned = isCoord || (offering.getAssignedFaculty() != null && (offering.getAssignedFaculty().contains(scope.getEmail()) || offering.getAssignedFaculty().contains(scope.getName())));
                     if (!isAssigned) {
                         throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: You are not assigned to this Course Offering.");
@@ -110,7 +110,7 @@ public class AttainmentCalculationService {
                     List<CourseOffering> offerings = courseOfferingRepository.findByCourseId(course.getId());
                     boolean hasAssigned = offerings.stream().anyMatch(o -> {
                         boolean isCoord = (o.getCourseCoordinatorId() != null && Objects.equals(o.getCourseCoordinatorId(), scope.getUserId()))
-                                || (o.getCourseCoordinatorId() == null && o.getCourseCoordinatorName() != null && o.getCourseCoordinatorName().equalsIgnoreCase(scope.getName()));
+                                ;
                         return isCoord || (o.getAssignedFaculty() != null && (o.getAssignedFaculty().contains(scope.getEmail()) || o.getAssignedFaculty().contains(scope.getName())));
                     });
                     if (!hasAssigned) {
@@ -651,10 +651,7 @@ public class AttainmentCalculationService {
                             coMaxMarks.put(coCode, BigDecimal.valueOf(val).setScale(2, RoundingMode.HALF_UP));
                         }
                     } else {
-                        // Fallback: check row directly above CO header or default to 20.00
-                        for (String coCode : coColMap.values()) {
-                            coMaxMarks.put(coCode, new BigDecimal("20.00"));
-                        }
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Could not find 'Out Of' or 'Max Marks' row indicating maximum marks for COs.");
                     }
 
                     // 4. Locate PRN and Name columns
@@ -675,8 +672,12 @@ public class AttainmentCalculationService {
                             }
                         }
                     }
-                    if (prnCol == -1) prnCol = 1;
-                    if (nameCol == -1) nameCol = 2;
+                    if (prnCol == -1) {
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Could not find a column header for 'PRN' or 'Roll Number'.");
+                    }
+                    if (nameCol == -1) {
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Could not find a column header for 'Name'.");
+                    }
 
                     // 5. Parse student mark records
                     for (int r = coHeaderRowNum + 1; r <= sheet.getLastRowNum(); r++) {
@@ -690,19 +691,13 @@ public class AttainmentCalculationService {
                         String name = getStringCellValue(nameCell, evaluator);
 
                         if (prn == null || prn.isBlank()) {
-                            // If PRN is in col 0
-                            if (prnCol != 0) {
-                                String prn0 = getStringCellValue(row.getCell(0), evaluator);
-                                if (prn0 != null && !prn0.isBlank() && !prn0.matches("\\d+")) {
-                                    prn = prn0;
-                                }
-                            }
+                            continue;
                         }
 
                         if (prn == null || prn.isBlank()) continue;
 
                         String prnLower = prn.toLowerCase();
-                        if (prnLower.contains("average") || prnLower.contains("total") || prnLower.contains("threshold") || prnLower.contains("count") || prnLower.contains("target")) {
+                        if (r == outOfRowNum || prnLower.contains("average") || prnLower.contains("total") || prnLower.contains("threshold") || prnLower.contains("count") || prnLower.contains("target") || prnLower.contains("max") || prnLower.contains("out of")) {
                             continue;
                         }
 
@@ -1111,11 +1106,15 @@ public class AttainmentCalculationService {
                             }
                         }
 
+                        if (prn == null || prn.isBlank()) {
+                            prn = "SRV-" + (surveyResponses.size() + 1);
+                        }
+
                         int srNo = surveyResponses.size() + 1;
                         surveyResponses.add(SurveyResponseRowDto.builder()
                                 .srNo(srNo)
-                                .prn(prn != null && !prn.isBlank() ? prn : "SRV-" + srNo)
-                                .studentName(sName != null && !sName.isBlank() ? sName : "Student " + srNo)
+                                .prn(prn)
+                                .studentName(sName != null && !sName.isBlank() ? sName : prn)
                                 .coRatings(coRatings)
                                 .coFeedbacks(coFeedbacks)
                                 .build());
@@ -1185,22 +1184,13 @@ public class AttainmentCalculationService {
             return surveyAttainmentStore.get(offeringId);
         }
 
-        Map<String, BigDecimal> defaultScores = new LinkedHashMap<>();
-        Map<String, BigDecimal> defaultPcts = new LinkedHashMap<>();
-        Map<String, Integer> defaultLevels = new LinkedHashMap<>();
-        for (int i = 1; i <= 5; i++) {
-            defaultScores.put("CO" + i, new BigDecimal("2.50"));
-            defaultPcts.put("CO" + i, new BigDecimal("83.33"));
-            defaultLevels.put("CO" + i, 3);
-        }
-
         return SurveyAttainmentResultDto.builder()
                 .courseId(offeringId)
                 .surveyResponses(Collections.emptyList())
-                .indirectAttainmentScores(defaultScores)
-                .overallIndirectPercentages(defaultPcts)
-                .coAttainmentLevels(defaultLevels)
-                .overallIndirectCoAttainment(new BigDecimal("2.50"))
+                .indirectAttainmentScores(Collections.emptyMap())
+                .overallIndirectPercentages(Collections.emptyMap())
+                .coAttainmentLevels(Collections.emptyMap())
+                .overallIndirectCoAttainment(BigDecimal.ZERO)
                 .build();
     }
 
@@ -1244,13 +1234,13 @@ public class AttainmentCalculationService {
             String coCode = co.getCode();
             String statement = co.getStatement() != null ? co.getStatement() : "Course outcome " + coCode;
 
-            BigDecimal directPct = getCoMapValue(examResult.getPercentageAboveThreshold(), coCode, i, new BigDecimal("75.00"));
-            Integer directLevelObj = getCoMapValue(examResult.getCoAttainmentLevels(), coCode, i, 3);
+            BigDecimal directPct = getCoMapValue(examResult.getPercentageAboveThreshold(), coCode, i, BigDecimal.ZERO);
+            Integer directLevelObj = getCoMapValue(examResult.getCoAttainmentLevels(), coCode, i, 0);
             int directLevel = directLevelObj != null ? directLevelObj : evaluateLevelBand(directPct, parseLevelBands(config.getDirectLevelsJson(), true));
 
-            BigDecimal indirectPct = getCoMapValue(surveyResult.getOverallIndirectPercentages(), coCode, i, new BigDecimal("83.33"));
-            BigDecimal indirectScore = getCoMapValue(surveyResult.getIndirectAttainmentScores(), coCode, i, new BigDecimal("2.50"));
-            Integer indirectLevelObj = getCoMapValue(surveyResult.getCoAttainmentLevels(), coCode, i, 3);
+            BigDecimal indirectPct = getCoMapValue(surveyResult.getOverallIndirectPercentages(), coCode, i, BigDecimal.ZERO);
+            BigDecimal indirectScore = getCoMapValue(surveyResult.getIndirectAttainmentScores(), coCode, i, BigDecimal.ZERO);
+            Integer indirectLevelObj = getCoMapValue(surveyResult.getCoAttainmentLevels(), coCode, i, 0);
             int indirectLevel = indirectLevelObj != null ? indirectLevelObj : evaluateLevelBand(indirectPct, parseLevelBands(config.getIndirectLevelsJson(), false));
 
             double directW = config.getDirectWeight() != null ? config.getDirectWeight().doubleValue() / 100.0 : 0.80;
@@ -1286,11 +1276,49 @@ public class AttainmentCalculationService {
                 ? sumCoAttainment.divide(BigDecimal.valueOf(countCOs), 2, RoundingMode.HALF_UP)
                 : BigDecimal.ZERO;
 
-        double avgDirect = coResults.stream().mapToDouble(c -> ((Number) c.get("directLevel")).doubleValue()).average().orElse(2.50);
-        double avgIndirect = coResults.stream().mapToDouble(c -> ((BigDecimal) c.get("indirectScore")).doubleValue()).average().orElse(2.50);
+        double avgDirect = coResults.stream().mapToDouble(c -> ((Number) c.get("directLevel")).doubleValue()).average().orElse(0.0);
+        double avgIndirect = coResults.stream().mapToDouble(c -> ((BigDecimal) c.get("indirectScore")).doubleValue()).average().orElse(0.0);
 
         BigDecimal directAttainment = BigDecimal.valueOf(avgDirect).setScale(2, RoundingMode.HALF_UP);
         BigDecimal indirectAttainment = BigDecimal.valueOf(avgIndirect).setScale(2, RoundingMode.HALF_UP);
+
+        // Calculate Authoritative Course PO and PSO Direct Attainments
+        List<String> coIds = cos.stream().map(CourseOutcome::getId).filter(Objects::nonNull).collect(Collectors.toList());
+        List<CoPoMapping> poMappings = (coPoMappingRepository != null && !coIds.isEmpty())
+                ? coPoMappingRepository.findByCourseOutcomeIdIn(coIds)
+                : Collections.emptyList();
+        Map<String, List<Integer>> poVals = new LinkedHashMap<>();
+        for (CoPoMapping m : poMappings) {
+            if (m.getMappingLevel() != null && m.getMappingLevel() > 0 && m.getPoCode() != null) {
+                poVals.computeIfAbsent(m.getPoCode().toUpperCase(), k -> new ArrayList<>()).add(m.getMappingLevel());
+            }
+        }
+        Map<String, BigDecimal> poAttainment = new LinkedHashMap<>();
+        Map<String, BigDecimal> poAverages = new LinkedHashMap<>();
+        for (Map.Entry<String, List<Integer>> e : poVals.entrySet()) {
+            double avg = e.getValue().stream().mapToInt(Integer::intValue).average().orElse(0.0);
+            poAverages.put(e.getKey(), BigDecimal.valueOf(avg).setScale(2, RoundingMode.HALF_UP));
+            BigDecimal att = BigDecimal.valueOf((avg * overallCoAttainment.doubleValue()) / 3.0).setScale(2, RoundingMode.HALF_UP);
+            poAttainment.put(e.getKey(), att);
+        }
+
+        List<CoPsoMapping> psoMappings = (coPsoMappingRepository != null && !coIds.isEmpty())
+                ? coPsoMappingRepository.findByCourseOutcomeIdIn(coIds)
+                : Collections.emptyList();
+        Map<String, List<Integer>> psoVals = new LinkedHashMap<>();
+        for (CoPsoMapping m : psoMappings) {
+            if (m.getMappingLevel() != null && m.getMappingLevel() > 0 && m.getPsoCode() != null) {
+                psoVals.computeIfAbsent(m.getPsoCode().toUpperCase(), k -> new ArrayList<>()).add(m.getMappingLevel());
+            }
+        }
+        Map<String, BigDecimal> psoAttainment = new LinkedHashMap<>();
+        Map<String, BigDecimal> psoAverages = new LinkedHashMap<>();
+        for (Map.Entry<String, List<Integer>> e : psoVals.entrySet()) {
+            double avg = e.getValue().stream().mapToInt(Integer::intValue).average().orElse(0.0);
+            psoAverages.put(e.getKey(), BigDecimal.valueOf(avg).setScale(2, RoundingMode.HALF_UP));
+            BigDecimal att = BigDecimal.valueOf((avg * overallCoAttainment.doubleValue()) / 3.0).setScale(2, RoundingMode.HALF_UP);
+            psoAttainment.put(e.getKey(), att);
+        }
 
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("courseOfferingId", offeringId);
@@ -1302,6 +1330,12 @@ public class AttainmentCalculationService {
         response.put("overallCOAttainment", overallCoAttainment);
         response.put("coAttainments", coResults);
         response.put("coDetails", coResults);
+        response.put("poAttainment", poAttainment);
+        response.put("psoAttainment", psoAttainment);
+        response.put("poDirectAttainment", poAttainment);
+        response.put("psoDirectAttainment", psoAttainment);
+        response.put("poAverages", poAverages);
+        response.put("psoAverages", psoAverages);
         response.put("examDetails", examResult);
         response.put("surveyDetails", surveyResult);
 
@@ -1559,10 +1593,10 @@ public class AttainmentCalculationService {
                         List<Double> ratings = poRatingsMap.get(poCode);
                         BigDecimal avgVal;
                         if (ratings != null && !ratings.isEmpty()) {
-                            double avg = ratings.stream().mapToDouble(Double::doubleValue).average().orElse(2.30);
+                            double avg = ratings.stream().mapToDouble(Double::doubleValue).average().orElse(0.0);
                             avgVal = BigDecimal.valueOf(avg).setScale(2, RoundingMode.HALF_UP);
                         } else {
-                            avgVal = new BigDecimal("2.30");
+                            avgVal = BigDecimal.ZERO;
                         }
                         poItems.add(ProgrammeSurveyResultDto.OutcomeIndirectItem.builder()
                                 .outcomeCode(poCode)
@@ -1574,10 +1608,10 @@ public class AttainmentCalculationService {
                         List<Double> ratings = psoRatingsMap.get(psoCode);
                         BigDecimal avgVal;
                         if (ratings != null && !ratings.isEmpty()) {
-                            double avg = ratings.stream().mapToDouble(Double::doubleValue).average().orElse(2.20);
+                            double avg = ratings.stream().mapToDouble(Double::doubleValue).average().orElse(0.0);
                             avgVal = BigDecimal.valueOf(avg).setScale(2, RoundingMode.HALF_UP);
                         } else {
-                            avgVal = new BigDecimal("2.20");
+                            avgVal = BigDecimal.ZERO;
                         }
                         psoItems.add(ProgrammeSurveyResultDto.OutcomeIndirectItem.builder()
                                 .outcomeCode(psoCode)
@@ -1608,18 +1642,12 @@ public class AttainmentCalculationService {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Failed to parse Programme End Survey file: " + e.getMessage());
             }
         } else {
-            // Default calculated values for configured outcomes
-            int idx = 1;
+            // When no survey file is uploaded yet, initialize zero attainment for configured outcomes
             for (String poCode : configuredPOCodes) {
-                BigDecimal val = new BigDecimal("2.30").add(BigDecimal.valueOf((idx % 3) * 0.10)).setScale(2, RoundingMode.HALF_UP);
-                poItems.add(ProgrammeSurveyResultDto.OutcomeIndirectItem.builder().outcomeCode(poCode).indirectAttainment(val).build());
-                idx++;
+                poItems.add(ProgrammeSurveyResultDto.OutcomeIndirectItem.builder().outcomeCode(poCode).indirectAttainment(BigDecimal.ZERO).build());
             }
-            idx = 1;
             for (String psoCode : configuredPSOCodes) {
-                BigDecimal val = new BigDecimal("2.20").add(BigDecimal.valueOf((idx % 2) * 0.10)).setScale(2, RoundingMode.HALF_UP);
-                psoItems.add(ProgrammeSurveyResultDto.OutcomeIndirectItem.builder().outcomeCode(psoCode).indirectAttainment(val).build());
-                idx++;
+                psoItems.add(ProgrammeSurveyResultDto.OutcomeIndirectItem.builder().outcomeCode(psoCode).indirectAttainment(BigDecimal.ZERO).build());
             }
         }
 
@@ -1628,7 +1656,7 @@ public class AttainmentCalculationService {
                 .programmeId(programmeId)
                 .batchId(batchId)
                 .surveyType("PROGRAMME_INDIRECT")
-                .recordsProcessed(rowsProcessed > 0 ? rowsProcessed : 60)
+                .recordsProcessed(rowsProcessed)
                 .poIndirectAttainment(poItems)
                 .psoIndirectAttainment(psoItems)
                 .status("PROCESSED")
@@ -1707,22 +1735,52 @@ public class AttainmentCalculationService {
             List<ProgrammeAttainmentResultDto.SemesterValue> semDirectValues = new ArrayList<>();
             double totalMap = 0;
             double totalDirect = 0;
-            int semCount = 0;
+            int semCountWithData = 0;
 
             for (int s = 1; s <= 8; s++) {
-                BigDecimal mapVal = new BigDecimal("2.50").subtract(BigDecimal.valueOf((i % 4) * 0.20)).setScale(2, RoundingMode.HALF_UP);
-                BigDecimal directVal = new BigDecimal("2.20").add(BigDecimal.valueOf((i % 3) * 0.15)).setScale(2, RoundingMode.HALF_UP);
+                List<CourseOffering> sOfferings = semOfferings.getOrDefault(s, Collections.emptyList());
+                double semMapSum = 0;
+                int semMapCount = 0;
+                double semDirectSum = 0;
+                int semDirectCount = 0;
+
+                for (CourseOffering off : sOfferings) {
+                    List<CourseOutcome> cos = courseOutcomeRepository.findByCourseOfferingId(off.getId());
+                    for (CourseOutcome co : cos) {
+                        if (coPoMappingRepository != null) {
+                            List<CoPoMapping> mappings = coPoMappingRepository.findByCourseOutcomeId(co.getId());
+                            for (CoPoMapping m : mappings) {
+                                if (poCode.equalsIgnoreCase(m.getPoCode()) && m.getMappingLevel() != null && m.getMappingLevel() > 0) {
+                                    semMapSum += m.getMappingLevel();
+                                    semMapCount++;
+                                }
+                            }
+                        }
+                    }
+                    try {
+                        Map<String, Object> cAtt = calculateCourseCoAttainment(off.getId());
+                        if (cAtt != null && cAtt.get("directAttainment") instanceof BigDecimal bDirect && bDirect.compareTo(BigDecimal.ZERO) > 0) {
+                            semDirectSum += bDirect.doubleValue();
+                            semDirectCount++;
+                        }
+                    } catch (Exception ignored) {}
+                }
+
+                BigDecimal mapVal = semMapCount > 0 ? BigDecimal.valueOf(semMapSum / semMapCount).setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO;
+                BigDecimal directVal = semDirectCount > 0 ? BigDecimal.valueOf(semDirectSum / semDirectCount).setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO;
 
                 semMapValues.add(ProgrammeAttainmentResultDto.SemesterValue.builder().semester(s).averageMapping(mapVal).averageAttainment(directVal).build());
                 semDirectValues.add(ProgrammeAttainmentResultDto.SemesterValue.builder().semester(s).averageMapping(mapVal).averageAttainment(directVal).build());
 
-                totalMap += mapVal.doubleValue();
-                totalDirect += directVal.doubleValue();
-                semCount++;
+                if (mapVal.compareTo(BigDecimal.ZERO) > 0 || directVal.compareTo(BigDecimal.ZERO) > 0) {
+                    totalMap += mapVal.doubleValue();
+                    totalDirect += directVal.doubleValue();
+                    semCountWithData++;
+                }
             }
 
-            BigDecimal avgMap = semCount > 0 ? BigDecimal.valueOf(totalMap / semCount).setScale(2, RoundingMode.HALF_UP) : new BigDecimal("2.50");
-            BigDecimal avgDirect = semCount > 0 ? BigDecimal.valueOf(totalDirect / semCount).setScale(2, RoundingMode.HALF_UP) : new BigDecimal("2.20");
+            BigDecimal avgMap = semCountWithData > 0 ? BigDecimal.valueOf(totalMap / semCountWithData).setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO;
+            BigDecimal avgDirect = semCountWithData > 0 ? BigDecimal.valueOf(totalDirect / semCountWithData).setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO;
 
             poMappingBreakdown.add(ProgrammeAttainmentResultDto.OutcomeMappingItem.builder()
                     .poCode(poCode)
@@ -1746,22 +1804,52 @@ public class AttainmentCalculationService {
             List<ProgrammeAttainmentResultDto.SemesterValue> semDirectValues = new ArrayList<>();
             double totalMap = 0;
             double totalDirect = 0;
-            int semCount = 0;
+            int semCountWithData = 0;
 
             for (int s = 1; s <= 8; s++) {
-                BigDecimal mapVal = new BigDecimal("2.60").subtract(BigDecimal.valueOf((i % 2) * 0.20)).setScale(2, RoundingMode.HALF_UP);
-                BigDecimal directVal = new BigDecimal("2.40").add(BigDecimal.valueOf((i % 2) * 0.10)).setScale(2, RoundingMode.HALF_UP);
+                List<CourseOffering> sOfferings = semOfferings.getOrDefault(s, Collections.emptyList());
+                double semMapSum = 0;
+                int semMapCount = 0;
+                double semDirectSum = 0;
+                int semDirectCount = 0;
+
+                for (CourseOffering off : sOfferings) {
+                    List<CourseOutcome> cos = courseOutcomeRepository.findByCourseOfferingId(off.getId());
+                    for (CourseOutcome co : cos) {
+                        if (coPsoMappingRepository != null) {
+                            List<CoPsoMapping> mappings = coPsoMappingRepository.findByCourseOutcomeId(co.getId());
+                            for (CoPsoMapping m : mappings) {
+                                if (psoCode.equalsIgnoreCase(m.getPsoCode()) && m.getMappingLevel() != null && m.getMappingLevel() > 0) {
+                                    semMapSum += m.getMappingLevel();
+                                    semMapCount++;
+                                }
+                            }
+                        }
+                    }
+                    try {
+                        Map<String, Object> cAtt = calculateCourseCoAttainment(off.getId());
+                        if (cAtt != null && cAtt.get("directAttainment") instanceof BigDecimal bDirect && bDirect.compareTo(BigDecimal.ZERO) > 0) {
+                            semDirectSum += bDirect.doubleValue();
+                            semDirectCount++;
+                        }
+                    } catch (Exception ignored) {}
+                }
+
+                BigDecimal mapVal = semMapCount > 0 ? BigDecimal.valueOf(semMapSum / semMapCount).setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO;
+                BigDecimal directVal = semDirectCount > 0 ? BigDecimal.valueOf(semDirectSum / semDirectCount).setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO;
 
                 semMapValues.add(ProgrammeAttainmentResultDto.SemesterValue.builder().semester(s).averageMapping(mapVal).averageAttainment(directVal).build());
                 semDirectValues.add(ProgrammeAttainmentResultDto.SemesterValue.builder().semester(s).averageMapping(mapVal).averageAttainment(directVal).build());
 
-                totalMap += mapVal.doubleValue();
-                totalDirect += directVal.doubleValue();
-                semCount++;
+                if (mapVal.compareTo(BigDecimal.ZERO) > 0 || directVal.compareTo(BigDecimal.ZERO) > 0) {
+                    totalMap += mapVal.doubleValue();
+                    totalDirect += directVal.doubleValue();
+                    semCountWithData++;
+                }
             }
 
-            BigDecimal avgMap = semCount > 0 ? BigDecimal.valueOf(totalMap / semCount).setScale(2, RoundingMode.HALF_UP) : new BigDecimal("2.50");
-            BigDecimal avgDirect = semCount > 0 ? BigDecimal.valueOf(totalDirect / semCount).setScale(2, RoundingMode.HALF_UP) : new BigDecimal("2.45");
+            BigDecimal avgMap = semCountWithData > 0 ? BigDecimal.valueOf(totalMap / semCountWithData).setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO;
+            BigDecimal avgDirect = semCountWithData > 0 ? BigDecimal.valueOf(totalDirect / semCountWithData).setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO;
 
             psoMappingBreakdown.add(ProgrammeAttainmentResultDto.OutcomeMappingItem.builder()
                     .psoCode(psoCode)
@@ -1799,7 +1887,7 @@ public class AttainmentCalculationService {
         for (ProgrammeAttainmentResultDto.OutcomeDirectItem d : poDirectBreakdown) {
             String code = d.getPoCode();
             BigDecimal direct = d.getOverallAverage();
-            BigDecimal indirect = exitSurveyPoMap.getOrDefault(code.toUpperCase(), new BigDecimal("2.30"));
+            BigDecimal indirect = exitSurveyPoMap.getOrDefault(code.toUpperCase(), BigDecimal.ZERO);
 
             double overallScore = (direct.doubleValue() * 0.80) + (indirect.doubleValue() * 0.20);
             BigDecimal overall = BigDecimal.valueOf(overallScore).setScale(2, RoundingMode.HALF_UP);
@@ -1812,10 +1900,7 @@ public class AttainmentCalculationService {
             boolean achieved = overall.compareTo(target) >= 0;
             String obs = String.format("%s%% Target %s", pct, achieved ? "Achieved" : "Not Achieved");
 
-            List<String> actions = List.of(
-                    "Action 1: Integrate problem-solving tutorial modules for " + code + ".",
-                    "Action 2: Introduce industry-aligned capstone problem statements."
-            );
+            List<String> actions = Collections.emptyList();
 
             poOverallList.add(ProgrammeAttainmentResultDto.OutcomeAttainmentItem.builder()
                     .poCode(code)
@@ -1835,7 +1920,7 @@ public class AttainmentCalculationService {
         for (ProgrammeAttainmentResultDto.OutcomeDirectItem d : psoDirectBreakdown) {
             String code = d.getPsoCode();
             BigDecimal direct = d.getOverallAverage();
-            BigDecimal indirect = exitSurveyPsoMap.getOrDefault(code.toUpperCase(), new BigDecimal("2.40"));
+            BigDecimal indirect = exitSurveyPsoMap.getOrDefault(code.toUpperCase(), BigDecimal.ZERO);
 
             double overallScore = (direct.doubleValue() * 0.80) + (indirect.doubleValue() * 0.20);
             BigDecimal overall = BigDecimal.valueOf(overallScore).setScale(2, RoundingMode.HALF_UP);
@@ -1848,10 +1933,7 @@ public class AttainmentCalculationService {
             boolean achieved = overall.compareTo(target) >= 0;
             String obs = String.format("%s%% Target %s", pct, achieved ? "Achieved" : "Not Achieved");
 
-            List<String> actions = List.of(
-                    "Action 1: Organize specialized hackathons and domain workshops for " + code + ".",
-                    "Action 2: Strengthen laboratory experimentation modules."
-            );
+            List<String> actions = Collections.emptyList();
 
             psoOverallList.add(ProgrammeAttainmentResultDto.OutcomeAttainmentItem.builder()
                     .psoCode(code)

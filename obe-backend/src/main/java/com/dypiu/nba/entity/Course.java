@@ -60,6 +60,9 @@ public class Course {
     private String faculty;
 
     @Transient
+    private String courseOfferingId;
+
+    @Transient
     private String assignedFaculty;
 
     @Transient

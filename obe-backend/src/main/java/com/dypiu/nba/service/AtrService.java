@@ -112,7 +112,7 @@ public class AtrService {
             List<CourseOffering> offerings = courseOfferingRepository.findByBatchId(batchId);
             boolean hasAssigned = offerings.stream().anyMatch(o -> {
                 boolean isCoord = (o.getCourseCoordinatorId() != null && Objects.equals(o.getCourseCoordinatorId(), scope.getUserId()))
-                        || (o.getCourseCoordinatorId() == null && o.getCourseCoordinatorName() != null && o.getCourseCoordinatorName().equalsIgnoreCase(scope.getName()));
+                        ;
                 return isCoord || (o.getAssignedFaculty() != null && (o.getAssignedFaculty().contains(scope.getEmail()) || o.getAssignedFaculty().contains(scope.getName())));
             });
             if (!hasAssigned) {
@@ -135,7 +135,7 @@ public class AtrService {
             List<CourseOffering> offerings = courseOfferingRepository.findByCourseId(courseId);
             boolean hasAssigned = offerings.stream().anyMatch(o -> {
                 boolean isCoord = (o.getCourseCoordinatorId() != null && Objects.equals(o.getCourseCoordinatorId(), scope.getUserId()))
-                        || (o.getCourseCoordinatorId() == null && o.getCourseCoordinatorName() != null && o.getCourseCoordinatorName().equalsIgnoreCase(scope.getName()));
+                        ;
                 return isCoord || (o.getAssignedFaculty() != null && (o.getAssignedFaculty().contains(scope.getEmail()) || o.getAssignedFaculty().contains(scope.getName())));
             });
             if (!hasAssigned) {
@@ -156,7 +156,7 @@ public class AtrService {
 
         if (scope.isFaculty()) {
             boolean isCoordinator = (offering.getCourseCoordinatorId() != null && Objects.equals(offering.getCourseCoordinatorId(), scope.getUserId()))
-                    || (offering.getCourseCoordinatorId() == null && offering.getCourseCoordinatorName() != null && offering.getCourseCoordinatorName().equalsIgnoreCase(scope.getName()));
+                    ;
             boolean isAssigned = isCoordinator || (offering.getAssignedFaculty() != null && (offering.getAssignedFaculty().contains(scope.getEmail()) || offering.getAssignedFaculty().contains(scope.getName())));
             if (!isAssigned) {
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: You are not assigned to this Course Offering.");
@@ -176,7 +176,7 @@ public class AtrService {
         CourseOffering offering = courseOfferingRepository.findById(offeringId)
                 .orElseThrow(() -> new ResourceNotFoundException("Course offering not found: " + offeringId));
         boolean isCoordinator = (offering.getCourseCoordinatorId() != null && Objects.equals(offering.getCourseCoordinatorId(), scope.getUserId()))
-                || (offering.getCourseCoordinatorId() == null && offering.getCourseCoordinatorName() != null && offering.getCourseCoordinatorName().equalsIgnoreCase(scope.getName()));
+                ;
         if (!isCoordinator) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Only the assigned Course Coordinator can perform this action.");
         }
@@ -271,13 +271,41 @@ public class AtrService {
         if (atr != null && atr.getBatchId() != null) {
             enforceBatchScope(atr.getBatchId());
         }
+        if (atr != null && atr.getProgrammeId() != null && atr.getBatchId() != null) {
+            ProgrammeAtr existing = programmeAtrRepository.findByProgrammeIdAndBatchId(atr.getProgrammeId(), atr.getBatchId()).orElse(null);
+            if (existing != null) {
+                atr.setId(existing.getId());
+                if (atr.getStatus() == null) atr.setStatus(existing.getStatus());
+                if (atr.getSubmittedBy() == null) atr.setSubmittedBy(existing.getSubmittedBy());
+                if (atr.getSubmittedAt() == null) atr.setSubmittedAt(existing.getSubmittedAt());
+                if (atr.getVerifiedBy() == null) atr.setVerifiedBy(existing.getVerifiedBy());
+                if (atr.getVerifiedAt() == null) atr.setVerifiedAt(existing.getVerifiedAt());
+                if (atr.getVerificationComments() == null) atr.setVerificationComments(existing.getVerificationComments());
+                if (atr.getObservationsJson() == null || atr.getObservationsJson().isBlank()) {
+                    atr.setObservationsJson(existing.getObservationsJson());
+                }
+            }
+        }
         if (atr.getId() == null || atr.getId().isBlank()) {
             atr.setId("patr-" + UUID.randomUUID().toString().substring(0, 8));
         }
         if (atr.getStatus() == null) {
             atr.setStatus(ProgrammeAtrStatus.DRAFT);
         }
+        atr.setUpdatedAt(ZonedDateTime.now());
         return programmeAtrRepository.save(atr);
+    }
+
+    public String resolveOfferingId(String offeringOrCourseId) {
+        if (offeringOrCourseId == null || offeringOrCourseId.isBlank()) return null;
+        if (courseOfferingRepository.existsById(offeringOrCourseId)) {
+            return offeringOrCourseId;
+        }
+        List<CourseOffering> offerings = courseOfferingRepository.findByCourseId(offeringOrCourseId);
+        if (!offerings.isEmpty()) {
+            return offerings.get(0).getId();
+        }
+        return offeringOrCourseId;
     }
 
     // =========================================================================
@@ -287,17 +315,18 @@ public class AtrService {
     @Transactional(readOnly = true)
     public CourseAtrReportDto getCourseAtrReport(String courseOfferingId) {
         System.out.println("[AtrService] getCourseAtrReport called | courseOfferingId: " + courseOfferingId);
-        if (courseOfferingId != null && !courseOfferingId.isBlank()) {
-            enforceOfferingScope(courseOfferingId);
+        String targetOfferingId = resolveOfferingId(courseOfferingId);
+        if (targetOfferingId != null && !targetOfferingId.isBlank()) {
+            enforceOfferingScope(targetOfferingId);
         }
-        CourseOffering offering = courseOfferingRepository.findById(courseOfferingId)
+        CourseOffering offering = courseOfferingRepository.findById(targetOfferingId)
                 .orElseThrow(() -> new ResourceNotFoundException("Course Offering not found: " + courseOfferingId));
 
         Course course = courseRepository.findById(offering.getCourseId()).orElse(null);
         Batch batch = batchRepository.findById(offering.getBatchId()).orElse(null);
 
         List<CourseOutcome> cos = courseOutcomeRepository.findByCourseOfferingId(offering.getId());
-        List<CourseAtr> existingAtrs = courseAtrRepository.findByCourseOfferingId(courseOfferingId);
+        List<CourseAtr> existingAtrs = courseAtrRepository.findByCourseOfferingId(offering.getId());
         Map<String, CourseAtr> atrMap = existingAtrs.stream().collect(Collectors.toMap(CourseAtr::getCoCode, a -> a, (a, b) -> a));
 
         Map<String, Object> calcResult = attainmentCalculationService.calculateCourseCoAttainment(offering.getId());
@@ -321,7 +350,7 @@ public class AtrService {
             CourseAtr saved = atrMap.get(coCode);
             BigDecimal actual = saved != null && saved.getActualScore() != null
                     ? saved.getActualScore()
-                    : attainmentScoreMap.getOrDefault(coCode, new BigDecimal("2.60"));
+                    : attainmentScoreMap.getOrDefault(coCode, BigDecimal.ZERO);
 
             BigDecimal pct = target.compareTo(BigDecimal.ZERO) > 0
                     ? actual.divide(target, 4, RoundingMode.HALF_UP).multiply(new BigDecimal("100")).setScale(2, RoundingMode.HALF_UP)
@@ -334,12 +363,6 @@ public class AtrService {
                 try {
                     actions = objectMapper.readValue(saved.getActionsJson(), new TypeReference<List<String>>() {});
                 } catch (Exception ignored) {}
-            }
-            if (actions.isEmpty()) {
-                actions = List.of(
-                        "Action 1: Include supplementary problem solving sets for " + coCode + ".",
-                        "Action 2: Conduct diagnostic remedial sessions prior to term-end examinations."
-                );
             }
 
             rows.add(CourseAtrReportDto.OutcomeRow.builder()
@@ -375,7 +398,7 @@ public class AtrService {
         if (dto == null || dto.getCourseOffering() == null || dto.getCourseOffering().getId() == null) {
             throw new IllegalArgumentException("Invalid Course ATR payload: CourseOffering is required.");
         }
-        String offeringId = dto.getCourseOffering().getId();
+        String offeringId = resolveOfferingId(dto.getCourseOffering().getId());
         enforceOfferingScope(offeringId);
         List<CourseAtr> toSave = new ArrayList<>();
 
@@ -395,8 +418,8 @@ public class AtrService {
 
                 atr.setStatement(r.getOutcomeStatement());
                 atr.setTargetScore(r.getTargetLevel() != null ? r.getTargetLevel() : new BigDecimal("2.50"));
-                atr.setActualScore(r.getAttainmentLevel() != null ? r.getAttainmentLevel() : new BigDecimal("2.60"));
-                atr.setPctAchieved(r.getAchievementPercentage() != null ? r.getAchievementPercentage() : new BigDecimal("104.00"));
+                atr.setActualScore(r.getAttainmentLevel() != null ? r.getAttainmentLevel() : BigDecimal.ZERO);
+                atr.setPctAchieved(r.getAchievementPercentage() != null ? r.getAchievementPercentage() : BigDecimal.ZERO);
                 atr.setActionsJson(actionsJson);
                 atr.setStatus(dto.getStatus() != null ? CourseAtrStatus.valueOf(dto.getStatus()) : CourseAtrStatus.DRAFT);
                 atr.setUpdatedAt(ZonedDateTime.now());
@@ -411,14 +434,15 @@ public class AtrService {
     @Transactional
     public CourseAtr submitCourseAtr(String courseOfferingId, String submittedBy) {
         System.out.println("[AtrService] submitCourseAtr called | courseOfferingId: " + courseOfferingId + " | submittedBy: " + submittedBy);
-        if (courseOfferingId != null && !courseOfferingId.isBlank()) {
-            enforceOfferingScope(courseOfferingId);
-            enforceCourseCoordinatorScope(courseOfferingId);
+        String targetOfferingId = resolveOfferingId(courseOfferingId);
+        if (targetOfferingId != null && !targetOfferingId.isBlank()) {
+            enforceOfferingScope(targetOfferingId);
+            enforceCourseCoordinatorScope(targetOfferingId);
         }
-        List<CourseAtr> atrs = courseAtrRepository.findByCourseOfferingId(courseOfferingId);
+        List<CourseAtr> atrs = courseAtrRepository.findByCourseOfferingId(targetOfferingId);
         if (atrs.isEmpty()) {
-            getCourseAtrReport(courseOfferingId); // generates default entries
-            atrs = courseAtrRepository.findByCourseOfferingId(courseOfferingId);
+            saveCourseAtrReport(getCourseAtrReport(targetOfferingId));
+            atrs = courseAtrRepository.findByCourseOfferingId(targetOfferingId);
         }
         for (CourseAtr a : atrs) {
             a.setStatus(CourseAtrStatus.SUBMITTED_FOR_VERIFICATION);
@@ -450,17 +474,48 @@ public class AtrService {
         ProgrammeAttainmentResultDto attainment = attainmentCalculationService.calculateProgrammeAttainment(programmeId, batchId);
         Optional<ProgrammeAtr> existingAtr = programmeAtrRepository.findByProgrammeIdAndBatchId(programmeId, batchId);
 
+        Map<String, List<String>> savedPoActions = new HashMap<>();
+        Map<String, String> savedPoObservations = new HashMap<>();
+        Map<String, List<String>> savedPsoActions = new HashMap<>();
+        Map<String, String> savedPsoObservations = new HashMap<>();
+
+        if (existingAtr.isPresent() && existingAtr.get().getObservationsJson() != null && !existingAtr.get().getObservationsJson().isBlank()) {
+            try {
+                ProgrammeAtrReportDto savedDto = objectMapper.readValue(existingAtr.get().getObservationsJson(), ProgrammeAtrReportDto.class);
+                if (savedDto.getPoOutcomes() != null) {
+                    for (ProgrammeAtrReportDto.OutcomeRow r : savedDto.getPoOutcomes()) {
+                        if (r.getOutcomeCode() != null) {
+                            if (r.getActions() != null) savedPoActions.put(r.getOutcomeCode().toUpperCase(), r.getActions());
+                            if (r.getObservation() != null) savedPoObservations.put(r.getOutcomeCode().toUpperCase(), r.getObservation());
+                        }
+                    }
+                }
+                if (savedDto.getPsoOutcomes() != null) {
+                    for (ProgrammeAtrReportDto.OutcomeRow r : savedDto.getPsoOutcomes()) {
+                        if (r.getOutcomeCode() != null) {
+                            if (r.getActions() != null) savedPsoActions.put(r.getOutcomeCode().toUpperCase(), r.getActions());
+                            if (r.getObservation() != null) savedPsoObservations.put(r.getOutcomeCode().toUpperCase(), r.getObservation());
+                        }
+                    }
+                }
+            } catch (Exception ignored) {}
+        }
+
         List<ProgrammeAtrReportDto.OutcomeRow> poRows = new ArrayList<>();
         if (attainment.getOverallAttainment() != null && attainment.getOverallAttainment().getPos() != null) {
             for (ProgrammeAttainmentResultDto.OutcomeAttainmentItem it : attainment.getOverallAttainment().getPos()) {
+                String code = it.getOutcomeCode() != null ? it.getOutcomeCode().toUpperCase() : "";
+                List<String> actions = savedPoActions.containsKey(code) ? savedPoActions.get(code) : it.getActions();
+                String obs = savedPoObservations.containsKey(code) ? savedPoObservations.get(code) : it.getObservation();
+
                 poRows.add(ProgrammeAtrReportDto.OutcomeRow.builder()
                         .outcomeCode(it.getOutcomeCode())
                         .outcomeStatement(it.getOutcomeStatement())
                         .targetLevel(it.getTarget())
                         .attainmentLevel(it.getOverallAttainment())
                         .achievementPercentage(it.getAchievementPercentage())
-                        .observation(it.getObservation())
-                        .actions(it.getActions())
+                        .observation(obs)
+                        .actions(actions)
                         .build());
             }
         }
@@ -468,14 +523,18 @@ public class AtrService {
         List<ProgrammeAtrReportDto.OutcomeRow> psoRows = new ArrayList<>();
         if (attainment.getOverallAttainment() != null && attainment.getOverallAttainment().getPsos() != null) {
             for (ProgrammeAttainmentResultDto.OutcomeAttainmentItem it : attainment.getOverallAttainment().getPsos()) {
+                String code = it.getOutcomeCode() != null ? it.getOutcomeCode().toUpperCase() : "";
+                List<String> actions = savedPsoActions.containsKey(code) ? savedPsoActions.get(code) : it.getActions();
+                String obs = savedPsoObservations.containsKey(code) ? savedPsoObservations.get(code) : it.getObservation();
+
                 psoRows.add(ProgrammeAtrReportDto.OutcomeRow.builder()
                         .outcomeCode(it.getOutcomeCode())
                         .outcomeStatement(it.getOutcomeStatement())
                         .targetLevel(it.getTarget())
                         .attainmentLevel(it.getOverallAttainment())
                         .achievementPercentage(it.getAchievementPercentage())
-                        .observation(it.getObservation())
-                        .actions(it.getActions())
+                        .observation(obs)
+                        .actions(actions)
                         .build());
             }
         }
@@ -493,7 +552,6 @@ public class AtrService {
                         .startYear(batch.getStartYear() != null ? String.valueOf(batch.getStartYear()) : "")
                         .endYear(batch.getEndYear() != null ? String.valueOf(batch.getEndYear()) : "")
                         .build())
-
                 .poOutcomes(poRows)
                 .psoOutcomes(psoRows)
                 .status(status)

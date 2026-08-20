@@ -301,7 +301,7 @@ public class FrontendContractHardeningIntegrationTest {
                 )
         );
 
-        Map<String, Object> result = academicService.allocateCourses(testProg.getId(), allocations);
+        Map<String, Object> result = academicService.allocateCourses(testProg.getId(), null, allocations);
         assertNotNull(result);
         assertTrue((Boolean) result.get("success"));
 

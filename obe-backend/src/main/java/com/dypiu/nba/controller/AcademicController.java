@@ -176,17 +176,30 @@ public class AcademicController {
                 ? hodEmail
                 : (principal != null ? principal.getName() : null);
         Integer targetStep = step != null ? step : currentStep;
+        String completedStep = null;
+        List<String> completedStepsList = null;
+
         if (body != null) {
             if (deptId == null && body.containsKey("identifier")) deptId = String.valueOf(body.get("identifier"));
             if (deptId == null && body.containsKey("departmentId")) deptId = String.valueOf(body.get("departmentId"));
             if (email == null && body.containsKey("email")) email = String.valueOf(body.get("email"));
+            if (email == null && body.containsKey("hodEmail")) email = String.valueOf(body.get("hodEmail"));
             if (targetStep == null && body.containsKey("step")) {
                 try { targetStep = Integer.parseInt(String.valueOf(body.get("step"))); } catch (Exception ignored) {}
+            }
+            if (targetStep == null && body.containsKey("currentStep")) {
+                try { targetStep = Integer.parseInt(String.valueOf(body.get("currentStep"))); } catch (Exception ignored) {}
+            }
+            if (body.containsKey("completedStep")) {
+                completedStep = String.valueOf(body.get("completedStep"));
+            }
+            if (body.get("completedSteps") instanceof List<?> list) {
+                completedStepsList = list.stream().map(String::valueOf).toList();
             }
         }
         if (targetStep == null) targetStep = 1;
         System.out.println("\n>>> [CONTROLLER] POST/PUT /api/v1/academic/hod/setup-progress | deptId: " + deptId + " | step: " + targetStep + " | email: " + email);
-        HodSetupProgressDto updated = academicService.updateHodSetupProgress(deptId, targetStep, email);
+        HodSetupProgressDto updated = academicService.updateHodSetupProgress(deptId, targetStep, completedStep, completedStepsList, email);
         System.out.println("<<< [CONTROLLER] POST/PUT /api/v1/academic/hod/setup-progress SUCCESS | newStep: " + updated.getCurrentStep() + " | completedSteps: " + updated.getCompletedSteps());
         return ResponseEntity.ok(ApiResponse.<HodSetupProgressDto>builder()
                 .success(true)
@@ -229,33 +242,37 @@ public class AcademicController {
     @GetMapping("/coordinator/setup-progress")
     public ResponseEntity<ApiResponse<ProgrammeCoordinatorSetupProgressDto>> getProgrammeCoordinatorSetupProgress(
             @RequestParam(required = false) String coordinatorEmail,
-            @RequestParam(required = false) String programmeId) {
+            @RequestParam(required = false) String programmeId,
+            @RequestParam(required = false) String batchId) {
         return ResponseEntity.ok(ApiResponse.<ProgrammeCoordinatorSetupProgressDto>builder()
                 .success(true)
-                .data(academicService.getProgrammeCoordinatorSetupProgress(coordinatorEmail, programmeId))
+                .data(academicService.getProgrammeCoordinatorSetupProgress(coordinatorEmail, programmeId, batchId))
                 .build());
     }
 
-    @PutMapping("/coordinator/setup-progress")
+    @RequestMapping(value = "/coordinator/setup-progress", method = {RequestMethod.POST, RequestMethod.PUT})
     public ResponseEntity<ApiResponse<ProgrammeCoordinatorSetupProgressDto>> updateProgrammeCoordinatorSetupProgress(
             @RequestParam(required = false) String coordinatorEmail,
             @RequestParam(required = false) String programmeId,
-            @RequestParam(required = false, defaultValue = "1") Integer currentStep) {
+            @RequestParam(required = false) String batchId,
+            @RequestParam(required = false, defaultValue = "0") Integer currentStep,
+            @RequestBody(required = false) Map<String, Object> body) {
         return ResponseEntity.ok(ApiResponse.<ProgrammeCoordinatorSetupProgressDto>builder()
                 .success(true)
                 .message("Programme Coordinator setup progress updated successfully")
-                .data(academicService.updateProgrammeCoordinatorSetupProgress(coordinatorEmail, programmeId, currentStep))
+                .data(academicService.updateProgrammeCoordinatorSetupProgress(coordinatorEmail, programmeId, batchId, currentStep, body))
                 .build());
     }
 
     @PostMapping("/coordinator/setup-progress/complete")
     public ResponseEntity<ApiResponse<ProgrammeCoordinatorSetupProgressDto>> completeProgrammeCoordinatorSetup(
             @RequestParam(required = false) String coordinatorEmail,
-            @RequestParam(required = false) String programmeId) {
+            @RequestParam(required = false) String programmeId,
+            @RequestParam(required = false) String batchId) {
         return ResponseEntity.ok(ApiResponse.<ProgrammeCoordinatorSetupProgressDto>builder()
                 .success(true)
                 .message("Programme Coordinator setup marked as completed successfully")
-                .data(academicService.completeProgrammeCoordinatorSetup(coordinatorEmail, programmeId))
+                .data(academicService.completeProgrammeCoordinatorSetup(coordinatorEmail, programmeId, batchId))
                 .build());
     }
 
@@ -522,10 +539,13 @@ public class AcademicController {
         return ResponseEntity.ok(ApiResponse.<Void>builder().success(true).message("Batch deleted").build());
     }
 
-    // --- Courses ---
     @GetMapping("/courses")
-    public ResponseEntity<ApiResponse<List<Course>>> getCourses(@RequestParam(required = false) String programmeId) {
-        List<Course> courses = programmeId != null ? academicService.getCoursesByProgramme(programmeId) : academicService.getAllCourses();
+    public ResponseEntity<ApiResponse<List<Course>>> getCourses(
+            @RequestParam(required = false) String programmeId,
+            @RequestParam(required = false) String batchId) {
+        List<Course> courses = programmeId != null 
+            ? academicService.getCoursesByProgramme(programmeId, batchId) 
+            : academicService.getAllCourses();
         return ResponseEntity.ok(ApiResponse.<List<Course>>builder().success(true).data(courses).build());
     }
 
@@ -682,14 +702,16 @@ public class AcademicController {
     @PostMapping("/courses/allocate")
     public ResponseEntity<ApiResponse<Map<String, Object>>> allocateCourses(@RequestBody Map<String, Object> body) {
         String programmeId = body != null && body.get("programmeId") != null ? body.get("programmeId").toString() : "prog-1";
+        String batchId = body != null && body.get("batchId") != null ? body.get("batchId").toString() : null;
+        boolean submit = body != null && Boolean.TRUE.equals(body.get("submit"));
         List<Map<String, Object>> allocations = body != null && body.get("allocations") instanceof List
                 ? (List<Map<String, Object>>) body.get("allocations")
                 : Collections.emptyList();
 
         return ResponseEntity.ok(ApiResponse.<Map<String, Object>>builder()
                 .success(true)
-                .message("Course allocations saved and submitted for review.")
-                .data(academicService.allocateCourses(programmeId, allocations))
+                .message(submit ? "Course allocations saved and submitted for review." : "Course allocations saved successfully.")
+                .data(academicService.allocateCourses(programmeId, batchId, allocations, submit))
                 .build());
     }
 
