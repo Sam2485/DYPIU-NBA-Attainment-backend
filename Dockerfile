@@ -5,11 +5,11 @@ FROM maven:3.9.8-eclipse-temurin-21-alpine AS build
 WORKDIR /app
 
 # Cache Maven dependencies
-COPY pom.xml .
+COPY obe-backend/pom.xml .
 RUN mvn dependency:go-offline -B
 
 # Copy source code and package application
-COPY src ./src
+COPY obe-backend/src ./src
 RUN mvn clean package -DskipTests
 
 # ==========================================
