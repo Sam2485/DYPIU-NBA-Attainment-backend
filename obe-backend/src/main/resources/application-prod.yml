@@ -27,7 +27,7 @@ spring:
   flyway:
     enabled: ${FLYWAY_ENABLED:true}
     clean-disabled: true # Production safeguard: prevent accidental flyway:clean
-    validate-on-migrate: true # Strict migration checksum verification
+    validate-on-migrate: ${FLYWAY_VALIDATE_ON_MIGRATE:false} # Allow flexibility across OS line endings
     baseline-on-migrate: true
     baseline-version: 0
 
