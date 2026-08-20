@@ -1,0 +1,28 @@
+[Unit]
+Description=DYPIU NBA Attainment Backend Service (Spring Boot Java 21)
+After=syslog.target network.target postgresql.service
+Requires=postgresql.service
+
+[Service]
+Type=simple
+User=dypiu
+Group=dypiu
+WorkingDirectory=/opt/dypiu-nba/backend
+EnvironmentFile=/etc/dypiu-nba/backend.env
+ExecStart=/usr/bin/java -Xms512m -Xmx2048m -Dspring.profiles.active=prod -Djava.security.egd=file:/dev/./urandom -jar /opt/dypiu-nba/backend/obe-backend-1.0.0.jar
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SuccessExitStatus=143
+TimeoutStopSec=30
+LimitNOFILE=65536
+
+# Security sandbox
+ProtectSystem=full
+ProtectHome=true
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
