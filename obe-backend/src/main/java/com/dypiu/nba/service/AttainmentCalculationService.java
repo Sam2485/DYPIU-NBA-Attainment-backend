@@ -651,10 +651,7 @@ public class AttainmentCalculationService {
                             coMaxMarks.put(coCode, BigDecimal.valueOf(val).setScale(2, RoundingMode.HALF_UP));
                         }
                     } else {
-                        // Fallback: check row directly above CO header or default to 20.00
-                        for (String coCode : coColMap.values()) {
-                            coMaxMarks.put(coCode, new BigDecimal("20.00"));
-                        }
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Could not find 'Out Of' or 'Max Marks' row indicating maximum marks for COs.");
                     }
 
                     // 4. Locate PRN and Name columns
@@ -675,8 +672,12 @@ public class AttainmentCalculationService {
                             }
                         }
                     }
-                    if (prnCol == -1) prnCol = 1;
-                    if (nameCol == -1) nameCol = 2;
+                    if (prnCol == -1) {
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Could not find a column header for 'PRN' or 'Roll Number'.");
+                    }
+                    if (nameCol == -1) {
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Could not find a column header for 'Name'.");
+                    }
 
                     // 5. Parse student mark records
                     for (int r = coHeaderRowNum + 1; r <= sheet.getLastRowNum(); r++) {
@@ -690,13 +691,7 @@ public class AttainmentCalculationService {
                         String name = getStringCellValue(nameCell, evaluator);
 
                         if (prn == null || prn.isBlank()) {
-                            // If PRN is in col 0
-                            if (prnCol != 0) {
-                                String prn0 = getStringCellValue(row.getCell(0), evaluator);
-                                if (prn0 != null && !prn0.isBlank() && !prn0.matches("\\d+")) {
-                                    prn = prn0;
-                                }
-                            }
+                            continue;
                         }
 
                         if (prn == null || prn.isBlank()) continue;
@@ -1111,11 +1106,15 @@ public class AttainmentCalculationService {
                             }
                         }
 
+                        if (prn == null || prn.isBlank()) {
+                            prn = "SRV-" + (surveyResponses.size() + 1);
+                        }
+
                         int srNo = surveyResponses.size() + 1;
                         surveyResponses.add(SurveyResponseRowDto.builder()
                                 .srNo(srNo)
-                                .prn(prn != null && !prn.isBlank() ? prn : "SRV-" + srNo)
-                                .studentName(sName != null && !sName.isBlank() ? sName : "Student " + srNo)
+                                .prn(prn)
+                                .studentName(sName != null && !sName.isBlank() ? sName : prn)
                                 .coRatings(coRatings)
                                 .coFeedbacks(coFeedbacks)
                                 .build());

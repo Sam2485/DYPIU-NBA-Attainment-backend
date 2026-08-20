@@ -548,10 +548,6 @@ public class ApprovalService {
             result.put("verifiedBy", verifier);
         } else {
             String offeringId = key;
-            List<com.dypiu.nba.entity.CourseOffering> offerings = courseOfferingRepository.findByCourseId(key);
-            if (!offerings.isEmpty()) {
-                offeringId = offerings.get(0).getId();
-            }
 
             com.dypiu.nba.entity.AttainmentConfiguration config = configRepository.findByCourseOfferingId(offeringId).orElse(null);
             String finalOfferingId = offeringId;
@@ -651,7 +647,13 @@ public class ApprovalService {
             courseOfferingId = key;
             com.dypiu.nba.entity.AttainmentConfiguration cfg = configRepository.findByCourseOfferingId(key).orElse(null);
             if (cfg != null) {
-                cfg.setStatus(com.dypiu.nba.entity.AttainmentConfigStatus.APPROVED);
+                if (status == ApprovalStatus.APPROVED || status == ApprovalStatus.VERIFIED) {
+                    cfg.setStatus(com.dypiu.nba.entity.AttainmentConfigStatus.APPROVED);
+                } else if (status == ApprovalStatus.REJECTED || status == ApprovalStatus.REVISION_REQUESTED || status == ApprovalStatus.NEEDS_REVISION) {
+                    cfg.setStatus(com.dypiu.nba.entity.AttainmentConfigStatus.NEEDS_REVISION);
+                } else {
+                    cfg.setStatus(com.dypiu.nba.entity.AttainmentConfigStatus.DRAFT);
+                }
                 configRepository.save(cfg);
             }
         } else if ("coStatus".equalsIgnoreCase(statusType)) {
@@ -662,7 +664,13 @@ public class ApprovalService {
             courseOfferingId = key;
             List<com.dypiu.nba.entity.CourseAtr> atrs = courseAtrRepository.findByCourseOfferingId(key);
             for (com.dypiu.nba.entity.CourseAtr a : atrs) {
-                a.setStatus(com.dypiu.nba.entity.CourseAtrStatus.APPROVED);
+                if (status == ApprovalStatus.APPROVED || status == ApprovalStatus.VERIFIED) {
+                    a.setStatus(com.dypiu.nba.entity.CourseAtrStatus.APPROVED);
+                } else if (status == ApprovalStatus.REJECTED || status == ApprovalStatus.REVISION_REQUESTED || status == ApprovalStatus.NEEDS_REVISION) {
+                    a.setStatus(com.dypiu.nba.entity.CourseAtrStatus.NEEDS_REVISION);
+                } else {
+                    a.setStatus(com.dypiu.nba.entity.CourseAtrStatus.DRAFT);
+                }
                 a.setVerifiedBy(verifierName);
                 a.setVerificationComments(remarksValue);
                 courseAtrRepository.save(a);
