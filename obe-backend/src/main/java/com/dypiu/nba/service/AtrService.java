@@ -33,7 +33,6 @@ public class AtrService {
     private final CourseOutcomeRepository courseOutcomeRepository;
     private final ProgrammeOutcomeRepository programmeOutcomeRepository;
     private final ProgrammeSpecificOutcomeRepository programmeSpecificOutcomeRepository;
-    private final ProgrammeTargetRepository programmeTargetRepository;
     private final AttainmentCalculationService attainmentCalculationService;
     private final DepartmentRepository departmentRepository;
     private final SchoolRepository schoolRepository;

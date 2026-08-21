@@ -292,28 +292,33 @@ public class ReportController {
             @RequestParam(required = false) String courseId,
             @RequestParam(required = false) String batchId,
             Principal principal) {
-        String pId = programmeId != null && !programmeId.isBlank() ? programmeId : "prog-1";
-        String bId = batchId != null && !batchId.isBlank() ? batchId : "batch-comp-2025-29";
-        String cId = courseId != null && !courseId.isBlank() ? courseId : "crs-1";
+        String pId = (programmeId != null && !programmeId.isBlank()) ? programmeId.trim() : null;
+        String bId = (batchId != null && !batchId.isBlank()) ? batchId.trim() : null;
+        String cId = (courseId != null && !courseId.isBlank()) ? courseId.trim() : null;
 
-        Map<String, Object> coAtt = attainmentCalculationService.calculateCourseCoAttainment(cId);
-        com.dypiu.nba.dto.CourseMappingMatrixDto matrixDto = outcomeService.getCourseMappings(cId);
-        com.dypiu.nba.dto.ProgrammeAttainmentResultDto progAtt = attainmentCalculationService.calculateProgrammeAttainment(pId, bId);
+        Map<String, Object> courseAttainment = null;
+        if (cId != null) {
+            Map<String, Object> coAtt = attainmentCalculationService.calculateCourseCoAttainment(cId);
+            com.dypiu.nba.dto.CourseMappingMatrixDto matrixDto = outcomeService.getCourseMappings(cId);
+            courseAttainment = new LinkedHashMap<>();
+            courseAttainment.put("courseId", cId);
+            courseAttainment.put("batchId", bId);
+            courseAttainment.put("directAttainment", coAtt != null ? coAtt.get("directAttainment") : null);
+            courseAttainment.put("indirectAttainment", coAtt != null ? coAtt.get("indirectAttainment") : null);
+            courseAttainment.put("overallAttainment", coAtt != null ? coAtt.get("overallCoAttainment") : null);
+            courseAttainment.put("coList", coAtt != null ? coAtt.get("coAttainments") : Collections.emptyList());
+            courseAttainment.put("matrix", matrixDto != null ? matrixDto.getMatrix() : Collections.emptyMap());
+        }
 
-        Map<String, Object> courseAttainment = new LinkedHashMap<>();
-        courseAttainment.put("courseId", cId);
-        courseAttainment.put("batchId", bId);
-        courseAttainment.put("directAttainment", coAtt.get("directAttainment"));
-        courseAttainment.put("indirectAttainment", coAtt.get("indirectAttainment"));
-        courseAttainment.put("overallAttainment", coAtt.get("overallCoAttainment"));
-        courseAttainment.put("coList", coAtt.get("coAttainments"));
-        courseAttainment.put("matrix", matrixDto.getMatrix());
-
-        Map<String, Object> programmeAttainment = new LinkedHashMap<>();
-        programmeAttainment.put("programmeId", pId);
-        programmeAttainment.put("batchId", bId);
-        programmeAttainment.put("poAttainment", progAtt != null ? progAtt.getPoAttainments() : Collections.emptyMap());
-        programmeAttainment.put("psoAttainment", progAtt != null ? progAtt.getPsoAttainments() : Collections.emptyMap());
+        Map<String, Object> programmeAttainment = null;
+        if (pId != null && bId != null) {
+            com.dypiu.nba.dto.ProgrammeAttainmentResultDto progAtt = attainmentCalculationService.calculateProgrammeAttainment(pId, bId);
+            programmeAttainment = new LinkedHashMap<>();
+            programmeAttainment.put("programmeId", pId);
+            programmeAttainment.put("batchId", bId);
+            programmeAttainment.put("poAttainment", progAtt != null ? progAtt.getPoAttainments() : Collections.emptyMap());
+            programmeAttainment.put("psoAttainment", progAtt != null ? progAtt.getPsoAttainments() : Collections.emptyMap());
+        }
 
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("courseAttainment", courseAttainment);
@@ -333,15 +338,16 @@ public class ReportController {
             @RequestParam(required = false) String batchId,
             @RequestParam(required = false) String reportType,
             Principal principal) {
-        User user = reportAccessService.getAuthenticatedUser(principal);
-        if (courseId != null && !courseId.isBlank()) {
-            if (courseOfferingRepository.existsById(courseId)) {
-                reportAccessService.validateCourseOfferingAccess(user, courseId);
-            } else {
-                reportAccessService.validateCourseAccess(user, courseId);
-            }
+        if (courseId == null || courseId.isBlank()) {
+            throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST, "Course ID is required for export.");
         }
-        String targetCourseId = courseId != null && !courseId.isBlank() ? courseId : "crs-1";
+        User user = reportAccessService.getAuthenticatedUser(principal);
+        if (courseOfferingRepository.existsById(courseId)) {
+            reportAccessService.validateCourseOfferingAccess(user, courseId);
+        } else {
+            reportAccessService.validateCourseAccess(user, courseId);
+        }
+        String targetCourseId = courseId.trim();
         byte[] excelBytes = exportService.generateAttainmentExcel(targetCourseId, batchId);
         String filename = "Attainment_Report_" + targetCourseId + ".xlsx";
 
@@ -358,15 +364,16 @@ public class ReportController {
             @RequestParam(required = false) String batchId,
             @RequestParam(required = false) String reportType,
             Principal principal) {
-        User user = reportAccessService.getAuthenticatedUser(principal);
-        if (courseId != null && !courseId.isBlank()) {
-            if (courseOfferingRepository.existsById(courseId)) {
-                reportAccessService.validateCourseOfferingAccess(user, courseId);
-            } else {
-                reportAccessService.validateCourseAccess(user, courseId);
-            }
+        if (courseId == null || courseId.isBlank()) {
+            throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST, "Course ID is required for export.");
         }
-        String targetCourseId = courseId != null && !courseId.isBlank() ? courseId : "crs-1";
+        User user = reportAccessService.getAuthenticatedUser(principal);
+        if (courseOfferingRepository.existsById(courseId)) {
+            reportAccessService.validateCourseOfferingAccess(user, courseId);
+        } else {
+            reportAccessService.validateCourseAccess(user, courseId);
+        }
+        String targetCourseId = courseId.trim();
         byte[] pdfBytes = exportService.generateAttainmentPdf(targetCourseId, batchId);
         String filename = "Attainment_Report_" + targetCourseId + ".pdf";
 

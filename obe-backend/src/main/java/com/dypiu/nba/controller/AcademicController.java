@@ -701,8 +701,11 @@ public class AcademicController {
     // --- Batch Course Allocation ---
     @PostMapping("/courses/allocate")
     public ResponseEntity<ApiResponse<Map<String, Object>>> allocateCourses(@RequestBody Map<String, Object> body) {
-        String programmeId = body != null && body.get("programmeId") != null ? body.get("programmeId").toString() : "prog-1";
-        String batchId = body != null && body.get("batchId") != null ? body.get("batchId").toString() : null;
+        String programmeId = body != null && body.get("programmeId") != null ? body.get("programmeId").toString().trim() : null;
+        if (programmeId == null || programmeId.isBlank()) {
+            throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST, "Programme ID is required for course allocation.");
+        }
+        String batchId = body != null && body.get("batchId") != null ? body.get("batchId").toString().trim() : null;
         boolean submit = body != null && Boolean.TRUE.equals(body.get("submit"));
         List<Map<String, Object>> allocations = body != null && body.get("allocations") instanceof List
                 ? (List<Map<String, Object>>) body.get("allocations")

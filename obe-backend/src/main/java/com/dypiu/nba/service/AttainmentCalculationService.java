@@ -43,7 +43,6 @@ public class AttainmentCalculationService {
     private final ProgrammeRepository programmeRepository;
     private final ProgrammeOutcomeRepository programmeOutcomeRepository;
     private final ProgrammeSpecificOutcomeRepository programmeSpecificOutcomeRepository;
-    private final ProgrammeTargetRepository programmeTargetRepository;
     private final CoPoMappingRepository coPoMappingRepository;
     private final CoPsoMappingRepository coPsoMappingRepository;
     private final com.dypiu.nba.security.CurrentUserScopeService currentUserScopeService;
@@ -1704,19 +1703,15 @@ public class AttainmentCalculationService {
             psos = defaultPsos;
         }
 
-        List<ProgrammeTarget> targets = programmeTargetRepository.findByBatchId(batchId);
-        if (targets.isEmpty()) {
-            List<Batch> progBatches = batchRepository.findByProgrammeId(programmeId);
-            List<String> bIds = progBatches.stream().map(Batch::getId).collect(Collectors.toList());
-            if (!bIds.isEmpty()) {
-                targets = programmeTargetRepository.findByBatchIdIn(bIds);
+        Map<String, BigDecimal> targetMap = new HashMap<>();
+        for (ProgrammeOutcome po : pos) {
+            if (po.getCode() != null && po.getTarget() != null) {
+                targetMap.put(po.getCode().toUpperCase(), po.getTarget());
             }
         }
-
-        Map<String, BigDecimal> targetMap = new HashMap<>();
-        for (ProgrammeTarget pt : targets) {
-            if (pt.getOutcomeCode() != null && pt.getTargetValue() != null) {
-                targetMap.put(pt.getOutcomeCode().toUpperCase(), pt.getTargetValue());
+        for (ProgrammeSpecificOutcome pso : psos) {
+            if (pso.getCode() != null && pso.getTarget() != null) {
+                targetMap.put(pso.getCode().toUpperCase(), pso.getTarget());
             }
         }
 
