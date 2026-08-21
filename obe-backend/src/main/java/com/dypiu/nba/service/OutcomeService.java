@@ -30,7 +30,6 @@ public class OutcomeService {
     private final CourseOutcomeRepository coRepository;
     private final PoCompetencyRepository poCompetencyRepository;
     private final PsoCompetencyRepository psoCompetencyRepository;
-    private final ProgrammeTargetRepository targetRepository;
     private final CourseRepository courseRepository;
     private final CourseOfferingRepository courseOfferingRepository;
     private final CoPoMappingRepository coPoMappingRepository;
@@ -260,6 +259,9 @@ public class OutcomeService {
                 if (existingByCodeAndYear.containsKey(key)) {
                     targetPo = existingByCodeAndYear.get(key);
                     targetPo.setStatement(po.getStatement());
+                    if (po.getTarget() != null) {
+                        targetPo.setTarget(po.getTarget());
+                    }
                 } else {
                     targetPo = po;
                     if (targetPo.getId() == null || targetPo.getId().isBlank()) {
@@ -388,6 +390,9 @@ public class OutcomeService {
                 if (existingByCodeAndYear.containsKey(key)) {
                     targetPso = existingByCodeAndYear.get(key);
                     targetPso.setStatement(pso.getStatement());
+                    if (pso.getTarget() != null) {
+                        targetPso.setTarget(pso.getTarget());
+                    }
                 } else {
                     targetPso = pso;
                     if (targetPso.getId() == null || targetPso.getId().isBlank()) {
@@ -626,20 +631,21 @@ public class OutcomeService {
                     .psoTargets(Collections.emptyMap())
                     .build();
         }
-        List<Batch> batches = batchRepository.findByProgrammeId(programmeId);
-        List<String> batchIds = batches.stream().map(Batch::getId).collect(Collectors.toList());
-        List<ProgrammeTarget> list = batchIds.isEmpty() ? Collections.emptyList() : targetRepository.findByBatchIdIn(batchIds);
+
+        List<ProgrammeOutcome> pos = poRepository.findByProgrammeIdOrderByCodeAsc(programmeId);
+        List<ProgrammeSpecificOutcome> psos = psoRepository.findByProgrammeIdOrderByCodeAsc(programmeId);
 
         Map<String, BigDecimal> poTargets = new LinkedHashMap<>();
         Map<String, BigDecimal> psoTargets = new LinkedHashMap<>();
 
-        for (ProgrammeTarget pt : list) {
-            if (pt.getOutcomeCode() != null) {
-                if (pt.getOutcomeCode().toUpperCase().startsWith("PSO")) {
-                    psoTargets.put(pt.getOutcomeCode(), pt.getTargetValue());
-                } else if (pt.getOutcomeCode().toUpperCase().startsWith("PO")) {
-                    poTargets.put(pt.getOutcomeCode(), pt.getTargetValue());
-                }
+        for (ProgrammeOutcome po : pos) {
+            if (po.getCode() != null && po.getTarget() != null) {
+                poTargets.put(po.getCode(), po.getTarget());
+            }
+        }
+        for (ProgrammeSpecificOutcome pso : psos) {
+            if (pso.getCode() != null && pso.getTarget() != null) {
+                psoTargets.put(pso.getCode(), pso.getTarget());
             }
         }
 
@@ -658,27 +664,14 @@ public class OutcomeService {
         }
         Batch batch = batchRepository.findById(batchId).orElse(null);
         String progId = batch != null ? batch.getProgrammeId() : null;
-        List<ProgrammeTarget> list = targetRepository.findByBatchId(batchId);
-
-        Map<String, BigDecimal> poTargets = new LinkedHashMap<>();
-        Map<String, BigDecimal> psoTargets = new LinkedHashMap<>();
-
-        for (ProgrammeTarget pt : list) {
-            if (pt.getOutcomeCode() != null) {
-                if (pt.getOutcomeCode().toUpperCase().startsWith("PSO")) {
-                    psoTargets.put(pt.getOutcomeCode(), pt.getTargetValue());
-                } else if (pt.getOutcomeCode().toUpperCase().startsWith("PO")) {
-                    poTargets.put(pt.getOutcomeCode(), pt.getTargetValue());
-                }
-            }
+        if (progId == null) {
+            return ProgrammeTargetDto.builder()
+                    .batchId(batchId)
+                    .poTargets(Collections.emptyMap())
+                    .psoTargets(Collections.emptyMap())
+                    .build();
         }
-
-        return ProgrammeTargetDto.builder()
-                .programmeId(progId)
-                .batchId(batchId)
-                .poTargets(poTargets)
-                .psoTargets(psoTargets)
-                .build();
+        return getProgrammeTargets(progId);
     }
 
     @Transactional
@@ -695,32 +688,78 @@ public class OutcomeService {
         }
         if (dto == null) return getProgrammeTargets(programmeId);
 
-        List<Batch> batches = batchRepository.findByProgrammeId(programmeId);
-        String targetBatchId = (dto.getBatchId() != null && !dto.getBatchId().isBlank())
-                ? dto.getBatchId()
-                : (!batches.isEmpty() ? batches.get(0).getId() : "batch-" + programmeId);
+        if (dto.getPoTargets() != null && !dto.getPoTargets().isEmpty()) {
+            List<ProgrammeOutcome> pos = new ArrayList<>(poRepository.findByProgrammeId(programmeId));
+            Map<String, ProgrammeOutcome> poMap = pos.stream()
+                    .filter(p -> p.getCode() != null)
+                    .collect(Collectors.toMap(p -> p.getCode().trim().toUpperCase(), p -> p, (a, b) -> a));
+            List<ProgrammeOutcome> toSave = new ArrayList<>();
+            for (Map.Entry<String, BigDecimal> entry : dto.getPoTargets().entrySet()) {
+                if (entry.getKey() == null) continue;
+                String rawCode = entry.getKey().trim();
+                String code = rawCode.toUpperCase();
+                BigDecimal val = entry.getValue();
 
-        Map<String, BigDecimal> combined = new LinkedHashMap<>();
-        if (dto.getPoTargets() != null) combined.putAll(dto.getPoTargets());
-        if (dto.getPsoTargets() != null) combined.putAll(dto.getPsoTargets());
+                ProgrammeOutcome po = poMap.get(code);
+                if (po == null && !code.startsWith("PO") && !code.startsWith("PSO")) {
+                    po = poMap.get("PO" + code);
+                }
 
-        for (Map.Entry<String, BigDecimal> entry : combined.entrySet()) {
-            String code = entry.getKey();
-            BigDecimal val = entry.getValue() != null ? entry.getValue() : new BigDecimal("2.00");
-            OutcomeType oType = code.toUpperCase().startsWith("PSO") ? OutcomeType.PSO : (code.toUpperCase().startsWith("PEO") ? OutcomeType.PEO : OutcomeType.PO);
+                if (po != null) {
+                    po.setTarget(val);
+                    toSave.add(po);
+                } else {
+                    String finalCode = rawCode.matches("\\d+") ? "PO" + rawCode : rawCode;
+                    ProgrammeOutcome newPo = ProgrammeOutcome.builder()
+                            .id("po-" + UUID.randomUUID().toString().substring(0, 8))
+                            .programmeId(programmeId)
+                            .code(finalCode)
+                            .statement("Programme Outcome " + finalCode)
+                            .target(val)
+                            .build();
+                    toSave.add(newPo);
+                }
+            }
+            if (!toSave.isEmpty()) {
+                poRepository.saveAll(toSave);
+            }
+        }
 
-            ProgrammeTarget target = targetRepository.findByBatchIdAndOutcomeCode(targetBatchId, code)
-                    .orElseGet(() -> ProgrammeTarget.builder()
-                            .id("target-" + UUID.randomUUID().toString().substring(0, 8))
-                            .batchId(targetBatchId)
-                            .outcomeType(oType)
-                            .outcomeCode(code)
-                            .build());
+        if (dto.getPsoTargets() != null && !dto.getPsoTargets().isEmpty()) {
+            List<ProgrammeSpecificOutcome> psos = new ArrayList<>(psoRepository.findByProgrammeId(programmeId));
+            Map<String, ProgrammeSpecificOutcome> psoMap = psos.stream()
+                    .filter(p -> p.getCode() != null)
+                    .collect(Collectors.toMap(p -> p.getCode().trim().toUpperCase(), p -> p, (a, b) -> a));
+            List<ProgrammeSpecificOutcome> toSave = new ArrayList<>();
+            for (Map.Entry<String, BigDecimal> entry : dto.getPsoTargets().entrySet()) {
+                if (entry.getKey() == null) continue;
+                String rawCode = entry.getKey().trim();
+                String code = rawCode.toUpperCase();
+                BigDecimal val = entry.getValue();
 
-            target.setTargetValue(val);
-            target.setOutcomeType(oType);
-            target.setUpdatedAt(ZonedDateTime.now());
-            targetRepository.save(target);
+                ProgrammeSpecificOutcome pso = psoMap.get(code);
+                if (pso == null && !code.startsWith("PSO")) {
+                    pso = psoMap.get("PSO" + code);
+                }
+
+                if (pso != null) {
+                    pso.setTarget(val);
+                    toSave.add(pso);
+                } else {
+                    String finalCode = rawCode.matches("\\d+") ? "PSO" + rawCode : rawCode;
+                    ProgrammeSpecificOutcome newPso = ProgrammeSpecificOutcome.builder()
+                            .id("pso-" + UUID.randomUUID().toString().substring(0, 8))
+                            .programmeId(programmeId)
+                            .code(finalCode)
+                            .statement("Programme Specific Outcome " + finalCode)
+                            .target(val)
+                            .build();
+                    toSave.add(newPso);
+                }
+            }
+            if (!toSave.isEmpty()) {
+                psoRepository.saveAll(toSave);
+            }
         }
 
         return getProgrammeTargets(programmeId);

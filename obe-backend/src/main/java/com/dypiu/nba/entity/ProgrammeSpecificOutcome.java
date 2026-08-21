@@ -34,6 +34,9 @@ public class ProgrammeSpecificOutcome {
     @Column(nullable = false, columnDefinition = "TEXT")
     private String statement;
 
+    @Column(name = "target", precision = 4, scale = 2)
+    private java.math.BigDecimal target;
+
     @Column(name = "created_at", insertable = false, updatable = false)
     private ZonedDateTime createdAt;
 

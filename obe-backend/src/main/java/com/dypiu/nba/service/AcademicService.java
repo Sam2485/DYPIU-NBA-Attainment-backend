@@ -1364,6 +1364,10 @@ public class AcademicService {
         if (scope != null && scope.isHod()) {
             return getProgrammesByDepartment(scope.getRequiredDepartmentId());
         }
+        if (scope != null && scope.isProgrammeCoordinator()) {
+            enforceSchoolScope(schoolId);
+            return getAllProgrammes();
+        }
         List<Department> depts = departmentRepository.findBySchoolId(schoolId);
         if (depts == null || depts.isEmpty()) {
             return Collections.emptyList();
@@ -1385,6 +1389,10 @@ public class AcademicService {
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: You cannot view programmes of a different department.");
             }
             departmentId = hodDeptId;
+        }
+        if (scope != null && scope.isProgrammeCoordinator()) {
+            enforceDepartmentScope(departmentId);
+            return getAllProgrammes();
         }
         if (departmentId == null || departmentId.isBlank()) {
             return getAllProgrammes();
