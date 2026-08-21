@@ -87,9 +87,23 @@ public class DashboardController {
                 : (scope.getEmail() != null ? scope.getEmail() : directorEmail);
         DirectorSetupProgressDto progress = academicService.getDirectorSetupProgress(finalSchoolId, targetEmail);
 
+        long assignedHodCount = depts.stream()
+                .filter(d -> (d.getHod() != null && !d.getHod().isBlank() && !d.getHod().equalsIgnoreCase("Unassigned"))
+                        || (d.getHodEmail() != null && !d.getHodEmail().isBlank() && !d.getHodEmail().equalsIgnoreCase("Unassigned")))
+                .count();
+        long unassignedHodCount = depts.size() - assignedHodCount;
+
         Map<String, Object> stats = new LinkedHashMap<>();
         stats.put("departments", depts.size());
         stats.put("departmentsCount", depts.size());
+        stats.put("assignedHODs", assignedHodCount);
+        stats.put("assignedHODsCount", assignedHodCount);
+        stats.put("assignedHods", assignedHodCount);
+        stats.put("assignedHodsCount", assignedHodCount);
+        stats.put("unassignedHODs", unassignedHodCount);
+        stats.put("unassignedHODsCount", unassignedHodCount);
+        stats.put("unassignedHods", unassignedHodCount);
+        stats.put("unassignedHodsCount", unassignedHodCount);
         stats.put("programmes", progs.size());
         stats.put("programmesCount", progs.size());
         stats.put("activeBatches", activeBatches.size());
