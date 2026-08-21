@@ -6,6 +6,11 @@
   <component name="ChangeListManager">
     <list default="true" id="e2083b67-9fd8-46af-a478-60fe0ace3472" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/obe-backend/src/main/java/com/dypiu/nba/controller/AcademicController.java" beforeDir="false" afterPath="$PROJECT_DIR$/obe-backend/src/main/java/com/dypiu/nba/controller/AcademicController.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/obe-backend/src/main/java/com/dypiu/nba/controller/ReportController.java" beforeDir="false" afterPath="$PROJECT_DIR$/obe-backend/src/main/java/com/dypiu/nba/controller/ReportController.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/obe-backend/src/main/java/com/dypiu/nba/service/AcademicService.java" beforeDir="false" afterPath="$PROJECT_DIR$/obe-backend/src/main/java/com/dypiu/nba/service/AcademicService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/obe-backend/src/main/java/com/dypiu/nba/service/OutcomeService.java" beforeDir="false" afterPath="$PROJECT_DIR$/obe-backend/src/main/java/com/dypiu/nba/service/OutcomeService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/obe-backend/src/main/resources/application-prod.yml" beforeDir="false" afterPath="$PROJECT_DIR$/obe-backend/src/main/resources/application-prod.yml" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />

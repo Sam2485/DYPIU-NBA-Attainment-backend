@@ -506,7 +506,7 @@ public class AcademicService {
         }
 
         if (targetSchoolId == null) {
-            targetSchoolId = "sch-1";
+            return null;
         }
 
         enforceSchoolScope(targetSchoolId);
@@ -575,8 +575,10 @@ public class AcademicService {
             targetSchoolId = schoolId;
         } else if (scope != null && scope.getSchoolId() != null) {
             targetSchoolId = scope.getSchoolId();
-        } else {
-            targetSchoolId = "sch-1";
+        }
+
+        if (targetSchoolId == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "School scope cannot be determined.");
         }
 
         enforceSchoolScope(targetSchoolId);
@@ -1198,9 +1200,9 @@ public class AcademicService {
                 enforceCourseScope(targetCourseId);
             }
         }
-        CourseCoordinatorSetupProgress progress = ccSetupProgressRepository.findByCourseOfferingId(targetCourseId)
-                .orElseGet(() -> CourseCoordinatorSetupProgress.builder()
-                        .id("ccprog-" + UUID.randomUUID().toString().substring(0, 8))
+        CourseCoordinatorSetupProgress progress = (targetCourseId != null)
+                ? ccSetupProgressRepository.findByCourseOfferingId(targetCourseId).orElseGet(() -> CourseCoordinatorSetupProgress.builder()
+                        .id("ccprog-" + targetCourseId)
                         .courseOfferingId(targetCourseId)
                         .coordinatorEmail(coordinatorEmail)
                         .currentStep(1)
@@ -1208,7 +1210,11 @@ public class AcademicService {
                         .completedSteps("")
                         .pendingSteps("cos,co_mapping,direct,indirect,attainment,course_atr")
                         .updatedAt(ZonedDateTime.now())
-                        .build());
+                        .build())
+                : null;
+        if (progress == null) {
+            return null;
+        }
 
         List<String> completed = (progress.getCompletedSteps() != null && !progress.getCompletedSteps().isBlank())
                 ? Arrays.asList(progress.getCompletedSteps().split(","))
@@ -1882,7 +1888,7 @@ public class AcademicService {
 
         String targetDeptId = resolveTargetDeptId(departmentId, hodEmail);
         if (targetDeptId == null || targetDeptId.isBlank()) {
-            targetDeptId = "dept-1";
+            return null;
         }
         enforceDepartmentScope(targetDeptId);
 
@@ -1916,7 +1922,7 @@ public class AcademicService {
 
         String targetDeptId = resolveTargetDeptId(departmentId, hodEmail);
         if (targetDeptId == null || targetDeptId.isBlank()) {
-            targetDeptId = "dept-1";
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Department scope cannot be determined.");
         }
         enforceDepartmentScope(targetDeptId);
 
@@ -2208,13 +2214,13 @@ public class AcademicService {
         String targetBatchId = batchId;
         if (targetBatchId == null || targetBatchId.isBlank()) {
             List<Batch> batches = batchRepository.findByProgrammeId(targetProgId);
-            targetBatchId = !batches.isEmpty() ? batches.get(0).getId() : "batch-" + targetProgId;
+            targetBatchId = !batches.isEmpty() ? batches.get(0).getId() : null;
         }
 
         final String finalProgId = targetProgId;
         final String finalBatchId = targetBatchId;
         ProgrammeCoordinatorSetupProgress progress = pcSetupProgressRepository.findByProgrammeIdAndBatchId(finalProgId, finalBatchId)
-                .orElseGet(() -> pcSetupProgressRepository.save(createDefaultPcProgress(finalProgId, finalBatchId, coordinatorEmail)));
+                .orElseGet(() -> createDefaultPcProgress(finalProgId, finalBatchId, coordinatorEmail));
 
         return buildPcSetupProgressDto(progress);
     }
@@ -2537,12 +2543,21 @@ public class AcademicService {
     @Transactional(readOnly = true)
     public Map<String, Object> getConsolidatedOutcomes(String programmeId, String batchId) {
         if (programmeId != null && !programmeId.isBlank()) {
-            enforceProgrammeScope(programmeId);
+            enforceProgrammeScope(programmeId.trim());
         }
         if (batchId != null && !batchId.isBlank()) {
-            enforceBatchScope(batchId);
+            enforceBatchScope(batchId.trim());
         }
-        String pId = programmeId != null && !programmeId.isBlank() ? programmeId : "prog-1";
+        if (programmeId == null || programmeId.isBlank()) {
+            Map<String, Object> data = new LinkedHashMap<>();
+            data.put("programmeId", null);
+            data.put("batchId", batchId);
+            data.put("pos", Collections.emptyList());
+            data.put("psos", Collections.emptyList());
+            data.put("peos", Collections.emptyList());
+            return data;
+        }
+        String pId = programmeId.trim();
         List<ProgrammeOutcome> pos = programmeOutcomeRepository.findByProgrammeIdOrderByCodeAsc(pId);
         List<ProgrammeSpecificOutcome> psos = programmeSpecificOutcomeRepository.findByProgrammeIdOrderByCodeAsc(pId);
         List<PeoOutcome> peos = peoOutcomeRepository.findByProgrammeIdOrderByCodeAsc(pId);
@@ -2558,10 +2573,11 @@ public class AcademicService {
 
     @Transactional
     public Map<String, Object> saveConsolidatedOutcomes(Map<String, Object> payload) {
-        String progId = payload != null && payload.get("programmeId") != null ? payload.get("programmeId").toString() : "prog-1";
-        if (progId != null && !progId.isBlank()) {
-            enforceProgrammeScope(progId);
+        String progId = payload != null && payload.get("programmeId") != null ? payload.get("programmeId").toString().trim() : null;
+        if (progId == null || progId.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Programme ID is required to save outcomes.");
         }
+        enforceProgrammeScope(progId);
 
         // 1. Process and save POs
         if (payload != null && payload.get("pos") instanceof List<?> poList) {
@@ -2660,11 +2676,6 @@ public class AcademicService {
         Map<String, BigDecimal> targets = new LinkedHashMap<>();
         for (CourseOutcome co : cos) {
             targets.put(co.getCode(), co.getTargetLevel() != null ? co.getTargetLevel() : new BigDecimal("2.50"));
-        }
-        if (targets.isEmpty()) {
-            for (int i = 1; i <= 5; i++) {
-                targets.put("CO" + i, new BigDecimal("2.50"));
-            }
         }
         Map<String, Object> res = new LinkedHashMap<>();
         res.put("courseId", courseId);

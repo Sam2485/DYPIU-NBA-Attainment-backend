@@ -199,7 +199,7 @@ public class OutcomeService {
         }
     }
 
-    @Transactional
+    @Transactional(readOnly = true)
     public List<ProgrammeOutcome> getPOsByProgramme(String programmeId) {
         System.out.println("================================================================================");
         System.out.println("[OutcomeService] >>> getPOsByProgramme called | programmeId: " + programmeId);
@@ -211,10 +211,6 @@ public class OutcomeService {
             return Collections.emptyList();
         }
         List<ProgrammeOutcome> list = poRepository.findByProgrammeIdOrderByCodeAsc(programmeId);
-        if (list.isEmpty()) {
-            System.out.println("[OutcomeService] No POs found in DB for programmeId: " + programmeId + ". Seeding default POs...");
-            list = seedDefaultPOs(programmeId);
-        }
         for (ProgrammeOutcome po : list) {
             List<PoCompetency> comps = poCompetencyRepository.findByPoIdOrderByCodeAsc(po.getId());
             comps.sort(Comparator.comparing(PoCompetency::getCode, NATURAL_CODE_COMPARATOR));
@@ -228,62 +224,6 @@ public class OutcomeService {
         System.out.println("[OutcomeService] <<< OUTGOING POs Payload (" + list.size() + " items) for programmeId: " + programmeId);
         System.out.println("================================================================================");
         return list;
-    }
-
-    private List<ProgrammeOutcome> seedDefaultPOs(String programmeId) {
-        if (programmeId == null || programmeId.isBlank() || !programmeRepository.existsById(programmeId)) {
-            System.out.println("[OutcomeService] Programme does not exist: " + programmeId + ". Skipping default PO seed.");
-            return Collections.emptyList();
-        }
-        String pId = programmeId;
-        String[][] poDefs = {
-            {"PO1", "Engineering Knowledge: Apply knowledge of mathematics, science, engineering fundamentals, and computer engineering to solve complex problems."},
-            {"PO2", "Problem Analysis: Identify, formulate, review research literature, and analyze complex engineering problems reaching substantiated conclusions."},
-            {"PO3", "Design/Development of Solutions: Design solutions for complex engineering problems and design system components or processes."},
-            {"PO4", "Conduct Investigations of Complex Problems: Use research-based knowledge and research methods including design of experiments, analysis and interpretation of data."},
-            {"PO5", "Modern Tool Usage: Create, select, and apply appropriate techniques, resources, and modern engineering and IT tools."},
-            {"PO6", "The Engineer and Society: Apply reasoning informed by contextual knowledge to assess societal, health, safety, legal and cultural issues."},
-            {"PO7", "Environment and Sustainability: Understand the impact of professional engineering solutions in societal and environmental contexts."},
-            {"PO8", "Ethics: Apply ethical principles and commit to professional ethics and responsibilities and norms of engineering practice."},
-            {"PO9", "Individual and Team Work: Function effectively as an individual, and as a member or leader in diverse teams, and in multidisciplinary settings."},
-            {"PO10", "Communication: Communicate effectively on complex engineering activities with the engineering community and with society at large."},
-            {"PO11", "Project Management and Finance: Demonstrate knowledge and understanding of engineering and management principles and apply these to manage projects."},
-            {"PO12", "Life-long Learning: Recognize the need for, and have the preparation and ability to engage in independent and life-long learning in the broadest context of technological change."}
-        };
-
-        List<ProgrammeOutcome> posToSave = new ArrayList<>();
-        for (String[] def : poDefs) {
-            String code = def[0];
-            String stmt = def[1];
-            String poId = "po-" + pId + "-" + code.toLowerCase();
-
-            ProgrammeOutcome po = ProgrammeOutcome.builder()
-                    .id(poId)
-                    .programmeId(pId)
-                    .code(code)
-                    .statement(stmt)
-                    .build();
-
-            poRepository.save(po);
-
-            List<PoCompetency> comps = new ArrayList<>();
-            comps.add(PoCompetency.builder()
-                    .id("comp-" + poId + "-1")
-                    .poId(poId)
-                    .code(code + ".1")
-                    .statement("Demonstrate core competency and analytical skills for " + code)
-                    .build());
-            comps.add(PoCompetency.builder()
-                    .id("comp-" + poId + "-2")
-                    .poId(poId)
-                    .code(code + ".2")
-                    .statement("Apply contextual knowledge and modern methods for " + code)
-                    .build());
-            poCompetencyRepository.saveAll(comps);
-            po.setCompetencies(comps);
-            posToSave.add(po);
-        }
-        return posToSave;
     }
 
     @Transactional
@@ -387,7 +327,7 @@ public class OutcomeService {
         return saved;
     }
 
-    @Transactional
+    @Transactional(readOnly = true)
     public List<ProgrammeSpecificOutcome> getPSOsByProgramme(String programmeId) {
         System.out.println("================================================================================");
         System.out.println("[OutcomeService] >>> getPSOsByProgramme called | programmeId: " + programmeId);
@@ -399,10 +339,6 @@ public class OutcomeService {
             return Collections.emptyList();
         }
         List<ProgrammeSpecificOutcome> list = psoRepository.findByProgrammeIdOrderByCodeAsc(programmeId);
-        if (list.isEmpty()) {
-            System.out.println("[OutcomeService] No PSOs found in DB for programmeId: " + programmeId + ". Seeding default PSOs...");
-            list = seedDefaultPSOs(programmeId);
-        }
         for (ProgrammeSpecificOutcome pso : list) {
             List<PsoCompetency> comps = psoCompetencyRepository.findByPsoIdOrderByCodeAsc(pso.getId());
             comps.sort(Comparator.comparing(PsoCompetency::getCode, NATURAL_CODE_COMPARATOR));
@@ -416,53 +352,6 @@ public class OutcomeService {
         System.out.println("[OutcomeService] <<< OUTGOING PSOs Payload (" + list.size() + " items) for programmeId: " + programmeId);
         System.out.println("================================================================================");
         return list;
-    }
-
-    private List<ProgrammeSpecificOutcome> seedDefaultPSOs(String programmeId) {
-        if (programmeId == null || programmeId.isBlank() || !programmeRepository.existsById(programmeId)) {
-            System.out.println("[OutcomeService] Programme does not exist: " + programmeId + ". Skipping default PSO seed.");
-            return Collections.emptyList();
-        }
-        String pId = programmeId;
-        String[][] psoDefs = {
-            {"PSO1", "Software System Design & Development: Ability to design, build, test and maintain scalable software applications using modern frameworks."},
-            {"PSO2", "Data Analytics & AI Integration: Ability to apply data structures, machine learning algorithms and statistical models to extract insights."},
-            {"PSO3", "Network Architecture & Security: Ability to configure, analyze and secure computer networks, cloud infrastructure and distributed systems."}
-        };
-
-        List<ProgrammeSpecificOutcome> psosToSave = new ArrayList<>();
-        for (String[] def : psoDefs) {
-            String code = def[0];
-            String stmt = def[1];
-            String psoId = "pso-" + pId + "-" + code.toLowerCase();
-
-            ProgrammeSpecificOutcome pso = ProgrammeSpecificOutcome.builder()
-                    .id(psoId)
-                    .programmeId(pId)
-                    .code(code)
-                    .statement(stmt)
-                    .academicYear("2025-26")
-                    .build();
-            psoRepository.save(pso);
-
-            List<PsoCompetency> comps = new ArrayList<>();
-            comps.add(PsoCompetency.builder()
-                    .id("psocomp-" + psoId + "-1")
-                    .psoId(psoId)
-                    .code(code + ".1")
-                    .statement("Demonstrate specialized domain skill statement 1 for " + code)
-                    .build());
-            comps.add(PsoCompetency.builder()
-                    .id("psocomp-" + psoId + "-2")
-                    .psoId(psoId)
-                    .code(code + ".2")
-                    .statement("Implement practical design and architecture solutions for " + code)
-                    .build());
-            psoCompetencyRepository.saveAll(comps);
-            pso.setCompetencies(comps);
-            psosToSave.add(pso);
-        }
-        return psosToSave;
     }
 
     @Transactional
