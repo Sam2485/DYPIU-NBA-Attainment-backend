@@ -25,8 +25,8 @@ public class Student {
     @Id
     private String id;
 
-    @Column(name = "batch_id", nullable = false)
-    private String batchId;
+    @Column(name = "programme_batch_id", nullable = false)
+    private String programmeBatchId;
 
     @Column(nullable = false, unique = true, length = 50)
     private String prn;
@@ -47,4 +47,13 @@ public class Student {
 
     @Column(name = "updated_at", insertable = false, updatable = false)
     private ZonedDateTime updatedAt;
+
+    // Helper compatibility methods
+    public String getBatchId() {
+        return programmeBatchId;
+    }
+
+    public void setBatchId(String batchId) {
+        this.programmeBatchId = batchId;
+    }
 }

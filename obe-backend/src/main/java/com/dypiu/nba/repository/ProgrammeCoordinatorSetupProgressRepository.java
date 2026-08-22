@@ -8,7 +8,6 @@ import java.util.Optional;
 
 @Repository
 public interface ProgrammeCoordinatorSetupProgressRepository extends JpaRepository<ProgrammeCoordinatorSetupProgress, String> {
-    Optional<ProgrammeCoordinatorSetupProgress> findByProgrammeId(String programmeId);
-    Optional<ProgrammeCoordinatorSetupProgress> findByProgrammeIdAndBatchId(String programmeId, String batchId);
+    Optional<ProgrammeCoordinatorSetupProgress> findByProgrammeBatchId(String programmeBatchId);
     Optional<ProgrammeCoordinatorSetupProgress> findByCoordinatorEmailIgnoreCase(String coordinatorEmail);
 }

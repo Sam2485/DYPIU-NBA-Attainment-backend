@@ -228,7 +228,7 @@ public class AcademicController {
                 .build());
     }
 
-    // --- Programme Coordinator Summary & Setup Progress ---
+    // --- MasterProgramme Coordinator Summary & Setup Progress ---
     @GetMapping("/coordinator/programme-summary")
     public ResponseEntity<ApiResponse<ProgrammeCoordinatorSummaryDto>> getProgrammeCoordinatorSummary(
             @RequestParam(required = false) String coordinatorEmail,
@@ -259,7 +259,7 @@ public class AcademicController {
             @RequestBody(required = false) Map<String, Object> body) {
         return ResponseEntity.ok(ApiResponse.<ProgrammeCoordinatorSetupProgressDto>builder()
                 .success(true)
-                .message("Programme Coordinator setup progress updated successfully")
+                .message("MasterProgramme Coordinator setup progress updated successfully")
                 .data(academicService.updateProgrammeCoordinatorSetupProgress(coordinatorEmail, programmeId, batchId, currentStep, body))
                 .build());
     }
@@ -271,7 +271,7 @@ public class AcademicController {
             @RequestParam(required = false) String batchId) {
         return ResponseEntity.ok(ApiResponse.<ProgrammeCoordinatorSetupProgressDto>builder()
                 .success(true)
-                .message("Programme Coordinator setup marked as completed successfully")
+                .message("MasterProgramme Coordinator setup marked as completed successfully")
                 .data(academicService.completeProgrammeCoordinatorSetup(coordinatorEmail, programmeId, batchId))
                 .build());
     }
@@ -302,7 +302,7 @@ public class AcademicController {
             @RequestParam(required = false, defaultValue = "1") Integer currentStep) {
         return ResponseEntity.ok(ApiResponse.<CourseCoordinatorSetupProgressDto>builder()
                 .success(true)
-                .message("Course Coordinator setup progress updated successfully")
+                .message("MasterCourse Coordinator setup progress updated successfully")
                 .data(academicService.updateCourseCoordinatorSetupProgress(coordinatorEmail, courseId, currentStep))
                 .build());
     }
@@ -313,7 +313,7 @@ public class AcademicController {
             @RequestParam(required = false) String courseId) {
         return ResponseEntity.ok(ApiResponse.<CourseCoordinatorSetupProgressDto>builder()
                 .success(true)
-                .message("Course Coordinator setup marked as completed successfully")
+                .message("MasterCourse Coordinator setup marked as completed successfully")
                 .data(academicService.completeCourseCoordinatorSetup(coordinatorEmail, courseId))
                 .build());
     }
@@ -402,76 +402,76 @@ public class AcademicController {
 
     // --- Programmes ---
     @GetMapping("/programmes")
-    public ResponseEntity<ApiResponse<List<Programme>>> getProgrammes(
+    public ResponseEntity<ApiResponse<List<MasterProgramme>>> getProgrammes(
             @RequestParam(required = false) String schoolId,
             @RequestParam(required = false) String departmentId,
             @RequestParam(required = false) String coordinatorEmail) {
-        List<Programme> list = (coordinatorEmail != null && !coordinatorEmail.isBlank())
+        List<MasterProgramme> list = (coordinatorEmail != null && !coordinatorEmail.isBlank())
                 ? academicService.getProgrammesByCoordinatorEmail(coordinatorEmail)
                 : (departmentId != null && !departmentId.isBlank())
                 ? academicService.getProgrammesByDepartment(departmentId)
                 : (schoolId != null && !schoolId.isBlank())
                 ? academicService.getProgrammesBySchool(schoolId)
                 : academicService.getAllProgrammes();
-        return ResponseEntity.ok(ApiResponse.<List<Programme>>builder()
+        return ResponseEntity.ok(ApiResponse.<List<MasterProgramme>>builder()
                 .success(true)
                 .data(list)
                 .build());
     }
 
     @GetMapping("/programmes/{id}")
-    public ResponseEntity<ApiResponse<Programme>> getProgrammeById(@PathVariable String id) {
-        return ResponseEntity.ok(ApiResponse.<Programme>builder()
+    public ResponseEntity<ApiResponse<MasterProgramme>> getProgrammeById(@PathVariable String id) {
+        return ResponseEntity.ok(ApiResponse.<MasterProgramme>builder()
                 .success(true)
                 .data(academicService.getProgrammeById(id))
                 .build());
     }
 
     @PostMapping("/programmes")
-    public ResponseEntity<ApiResponse<Programme>> saveProgramme(@RequestBody Programme programme) {
+    public ResponseEntity<ApiResponse<MasterProgramme>> saveProgramme(@RequestBody MasterProgramme programme) {
         System.out.println("\n>>> [CONTROLLER] POST /api/v1/academic/programmes | id: " + (programme != null ? programme.getId() : "null") + " | name: " + (programme != null ? programme.getName() : "null") + " | coordinator: " + (programme != null ? programme.getCoordinator() : "null") + " | coordinatorEmail: " + (programme != null ? programme.getCoordinatorEmail() : "null"));
-        Programme saved = academicService.saveProgramme(programme);
+        MasterProgramme saved = academicService.saveProgramme(programme);
         System.out.println("<<< [CONTROLLER] POST /api/v1/academic/programmes SUCCESS | savedId: " + saved.getId() + " | coordinator: " + saved.getCoordinator() + " | coordinatorEmail: " + saved.getCoordinatorEmail());
-        return ResponseEntity.ok(ApiResponse.<Programme>builder()
+        return ResponseEntity.ok(ApiResponse.<MasterProgramme>builder()
                 .success(true)
-                .message("Programme saved successfully")
+                .message("MasterProgramme saved successfully")
                 .data(saved)
                 .build());
     }
 
     @PutMapping("/programmes/{id}")
-    public ResponseEntity<ApiResponse<Programme>> updateProgramme(
+    public ResponseEntity<ApiResponse<MasterProgramme>> updateProgramme(
             @PathVariable String id,
-            @RequestBody Programme programme) {
+            @RequestBody MasterProgramme programme) {
         programme.setId(id);
         System.out.println("\n>>> [CONTROLLER] PUT /api/v1/academic/programmes/" + id + " | name: " + programme.getName() + " | coordinator: " + programme.getCoordinator() + " | coordinatorEmail: " + programme.getCoordinatorEmail());
-        Programme saved = academicService.saveProgramme(programme);
+        MasterProgramme saved = academicService.saveProgramme(programme);
         System.out.println("<<< [CONTROLLER] PUT /api/v1/academic/programmes/" + id + " SUCCESS | savedId: " + saved.getId() + " | coordinator: " + saved.getCoordinator() + " | coordinatorEmail: " + saved.getCoordinatorEmail());
-        return ResponseEntity.ok(ApiResponse.<Programme>builder()
+        return ResponseEntity.ok(ApiResponse.<MasterProgramme>builder()
                 .success(true)
-                .message("Programme updated successfully")
+                .message("MasterProgramme updated successfully")
                 .data(saved)
                 .build());
     }
 
     @PutMapping("/programmes/{id}/coordinator")
-    public ResponseEntity<ApiResponse<Programme>> updateProgrammeCoordinator(
+    public ResponseEntity<ApiResponse<MasterProgramme>> updateProgrammeCoordinator(
             @PathVariable String id,
             @RequestBody java.util.Map<String, Object> body) {
         String coordinator = body.containsKey("coordinator") ? String.valueOf(body.get("coordinator")) : (body.containsKey("coordinatorId") ? String.valueOf(body.get("coordinatorId")) : null);
         String coordinatorEmail = body.containsKey("coordinatorEmail") ? String.valueOf(body.get("coordinatorEmail")) : null;
         System.out.println("\n>>> [CONTROLLER] PUT /api/v1/academic/programmes/" + id + "/coordinator | coordinator: " + coordinator + " | email: " + coordinatorEmail);
-        Programme prog = academicService.getProgrammeById(id);
+        MasterProgramme prog = academicService.getProgrammeById(id);
         if (prog == null) {
-            prog = Programme.builder().id(id).name("Programme " + id).code(id).build();
+            prog = MasterProgramme.builder().id(id).name("MasterProgramme " + id).code(id).build();
         }
         if (coordinator != null) prog.setCoordinator(coordinator);
         if (coordinatorEmail != null) prog.setCoordinatorEmail(coordinatorEmail);
-        Programme saved = academicService.saveProgramme(prog);
+        MasterProgramme saved = academicService.saveProgramme(prog);
         System.out.println("<<< [CONTROLLER] PUT /api/v1/academic/programmes/" + id + "/coordinator SUCCESS | coordinator: " + saved.getCoordinator());
-        return ResponseEntity.ok(ApiResponse.<Programme>builder()
+        return ResponseEntity.ok(ApiResponse.<MasterProgramme>builder()
                 .success(true)
-                .message("Programme coordinator updated successfully")
+                .message("MasterProgramme coordinator updated successfully")
                 .data(saved)
                 .build());
     }
@@ -481,24 +481,24 @@ public class AcademicController {
         System.out.println("\n>>> [CONTROLLER] DELETE /api/v1/academic/programmes/" + id);
         academicService.deleteProgramme(id);
         System.out.println("<<< [CONTROLLER] DELETE /api/v1/academic/programmes/" + id + " SUCCESS");
-        return ResponseEntity.ok(ApiResponse.<Void>builder().success(true).message("Programme deleted").build());
+        return ResponseEntity.ok(ApiResponse.<Void>builder().success(true).message("MasterProgramme deleted").build());
     }
 
     // --- Batches ---
     @GetMapping("/batches")
-    public ResponseEntity<ApiResponse<List<Batch>>> getBatches(
+    public ResponseEntity<ApiResponse<List<ProgrammeBatch>>> getBatches(
             @RequestParam(required = false) String programmeId,
             @RequestParam(required = false) String userEmail,
             @RequestParam(required = false) String role,
             java.security.Principal principal) {
         String email = (userEmail != null && !userEmail.isBlank()) ? userEmail : (principal != null ? principal.getName() : null);
-        List<Batch> batches = academicService.getBatchesScoped(programmeId, email, role);
-        return ResponseEntity.ok(ApiResponse.<List<Batch>>builder().success(true).data(batches).build());
+        List<ProgrammeBatch> batches = academicService.getBatchesScoped(programmeId, email, role);
+        return ResponseEntity.ok(ApiResponse.<List<ProgrammeBatch>>builder().success(true).data(batches).build());
     }
 
     @GetMapping("/batches/{id}")
-    public ResponseEntity<ApiResponse<Batch>> getBatchById(@PathVariable String id) {
-        return ResponseEntity.ok(ApiResponse.<Batch>builder()
+    public ResponseEntity<ApiResponse<ProgrammeBatch>> getBatchById(@PathVariable String id) {
+        return ResponseEntity.ok(ApiResponse.<ProgrammeBatch>builder()
                 .success(true)
                 .data(academicService.getBatchById(id))
                 .build());
@@ -513,22 +513,22 @@ public class AcademicController {
     }
 
     @PostMapping("/batches")
-    public ResponseEntity<ApiResponse<Batch>> saveBatch(@RequestBody Batch batch) {
-        return ResponseEntity.ok(ApiResponse.<Batch>builder()
+    public ResponseEntity<ApiResponse<ProgrammeBatch>> saveBatch(@RequestBody ProgrammeBatch batch) {
+        return ResponseEntity.ok(ApiResponse.<ProgrammeBatch>builder()
                 .success(true)
-                .message("Batch saved successfully")
+                .message("ProgrammeBatch saved successfully")
                 .data(academicService.saveBatch(batch))
                 .build());
     }
 
     @PutMapping("/batches/{id}")
-    public ResponseEntity<ApiResponse<Batch>> updateBatch(
+    public ResponseEntity<ApiResponse<ProgrammeBatch>> updateBatch(
             @PathVariable String id,
-            @RequestBody Batch batch) {
+            @RequestBody ProgrammeBatch batch) {
         batch.setId(id);
-        return ResponseEntity.ok(ApiResponse.<Batch>builder()
+        return ResponseEntity.ok(ApiResponse.<ProgrammeBatch>builder()
                 .success(true)
-                .message("Batch updated successfully")
+                .message("ProgrammeBatch updated successfully")
                 .data(academicService.saveBatch(batch))
                 .build());
     }
@@ -536,44 +536,44 @@ public class AcademicController {
     @DeleteMapping("/batches/{id}")
     public ResponseEntity<ApiResponse<Void>> deleteBatch(@PathVariable String id) {
         academicService.deleteBatch(id);
-        return ResponseEntity.ok(ApiResponse.<Void>builder().success(true).message("Batch deleted").build());
+        return ResponseEntity.ok(ApiResponse.<Void>builder().success(true).message("ProgrammeBatch deleted").build());
     }
 
     @GetMapping("/courses")
-    public ResponseEntity<ApiResponse<List<Course>>> getCourses(
+    public ResponseEntity<ApiResponse<List<MasterCourse>>> getCourses(
             @RequestParam(required = false) String programmeId,
             @RequestParam(required = false) String batchId) {
-        List<Course> courses = programmeId != null 
+        List<MasterCourse> courses = programmeId != null 
             ? academicService.getCoursesByProgramme(programmeId, batchId) 
             : academicService.getAllCourses();
-        return ResponseEntity.ok(ApiResponse.<List<Course>>builder().success(true).data(courses).build());
+        return ResponseEntity.ok(ApiResponse.<List<MasterCourse>>builder().success(true).data(courses).build());
     }
 
     @GetMapping("/courses/{id}")
-    public ResponseEntity<ApiResponse<Course>> getCourseById(@PathVariable String id) {
-        return ResponseEntity.ok(ApiResponse.<Course>builder()
+    public ResponseEntity<ApiResponse<MasterCourse>> getCourseById(@PathVariable String id) {
+        return ResponseEntity.ok(ApiResponse.<MasterCourse>builder()
                 .success(true)
                 .data(academicService.getCourseById(id))
                 .build());
     }
 
     @PostMapping("/courses")
-    public ResponseEntity<ApiResponse<Course>> saveCourse(@RequestBody Course course) {
-        return ResponseEntity.ok(ApiResponse.<Course>builder()
+    public ResponseEntity<ApiResponse<MasterCourse>> saveCourse(@RequestBody MasterCourse course) {
+        return ResponseEntity.ok(ApiResponse.<MasterCourse>builder()
                 .success(true)
-                .message("Course saved successfully")
+                .message("MasterCourse saved successfully")
                 .data(academicService.saveCourse(course))
                 .build());
     }
 
     @PutMapping("/courses/{id}")
-    public ResponseEntity<ApiResponse<Course>> updateCourse(
+    public ResponseEntity<ApiResponse<MasterCourse>> updateCourse(
             @PathVariable String id,
-            @RequestBody Course course) {
+            @RequestBody MasterCourse course) {
         course.setId(id);
-        return ResponseEntity.ok(ApiResponse.<Course>builder()
+        return ResponseEntity.ok(ApiResponse.<MasterCourse>builder()
                 .success(true)
-                .message("Course updated successfully")
+                .message("MasterCourse updated successfully")
                 .data(academicService.saveCourse(course))
                 .build());
     }
@@ -581,39 +581,39 @@ public class AcademicController {
     @DeleteMapping("/courses/{id}")
     public ResponseEntity<ApiResponse<Void>> deleteCourse(@PathVariable String id) {
         academicService.deleteCourse(id);
-        return ResponseEntity.ok(ApiResponse.<Void>builder().success(true).message("Course deleted").build());
+        return ResponseEntity.ok(ApiResponse.<Void>builder().success(true).message("MasterCourse deleted").build());
     }
 
-    // --- Course Offerings (Batch Specific) ---
+    // --- MasterCourse Offerings (ProgrammeBatch Specific) ---
     @GetMapping("/course-offerings")
-    public ResponseEntity<ApiResponse<List<com.dypiu.nba.entity.CourseOffering>>> getCourseOfferings(@RequestParam String batchId) {
-        return ResponseEntity.ok(ApiResponse.<List<com.dypiu.nba.entity.CourseOffering>>builder()
+    public ResponseEntity<ApiResponse<List<com.dypiu.nba.entity.ProgrammeBatchCourse>>> getProgrammeBatchCourses(@RequestParam String batchId) {
+        return ResponseEntity.ok(ApiResponse.<List<com.dypiu.nba.entity.ProgrammeBatchCourse>>builder()
                 .success(true)
-                .data(academicService.getCourseOfferingsByBatch(batchId))
+                .data(academicService.getProgrammeBatchCoursesByBatch(batchId))
                 .build());
     }
 
     @GetMapping("/course-offerings/{offeringId}")
-    public ResponseEntity<ApiResponse<com.dypiu.nba.entity.CourseOffering>> getCourseOfferingById(@PathVariable String offeringId) {
-        return ResponseEntity.ok(ApiResponse.<com.dypiu.nba.entity.CourseOffering>builder()
+    public ResponseEntity<ApiResponse<com.dypiu.nba.entity.ProgrammeBatchCourse>> getProgrammeBatchCourseById(@PathVariable String offeringId) {
+        return ResponseEntity.ok(ApiResponse.<com.dypiu.nba.entity.ProgrammeBatchCourse>builder()
                 .success(true)
-                .data(academicService.getCourseOfferingById(offeringId))
+                .data(academicService.getProgrammeBatchCourseById(offeringId))
                 .build());
     }
 
     @PostMapping("/course-offerings")
-    public ResponseEntity<ApiResponse<com.dypiu.nba.entity.CourseOffering>> saveCourseOffering(@RequestBody com.dypiu.nba.entity.CourseOffering offering) {
-        return ResponseEntity.ok(ApiResponse.<com.dypiu.nba.entity.CourseOffering>builder()
+    public ResponseEntity<ApiResponse<com.dypiu.nba.entity.ProgrammeBatchCourse>> saveProgrammeBatchCourse(@RequestBody com.dypiu.nba.entity.ProgrammeBatchCourse offering) {
+        return ResponseEntity.ok(ApiResponse.<com.dypiu.nba.entity.ProgrammeBatchCourse>builder()
                 .success(true)
-                .message("Course Offering saved successfully")
-                .data(academicService.saveCourseOffering(offering))
+                .message("MasterCourse Offering saved successfully")
+                .data(academicService.saveProgrammeBatchCourse(offering))
                 .build());
     }
 
     @DeleteMapping("/course-offerings/{id}")
-    public ResponseEntity<ApiResponse<Void>> deleteCourseOffering(@PathVariable String id) {
-        academicService.deleteCourseOffering(id);
-        return ResponseEntity.ok(ApiResponse.<Void>builder().success(true).message("Course Offering deleted").build());
+    public ResponseEntity<ApiResponse<Void>> deleteProgrammeBatchCourse(@PathVariable String id) {
+        academicService.deleteProgrammeBatchCourse(id);
+        return ResponseEntity.ok(ApiResponse.<Void>builder().success(true).message("MasterCourse Offering deleted").build());
     }
 
     @GetMapping("/course-offerings/{offeringId}/outcomes")
@@ -630,7 +630,7 @@ public class AcademicController {
             @RequestBody List<CourseOutcome> outcomes) {
         return ResponseEntity.ok(ApiResponse.<List<CourseOutcome>>builder()
                 .success(true)
-                .message("Course outcomes saved for offering")
+                .message("MasterCourse outcomes saved for offering")
                 .data(outcomeService.saveOutcomesByOffering(offeringId, outcomes))
                 .build());
     }
@@ -649,7 +649,7 @@ public class AcademicController {
             @RequestBody com.dypiu.nba.dto.CourseMappingMatrixDto dto) {
         return ResponseEntity.ok(ApiResponse.<com.dypiu.nba.dto.CourseMappingMatrixDto>builder()
                 .success(true)
-                .message("Course mappings saved for offering")
+                .message("MasterCourse mappings saved for offering")
                 .data(outcomeService.saveMappingsByOffering(offeringId, dto))
                 .build());
     }
@@ -693,17 +693,17 @@ public class AcademicController {
     public ResponseEntity<ApiResponse<Map<String, Object>>> assignHodCoordinator(@RequestBody Map<String, Object> body) {
         return ResponseEntity.ok(ApiResponse.<Map<String, Object>>builder()
                 .success(true)
-                .message("Programme coordinator assigned successfully.")
+                .message("MasterProgramme coordinator assigned successfully.")
                 .data(academicService.assignHodCoordinator(body))
                 .build());
     }
 
-    // --- Batch Course Allocation ---
+    // --- ProgrammeBatch MasterCourse Allocation ---
     @PostMapping("/courses/allocate")
     public ResponseEntity<ApiResponse<Map<String, Object>>> allocateCourses(@RequestBody Map<String, Object> body) {
         String programmeId = body != null && body.get("programmeId") != null ? body.get("programmeId").toString().trim() : null;
         if (programmeId == null || programmeId.isBlank()) {
-            throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST, "Programme ID is required for course allocation.");
+            throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST, "MasterProgramme ID is required for course allocation.");
         }
         String batchId = body != null && body.get("batchId") != null ? body.get("batchId").toString().trim() : null;
         boolean submit = body != null && Boolean.TRUE.equals(body.get("submit"));
@@ -713,7 +713,7 @@ public class AcademicController {
 
         return ResponseEntity.ok(ApiResponse.<Map<String, Object>>builder()
                 .success(true)
-                .message(submit ? "Course allocations saved and submitted for review." : "Course allocations saved successfully.")
+                .message(submit ? "MasterCourse allocations saved and submitted for review." : "MasterCourse allocations saved successfully.")
                 .data(academicService.allocateCourses(programmeId, batchId, allocations, submit))
                 .build());
     }
@@ -755,12 +755,12 @@ public class AcademicController {
             @RequestBody Map<String, Object> body) {
         return ResponseEntity.ok(ApiResponse.<Map<String, Object>>builder()
                 .success(true)
-                .message("Course CO targets updated.")
+                .message("MasterCourse CO targets updated.")
                 .data(academicService.saveCourseCoTargets(courseId, body))
                 .build());
     }
 
-    // --- Course Outcomes by Course ID ---
+    // --- MasterCourse Outcomes by MasterCourse ID ---
     @GetMapping("/courses/{courseId}/outcomes")
     public ResponseEntity<ApiResponse<List<CourseOutcome>>> getCourseOutcomesByCourseId(
             @PathVariable String courseId,
@@ -777,12 +777,12 @@ public class AcademicController {
             @RequestBody List<CourseOutcome> outcomes) {
         return ResponseEntity.ok(ApiResponse.<List<CourseOutcome>>builder()
                 .success(true)
-                .message("Course outcomes saved successfully.")
+                .message("MasterCourse outcomes saved successfully.")
                 .data(outcomeService.saveCOs(courseId, outcomes))
                 .build());
     }
 
-    // --- Course Mapping Matrix by Course ID ---
+    // --- MasterCourse Mapping Matrix by MasterCourse ID ---
     @GetMapping("/courses/{courseId}/mapping")
     public ResponseEntity<ApiResponse<com.dypiu.nba.dto.CourseMappingMatrixDto>> getCourseMappingByCourseId(
             @PathVariable String courseId,
@@ -799,12 +799,12 @@ public class AcademicController {
             @RequestBody com.dypiu.nba.dto.CourseMappingMatrixDto dto) {
         return ResponseEntity.ok(ApiResponse.<com.dypiu.nba.dto.CourseMappingMatrixDto>builder()
                 .success(true)
-                .message("Course mappings updated.")
+                .message("MasterCourse mappings updated.")
                 .data(outcomeService.saveCourseMappings(courseId, dto))
                 .build());
     }
 
-    // --- Programme Targets by Programme ID ---
+    // --- MasterProgramme Targets by MasterProgramme ID ---
     @GetMapping("/programmes/{programmeId}/targets")
     public ResponseEntity<ApiResponse<com.dypiu.nba.dto.ProgrammeTargetDto>> getProgrammeTargetsByProgrammeId(
             @PathVariable String programmeId,
@@ -821,7 +821,7 @@ public class AcademicController {
             @RequestBody com.dypiu.nba.dto.ProgrammeTargetDto dto) {
         return ResponseEntity.ok(ApiResponse.<com.dypiu.nba.dto.ProgrammeTargetDto>builder()
                 .success(true)
-                .message("Programme targets saved.")
+                .message("MasterProgramme targets saved.")
                 .data(outcomeService.saveProgrammeTargets(programmeId, dto))
                 .build());
     }

@@ -4,14 +4,15 @@ import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.ZonedDateTime;
+import java.util.List;
 
 @Entity
 @Table(
-        name = "courses",
+        name = "master_courses",
         uniqueConstraints = {
                 @UniqueConstraint(
-                        name = "uk_programme_course_code",
-                        columnNames = {"programme_id", "code"}
+                        name = "uk_course_programme_code",
+                        columnNames = {"master_programme_id", "code"}
                 )
         }
 )
@@ -20,7 +21,7 @@ import java.time.ZonedDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class Course {
+public class MasterCourse {
 
     @Id
     private String id;
@@ -31,8 +32,8 @@ public class Course {
     @Column(nullable = false, length = 255)
     private String name;
 
-    @Column(name = "programme_id", nullable = false)
-    private String programmeId;
+    @Column(name = "master_programme_id", nullable = false)
+    private String masterProgrammeId;
 
     @Column(nullable = false)
     private Integer credits;
@@ -60,7 +61,7 @@ public class Course {
     private String faculty;
 
     @Transient
-    private String courseOfferingId;
+    private String programmeBatchCourseId;
 
     @Transient
     private String assignedFaculty;
@@ -72,7 +73,7 @@ public class Course {
     private String academicYear;
 
     @Transient
-    private java.util.List<CourseOutcome> courseOutcomes;
+    private List<CourseOutcome> courseOutcomes;
 
     @Transient
     public String getType() {
@@ -83,5 +84,22 @@ public class Course {
         if (type != null) {
             this.courseType = type;
         }
+    }
+
+    // Helper compatibility methods
+    public String getProgrammeId() {
+        return masterProgrammeId;
+    }
+
+    public void setProgrammeId(String programmeId) {
+        this.masterProgrammeId = programmeId;
+    }
+
+    public String getCourseOfferingId() {
+        return programmeBatchCourseId;
+    }
+
+    public void setCourseOfferingId(String offeringId) {
+        this.programmeBatchCourseId = offeringId;
     }
 }

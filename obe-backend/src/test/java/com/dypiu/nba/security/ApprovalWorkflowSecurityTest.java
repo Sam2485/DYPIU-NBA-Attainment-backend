@@ -47,16 +47,16 @@ public class ApprovalWorkflowSecurityTest {
     private DepartmentRepository departmentRepository;
 
     @Autowired
-    private ProgrammeRepository programmeRepository;
+    private MasterProgrammeRepository masterProgrammeRepository;
 
     @Autowired
-    private BatchRepository batchRepository;
+    private ProgrammeBatchRepository programmeBatchRepository;
 
     @Autowired
-    private CourseRepository courseRepository;
+    private MasterCourseRepository masterCourseRepository;
 
     @Autowired
-    private CourseOfferingRepository courseOfferingRepository;
+    private ProgrammeBatchCourseRepository programmeBatchCourseRepository;
 
     @Autowired
     private UserRepository userRepository;
@@ -65,11 +65,11 @@ public class ApprovalWorkflowSecurityTest {
     private School schoolB;
     private Department deptA;
     private Department deptB;
-    private Programme progA;
-    private Programme progB;
-    private Batch batchA;
-    private Course courseA;
-    private CourseOffering offeringA;
+    private MasterProgramme progA;
+    private MasterProgramme progB;
+    private ProgrammeBatch batchA;
+    private MasterCourse courseA;
+    private ProgrammeBatchCourse offeringA;
 
     private User directorA;
     private User directorB;
@@ -100,7 +100,7 @@ public class ApprovalWorkflowSecurityTest {
                 .hodEmail("hod.a." + salt + "@dypiu.ac.in")
                 .build());
 
-        progA = programmeRepository.save(Programme.builder()
+        progA = masterProgrammeRepository.save(MasterProgramme.builder()
                 .id("prog-app-a-" + salt)
                 .name("B.Tech CS A " + salt)
                 .code("BTCSA" + salt)
@@ -108,27 +108,25 @@ public class ApprovalWorkflowSecurityTest {
                 .coordinatorEmail("pc.a." + salt + "@dypiu.ac.in")
                 .build());
 
-        batchA = batchRepository.save(Batch.builder()
-                .id("batch-app-a-" + salt)
-                .programmeId(progA.getId())
+        batchA = programmeBatchRepository.save(ProgrammeBatch.builder().id("batch-app-a-" + salt).masterProgrammeId(progA.getId())
                 .name("2022-2026")
                 .startYear(2022)
                 .endYear(2026)
                 .build());
 
-        courseA = courseRepository.save(Course.builder()
+        courseA = masterCourseRepository.save(MasterCourse.builder()
                 .id("crs-app-a-" + salt)
                 .code("CS" + salt)
                 .name("Data Structures A")
-                .programmeId(progA.getId())
+                .masterProgrammeId(progA.getId())
                 .credits(4)
                 .courseType("THEORY")
                 .build());
 
-        offeringA = courseOfferingRepository.save(CourseOffering.builder()
+        offeringA = programmeBatchCourseRepository.save(ProgrammeBatchCourse.builder()
                 .id("off-app-a-" + salt)
-                .courseId(courseA.getId())
-                .batchId(batchA.getId())
+                .masterCourseId(courseA.getId())
+                .programmeBatchId(batchA.getId())
                 .semester(1)
                 .assignedFaculty("faculty.a." + salt + "@dypiu.ac.in")
                 .build());
@@ -149,7 +147,7 @@ public class ApprovalWorkflowSecurityTest {
                 .hodEmail("hod.b." + salt + "@dypiu.ac.in")
                 .build());
 
-        progB = programmeRepository.save(Programme.builder()
+        progB = masterProgrammeRepository.save(MasterProgramme.builder()
                 .id("prog-app-b-" + salt)
                 .name("MBA B " + salt)
                 .code("MBAB" + salt)
@@ -387,11 +385,11 @@ public class ApprovalWorkflowSecurityTest {
         ApprovalRequest reqA = approvalRequestRepository.save(ApprovalRequest.builder()
                 .id("app-hod-a-" + System.nanoTime())
                 .type(ApprovalType.COURSE_ALLOCATION)
-                .title("Course Allocation A")
+                .title("MasterCourse Allocation A")
                 .resourceId("allocation-" + progA.getId())
                 .schoolId(schoolA.getId())
                 .departmentId(deptA.getId())
-                .programmeId(progA.getId())
+                .masterProgrammeId(progA.getId())
                 .status(ApprovalStatus.PENDING)
                 .submittedBy("pc.a@dypiu.ac.in")
                 .build());
@@ -399,11 +397,11 @@ public class ApprovalWorkflowSecurityTest {
         ApprovalRequest reqB = approvalRequestRepository.save(ApprovalRequest.builder()
                 .id("app-hod-b-" + System.nanoTime())
                 .type(ApprovalType.COURSE_ALLOCATION)
-                .title("Course Allocation B")
+                .title("MasterCourse Allocation B")
                 .resourceId("allocation-" + progB.getId())
                 .schoolId(schoolB.getId())
                 .departmentId(deptB.getId())
-                .programmeId(progB.getId())
+                .masterProgrammeId(progB.getId())
                 .status(ApprovalStatus.PENDING)
                 .submittedBy("pc.b@dypiu.ac.in")
                 .build());
@@ -423,11 +421,11 @@ public class ApprovalWorkflowSecurityTest {
         ApprovalRequest reqB = approvalRequestRepository.save(ApprovalRequest.builder()
                 .id("app-hod-b-2-" + System.nanoTime())
                 .type(ApprovalType.COURSE_ALLOCATION)
-                .title("Course Allocation B")
+                .title("MasterCourse Allocation B")
                 .resourceId("allocation-" + progB.getId())
                 .schoolId(schoolB.getId())
                 .departmentId(deptB.getId())
-                .programmeId(progB.getId())
+                .masterProgrammeId(progB.getId())
                 .status(ApprovalStatus.PENDING)
                 .submittedBy("pc.b@dypiu.ac.in")
                 .build());
@@ -445,11 +443,11 @@ public class ApprovalWorkflowSecurityTest {
         ApprovalRequest reqB = approvalRequestRepository.save(ApprovalRequest.builder()
                 .id("app-hod-b-3-" + System.nanoTime())
                 .type(ApprovalType.COURSE_ALLOCATION)
-                .title("Course Allocation B")
+                .title("MasterCourse Allocation B")
                 .resourceId("allocation-" + progB.getId())
                 .schoolId(schoolB.getId())
                 .departmentId(deptB.getId())
-                .programmeId(progB.getId())
+                .masterProgrammeId(progB.getId())
                 .status(ApprovalStatus.PENDING)
                 .submittedBy("pc.b@dypiu.ac.in")
                 .build());
@@ -471,8 +469,8 @@ public class ApprovalWorkflowSecurityTest {
                 .resourceId(offeringA.getId())
                 .schoolId(schoolA.getId())
                 .departmentId(deptA.getId())
-                .programmeId(progA.getId())
-                .courseOfferingId(offeringA.getId())
+                .masterProgrammeId(progA.getId())
+                .programmeBatchCourseId(offeringA.getId())
                 .status(ApprovalStatus.PENDING)
                 .submittedBy("faculty.a@dypiu.ac.in")
                 .build());
@@ -494,7 +492,7 @@ public class ApprovalWorkflowSecurityTest {
                 .resourceId("off-b")
                 .schoolId(schoolB.getId())
                 .departmentId(deptB.getId())
-                .programmeId(progB.getId())
+                .masterProgrammeId(progB.getId())
                 .status(ApprovalStatus.PENDING)
                 .submittedBy("faculty.b@dypiu.ac.in")
                 .build());
@@ -516,7 +514,7 @@ public class ApprovalWorkflowSecurityTest {
                 .resourceId("off-b")
                 .schoolId(schoolB.getId())
                 .departmentId(deptB.getId())
-                .programmeId(progB.getId())
+                .masterProgrammeId(progB.getId())
                 .status(ApprovalStatus.PENDING)
                 .submittedBy("faculty.b@dypiu.ac.in")
                 .build());
@@ -542,8 +540,8 @@ public class ApprovalWorkflowSecurityTest {
                 .resourceId(offeringA.getId())
                 .schoolId(schoolA.getId())
                 .departmentId(deptA.getId())
-                .programmeId(progA.getId())
-                .courseOfferingId(offeringA.getId())
+                .masterProgrammeId(progA.getId())
+                .programmeBatchCourseId(offeringA.getId())
                 .status(ApprovalStatus.PENDING)
                 .submittedBy("another.faculty@dypiu.ac.in")
                 .build());
@@ -598,8 +596,8 @@ public class ApprovalWorkflowSecurityTest {
                 .resourceId(offeringA.getId())
                 .schoolId(schoolA.getId())
                 .departmentId(deptA.getId())
-                .programmeId(progA.getId())
-                .courseOfferingId(offeringA.getId())
+                .masterProgrammeId(progA.getId())
+                .programmeBatchCourseId(offeringA.getId())
                 .status(ApprovalStatus.PENDING)
                 .submittedBy("faculty.a@dypiu.ac.in")
                 .build());
@@ -636,8 +634,8 @@ public class ApprovalWorkflowSecurityTest {
                 .resourceId(offeringA.getId())
                 .schoolId(schoolA.getId())
                 .departmentId(deptA.getId())
-                .programmeId(progA.getId())
-                .courseOfferingId(offeringA.getId())
+                .masterProgrammeId(progA.getId())
+                .programmeBatchCourseId(offeringA.getId())
                 .status(ApprovalStatus.PENDING)
                 .submittedBy("faculty.a@dypiu.ac.in")
                 .build());
@@ -651,7 +649,7 @@ public class ApprovalWorkflowSecurityTest {
         ResponseEntity<ApiResponse<ApprovalRequest>> res = approvalController.rejectRequest(reqA.getId(), body);
         assertNotNull(res.getBody());
         ApprovalRequest rejected = res.getBody().getData();
-        assertEquals(ApprovalStatus.NEEDS_REVISION, rejected.getStatus());
+        assertEquals(ApprovalStatus.REVISION_REQUESTED, rejected.getStatus());
         assertEquals(pcA.getName(), rejected.getApprovedBy());
 
         List<ApprovalHistory> history = approvalHistoryRepository.findByApprovalRequestId(reqA.getId());
@@ -675,8 +673,8 @@ public class ApprovalWorkflowSecurityTest {
                 .resourceId(offeringA.getId())
                 .schoolId(schoolA.getId())
                 .departmentId(deptA.getId())
-                .programmeId(progA.getId())
-                .courseOfferingId(offeringA.getId())
+                .masterProgrammeId(progA.getId())
+                .programmeBatchCourseId(offeringA.getId())
                 .status(ApprovalStatus.PENDING)
                 .submittedBy(pcA.getEmail())
                 .build());
@@ -698,8 +696,8 @@ public class ApprovalWorkflowSecurityTest {
                 .resourceId(offeringA.getId())
                 .schoolId(schoolA.getId())
                 .departmentId(deptA.getId())
-                .programmeId(progA.getId())
-                .courseOfferingId(offeringA.getId())
+                .masterProgrammeId(progA.getId())
+                .programmeBatchCourseId(offeringA.getId())
                 .status(ApprovalStatus.PENDING)
                 .submittedBy("faculty.a@dypiu.ac.in")
                 .build());
@@ -729,8 +727,8 @@ public class ApprovalWorkflowSecurityTest {
                 .resourceId(offeringA.getId())
                 .schoolId(schoolA.getId())
                 .departmentId(deptA.getId())
-                .programmeId(progA.getId())
-                .courseOfferingId(offeringA.getId())
+                .masterProgrammeId(progA.getId())
+                .programmeBatchCourseId(offeringA.getId())
                 .status(ApprovalStatus.REJECTED)
                 .submittedBy("faculty.a@dypiu.ac.in")
                 .build());

@@ -21,9 +21,9 @@ public class MappingService {
     private final CoPoMappingRepository coPoMappingRepository;
     private final CoPsoMappingRepository coPsoMappingRepository;
     private final CourseOutcomeRepository courseOutcomeRepository;
-    private final CourseOfferingRepository courseOfferingRepository;
-    private final CourseRepository courseRepository;
-    private final ProgrammeRepository programmeRepository;
+    private final ProgrammeBatchCourseRepository programmeBatchCourseRepository;
+    private final MasterCourseRepository masterCourseRepository;
+    private final MasterProgrammeRepository masterProgrammeRepository;
     private final DepartmentRepository departmentRepository;
     private final CurrentUserScopeService currentUserScopeService;
 
@@ -43,14 +43,13 @@ public class MappingService {
         CourseOutcome co = courseOutcomeRepository.findById(courseOutcomeId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Course Outcome not found: " + courseOutcomeId));
 
-        String offeringId = co.getCourseOfferingId();
+        String offeringId = co.getProgrammeBatchCourseId();
         if (offeringId != null && !offeringId.isBlank()) {
-            CourseOffering offering = courseOfferingRepository.findById(offeringId)
+            ProgrammeBatchCourse offering = programmeBatchCourseRepository.findById(offeringId)
                     .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Course Offering not found: " + offeringId));
 
             if (scope.isFaculty()) {
-                boolean isCoord = (offering.getCourseCoordinatorId() != null && Objects.equals(offering.getCourseCoordinatorId(), scope.getUserId()))
-                        ;
+                boolean isCoord = (offering.getCourseCoordinatorId() != null && Objects.equals(offering.getCourseCoordinatorId(), scope.getUserId()));
                 boolean isAssigned = isCoord || (offering.getAssignedFaculty() != null && (offering.getAssignedFaculty().contains(scope.getEmail()) || offering.getAssignedFaculty().contains(scope.getName())));
                 if (!isAssigned) {
                     throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: You are not assigned to this Course Offering.");
@@ -58,13 +57,13 @@ public class MappingService {
                 return;
             }
 
-            if (offering.getCourseId() != null) {
-                Course c = courseRepository.findById(offering.getCourseId()).orElse(null);
-                if (c != null && c.getProgrammeId() != null) {
-                    if (scope.isProgrammeCoordinator() && !c.getProgrammeId().equals(scope.getRequiredProgrammeId())) {
+            if (offering.getMasterCourseId() != null) {
+                MasterCourse c = masterCourseRepository.findById(offering.getMasterCourseId()).orElse(null);
+                if (c != null && c.getMasterProgrammeId() != null) {
+                    if (scope.isProgrammeCoordinator() && !c.getMasterProgrammeId().equals(scope.getRequiredProgrammeId())) {
                         throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Course Outcome is outside your assigned programme scope.");
                     }
-                    Programme p = programmeRepository.findById(c.getProgrammeId()).orElse(null);
+                    MasterProgramme p = masterProgrammeRepository.findById(c.getMasterProgrammeId()).orElse(null);
                     if (p != null && p.getDepartmentId() != null) {
                         if (scope.isHod() && !p.getDepartmentId().equals(scope.getRequiredDepartmentId())) {
                             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Course Outcome is outside your assigned department scope.");

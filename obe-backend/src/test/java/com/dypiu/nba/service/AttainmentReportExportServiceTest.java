@@ -24,21 +24,21 @@ import static org.mockito.Mockito.when;
 class AttainmentReportExportServiceTest {
 
     @Mock
-    private CourseRepository courseRepository;
+    private MasterCourseRepository masterCourseRepository;
     @Mock
-    private ProgrammeRepository programmeRepository;
+    private MasterProgrammeRepository masterProgrammeRepository;
     @Mock
     private DepartmentRepository departmentRepository;
     @Mock
     private SchoolRepository schoolRepository;
     @Mock
-    private BatchRepository batchRepository;
+    private ProgrammeBatchRepository programmeBatchRepository;
     @Mock
     private CourseOutcomeRepository courseOutcomeRepository;
     @Mock
     private StudentCoMarkRepository studentCoMarkRepository;
     @Mock
-    private CourseOfferingRepository courseOfferingRepository;
+    private ProgrammeBatchCourseRepository programmeBatchCourseRepository;
     @Mock
     private AttainmentCalculationService calculationService;
     @Mock
@@ -47,38 +47,38 @@ class AttainmentReportExportServiceTest {
     @InjectMocks
     private AttainmentReportExportService exportService;
 
-    private Course sampleCourse;
-    private CourseOffering sampleOffering;
-    private Batch sampleBatch;
-    private Programme sampleProgramme;
+    private MasterCourse sampleCourse;
+    private ProgrammeBatchCourse sampleOffering;
+    private ProgrammeBatch sampleBatch;
+    private MasterProgramme sampleProgramme;
     private List<CourseOutcome> sampleCos;
 
     @BeforeEach
     void setUp() {
-        sampleCourse = Course.builder()
+        sampleCourse = MasterCourse.builder()
                 .id("crs-1")
                 .code("310244")
                 .name("Computer Network and Security")
-                .programmeId("prog-1")
+                .masterProgrammeId("prog-1")
                 .build();
 
-        sampleOffering = CourseOffering.builder()
+        sampleOffering = ProgrammeBatchCourse.builder()
                 .id("offering-crs-1-batch-1")
-                .courseId("crs-1")
-                .batchId("batch-1")
+                .masterCourseId("crs-1")
+                .programmeBatchId("batch-1")
                 .semester(5)
                 .build();
 
-        sampleBatch = Batch.builder()
+        sampleBatch = ProgrammeBatch.builder()
                 .id("batch-1")
-                .name("Batch 2025-29")
-                .programmeId("prog-1")
+                .name("ProgrammeBatch 2025-29")
+                .masterProgrammeId("prog-1")
                 .startYear(2025)
                 .endYear(2029)
                 .build();
 
 
-        sampleProgramme = Programme.builder()
+        sampleProgramme = MasterProgramme.builder()
                 .id("prog-1")
                 .code("BTECH-CSE")
                 .name("B.Tech Computer Science and Engineering")
@@ -89,7 +89,7 @@ class AttainmentReportExportServiceTest {
         for (int i = 1; i <= 6; i++) {
             sampleCos.add(CourseOutcome.builder()
                     .id("co-" + i)
-                    .courseOfferingId("offering-crs-1-batch-1")
+                    .programmeBatchCourseId("offering-crs-1-batch-1")
                     .code("CO" + i)
                     .statement("Statement for CO" + i)
                     .build());
@@ -98,10 +98,10 @@ class AttainmentReportExportServiceTest {
 
     @Test
     void testGenerateAttainmentExcel_CreatesValidWorkbook() throws Exception {
-        when(courseRepository.findById("crs-1")).thenReturn(Optional.of(sampleCourse));
-        when(programmeRepository.findById("prog-1")).thenReturn(Optional.of(sampleProgramme));
-        when(batchRepository.findById("batch-1")).thenReturn(Optional.of(sampleBatch));
-        when(courseOfferingRepository.findByCourseId("crs-1")).thenReturn(List.of(sampleOffering));
+        when(masterCourseRepository.findById("crs-1")).thenReturn(Optional.of(sampleCourse));
+        when(masterProgrammeRepository.findById("prog-1")).thenReturn(Optional.of(sampleProgramme));
+        when(programmeBatchRepository.findById("batch-1")).thenReturn(Optional.of(sampleBatch));
+        when(programmeBatchCourseRepository.findByMasterCourseId("crs-1")).thenReturn(List.of(sampleOffering));
 
         Map<String, Object> coCalcData = new HashMap<>();
         coCalcData.put("overallCoAttainment", new BigDecimal("2.50"));
@@ -134,10 +134,10 @@ class AttainmentReportExportServiceTest {
 
     @Test
     void testGenerateAttainmentPdf_CreatesValidPdf() {
-        when(courseRepository.findById("crs-1")).thenReturn(Optional.of(sampleCourse));
-        when(programmeRepository.findById("prog-1")).thenReturn(Optional.of(sampleProgramme));
-        when(batchRepository.findById("batch-1")).thenReturn(Optional.of(sampleBatch));
-        when(courseOfferingRepository.findByCourseId("crs-1")).thenReturn(List.of(sampleOffering));
+        when(masterCourseRepository.findById("crs-1")).thenReturn(Optional.of(sampleCourse));
+        when(masterProgrammeRepository.findById("prog-1")).thenReturn(Optional.of(sampleProgramme));
+        when(programmeBatchRepository.findById("batch-1")).thenReturn(Optional.of(sampleBatch));
+        when(programmeBatchCourseRepository.findByMasterCourseId("crs-1")).thenReturn(List.of(sampleOffering));
 
         Map<String, Object> coCalcData = new HashMap<>();
         coCalcData.put("overallCoAttainment", new BigDecimal("2.50"));

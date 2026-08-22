@@ -3,15 +3,17 @@ package com.dypiu.nba.entity;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.math.BigDecimal;
 import java.time.ZonedDateTime;
+import java.util.List;
 
 @Entity
 @Table(
         name = "programme_specific_outcomes",
         uniqueConstraints = {
                 @UniqueConstraint(
-                        name = "uk_programme_pso_code",
-                        columnNames = {"programme_id", "code"}
+                        name = "uk_batch_pso_code",
+                        columnNames = {"programme_batch_id", "code"}
                 )
         }
 )
@@ -25,8 +27,8 @@ public class ProgrammeSpecificOutcome {
     @Id
     private String id;
 
-    @Column(name = "programme_id", nullable = false)
-    private String programmeId;
+    @Column(name = "programme_batch_id", nullable = false)
+    private String programmeBatchId;
 
     @Column(nullable = false, length = 20)
     private String code;
@@ -35,7 +37,13 @@ public class ProgrammeSpecificOutcome {
     private String statement;
 
     @Column(name = "target", precision = 4, scale = 2)
-    private java.math.BigDecimal target;
+    @Builder.Default
+    private BigDecimal target = new BigDecimal("2.50");
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 30)
+    @Builder.Default
+    private ApprovalStatus status = ApprovalStatus.DRAFT;
 
     @Column(name = "created_at", insertable = false, updatable = false)
     private ZonedDateTime createdAt;
@@ -47,5 +55,14 @@ public class ProgrammeSpecificOutcome {
     private String academicYear;
 
     @Transient
-    private java.util.List<PsoCompetency> competencies;
+    private List<PsoCompetency> competencies;
+
+    // Helper compatibility methods
+    public String getProgrammeId() {
+        return programmeBatchId;
+    }
+
+    public void setProgrammeId(String programmeId) {
+        this.programmeBatchId = programmeId;
+    }
 }

@@ -47,13 +47,13 @@ public class DirectorAndHodScopeSecurityTest {
     private DepartmentRepository departmentRepository;
 
     @Autowired
-    private ProgrammeRepository programmeRepository;
+    private MasterProgrammeRepository masterProgrammeRepository;
 
     @Autowired
-    private BatchRepository batchRepository;
+    private ProgrammeBatchRepository programmeBatchRepository;
 
     @Autowired
-    private CourseRepository courseRepository;
+    private MasterCourseRepository masterCourseRepository;
 
     @Autowired
     private UserRepository userRepository;
@@ -63,12 +63,12 @@ public class DirectorAndHodScopeSecurityTest {
     private Department deptA1;
     private Department deptA2;
     private Department deptB1;
-    private Programme progA1;
-    private Programme progB1;
-    private Batch batchA1;
-    private Batch batchB1;
-    private Course courseA1;
-    private Course courseB1;
+    private MasterProgramme progA1;
+    private MasterProgramme progB1;
+    private ProgrammeBatch batchA1;
+    private ProgrammeBatch batchB1;
+    private MasterCourse courseA1;
+    private MasterCourse courseB1;
 
     private User directorA;
     private User directorB;
@@ -126,14 +126,14 @@ public class DirectorAndHodScopeSecurityTest {
                 .build());
 
         // 3. Programmes
-        progA1 = programmeRepository.save(Programme.builder()
+        progA1 = masterProgrammeRepository.save(MasterProgramme.builder()
                 .id("prog-test-a1-" + System.nanoTime())
                 .departmentId(deptA1.getId())
                 .name("B.Tech Computer Science")
                 .code("BT-CS")
                 .build());
 
-        progB1 = programmeRepository.save(Programme.builder()
+        progB1 = masterProgrammeRepository.save(MasterProgramme.builder()
                 .id("prog-test-b1-" + System.nanoTime())
                 .departmentId(deptB1.getId())
                 .name("MBA Finance")
@@ -141,36 +141,36 @@ public class DirectorAndHodScopeSecurityTest {
                 .build());
 
         // 4. Batches
-        batchA1 = batchRepository.save(Batch.builder()
+        batchA1 = programmeBatchRepository.save(ProgrammeBatch.builder()
                 .id("batch-test-a1-" + System.nanoTime())
-                .programmeId(progA1.getId())
-                .name("Batch CS 2022-2026")
+                .masterProgrammeId(progA1.getId())
+                .name("ProgrammeBatch CS 2022-2026")
                 .startYear(2022)
                 .endYear(2026)
                 .build());
 
-        batchB1 = batchRepository.save(Batch.builder()
+        batchB1 = programmeBatchRepository.save(ProgrammeBatch.builder()
                 .id("batch-test-b1-" + System.nanoTime())
-                .programmeId(progB1.getId())
-                .name("Batch MBA 2023-2025")
+                .masterProgrammeId(progB1.getId())
+                .name("ProgrammeBatch MBA 2023-2025")
                 .startYear(2023)
                 .endYear(2025)
                 .durationYears(2)
                 .build());
 
         // 5. Courses
-        courseA1 = courseRepository.save(Course.builder()
+        courseA1 = masterCourseRepository.save(MasterCourse.builder()
                 .id("crs-test-a1-" + System.nanoTime())
-                .programmeId(progA1.getId())
+                .masterProgrammeId(progA1.getId())
                 .name("Data Structures")
                 .code("CS201")
                 .credits(4)
                 .courseType("CORE")
                 .build());
 
-        courseB1 = courseRepository.save(Course.builder()
+        courseB1 = masterCourseRepository.save(MasterCourse.builder()
                 .id("crs-test-b1-" + System.nanoTime())
-                .programmeId(progB1.getId())
+                .masterProgrammeId(progB1.getId())
                 .name("Financial Accounting")
                 .code("MBA101")
                 .credits(3)
@@ -300,7 +300,7 @@ public class DirectorAndHodScopeSecurityTest {
     @DisplayName("Scenario 5: Director A sees only programmes under School A")
     void testDirectorProgrammesScopedToSchoolA() {
         authenticateUser(directorA);
-        List<Programme> progs = academicService.getAllProgrammes();
+        List<MasterProgramme> progs = academicService.getAllProgrammes();
         assertFalse(progs.isEmpty());
         assertTrue(progs.stream().anyMatch(p -> progA1.getId().equals(p.getId())));
         assertFalse(progs.stream().anyMatch(p -> progB1.getId().equals(p.getId())));
@@ -318,7 +318,7 @@ public class DirectorAndHodScopeSecurityTest {
     @DisplayName("Scenario 7: Director A sees only batches under School A")
     void testDirectorBatchesScopedToSchoolA() {
         authenticateUser(directorA);
-        List<Batch> batches = academicService.getAllBatches();
+        List<ProgrammeBatch> batches = academicService.getAllBatches();
         assertFalse(batches.isEmpty());
         assertTrue(batches.stream().anyMatch(b -> batchA1.getId().equals(b.getId())));
         assertFalse(batches.stream().anyMatch(b -> batchB1.getId().equals(b.getId())));
@@ -336,7 +336,7 @@ public class DirectorAndHodScopeSecurityTest {
     @DisplayName("Scenario 9: Director A sees only courses under School A")
     void testDirectorCoursesScopedToSchoolA() {
         authenticateUser(directorA);
-        List<Course> courses = academicService.getAllCourses();
+        List<MasterCourse> courses = academicService.getAllCourses();
         assertFalse(courses.isEmpty());
         assertTrue(courses.stream().anyMatch(c -> courseA1.getId().equals(c.getId())));
         assertFalse(courses.stream().anyMatch(c -> courseB1.getId().equals(c.getId())));
@@ -417,7 +417,7 @@ public class DirectorAndHodScopeSecurityTest {
     @DisplayName("Scenario 16: HOD A1 sees only programmes belonging to Department A1")
     void testHodProgrammesScopedToDeptA1() {
         authenticateUser(hodA1);
-        List<Programme> progs = academicService.getAllProgrammes();
+        List<MasterProgramme> progs = academicService.getAllProgrammes();
         assertFalse(progs.isEmpty());
         assertTrue(progs.stream().allMatch(p -> deptA1.getId().equals(p.getDepartmentId())));
         assertTrue(progs.stream().anyMatch(p -> progA1.getId().equals(p.getId())));
@@ -436,7 +436,7 @@ public class DirectorAndHodScopeSecurityTest {
     @DisplayName("Scenario 18: HOD A1 sees only batches belonging to programmes in Department A1")
     void testHodBatchesScopedToDeptA1() {
         authenticateUser(hodA1);
-        List<Batch> batches = academicService.getAllBatches();
+        List<ProgrammeBatch> batches = academicService.getAllBatches();
         assertFalse(batches.isEmpty());
         assertTrue(batches.stream().anyMatch(b -> batchA1.getId().equals(b.getId())));
         assertFalse(batches.stream().anyMatch(b -> batchB1.getId().equals(b.getId())));
@@ -454,7 +454,7 @@ public class DirectorAndHodScopeSecurityTest {
     @DisplayName("Scenario 20: HOD A1 sees only courses belonging to programmes in Department A1")
     void testHodCoursesScopedToDeptA1() {
         authenticateUser(hodA1);
-        List<Course> courses = academicService.getAllCourses();
+        List<MasterCourse> courses = academicService.getAllCourses();
         assertFalse(courses.isEmpty());
         assertTrue(courses.stream().anyMatch(c -> courseA1.getId().equals(c.getId())));
         assertFalse(courses.stream().anyMatch(c -> courseB1.getId().equals(c.getId())));
@@ -503,20 +503,20 @@ public class DirectorAndHodScopeSecurityTest {
         assertNotNull(fetchedDeptB);
 
         // Admin can access programmes across schools
-        Programme fetchedProgA = academicService.getProgrammeById(progA1.getId());
-        Programme fetchedProgB = academicService.getProgrammeById(progB1.getId());
+        MasterProgramme fetchedProgA = academicService.getProgrammeById(progA1.getId());
+        MasterProgramme fetchedProgB = academicService.getProgrammeById(progB1.getId());
         assertNotNull(fetchedProgA);
         assertNotNull(fetchedProgB);
 
         // Admin can access batches across schools
-        Batch fetchedBatchA = academicService.getBatchById(batchA1.getId());
-        Batch fetchedBatchB = academicService.getBatchById(batchB1.getId());
+        ProgrammeBatch fetchedBatchA = academicService.getBatchById(batchA1.getId());
+        ProgrammeBatch fetchedBatchB = academicService.getBatchById(batchB1.getId());
         assertNotNull(fetchedBatchA);
         assertNotNull(fetchedBatchB);
 
         // Admin can access courses across schools
-        Course fetchedCourseA = academicService.getCourseById(courseA1.getId());
-        Course fetchedCourseB = academicService.getCourseById(courseB1.getId());
+        MasterCourse fetchedCourseA = academicService.getCourseById(courseA1.getId());
+        MasterCourse fetchedCourseB = academicService.getCourseById(courseB1.getId());
         assertNotNull(fetchedCourseA);
         assertNotNull(fetchedCourseB);
     }

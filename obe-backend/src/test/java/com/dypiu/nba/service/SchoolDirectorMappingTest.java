@@ -20,9 +20,9 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
-import com.dypiu.nba.entity.Programme;
+import com.dypiu.nba.entity.MasterProgramme;
 import com.dypiu.nba.repository.DepartmentRepository;
-import com.dypiu.nba.repository.ProgrammeRepository;
+import com.dypiu.nba.repository.MasterProgrammeRepository;
 
 @ExtendWith(MockitoExtension.class)
 public class SchoolDirectorMappingTest {
@@ -34,7 +34,7 @@ public class SchoolDirectorMappingTest {
     private UserRepository userRepository;
 
     @Mock
-    private ProgrammeRepository programmeRepository;
+    private MasterProgrammeRepository masterProgrammeRepository;
 
     @Mock
     private DepartmentRepository departmentRepository;
@@ -141,7 +141,7 @@ public class SchoolDirectorMappingTest {
     @Test
     @DisplayName("Successfully save programme preserving coordinator and coordinatorEmail")
     void testSaveProgramme_PreservesCoordinatorAndEmail() {
-        Programme inputProg = Programme.builder()
+        MasterProgramme inputProg = MasterProgramme.builder()
                 .id("prog-1a1b6c2e")
                 .name("B.Tech Computer science")
                 .code("BTCS")
@@ -157,11 +157,11 @@ public class SchoolDirectorMappingTest {
                 .role(UserRole.FACULTY)
                 .build();
 
-        when(programmeRepository.findById("prog-1a1b6c2e")).thenReturn(Optional.of(inputProg));
+        when(masterProgrammeRepository.findById("prog-1a1b6c2e")).thenReturn(Optional.of(inputProg));
         when(userRepository.findByEmail("pc@gmail.com")).thenReturn(Optional.of(pcUser));
-        when(programmeRepository.save(any(Programme.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(masterProgrammeRepository.save(any(MasterProgramme.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        Programme saved = academicService.saveProgramme(inputProg);
+        MasterProgramme saved = academicService.saveProgramme(inputProg);
 
         assertNotNull(saved);
         assertEquals("prog-1a1b6c2e", saved.getId());

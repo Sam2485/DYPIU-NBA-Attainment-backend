@@ -11,8 +11,8 @@ import java.time.ZonedDateTime;
         name = "course_atrs",
         uniqueConstraints = {
                 @UniqueConstraint(
-                        name = "uk_offering_co_atr",
-                        columnNames = {"course_offering_id", "co_code"}
+                        name = "uk_batch_course_co_atr",
+                        columnNames = {"programme_batch_course_id", "co_code"}
                 )
         }
 )
@@ -26,8 +26,8 @@ public class CourseAtr {
     @Id
     private String id;
 
-    @Column(name = "course_offering_id", nullable = false)
-    private String courseOfferingId;
+    @Column(name = "programme_batch_course_id", nullable = false)
+    private String programmeBatchCourseId;
 
     @Column(name = "co_code", nullable = false, length = 30)
     private String coCode;
@@ -41,7 +41,8 @@ public class CourseAtr {
     private BigDecimal actualScore;
 
     @Column(name = "pct_achieved", nullable = false)
-    private BigDecimal pctAchieved;
+    @Builder.Default
+    private BigDecimal pctAchieved = BigDecimal.ZERO;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)
@@ -76,4 +77,13 @@ public class CourseAtr {
 
     @Column(name = "updated_at")
     private ZonedDateTime updatedAt;
+
+    // Helper compatibility methods
+    public String getCourseOfferingId() {
+        return programmeBatchCourseId;
+    }
+
+    public void setCourseOfferingId(String courseOfferingId) {
+        this.programmeBatchCourseId = courseOfferingId;
+    }
 }

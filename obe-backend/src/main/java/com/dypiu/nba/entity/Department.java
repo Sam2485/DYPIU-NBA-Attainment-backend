@@ -2,7 +2,9 @@ package com.dypiu.nba.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+
 import java.time.ZonedDateTime;
+
 @Entity
 @Table(
         name = "departments",

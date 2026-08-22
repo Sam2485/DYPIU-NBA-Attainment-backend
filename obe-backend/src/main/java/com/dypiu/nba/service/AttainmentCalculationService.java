@@ -37,15 +37,16 @@ public class AttainmentCalculationService {
     private final CourseOutcomeRepository courseOutcomeRepository;
     private final UploadedDocumentRepository uploadedDocumentRepository;
     private final StudentRepository studentRepository;
-    private final CourseRepository courseRepository;
-    private final CourseOfferingRepository courseOfferingRepository;
-    private final BatchRepository batchRepository;
-    private final ProgrammeRepository programmeRepository;
+    private final MasterCourseRepository masterCourseRepository;
+    private final ProgrammeBatchCourseRepository programmeBatchCourseRepository;
+    private final ProgrammeBatchRepository programmeBatchRepository;
+    private final MasterProgrammeRepository masterProgrammeRepository;
     private final ProgrammeOutcomeRepository programmeOutcomeRepository;
     private final ProgrammeSpecificOutcomeRepository programmeSpecificOutcomeRepository;
     private final CoPoMappingRepository coPoMappingRepository;
     private final CoPsoMappingRepository coPsoMappingRepository;
     private final com.dypiu.nba.security.CurrentUserScopeService currentUserScopeService;
+    private final ApprovalService approvalService;
 
     @org.springframework.beans.factory.annotation.Value("${app.upload.dir:uploads}")
     private String baseUploadDir;
@@ -56,10 +57,10 @@ public class AttainmentCalculationService {
 
     public String resolveOfferingId(String offeringOrCourseId) {
         if (offeringOrCourseId == null || offeringOrCourseId.isBlank()) return null;
-        if (courseOfferingRepository.existsById(offeringOrCourseId)) {
+        if (programmeBatchCourseRepository.existsById(offeringOrCourseId)) {
             return offeringOrCourseId;
         }
-        List<CourseOffering> offerings = courseOfferingRepository.findByCourseId(offeringOrCourseId);
+        List<ProgrammeBatchCourse> offerings = programmeBatchCourseRepository.findByMasterCourseId(offeringOrCourseId);
         if (!offerings.isEmpty()) {
             return offerings.get(0).getId();
         }
@@ -80,8 +81,8 @@ public class AttainmentCalculationService {
         if (scope == null || scope.isAdmin() || scope.isIqac()) return;
 
         String offeringId = resolveOfferingId(courseOfferingOrCourseId);
-        if (offeringId != null && courseOfferingRepository.existsById(offeringId)) {
-            CourseOffering offering = courseOfferingRepository.findById(offeringId).orElse(null);
+        if (offeringId != null && programmeBatchCourseRepository.existsById(offeringId)) {
+            ProgrammeBatchCourse offering = programmeBatchCourseRepository.findById(offeringId).orElse(null);
             if (offering != null) {
                 if (scope.isFaculty()) {
                     boolean isCoord = (offering.getCourseCoordinatorId() != null && Objects.equals(offering.getCourseCoordinatorId(), scope.getUserId()))
@@ -93,7 +94,7 @@ public class AttainmentCalculationService {
                     return;
                 }
                 if (scope.isProgrammeCoordinator() && offering.getCourseId() != null) {
-                    Course course = courseRepository.findById(offering.getCourseId()).orElse(null);
+                    MasterCourse course = masterCourseRepository.findById(offering.getCourseId()).orElse(null);
                     if (course != null && !scope.getRequiredProgrammeId().equals(course.getProgrammeId())) {
                         throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Resource is outside your assigned programme scope.");
                     }
@@ -102,11 +103,11 @@ public class AttainmentCalculationService {
             }
         }
 
-        if (courseRepository.existsById(courseOfferingOrCourseId)) {
-            Course course = courseRepository.findById(courseOfferingOrCourseId).orElse(null);
+        if (masterCourseRepository.existsById(courseOfferingOrCourseId)) {
+            MasterCourse course = masterCourseRepository.findById(courseOfferingOrCourseId).orElse(null);
             if (course != null) {
                 if (scope.isFaculty()) {
-                    List<CourseOffering> offerings = courseOfferingRepository.findByCourseId(course.getId());
+                    List<ProgrammeBatchCourse> offerings = programmeBatchCourseRepository.findByMasterCourseId(course.getId());
                     boolean hasAssigned = offerings.stream().anyMatch(o -> {
                         boolean isCoord = (o.getCourseCoordinatorId() != null && Objects.equals(o.getCourseCoordinatorId(), scope.getUserId()))
                                 ;
@@ -129,10 +130,10 @@ public class AttainmentCalculationService {
         System.out.println("[AttainmentCalculationService] getAttainmentConfig called | courseOfferingOrCourseId: " + courseOfferingOrCourseId);
         enforceOfferingOrCourseScope(courseOfferingOrCourseId);
         String offeringId = resolveOfferingId(courseOfferingOrCourseId);
-        return configRepository.findByCourseOfferingId(offeringId)
+        return configRepository.findByProgrammeBatchCourseId(offeringId)
                 .orElseGet(() -> AttainmentConfiguration.builder()
                         .id("cfg-" + offeringId)
-                        .courseOfferingId(offeringId)
+                        .programmeBatchCourseId(offeringId)
                         .directWeight(new BigDecimal("80.00"))
                         .indirectWeight(new BigDecimal("20.00"))
                         .directThreshold(new BigDecimal("60.00"))
@@ -146,7 +147,10 @@ public class AttainmentCalculationService {
         System.out.println("[AttainmentCalculationService] saveAttainmentConfig called | courseOfferingOrCourseId: " + courseOfferingOrCourseId);
         enforceOfferingOrCourseScope(courseOfferingOrCourseId);
         String offeringId = resolveOfferingId(courseOfferingOrCourseId);
-        config.setCourseOfferingId(offeringId);
+        if (approvalService != null && approvalService.isAttainmentConfigApproved(offeringId)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Cannot modify approved Attainment Configuration. A revision must be requested first.");
+        }
+        config.setProgrammeBatchCourseId(offeringId);
         if (config.getId() == null) config.setId("cfg-" + offeringId);
         return configRepository.save(config);
     }
@@ -159,7 +163,7 @@ public class AttainmentCalculationService {
         if (courseOfferingOrCourseId == null || studentList == null || studentList.isEmpty()) return;
 
         String offeringId = resolveOfferingId(courseOfferingOrCourseId);
-        CourseOffering offering = courseOfferingRepository.findById(offeringId)
+        ProgrammeBatchCourse offering = programmeBatchCourseRepository.findById(offeringId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Course Offering not found: " + offeringId));
 
         String batchId = offering.getBatchId();
@@ -184,7 +188,7 @@ public class AttainmentCalculationService {
         }
 
         // 2. Delete existing marks for this offering
-        studentCoMarkRepository.deleteByCourseOfferingId(offeringId);
+        studentCoMarkRepository.deleteByProgrammeBatchCourseId(offeringId);
         studentCoMarkRepository.flush();
 
         // 3. Save validated Student CO marks
@@ -202,7 +206,7 @@ public class AttainmentCalculationService {
 
                     StudentCoMark markEntity = StudentCoMark.builder()
                             .id("mrk-" + UUID.randomUUID().toString().substring(0, 8))
-                            .courseOfferingId(offeringId)
+                            .programmeBatchCourseId(offeringId)
                             .studentId(student.getId())
                             .prn(student.getPrn())
                             .studentName(student.getName())
@@ -568,7 +572,7 @@ public class AttainmentCalculationService {
     public ExaminationAttainmentResultDto processAndSaveExaminationFile(String courseOfferingOrCourseId, MultipartFile file, BigDecimal thresholdPercentage, String uploadedBy) {
         System.out.println("[AttainmentCalculationService] processAndSaveExaminationFile called | courseOfferingOrCourseId: " + courseOfferingOrCourseId);
         String offeringId = resolveOfferingId(courseOfferingOrCourseId);
-        CourseOffering offering = courseOfferingRepository.findById(offeringId)
+        ProgrammeBatchCourse offering = programmeBatchCourseRepository.findById(offeringId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Course Offering not found: " + offeringId));
         String batchId = offering.getBatchId();
 
@@ -751,11 +755,11 @@ public class AttainmentCalculationService {
                 // Persist Student marks and audit document
                 saveStudentCoMarksToDatabase(offeringId, coMaxMarks, studentList);
 
-                uploadedDocumentRepository.deleteByCourseOfferingIdAndDocumentType(offeringId, DocumentType.EXAMINATION);
+                uploadedDocumentRepository.deleteByProgrammeBatchCourseIdAndDocumentType(offeringId, DocumentType.EXAMINATION);
                 UploadedDocument doc = UploadedDocument.builder()
                         .id("doc-" + UUID.randomUUID().toString().substring(0, 8))
-                        .courseOfferingId(offeringId)
-                        .batchId(batchId)
+                        .programmeBatchCourseId(offeringId)
+                        .programmeBatchId(batchId)
                         .documentType(DocumentType.EXAMINATION)
                         .fileName(originalFilename)
                         .savedFileName(savedFileName)
@@ -794,7 +798,7 @@ public class AttainmentCalculationService {
             return examinationAttainmentStore.get(offeringId);
         }
 
-        List<StudentCoMark> dbMarks = studentCoMarkRepository.findByCourseOfferingId(offeringId);
+        List<StudentCoMark> dbMarks = studentCoMarkRepository.findByProgrammeBatchCourseId(offeringId);
         if (!dbMarks.isEmpty()) {
             Map<String, BigDecimal> coMaxMarks = new LinkedHashMap<>();
             Map<String, Map<String, BigDecimal>> studentCoMarksMap = new LinkedHashMap<>();
@@ -828,7 +832,7 @@ public class AttainmentCalculationService {
             BigDecimal threshold = getAttainmentConfig(offeringId).getDirectThreshold();
             if (threshold == null) threshold = new BigDecimal("60.00");
             Optional<UploadedDocument> docOpt = uploadedDocumentRepository
-                    .findFirstByCourseOfferingIdAndDocumentTypeOrderByUploadedAtDesc(offeringId, DocumentType.EXAMINATION);
+                    .findFirstByProgrammeBatchCourseIdAndDocumentTypeOrderByUploadedAtDesc(offeringId, DocumentType.EXAMINATION);
             if (docOpt.isPresent() && docOpt.get().getThresholdPercentage() != null) {
                 threshold = docOpt.get().getThresholdPercentage();
             }
@@ -976,7 +980,7 @@ public class AttainmentCalculationService {
     public SurveyAttainmentResultDto processAndSaveSurveyFile(String courseOfferingOrCourseId, MultipartFile file, BigDecimal thresholdPercentage, String uploadedBy) {
         System.out.println("[AttainmentCalculationService] processAndSaveSurveyFile called | courseOfferingOrCourseId: " + courseOfferingOrCourseId);
         String offeringId = resolveOfferingId(courseOfferingOrCourseId);
-        CourseOffering offering = courseOfferingRepository.findById(offeringId)
+        ProgrammeBatchCourse offering = programmeBatchCourseRepository.findById(offeringId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Course Offering not found: " + offeringId));
         String batchId = offering.getBatchId();
 
@@ -1142,11 +1146,11 @@ public class AttainmentCalculationService {
                     }
                 }
 
-                uploadedDocumentRepository.deleteByCourseOfferingIdAndDocumentType(offeringId, DocumentType.SURVEY);
+                uploadedDocumentRepository.deleteByProgrammeBatchCourseIdAndDocumentType(offeringId, DocumentType.SURVEY);
                 UploadedDocument doc = UploadedDocument.builder()
                         .id("doc-" + UUID.randomUUID().toString().substring(0, 8))
-                        .courseOfferingId(offeringId)
-                        .batchId(batchId)
+                        .programmeBatchCourseId(offeringId)
+                        .programmeBatchId(batchId)
                         .documentType(DocumentType.SURVEY)
                         .fileName(originalFilename)
                         .savedFileName(savedFileName)
@@ -1202,11 +1206,11 @@ public class AttainmentCalculationService {
         System.out.println("[AttainmentCalculationService] calculateCourseCoAttainment called | courseOfferingOrCourseId: " + courseOfferingOrCourseId);
         enforceOfferingOrCourseScope(courseOfferingOrCourseId);
         String offeringId = resolveOfferingId(courseOfferingOrCourseId);
-        CourseOffering offering = courseOfferingRepository.findById(offeringId).orElse(null);
+        ProgrammeBatchCourse offering = programmeBatchCourseRepository.findById(offeringId).orElse(null);
         String courseId = offering != null ? offering.getCourseId() : offeringId;
 
         AttainmentConfiguration config = getAttainmentConfig(offeringId);
-        List<CourseOutcome> cos = courseOutcomeRepository.findByCourseOfferingId(offeringId);
+        List<CourseOutcome> cos = courseOutcomeRepository.findByProgrammeBatchCourseId(offeringId);
 
         ExaminationAttainmentResultDto examResult = getExaminationAttainment(offeringId);
         SurveyAttainmentResultDto surveyResult = getSurveyAttainment(offeringId);
@@ -1216,7 +1220,7 @@ public class AttainmentCalculationService {
             for (int i = 1; i <= 5; i++) {
                 cos.add(CourseOutcome.builder()
                         .id("co-default-" + i)
-                        .courseOfferingId(offeringId)
+                        .programmeBatchCourseId(offeringId)
                         .code("CO" + i)
                         .statement("Course outcome CO" + i)
                         .targetLevel(new BigDecimal("2.50"))
@@ -1343,15 +1347,15 @@ public class AttainmentCalculationService {
 
     public List<UploadedDocument> getUploadedDocumentsForOffering(String courseOfferingId) {
         System.out.println("[AttainmentCalculationService] getUploadedDocumentsForOffering called | courseOfferingId: " + courseOfferingId);
-        return uploadedDocumentRepository.findByCourseOfferingId(courseOfferingId);
+        return uploadedDocumentRepository.findByProgrammeBatchCourseId(courseOfferingId);
     }
 
     public List<UploadedDocument> getUploadedDocumentsForCourse(String courseId) {
         System.out.println("[AttainmentCalculationService] getUploadedDocumentsForCourse called | courseId: " + courseId);
-        List<CourseOffering> offerings = courseOfferingRepository.findByCourseId(courseId);
+        List<ProgrammeBatchCourse> offerings = programmeBatchCourseRepository.findByMasterCourseId(courseId);
         List<UploadedDocument> docs = new ArrayList<>();
-        for (CourseOffering o : offerings) {
-            docs.addAll(uploadedDocumentRepository.findByCourseOfferingId(o.getId()));
+        for (ProgrammeBatchCourse o : offerings) {
+            docs.addAll(uploadedDocumentRepository.findByProgrammeBatchCourseId(o.getId()));
         }
         return docs;
     }
@@ -1389,26 +1393,26 @@ public class AttainmentCalculationService {
         String key = programmeId + "::" + batchId;
 
         // Load authoritative configured POs and PSOs for the programme
-        List<ProgrammeOutcome> pos = programmeOutcomeRepository.findByProgrammeIdOrderByCodeAsc(programmeId);
+        List<ProgrammeOutcome> pos = programmeOutcomeRepository.findByProgrammeBatchIdOrderByCodeAsc(batchId);
         if (pos == null || pos.isEmpty()) {
             List<ProgrammeOutcome> defaultPos = new ArrayList<>();
             for (int i = 1; i <= 12; i++) {
                 defaultPos.add(ProgrammeOutcome.builder()
                         .id("po-def-" + i)
-                        .programmeId(programmeId)
+                        .programmeBatchId(batchId)
                         .code("PO" + i)
                         .statement("Program Outcome " + i)
                         .build());
             }
             pos = defaultPos;
         }
-        List<ProgrammeSpecificOutcome> psos = programmeSpecificOutcomeRepository.findByProgrammeIdOrderByCodeAsc(programmeId);
+        List<ProgrammeSpecificOutcome> psos = programmeSpecificOutcomeRepository.findByProgrammeBatchIdOrderByCodeAsc(batchId);
         if (psos == null || psos.isEmpty()) {
             List<ProgrammeSpecificOutcome> defaultPsos = new ArrayList<>();
             for (int i = 1; i <= 3; i++) {
                 defaultPsos.add(ProgrammeSpecificOutcome.builder()
                         .id("pso-def-" + i)
-                        .programmeId(programmeId)
+                        .programmeBatchId(batchId)
                         .code("PSO" + i)
                         .statement("Program Specific Outcome " + i)
                         .build());
@@ -1621,7 +1625,7 @@ public class AttainmentCalculationService {
                     // 4. Persist uploaded document record only after successful validation
                     UploadedDocument doc = UploadedDocument.builder()
                             .id("doc-" + UUID.randomUUID().toString().substring(0, 8))
-                            .batchId(batchId)
+                            .programmeBatchId(batchId)
                             .documentType(DocumentType.SURVEY)
                             .fileName(originalFileName)
                             .savedFileName(savedFileName)
@@ -1672,30 +1676,30 @@ public class AttainmentCalculationService {
     @Transactional(readOnly = true)
     public ProgrammeAttainmentResultDto calculateProgrammeAttainment(String programmeId, String batchId) {
         System.out.println("[AttainmentCalculationService] calculateProgrammeAttainment called | programmeId: " + programmeId + " | batchId: " + batchId);
-        Programme prog = programmeRepository.findById(programmeId).orElse(null);
-        Batch batch = batchRepository.findById(batchId).orElse(null);
+        MasterProgramme prog = masterProgrammeRepository.findById(programmeId).orElse(null);
+        ProgrammeBatch batch = programmeBatchRepository.findById(batchId).orElse(null);
 
-        List<CourseOffering> offerings = courseOfferingRepository.findByBatchId(batchId);
-        List<ProgrammeOutcome> pos = programmeOutcomeRepository.findByProgrammeIdOrderByCodeAsc(programmeId);
+        List<ProgrammeBatchCourse> offerings = programmeBatchCourseRepository.findByProgrammeBatchId(batchId);
+        List<ProgrammeOutcome> pos = programmeOutcomeRepository.findByProgrammeBatchIdOrderByCodeAsc(batchId);
         if (pos == null || pos.isEmpty()) {
             List<ProgrammeOutcome> defaultPos = new ArrayList<>();
             for (int i = 1; i <= 12; i++) {
                 defaultPos.add(ProgrammeOutcome.builder()
                         .id("po-def-" + i)
-                        .programmeId(programmeId)
+                        .programmeBatchId(batchId)
                         .code("PO" + i)
                         .statement("Program Outcome " + i)
                         .build());
             }
             pos = defaultPos;
         }
-        List<ProgrammeSpecificOutcome> psos = programmeSpecificOutcomeRepository.findByProgrammeIdOrderByCodeAsc(programmeId);
+        List<ProgrammeSpecificOutcome> psos = programmeSpecificOutcomeRepository.findByProgrammeBatchIdOrderByCodeAsc(batchId);
         if (psos == null || psos.isEmpty()) {
             List<ProgrammeSpecificOutcome> defaultPsos = new ArrayList<>();
             for (int i = 1; i <= 3; i++) {
                 defaultPsos.add(ProgrammeSpecificOutcome.builder()
                         .id("pso-def-" + i)
-                        .programmeId(programmeId)
+                        .programmeBatchId(batchId)
                         .code("PSO" + i)
                         .statement("Program Specific Outcome " + i)
                         .build());
@@ -1715,8 +1719,8 @@ public class AttainmentCalculationService {
             }
         }
 
-        Map<Integer, List<CourseOffering>> semOfferings = new TreeMap<>();
-        for (CourseOffering o : offerings) {
+        Map<Integer, List<ProgrammeBatchCourse>> semOfferings = new TreeMap<>();
+        for (ProgrammeBatchCourse o : offerings) {
             int sem = o.getSemester() != null ? o.getSemester() : 1;
             semOfferings.computeIfAbsent(sem, k -> new ArrayList<>()).add(o);
         }
@@ -1733,14 +1737,14 @@ public class AttainmentCalculationService {
             int semCountWithData = 0;
 
             for (int s = 1; s <= 8; s++) {
-                List<CourseOffering> sOfferings = semOfferings.getOrDefault(s, Collections.emptyList());
+                List<ProgrammeBatchCourse> sOfferings = semOfferings.getOrDefault(s, Collections.emptyList());
                 double semMapSum = 0;
                 int semMapCount = 0;
                 double semDirectSum = 0;
                 int semDirectCount = 0;
 
-                for (CourseOffering off : sOfferings) {
-                    List<CourseOutcome> cos = courseOutcomeRepository.findByCourseOfferingId(off.getId());
+                for (ProgrammeBatchCourse off : sOfferings) {
+                    List<CourseOutcome> cos = courseOutcomeRepository.findByProgrammeBatchCourseId(off.getId());
                     for (CourseOutcome co : cos) {
                         if (coPoMappingRepository != null) {
                             List<CoPoMapping> mappings = coPoMappingRepository.findByCourseOutcomeId(co.getId());
@@ -1802,14 +1806,14 @@ public class AttainmentCalculationService {
             int semCountWithData = 0;
 
             for (int s = 1; s <= 8; s++) {
-                List<CourseOffering> sOfferings = semOfferings.getOrDefault(s, Collections.emptyList());
+                List<ProgrammeBatchCourse> sOfferings = semOfferings.getOrDefault(s, Collections.emptyList());
                 double semMapSum = 0;
                 int semMapCount = 0;
                 double semDirectSum = 0;
                 int semDirectCount = 0;
 
-                for (CourseOffering off : sOfferings) {
-                    List<CourseOutcome> cos = courseOutcomeRepository.findByCourseOfferingId(off.getId());
+                for (ProgrammeBatchCourse off : sOfferings) {
+                    List<CourseOutcome> cos = courseOutcomeRepository.findByProgrammeBatchCourseId(off.getId());
                     for (CourseOutcome co : cos) {
                         if (coPsoMappingRepository != null) {
                             List<CoPsoMapping> mappings = coPsoMappingRepository.findByCourseOutcomeId(co.getId());

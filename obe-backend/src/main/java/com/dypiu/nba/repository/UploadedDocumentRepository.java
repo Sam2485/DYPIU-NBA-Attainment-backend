@@ -10,11 +10,11 @@ import java.util.Optional;
 
 @Repository
 public interface UploadedDocumentRepository extends JpaRepository<UploadedDocument, String> {
-    List<UploadedDocument> findByCourseOfferingId(String courseOfferingId);
-    List<UploadedDocument> findByBatchId(String batchId);
-    List<UploadedDocument> findByBatchIdAndDocumentType(String batchId, DocumentType documentType);
-    Optional<UploadedDocument> findFirstByCourseOfferingIdAndDocumentTypeOrderByUploadedAtDesc(String courseOfferingId, DocumentType documentType);
-    Optional<UploadedDocument> findFirstByBatchIdAndDocumentTypeOrderByUploadedAtDesc(String batchId, DocumentType documentType);
-    void deleteByCourseOfferingIdAndDocumentType(String courseOfferingId, DocumentType documentType);
-    void deleteByBatchIdAndDocumentType(String batchId, DocumentType documentType);
+    List<UploadedDocument> findByProgrammeBatchCourseId(String programmeBatchCourseId);
+    List<UploadedDocument> findByProgrammeBatchId(String programmeBatchId);
+    List<UploadedDocument> findByProgrammeBatchIdAndDocumentType(String programmeBatchId, DocumentType documentType);
+    Optional<UploadedDocument> findFirstByProgrammeBatchCourseIdAndDocumentTypeOrderByUploadedAtDesc(String programmeBatchCourseId, DocumentType documentType);
+    Optional<UploadedDocument> findFirstByProgrammeBatchIdAndDocumentTypeOrderByUploadedAtDesc(String programmeBatchId, DocumentType documentType);
+    void deleteByProgrammeBatchCourseIdAndDocumentType(String programmeBatchCourseId, DocumentType documentType);
+    void deleteByProgrammeBatchIdAndDocumentType(String programmeBatchId, DocumentType documentType);
 }

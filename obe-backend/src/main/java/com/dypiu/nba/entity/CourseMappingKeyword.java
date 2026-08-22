@@ -9,8 +9,8 @@ import java.time.ZonedDateTime;
         name = "course_mapping_keywords",
         uniqueConstraints = {
                 @UniqueConstraint(
-                        name = "uk_offering_keyword_type",
-                        columnNames = {"course_offering_id", "keyword_type"}
+                        name = "uq_batch_course_keyword_type",
+                        columnNames = {"programme_batch_course_id", "keyword_type"}
                 )
         }
 )
@@ -24,8 +24,8 @@ public class CourseMappingKeyword {
     @Id
     private String id;
 
-    @Column(name = "course_offering_id", nullable = false)
-    private String courseOfferingId;
+    @Column(name = "programme_batch_course_id", nullable = false)
+    private String programmeBatchCourseId;
 
     @Column(name = "keyword_type", nullable = false, length = 20)
     private String keywordType; // PO or PSO
@@ -38,4 +38,13 @@ public class CourseMappingKeyword {
 
     @Column(name = "updated_at", insertable = false, updatable = false)
     private ZonedDateTime updatedAt;
+
+    // Helper compatibility methods
+    public String getCourseOfferingId() {
+        return programmeBatchCourseId;
+    }
+
+    public void setCourseOfferingId(String offeringId) {
+        this.programmeBatchCourseId = offeringId;
+    }
 }

@@ -35,13 +35,13 @@ public class Phase6ProgrammeCoordinatorIntegrationTest {
     private DepartmentRepository departmentRepository;
 
     @Autowired
-    private ProgrammeRepository programmeRepository;
+    private MasterProgrammeRepository masterProgrammeRepository;
 
     @Autowired
-    private BatchRepository batchRepository;
+    private ProgrammeBatchRepository programmeBatchRepository;
 
     @Autowired
-    private CourseRepository courseRepository;
+    private MasterCourseRepository masterCourseRepository;
 
     @Autowired
     private ProgrammeOutcomeRepository programmeOutcomeRepository;
@@ -73,7 +73,7 @@ public class Phase6ProgrammeCoordinatorIntegrationTest {
                 .schoolId(school.getId())
                 .build());
 
-        Programme prog1 = programmeRepository.save(Programme.builder()
+        MasterProgramme prog1 = masterProgrammeRepository.save(MasterProgramme.builder()
                 .id("prog-pct-1-" + UUID.randomUUID().toString().substring(0, 6))
                 .name("B.Tech Computer Science PCT 1")
                 .code("BT-CS-1")
@@ -84,7 +84,7 @@ public class Phase6ProgrammeCoordinatorIntegrationTest {
                 .build());
         progId1 = prog1.getId();
 
-        Programme prog2 = programmeRepository.save(Programme.builder()
+        MasterProgramme prog2 = masterProgrammeRepository.save(MasterProgramme.builder()
                 .id("prog-pct-2-" + UUID.randomUUID().toString().substring(0, 6))
                 .name("B.Tech AI & Data Science PCT 2")
                 .code("BT-AI-2")
@@ -95,20 +95,20 @@ public class Phase6ProgrammeCoordinatorIntegrationTest {
                 .build());
         progId2 = prog2.getId();
 
-        Batch b1 = batchRepository.save(Batch.builder()
+        ProgrammeBatch b1 = programmeBatchRepository.save(ProgrammeBatch.builder()
                 .id("batch-pct-1-" + UUID.randomUUID().toString().substring(0, 6))
-                .name("2022-2026 Batch A")
-                .programmeId(progId1)
+                .name("2022-2026 ProgrammeBatch A")
+                .masterProgrammeId(progId1)
                 .startYear(2022)
                 .endYear(2026)
                 .status("ACTIVE")
                 .build());
         batchId1 = b1.getId();
 
-        Batch b2 = batchRepository.save(Batch.builder()
+        ProgrammeBatch b2 = programmeBatchRepository.save(ProgrammeBatch.builder()
                 .id("batch-pct-2-" + UUID.randomUUID().toString().substring(0, 6))
-                .name("2023-2027 Batch B")
-                .programmeId(progId1)
+                .name("2023-2027 ProgrammeBatch B")
+                .masterProgrammeId(progId1)
                 .startYear(2023)
                 .endYear(2027)
                 .status("ACTIVE")
@@ -117,7 +117,7 @@ public class Phase6ProgrammeCoordinatorIntegrationTest {
     }
 
     @Test
-    @DisplayName("TEST A: Initial Workflow State & Batch Isolation")
+    @DisplayName("TEST A: Initial Workflow State & ProgrammeBatch Isolation")
     void testInitialWorkflowAndBatchIsolation() {
         ProgrammeCoordinatorSetupProgressDto progressB1 = academicService.getProgrammeCoordinatorSetupProgress(coordinatorEmail, progId1, batchId1);
         assertNotNull(progressB1);
@@ -126,16 +126,16 @@ public class Phase6ProgrammeCoordinatorIntegrationTest {
         assertEquals(0, progressB1.getCurrentStep());
         assertTrue(progressB1.getCompletedSteps().isEmpty());
 
-        // Update progress on Batch 1 (Step 0 complete)
+        // Update progress on ProgrammeBatch 1 (Step 0 complete)
         academicService.updateProgrammeCoordinatorSetupProgress(coordinatorEmail, progId1, batchId1, 1, Map.of("completedSteps", List.of("0")));
 
-        // Verify Batch 1 progress updated
+        // Verify ProgrammeBatch 1 progress updated
         ProgrammeCoordinatorSetupProgressDto updatedB1 = academicService.getProgrammeCoordinatorSetupProgress(coordinatorEmail, progId1, batchId1);
         assertTrue(updatedB1.getCompletedSteps().contains("0"));
 
-        // Verify Batch 2 progress remains unaffected (Batch Isolation)
+        // Verify ProgrammeBatch 2 progress remains unaffected (ProgrammeBatch Isolation)
         ProgrammeCoordinatorSetupProgressDto progressB2 = academicService.getProgrammeCoordinatorSetupProgress(coordinatorEmail, progId1, batchId2);
-        assertFalse(progressB2.getCompletedSteps().contains("0"), "Batch 2 must not inherit Batch 1 completed steps");
+        assertFalse(progressB2.getCompletedSteps().contains("0"), "ProgrammeBatch 2 must not inherit ProgrammeBatch 1 completed steps");
     }
 
     @Test
@@ -144,7 +144,7 @@ public class Phase6ProgrammeCoordinatorIntegrationTest {
         // Complete Step 0
         academicService.updateProgrammeCoordinatorSetupProgress(coordinatorEmail, progId1, batchId1, 1, Map.of("completedSteps", List.of("0")));
 
-        // Jump directly to Step 2 (Programme ATR) and complete it without completing Step 1 (Targets)
+        // Jump directly to Step 2 (MasterProgramme ATR) and complete it without completing Step 1 (Targets)
         academicService.updateProgrammeCoordinatorSetupProgress(coordinatorEmail, progId1, batchId1, 3, Map.of("completedSteps", List.of("0", "2")));
 
         ProgrammeCoordinatorSetupProgressDto progress = academicService.getProgrammeCoordinatorSetupProgress(coordinatorEmail, progId1, batchId1);
@@ -155,19 +155,19 @@ public class Phase6ProgrammeCoordinatorIntegrationTest {
     }
 
     @Test
-    @DisplayName("TEST C: Step 1 Course Allocation - Save (Draft) vs Submit Boundary")
+    @DisplayName("TEST C: Step 1 MasterCourse Allocation - Save (Draft) vs Submit Boundary")
     void testStep1AllocationDraftVsSubmitBoundary() {
-        Course c1 = courseRepository.save(Course.builder()
+        MasterCourse c1 = masterCourseRepository.save(MasterCourse.builder()
                 .id("crs-test-1-" + UUID.randomUUID().toString().substring(0, 6))
                 .code("CS301")
                 .name("Data Structures")
-                .programmeId(progId1)
+                .masterProgrammeId(progId1)
                 .credits(3)
                 .courseType("THEORY")
                 .status("ACTIVE")
                 .build());
 
-        int initialApprovalCount = approvalRequestRepository.findByProgrammeId(progId1).size();
+        int initialApprovalCount = approvalRequestRepository.findByMasterProgrammeId(progId1).size();
 
         // 1. Save allocations as Draft (submit = false)
         List<Map<String, Object>> allocations = List.of(Map.of(
@@ -179,14 +179,14 @@ public class Phase6ProgrammeCoordinatorIntegrationTest {
         assertTrue((Boolean) draftRes.get("success"));
 
         // Verify NO approval request was created
-        List<ApprovalRequest> afterDraftApprovals = approvalRequestRepository.findByProgrammeId(progId1);
+        List<ApprovalRequest> afterDraftApprovals = approvalRequestRepository.findByMasterProgrammeId(progId1);
         assertEquals(initialApprovalCount, afterDraftApprovals.size(), "Draft save must NOT create ApprovalRequest");
 
         // 2. Explicit Submit (submit = true)
         Map<String, Object> submitRes = academicService.allocateCourses(progId1, null, allocations, true);
         assertTrue((Boolean) submitRes.get("success"));
 
-        List<ApprovalRequest> afterSubmitApprovals = approvalRequestRepository.findByProgrammeId(progId1);
+        List<ApprovalRequest> afterSubmitApprovals = approvalRequestRepository.findByMasterProgrammeId(progId1);
         assertEquals(initialApprovalCount + 1, afterSubmitApprovals.size(), "Explicit submit must create ApprovalRequest");
         ApprovalRequest req = afterSubmitApprovals.get(afterSubmitApprovals.size() - 1);
         assertEquals(ApprovalType.COURSE_ALLOCATION, req.getType());
@@ -197,11 +197,11 @@ public class Phase6ProgrammeCoordinatorIntegrationTest {
     @DisplayName("TEST D: Step 2 PO/PSO Dynamic Dimension & Target Benchmarks Persistence")
     void testStep2TargetBenchmarksPersistence() {
         // Create 3 POs and 2 PSOs dynamically
-        programmeOutcomeRepository.save(ProgrammeOutcome.builder().id("po-1-" + UUID.randomUUID().toString().substring(0, 4)).programmeId(progId1).code("PO1").statement("PO1 Stmt").build());
-        programmeOutcomeRepository.save(ProgrammeOutcome.builder().id("po-2-" + UUID.randomUUID().toString().substring(0, 4)).programmeId(progId1).code("PO2").statement("PO2 Stmt").build());
-        programmeOutcomeRepository.save(ProgrammeOutcome.builder().id("po-3-" + UUID.randomUUID().toString().substring(0, 4)).programmeId(progId1).code("PO3").statement("PO3 Stmt").build());
-        programmeSpecificOutcomeRepository.save(ProgrammeSpecificOutcome.builder().id("pso-1-" + UUID.randomUUID().toString().substring(0, 4)).programmeId(progId1).code("PSO1").statement("PSO1 Stmt").build());
-        programmeSpecificOutcomeRepository.save(ProgrammeSpecificOutcome.builder().id("pso-2-" + UUID.randomUUID().toString().substring(0, 4)).programmeId(progId1).code("PSO2").statement("PSO2 Stmt").build());
+        programmeOutcomeRepository.save(ProgrammeOutcome.builder().id("po-1-" + UUID.randomUUID().toString().substring(0, 4)).programmeBatchId(batchId1).code("PO1").statement("PO1 Stmt").build());
+        programmeOutcomeRepository.save(ProgrammeOutcome.builder().id("po-2-" + UUID.randomUUID().toString().substring(0, 4)).programmeBatchId(batchId1).code("PO2").statement("PO2 Stmt").build());
+        programmeOutcomeRepository.save(ProgrammeOutcome.builder().id("po-3-" + UUID.randomUUID().toString().substring(0, 4)).programmeBatchId(batchId1).code("PO3").statement("PO3 Stmt").build());
+        programmeSpecificOutcomeRepository.save(ProgrammeSpecificOutcome.builder().id("pso-1-" + UUID.randomUUID().toString().substring(0, 4)).programmeBatchId(batchId1).code("PSO1").statement("PSO1 Stmt").build());
+        programmeSpecificOutcomeRepository.save(ProgrammeSpecificOutcome.builder().id("pso-2-" + UUID.randomUUID().toString().substring(0, 4)).programmeBatchId(batchId1).code("PSO2").statement("PSO2 Stmt").build());
 
         Map<String, Object> outcomes = academicService.getConsolidatedOutcomes(progId1, batchId1);
         List<?> pos = (List<?>) outcomes.get("pos");

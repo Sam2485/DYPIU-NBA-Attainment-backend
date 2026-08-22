@@ -1,6 +1,7 @@
 package com.dypiu.nba.repository;
 
 import com.dypiu.nba.entity.CourseAtr;
+import com.dypiu.nba.entity.CourseAtrStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
@@ -10,8 +11,8 @@ import java.util.Optional;
 
 @Repository
 public interface CourseAtrRepository extends JpaRepository<CourseAtr, String> {
-    List<CourseAtr> findByCourseOfferingId(String courseOfferingId);
-    List<CourseAtr> findByCourseOfferingIdIn(Collection<String> courseOfferingIds);
-    Optional<CourseAtr> findByCourseOfferingIdAndCoCode(String courseOfferingId, String coCode);
+    List<CourseAtr> findByProgrammeBatchCourseId(String programmeBatchCourseId);
+    List<CourseAtr> findByProgrammeBatchCourseIdIn(Collection<String> programmeBatchCourseIds);
+    Optional<CourseAtr> findByProgrammeBatchCourseIdAndCoCode(String programmeBatchCourseId, String coCode);
+    List<CourseAtr> findByProgrammeBatchCourseIdAndStatus(String programmeBatchCourseId, CourseAtrStatus status);
 }
-

@@ -31,11 +31,12 @@ import java.util.stream.Collectors;
 public class AcademicService {
 
     private final CurrentUserScopeService currentUserScopeService;
+    private final AuditLogService auditLogService;
     private final SchoolRepository schoolRepository;
     private final DepartmentRepository departmentRepository;
-    private final ProgrammeRepository programmeRepository;
-    private final BatchRepository batchRepository;
-    private final CourseRepository courseRepository;
+    private final MasterProgrammeRepository masterProgrammeRepository;
+    private final ProgrammeBatchRepository programmeBatchRepository;
+    private final MasterCourseRepository masterCourseRepository;
     private final StudentRepository studentRepository;
     private final DirectorSetupProgressRepository directorSetupProgressRepository;
     private final HodSetupProgressRepository hodSetupProgressRepository;
@@ -46,7 +47,7 @@ public class AcademicService {
     private final ProgrammeSpecificOutcomeRepository programmeSpecificOutcomeRepository;
     private final PeoOutcomeRepository peoOutcomeRepository;
     private final UserRepository userRepository;
-    private final CourseOfferingRepository courseOfferingRepository;
+    private final ProgrammeBatchCourseRepository programmeBatchCourseRepository;
     private final CourseAtrRepository courseAtrRepository;
     private final ProgrammeAtrRepository programmeAtrRepository;
     private final ApprovalRequestRepository approvalRequestRepository;
@@ -102,8 +103,8 @@ public class AcademicService {
             }
         }
 
-        Programme prog = programmeRepository.findById(programmeId)
-                .orElseThrow(() -> new ResourceNotFoundException("Programme not found: " + programmeId));
+        MasterProgramme prog = masterProgrammeRepository.findById(programmeId)
+                .orElseThrow(() -> new ResourceNotFoundException("MasterProgramme not found: " + programmeId));
         if (prog.getDepartmentId() != null) {
             enforceDepartmentScope(prog.getDepartmentId());
             Department dept = departmentRepository.findById(prog.getDepartmentId()).orElse(null);
@@ -117,18 +118,18 @@ public class AcademicService {
         CurrentUserScope scope = getScope();
         if (scope == null || scope.isAdmin() || scope.isIqac()) return;
         if (batchId == null || batchId.isBlank()) return;
-        Batch batch = batchRepository.findById(batchId)
-                .orElseThrow(() -> new ResourceNotFoundException("Batch not found: " + batchId));
+        ProgrammeBatch batch = programmeBatchRepository.findById(batchId)
+                .orElseThrow(() -> new ResourceNotFoundException("ProgrammeBatch not found: " + batchId));
 
         if (scope.isFaculty()) {
-            List<CourseOffering> offerings = courseOfferingRepository.findByBatchId(batchId);
+            List<ProgrammeBatchCourse> offerings = programmeBatchCourseRepository.findByProgrammeBatchId(batchId);
             boolean hasAssigned = offerings.stream().anyMatch(o -> {
                 boolean isCoord = (o.getCourseCoordinatorId() != null && Objects.equals(o.getCourseCoordinatorId(), scope.getUserId()))
                         ;
                 return isCoord || (o.getAssignedFaculty() != null && (o.getAssignedFaculty().contains(scope.getEmail()) || o.getAssignedFaculty().contains(scope.getName())));
             });
             if (!hasAssigned) {
-                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: You are not assigned to any Course Offering in this Batch.");
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: You are not assigned to any MasterCourse Offering in this ProgrammeBatch.");
             }
             return;
         }
@@ -140,18 +141,18 @@ public class AcademicService {
         CurrentUserScope scope = getScope();
         if (scope == null || scope.isAdmin() || scope.isIqac()) return;
         if (courseId == null || courseId.isBlank()) return;
-        Course course = courseRepository.findById(courseId)
-                .orElseThrow(() -> new ResourceNotFoundException("Course not found: " + courseId));
+        MasterCourse course = masterCourseRepository.findById(courseId)
+                .orElseThrow(() -> new ResourceNotFoundException("MasterCourse not found: " + courseId));
 
         if (scope.isFaculty()) {
-            List<CourseOffering> offerings = courseOfferingRepository.findByCourseId(courseId);
+            List<ProgrammeBatchCourse> offerings = programmeBatchCourseRepository.findByMasterCourseId(courseId);
             boolean hasAssigned = offerings.stream().anyMatch(o -> {
                 boolean isCoord = (o.getCourseCoordinatorId() != null && Objects.equals(o.getCourseCoordinatorId(), scope.getUserId()))
                         ;
                 return isCoord || (o.getAssignedFaculty() != null && (o.getAssignedFaculty().contains(scope.getEmail()) || o.getAssignedFaculty().contains(scope.getName())));
             });
             if (!hasAssigned) {
-                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: You are not assigned to this Course.");
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: You are not assigned to this MasterCourse.");
             }
             return;
         }
@@ -159,20 +160,20 @@ public class AcademicService {
         enforceProgrammeScope(course.getProgrammeId());
     }
 
-    private void enforceCourseOfferingScope(String offeringId) {
+    private void enforceProgrammeBatchCourseScope(String offeringId) {
         CurrentUserScope scope = getScope();
         if (scope == null || scope.isAdmin() || scope.isIqac()) return;
         if (offeringId == null || offeringId.isBlank()) return;
 
-        CourseOffering offering = courseOfferingRepository.findById(offeringId)
-                .orElseThrow(() -> new ResourceNotFoundException("Course offering not found: " + offeringId));
+        ProgrammeBatchCourse offering = programmeBatchCourseRepository.findById(offeringId)
+                .orElseThrow(() -> new ResourceNotFoundException("MasterCourse offering not found: " + offeringId));
 
         if (scope.isFaculty()) {
             boolean isCoordinator = (offering.getCourseCoordinatorId() != null && Objects.equals(offering.getCourseCoordinatorId(), scope.getUserId()))
                     ;
             boolean isFacultyAssigned = isCoordinator || (offering.getAssignedFaculty() != null && (offering.getAssignedFaculty().contains(scope.getEmail()) || offering.getAssignedFaculty().contains(scope.getName())));
             if (!isFacultyAssigned) {
-                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: You are not assigned to this Course Offering.");
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: You are not assigned to this MasterCourse Offering.");
             }
             return;
         }
@@ -187,45 +188,45 @@ public class AcademicService {
             return;
         }
         if (offeringOrCourseId == null || offeringOrCourseId.isBlank()) return;
-        CourseOffering offering = courseOfferingRepository.findById(offeringOrCourseId).orElse(null);
+        ProgrammeBatchCourse offering = programmeBatchCourseRepository.findById(offeringOrCourseId).orElse(null);
         if (offering == null) {
-            List<CourseOffering> offerings = courseOfferingRepository.findByCourseId(offeringOrCourseId);
+            List<ProgrammeBatchCourse> offerings = programmeBatchCourseRepository.findByMasterCourseId(offeringOrCourseId);
             offering = offerings.stream().findFirst().orElse(null);
         }
         if (offering == null) {
-            throw new ResourceNotFoundException("Course offering not found: " + offeringOrCourseId);
+            throw new ResourceNotFoundException("MasterCourse offering not found: " + offeringOrCourseId);
         }
         boolean isCoordinator = (offering.getCourseCoordinatorId() != null && Objects.equals(offering.getCourseCoordinatorId(), scope.getUserId()))
                 ;
         if (!isCoordinator) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Only the assigned Course Coordinator can perform this action.");
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Only the assigned MasterCourse Coordinator can perform this action.");
         }
     }
 
     @Transactional(readOnly = true)
     public com.dypiu.nba.dto.BatchContextDto getBatchContext(String batchId) {
         System.out.println("[AcademicService] getBatchContext called | batchId: " + batchId);
-        Batch batch = batchRepository.findById(batchId)
-                .orElseThrow(() -> new ResourceNotFoundException("Batch not found: " + batchId));
+        ProgrammeBatch batch = programmeBatchRepository.findById(batchId)
+                .orElseThrow(() -> new ResourceNotFoundException("ProgrammeBatch not found: " + batchId));
 
         enforceProgrammeScope(batch.getProgrammeId());
 
-        Programme prog = programmeRepository.findById(batch.getProgrammeId()).orElse(null);
+        MasterProgramme prog = masterProgrammeRepository.findById(batch.getProgrammeId()).orElse(null);
         Department dept = (prog != null && prog.getDepartmentId() != null) ? departmentRepository.findById(prog.getDepartmentId()).orElse(null) : null;
         School school = (dept != null && dept.getSchoolId() != null) ? schoolRepository.findById(dept.getSchoolId()).orElse(null) : null;
 
-        List<Student> students = studentRepository.findByBatchId(batchId);
-        List<CourseOffering> offerings = courseOfferingRepository.findByBatchId(batchId);
-        Set<String> uniqueCourseIds = offerings.stream().map(CourseOffering::getCourseId).collect(Collectors.toSet());
-        List<String> offeringIds = offerings.stream().map(CourseOffering::getId).collect(Collectors.toList());
+        List<Student> students = studentRepository.findByProgrammeBatchId(batchId);
+        List<ProgrammeBatchCourse> offerings = programmeBatchCourseRepository.findByProgrammeBatchId(batchId);
+        Set<String> uniqueCourseIds = offerings.stream().map(ProgrammeBatchCourse::getCourseId).collect(Collectors.toSet());
+        List<String> offeringIds = offerings.stream().map(ProgrammeBatchCourse::getId).collect(Collectors.toList());
 
-        long completedAtrs = offeringIds.isEmpty() ? 0 : courseAtrRepository.findByCourseOfferingIdIn(offeringIds).stream()
+        long completedAtrs = offeringIds.isEmpty() ? 0 : courseAtrRepository.findByProgrammeBatchCourseIdIn(offeringIds).stream()
                                                          .filter(a -> a.getStatus() == CourseAtrStatus.VERIFIED)
                                                          .count();
 
         String progAtrStatus = "DRAFT";
         if (prog != null) {
-            Optional<ProgrammeAtr> patr = programmeAtrRepository.findByProgrammeIdAndBatchId(prog.getId(), batchId);
+            Optional<ProgrammeAtr> patr = programmeAtrRepository.findByProgrammeBatchId(batchId);
             if (patr.isPresent() && patr.get().getStatus() != null) {
                 progAtrStatus = patr.get().getStatus().name();
             }
@@ -263,13 +264,13 @@ public class AcademicService {
     }
 
     @Transactional(readOnly = true)
-    public List<CourseOffering> getCourseOfferingsByBatch(String batchId) {
-        System.out.println("[AcademicService] getCourseOfferingsByBatch called | batchId: " + batchId);
+    public List<ProgrammeBatchCourse> getProgrammeBatchCoursesByBatch(String batchId) {
+        System.out.println("[AcademicService] getProgrammeBatchCoursesByProgrammeBatch called | batchId: " + batchId);
         CurrentUserScope scope = getScope();
         if (scope != null && scope.isFaculty()) {
-            List<CourseOffering> offerings = (batchId != null && !batchId.isBlank())
-                    ? courseOfferingRepository.findByBatchId(batchId)
-                    : courseOfferingRepository.findAll();
+            List<ProgrammeBatchCourse> offerings = (batchId != null && !batchId.isBlank())
+                    ? programmeBatchCourseRepository.findByProgrammeBatchId(batchId)
+                    : programmeBatchCourseRepository.findAll();
             return offerings.stream()
                     .filter(o -> {
                         boolean isCoord = (o.getCourseCoordinatorId() != null && Objects.equals(o.getCourseCoordinatorId(), scope.getUserId()))
@@ -280,73 +281,78 @@ public class AcademicService {
         }
         if (batchId != null && !batchId.isBlank()) {
             enforceBatchScope(batchId);
-            return courseOfferingRepository.findByBatchId(batchId);
+            return programmeBatchCourseRepository.findByProgrammeBatchId(batchId);
         }
         if (scope != null && scope.isProgrammeCoordinator()) {
-            List<Batch> batches = batchRepository.findByProgrammeId(scope.getRequiredProgrammeId());
-            Set<String> bIds = batches.stream().map(Batch::getId).collect(Collectors.toSet());
-            return bIds.isEmpty() ? Collections.emptyList() : courseOfferingRepository.findByBatchIdIn(bIds);
+            List<ProgrammeBatch> batches = programmeBatchRepository.findByMasterProgrammeId(scope.getRequiredProgrammeId());
+            Set<String> bIds = batches.stream().map(ProgrammeBatch::getId).collect(Collectors.toSet());
+            return bIds.isEmpty() ? Collections.emptyList() : programmeBatchCourseRepository.findByProgrammeBatchIdIn(bIds);
         }
         if (scope != null && scope.isHod()) {
-            List<Programme> progs = programmeRepository.findByDepartmentId(scope.getRequiredDepartmentId());
-            List<String> pIds = progs.stream().map(Programme::getId).toList();
-            List<Batch> batches = pIds.isEmpty() ? Collections.emptyList() : batchRepository.findByProgrammeIdIn(pIds);
-            Set<String> bIds = batches.stream().map(Batch::getId).collect(Collectors.toSet());
-            return bIds.isEmpty() ? Collections.emptyList() : courseOfferingRepository.findByBatchIdIn(bIds);
+            List<MasterProgramme> progs = masterProgrammeRepository.findByDepartmentId(scope.getRequiredDepartmentId());
+            List<String> pIds = progs.stream().map(MasterProgramme::getId).toList();
+            List<ProgrammeBatch> batches = pIds.isEmpty() ? Collections.emptyList() : programmeBatchRepository.findByMasterProgrammeIdIn(pIds);
+            Set<String> bIds = batches.stream().map(ProgrammeBatch::getId).collect(Collectors.toSet());
+            return bIds.isEmpty() ? Collections.emptyList() : programmeBatchCourseRepository.findByProgrammeBatchIdIn(bIds);
         }
         if (scope != null && scope.isDirector()) {
             List<Department> depts = departmentRepository.findBySchoolId(scope.getRequiredSchoolId());
             List<String> dIds = depts.stream().map(Department::getId).toList();
-            List<Programme> progs = dIds.isEmpty() ? Collections.emptyList() : programmeRepository.findByDepartmentIdIn(dIds);
-            List<String> pIds = progs.stream().map(Programme::getId).toList();
-            List<Batch> batches = pIds.isEmpty() ? Collections.emptyList() : batchRepository.findByProgrammeIdIn(pIds);
-            Set<String> bIds = batches.stream().map(Batch::getId).collect(Collectors.toSet());
-            return bIds.isEmpty() ? Collections.emptyList() : courseOfferingRepository.findByBatchIdIn(bIds);
+            List<MasterProgramme> progs = dIds.isEmpty() ? Collections.emptyList() : masterProgrammeRepository.findByDepartmentIdIn(dIds);
+            List<String> pIds = progs.stream().map(MasterProgramme::getId).toList();
+            List<ProgrammeBatch> batches = pIds.isEmpty() ? Collections.emptyList() : programmeBatchRepository.findByMasterProgrammeIdIn(pIds);
+            Set<String> bIds = batches.stream().map(ProgrammeBatch::getId).collect(Collectors.toSet());
+            return bIds.isEmpty() ? Collections.emptyList() : programmeBatchCourseRepository.findByProgrammeBatchIdIn(bIds);
         }
         if (scope != null && (scope.isAdmin() || scope.isIqac())) {
-            return courseOfferingRepository.findAll();
+            return programmeBatchCourseRepository.findAll();
         }
         return Collections.emptyList();
     }
 
     @Transactional(readOnly = true)
-    public CourseOffering getCourseOfferingById(String offeringId) {
-        System.out.println("[AcademicService] getCourseOfferingById called | offeringId: " + offeringId);
+    public ProgrammeBatchCourse getProgrammeBatchCourseById(String offeringId) {
+        System.out.println("[AcademicService] getProgrammeBatchCourseById called | offeringId: " + offeringId);
         if (offeringId == null || offeringId.isBlank()) return null;
-        CourseOffering offering = courseOfferingRepository.findById(offeringId)
-                .orElseThrow(() -> new ResourceNotFoundException("Course offering not found: " + offeringId));
+        ProgrammeBatchCourse offering = programmeBatchCourseRepository.findById(offeringId)
+                .orElseThrow(() -> new ResourceNotFoundException("MasterCourse offering not found: " + offeringId));
         if (offering.getBatchId() != null) enforceBatchScope(offering.getBatchId());
         if (offering.getCourseId() != null) enforceCourseScope(offering.getCourseId());
         return offering;
     }
 
     @Transactional
-    public CourseOffering saveCourseOffering(CourseOffering offering) {
-        System.out.println("[AcademicService] saveCourseOffering called | courseId: " + (offering != null ? offering.getCourseId() : "null"));
+    public ProgrammeBatchCourse saveProgrammeBatchCourse(ProgrammeBatchCourse offering) {
+        System.out.println("[AcademicService] saveProgrammeBatchCourse called | courseId: " + (offering != null ? offering.getCourseId() : "null"));
         if (offering == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Course offering details cannot be null.");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "MasterCourse offering details cannot be null.");
         }
         if (offering.getBatchId() != null) enforceBatchScope(offering.getBatchId());
         if (offering.getCourseId() != null) enforceCourseScope(offering.getCourseId());
         if (offering.getId() != null) {
-            CourseOffering existing = courseOfferingRepository.findById(offering.getId()).orElse(null);
+            ProgrammeBatchCourse existing = programmeBatchCourseRepository.findById(offering.getId()).orElse(null);
             if (existing != null) {
                 if (existing.getBatchId() != null) enforceBatchScope(existing.getBatchId());
                 if (existing.getCourseId() != null) enforceCourseScope(existing.getCourseId());
             }
         }
         if (offering.getId() == null) offering.setId("offering-" + UUID.randomUUID().toString().substring(0, 8));
-        return courseOfferingRepository.save(offering);
+        boolean isNew = (offering.getId() == null || !programmeBatchCourseRepository.existsById(offering.getId()));
+        ProgrammeBatchCourse saved = programmeBatchCourseRepository.save(offering);
+        if (auditLogService != null) {
+            auditLogService.recordSuccess(isNew ? com.dypiu.nba.audit.AuditAction.CREATE : com.dypiu.nba.audit.AuditAction.UPDATE, com.dypiu.nba.audit.ResourceType.PROGRAMME_BATCH_COURSE, saved.getId(), null, "ACTIVE", isNew ? "Created ProgrammeBatchCourse" : "Updated ProgrammeBatchCourse", java.util.Map.of("courseId", saved.getCourseId() != null ? saved.getCourseId() : ""));
+        }
+        return saved;
     }
 
     @Transactional
-    public void deleteCourseOffering(String id) {
-        System.out.println("[AcademicService] deleteCourseOffering called | id: " + id);
-        CourseOffering offering = courseOfferingRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Course offering not found: " + id));
+    public void deleteProgrammeBatchCourse(String id) {
+        System.out.println("[AcademicService] deleteProgrammeBatchCourse called | id: " + id);
+        ProgrammeBatchCourse offering = programmeBatchCourseRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("MasterCourse offering not found: " + id));
         if (offering.getBatchId() != null) enforceBatchScope(offering.getBatchId());
         if (offering.getCourseId() != null) enforceCourseScope(offering.getCourseId());
-        courseOfferingRepository.deleteById(id);
+        programmeBatchCourseRepository.deleteById(id);
     }
 
     // --- Director School Summary ---
@@ -399,7 +405,7 @@ public class AcademicService {
         School school = schoolOpt.get();
         List<Department> departments = departmentRepository.findBySchoolId(school.getId());
         List<String> deptIds = departments.stream().map(Department::getId).toList();
-        List<Programme> schoolProgrammes = deptIds.isEmpty() ? Collections.emptyList() : programmeRepository.findByDepartmentIdIn(deptIds);
+        List<MasterProgramme> schoolProgrammes = deptIds.isEmpty() ? Collections.emptyList() : masterProgrammeRepository.findByDepartmentIdIn(deptIds);
 
         int assignedHodCount = 0;
         int unassignedHodCount = 0;
@@ -465,7 +471,7 @@ public class AcademicService {
         List<DepartmentSummaryDto> list = new ArrayList<>();
         for (Department dept : departments) {
             boolean isHodAssigned = dept.getHod() != null && !dept.getHod().isBlank() && !dept.getHod().equalsIgnoreCase("Unassigned");
-            int progsCount = programmeRepository.findByDepartmentId(dept.getId()).size();
+            int progsCount = masterProgrammeRepository.findByDepartmentId(dept.getId()).size();
             list.add(DepartmentSummaryDto.builder()
                     .deptId(dept.getId())
                     .deptCode(dept.getCode())
@@ -767,7 +773,11 @@ public class AcademicService {
             school.setId("sch-" + UUID.randomUUID().toString().substring(0, 8));
         }
 
+        boolean isNewSchool = (school.getId() == null || !schoolRepository.existsById(school.getId()));
         School saved = schoolRepository.save(school);
+        if (auditLogService != null) {
+            auditLogService.recordSuccess(isNewSchool ? com.dypiu.nba.audit.AuditAction.CREATE : com.dypiu.nba.audit.AuditAction.UPDATE, com.dypiu.nba.audit.ResourceType.SCHOOL, saved.getId(), null, "ACTIVE", isNewSchool ? "Created School" : "Updated School", java.util.Map.of("code", saved.getCode() != null ? saved.getCode() : "", "name", saved.getName() != null ? saved.getName() : ""));
+        }
 
         // Sync schoolId to the Director user in userRepository
         if (saved.getDirectorEmail() != null && !saved.getDirectorEmail().isBlank()) {
@@ -838,6 +848,9 @@ public class AcademicService {
         }
 
         School updated = schoolRepository.save(school);
+        if (auditLogService != null) {
+            auditLogService.recordSuccess(com.dypiu.nba.audit.AuditAction.UPDATE, com.dypiu.nba.audit.ResourceType.SCHOOL, updated.getId(), null, "ACTIVE", "Updated School Details", java.util.Map.of("code", updated.getCode() != null ? updated.getCode() : "", "name", updated.getName() != null ? updated.getName() : ""));
+        }
 
         // Sync schoolId to the Director user in userRepository
         if (updated.getDirectorEmail() != null && !updated.getDirectorEmail().isBlank()) {
@@ -915,7 +928,11 @@ public class AcademicService {
             }
         }
         if (department.getId() == null) department.setId("dept-" + UUID.randomUUID().toString().substring(0, 8));
+        boolean isNewDept = (department.getId() == null || !departmentRepository.existsById(department.getId()));
         Department saved = departmentRepository.save(department);
+        if (auditLogService != null) {
+            auditLogService.recordSuccess(isNewDept ? com.dypiu.nba.audit.AuditAction.CREATE : com.dypiu.nba.audit.AuditAction.UPDATE, com.dypiu.nba.audit.ResourceType.DEPARTMENT, saved.getId(), null, "ACTIVE", isNewDept ? "Created Department" : "Updated Department", java.util.Map.of("code", saved.getCode() != null ? saved.getCode() : "", "name", saved.getName() != null ? saved.getName() : ""));
+        }
         System.out.println("[AcademicService] Saved department with id: " + saved.getId());
 
         // Sync department info to HOD user if hodEmail or hod name matches
@@ -980,7 +997,7 @@ public class AcademicService {
             }
         }
 
-        // Apply organizational scope isolation for Director, HOD, and Programme Coordinator
+        // Apply organizational scope isolation for Director, HOD, and MasterProgramme Coordinator
         if (scope != null && scope.isDirector()) {
             String schoolId = scope.getRequiredSchoolId();
             users = users.stream()
@@ -1036,11 +1053,22 @@ public class AcademicService {
     }
 
     // --- Programmes ---
-    @Transactional(readOnly = true)
-    private void enrichProgrammeCoordinator(Programme programme) {
+        @Transactional(readOnly = true)
+    private void enrichProgrammeCoordinator(MasterProgramme programme) {
         if (programme == null) return;
-        String coord = programme.getCoordinator();
         String coordEmail = programme.getCoordinatorEmail();
+        String coord = programme.getCoordinator();
+
+        // 1. If coordinatorEmail is valid, lookup user by email
+        if (coordEmail != null && !coordEmail.isBlank() && coordEmail.contains("@")) {
+            Optional<User> uOpt = userRepository.findByEmail(coordEmail.trim());
+            if (uOpt.isPresent()) {
+                User u = uOpt.get();
+                programme.setCoordinator(u.getName());
+                programme.setCoordinatorEmail(u.getEmail());
+                return;
+            }
+        }
 
         // 1. If coordinatorEmail is valid, lookup user by email
         if (coordEmail != null && !coordEmail.isBlank() && coordEmail.contains("@")) {
@@ -1054,6 +1082,24 @@ public class AcademicService {
         }
 
         // 2. Lookup by coordinator string (ID, email, username, name)
+        // 3. Fallback: check if a user with PROGRAMME_COORDINATOR role is assigned to this programme
+        if (programme.getCoordinator() == null || programme.getCoordinator().isBlank() || "Not Assigned".equalsIgnoreCase(programme.getCoordinator())) {
+            List<User> pcs = userRepository.findByRole(UserRole.PROGRAMME_COORDINATOR).stream().filter(u -> programme.getId().equalsIgnoreCase(u.getProgrammeId())).toList();
+            if (pcs != null && !pcs.isEmpty()) {
+                programme.setCoordinator(pcs.get(0).getName());
+                programme.setCoordinatorEmail(pcs.get(0).getEmail());
+                return;
+            }
+            List<ProgrammeBatch> batches = programmeBatchRepository.findByMasterProgrammeId(programme.getId());
+            for (ProgrammeBatch b : batches) {
+                if (b.getCoordinatorName() != null && !b.getCoordinatorName().isBlank()) {
+                    programme.setCoordinator(b.getCoordinatorName());
+                    programme.setCoordinatorEmail(b.getCoordinatorEmail());
+                    return;
+                }
+            }
+        }
+
         if (coord != null && !coord.isBlank()) {
             if (coord.matches("\\d+")) {
                 try {
@@ -1092,7 +1138,7 @@ public class AcademicService {
     public CourseCoordinatorSummaryDto getCourseCoordinatorSummary(String coordinatorEmail) {
         System.out.println("[AcademicService] getCourseCoordinatorSummary called | coordinatorEmail: " + coordinatorEmail);
         CurrentUserScope scope = getScope();
-        String name = scope != null && scope.getName() != null ? scope.getName() : "Course Coordinator";
+        String name = scope != null && scope.getName() != null ? scope.getName() : "MasterCourse Coordinator";
         String email = scope != null && scope.getEmail() != null ? scope.getEmail() : (coordinatorEmail != null ? coordinatorEmail.trim() : "");
         Long userId = scope != null ? scope.getUserId() : null;
 
@@ -1106,12 +1152,12 @@ public class AcademicService {
             }
         }
 
-        List<CourseOffering> allOfferings = courseOfferingRepository.findAll();
+        List<ProgrammeBatchCourse> allOfferings = programmeBatchCourseRepository.findAll();
         final String searchEmail = email.toLowerCase();
         final String searchName = name.toLowerCase();
         final Long searchUserId = userId;
 
-        List<CourseOffering> assignedOfferings = allOfferings.stream()
+        List<ProgrammeBatchCourse> assignedOfferings = allOfferings.stream()
                 .filter(o -> {
                     boolean matches = false;
                     if (o.getCourseCoordinatorId() != null) {
@@ -1125,16 +1171,16 @@ public class AcademicService {
                 })
                 .toList();
 
-        Set<String> assignedCourseIds = assignedOfferings.stream().map(CourseOffering::getCourseId).filter(Objects::nonNull).collect(Collectors.toSet());
-        List<Course> finalCourses = assignedCourseIds.isEmpty() ? Collections.emptyList() : courseRepository.findAllById(assignedCourseIds);
+        Set<String> assignedCourseIds = assignedOfferings.stream().map(ProgrammeBatchCourse::getCourseId).filter(Objects::nonNull).collect(Collectors.toSet());
+        List<MasterCourse> finalCourses = assignedCourseIds.isEmpty() ? Collections.emptyList() : masterCourseRepository.findAllById(assignedCourseIds);
 
-        for (Course course : finalCourses) {
-            CourseOffering offering = assignedOfferings.stream()
+        for (MasterCourse course : finalCourses) {
+            ProgrammeBatchCourse offering = assignedOfferings.stream()
                     .filter(o -> course.getId().equals(o.getCourseId()))
                     .findFirst()
                     .orElse(null);
             if (offering != null) {
-                course.setCourseOfferingId(offering.getId());
+                course.setProgrammeBatchCourseId(offering.getId());
                 course.setSemester(offering.getSemester() != null ? String.valueOf(offering.getSemester()) : null);
                 course.setCoordinator(offering.getCourseCoordinatorName());
                 course.setFaculty(offering.getCourseCoordinatorName());
@@ -1146,24 +1192,24 @@ public class AcademicService {
             }
         }
 
-        Course primaryCourse = !finalCourses.isEmpty() ? finalCourses.get(0) : null;
+        MasterCourse primaryMasterCourse = !finalCourses.isEmpty() ? finalCourses.get(0) : null;
 
         CourseCoordinatorSetupProgressDto setupProgress = null;
         int coCount = 0;
         int poCount = 0;
         int psoCount = 0;
 
-        if (primaryCourse != null) {
-            setupProgress = getCourseCoordinatorSetupProgress(email, primaryCourse.getId());
+        if (primaryMasterCourse != null) {
+            setupProgress = getCourseCoordinatorSetupProgress(email, primaryMasterCourse.getId());
 
-            List<CourseOffering> offerings = courseOfferingRepository.findByCourseId(primaryCourse.getId());
-            String offeringId = !offerings.isEmpty() ? offerings.get(0).getId() : primaryCourse.getId();
-            coCount = courseOutcomeRepository.findByCourseOfferingId(offeringId).size();
+            List<ProgrammeBatchCourse> offerings = programmeBatchCourseRepository.findByMasterCourseId(primaryMasterCourse.getId());
+            String offeringId = !offerings.isEmpty() ? offerings.get(0).getId() : primaryMasterCourse.getId();
+            coCount = courseOutcomeRepository.findByProgrammeBatchCourseId(offeringId).size();
 
-            String programmeId = primaryCourse.getProgrammeId();
+            String programmeId = primaryMasterCourse.getProgrammeId();
             if (programmeId != null && !programmeId.isBlank()) {
-                poCount = programmeOutcomeRepository.findByProgrammeId(programmeId).size();
-                psoCount = programmeSpecificOutcomeRepository.findByProgrammeId(programmeId).size();
+                poCount = programmeOutcomeRepository.findByProgrammeBatchIdOrderByCodeAsc(programmeId).size();
+                psoCount = programmeSpecificOutcomeRepository.findByProgrammeBatchIdOrderByCodeAsc(programmeId).size();
             }
         }
 
@@ -1183,7 +1229,7 @@ public class AcademicService {
     }
 
     private String resolveTargetCourseId(String courseId) {
-        if (courseId != null && !courseId.isBlank() && courseRepository.existsById(courseId)) {
+        if (courseId != null && !courseId.isBlank() && masterCourseRepository.existsById(courseId)) {
             return courseId;
         }
         return courseId;
@@ -1194,16 +1240,16 @@ public class AcademicService {
         String targetCourseId = resolveTargetCourseId(courseId);
         System.out.println("[AcademicService] getCourseCoordinatorSetupProgress called | courseId: " + courseId + " -> targetCourseId: " + targetCourseId);
         if (targetCourseId != null && !targetCourseId.isBlank()) {
-            if (courseOfferingRepository.existsById(targetCourseId)) {
-                enforceCourseOfferingScope(targetCourseId);
-            } else if (courseRepository.existsById(targetCourseId)) {
+            if (programmeBatchCourseRepository.existsById(targetCourseId)) {
+                enforceProgrammeBatchCourseScope(targetCourseId);
+            } else if (masterCourseRepository.existsById(targetCourseId)) {
                 enforceCourseScope(targetCourseId);
             }
         }
         CourseCoordinatorSetupProgress progress = (targetCourseId != null)
-                ? ccSetupProgressRepository.findByCourseOfferingId(targetCourseId).orElseGet(() -> CourseCoordinatorSetupProgress.builder()
+                ? ccSetupProgressRepository.findByProgrammeBatchCourseId(targetCourseId).orElseGet(() -> CourseCoordinatorSetupProgress.builder()
                         .id("ccprog-" + targetCourseId)
-                        .courseOfferingId(targetCourseId)
+                        .programmeBatchCourseId(targetCourseId)
                         .coordinatorEmail(coordinatorEmail)
                         .currentStep(1)
                         .overallStatus(SetupStepStatus.IN_PROGRESS)
@@ -1238,16 +1284,16 @@ public class AcademicService {
         String targetCourseId = resolveTargetCourseId(courseId);
         System.out.println("[AcademicService] updateCourseCoordinatorSetupProgress called | courseId: " + courseId + " -> targetCourseId: " + targetCourseId + " | stepNumber: " + currentStep);
         if (targetCourseId != null && !targetCourseId.isBlank()) {
-            if (courseOfferingRepository.existsById(targetCourseId)) {
-                enforceCourseOfferingScope(targetCourseId);
-            } else if (courseRepository.existsById(targetCourseId)) {
+            if (programmeBatchCourseRepository.existsById(targetCourseId)) {
+                enforceProgrammeBatchCourseScope(targetCourseId);
+            } else if (masterCourseRepository.existsById(targetCourseId)) {
                 enforceCourseScope(targetCourseId);
             }
         }
-        CourseCoordinatorSetupProgress progress = ccSetupProgressRepository.findByCourseOfferingId(targetCourseId)
+        CourseCoordinatorSetupProgress progress = ccSetupProgressRepository.findByProgrammeBatchCourseId(targetCourseId)
                 .orElseGet(() -> CourseCoordinatorSetupProgress.builder()
                         .id("ccprog-" + UUID.randomUUID().toString().substring(0, 8))
-                        .courseOfferingId(targetCourseId)
+                        .programmeBatchCourseId(targetCourseId)
                         .coordinatorEmail(coordinatorEmail)
                         .currentStep(1)
                         .overallStatus(SetupStepStatus.IN_PROGRESS)
@@ -1269,18 +1315,18 @@ public class AcademicService {
         String targetCourseId = resolveTargetCourseId(courseId);
         System.out.println("[AcademicService] completeCourseCoordinatorSetup called | courseId: " + courseId + " -> targetCourseId: " + targetCourseId);
         if (targetCourseId != null && !targetCourseId.isBlank()) {
-            if (courseOfferingRepository.existsById(targetCourseId)) {
-                enforceCourseOfferingScope(targetCourseId);
+            if (programmeBatchCourseRepository.existsById(targetCourseId)) {
+                enforceProgrammeBatchCourseScope(targetCourseId);
                 enforceCourseCoordinatorScope(targetCourseId);
-            } else if (courseRepository.existsById(targetCourseId)) {
+            } else if (masterCourseRepository.existsById(targetCourseId)) {
                 enforceCourseScope(targetCourseId);
                 enforceCourseCoordinatorScope(targetCourseId);
             }
         }
-        CourseCoordinatorSetupProgress progress = ccSetupProgressRepository.findByCourseOfferingId(targetCourseId)
+        CourseCoordinatorSetupProgress progress = ccSetupProgressRepository.findByProgrammeBatchCourseId(targetCourseId)
                 .orElseGet(() -> CourseCoordinatorSetupProgress.builder()
                         .id("ccprog-" + UUID.randomUUID().toString().substring(0, 8))
-                        .courseOfferingId(targetCourseId)
+                        .programmeBatchCourseId(targetCourseId)
                         .coordinatorEmail(coordinatorEmail)
                         .build());
 
@@ -1294,7 +1340,7 @@ public class AcademicService {
 
     // --- Programmes ---
     @Transactional(readOnly = true)
-    public List<Programme> getAllProgrammes() {
+    public List<MasterProgramme> getAllProgrammes() {
         System.out.println("[AcademicService] getAllProgrammes called");
         CurrentUserScope scope = getScope();
         if (scope != null && scope.isDirector()) {
@@ -1305,7 +1351,7 @@ public class AcademicService {
         }
         if (scope != null && scope.isProgrammeCoordinator()) {
             String progId = scope.getRequiredProgrammeId();
-            Programme p = programmeRepository.findById(progId).orElse(null);
+            MasterProgramme p = masterProgrammeRepository.findById(progId).orElse(null);
             if (p != null) {
                 enforceProgrammeScope(p.getId());
                 enrichProgrammeCoordinator(p);
@@ -1313,17 +1359,17 @@ public class AcademicService {
             }
             return Collections.emptyList();
         }
-        List<Programme> list = programmeRepository.findAll();
+        List<MasterProgramme> list = masterProgrammeRepository.findAll();
         list.forEach(this::enrichProgrammeCoordinator);
         System.out.println("[AcademicService] Fetched all programmes (" + list.size() + " items)");
         return list;
     }
 
     @Transactional(readOnly = true)
-    public Programme getProgrammeById(String id) {
+    public MasterProgramme getProgrammeById(String id) {
         System.out.println("[AcademicService] getProgrammeById called | id: " + id);
         if (id == null || id.isBlank()) return null;
-        Programme p = programmeRepository.findById(id).orElse(null);
+        MasterProgramme p = masterProgrammeRepository.findById(id).orElse(null);
         if (p == null) return null;
         enforceProgrammeScope(p.getId());
         enrichProgrammeCoordinator(p);
@@ -1331,14 +1377,14 @@ public class AcademicService {
     }
 
     @Transactional(readOnly = true)
-    public List<Programme> getProgrammesByCoordinatorEmail(String coordinatorEmail) {
+    public List<MasterProgramme> getProgrammesByCoordinatorEmail(String coordinatorEmail) {
         System.out.println("[AcademicService] getProgrammesByCoordinatorEmail called | coordinatorEmail: " + coordinatorEmail);
-        List<Programme> all = getAllProgrammes();
+        List<MasterProgramme> all = getAllProgrammes();
         if (coordinatorEmail == null || coordinatorEmail.isBlank()) {
             return all;
         }
         String emailTrim = coordinatorEmail.trim().toLowerCase();
-        List<Programme> filtered = all.stream()
+        List<MasterProgramme> filtered = all.stream()
                 .filter(p -> (p.getCoordinatorEmail() != null && emailTrim.equalsIgnoreCase(p.getCoordinatorEmail().trim()))
                         || (p.getCoordinator() != null && emailTrim.equalsIgnoreCase(p.getCoordinator().trim())))
                 .toList();
@@ -1351,7 +1397,7 @@ public class AcademicService {
     }
 
     @Transactional(readOnly = true)
-    public List<Programme> getProgrammesBySchool(String schoolId) {
+    public List<MasterProgramme> getProgrammesBySchool(String schoolId) {
         System.out.println("[AcademicService] getProgrammesBySchool called | schoolId: " + schoolId);
         CurrentUserScope scope = getScope();
         if (scope != null && scope.isDirector()) {
@@ -1373,14 +1419,14 @@ public class AcademicService {
             return Collections.emptyList();
         }
         List<String> deptIds = depts.stream().map(Department::getId).toList();
-        List<Programme> list = programmeRepository.findByDepartmentIdIn(deptIds);
+        List<MasterProgramme> list = masterProgrammeRepository.findByDepartmentIdIn(deptIds);
         list.forEach(this::enrichProgrammeCoordinator);
         System.out.println("[AcademicService] Fetched programmes (" + list.size() + " items) for schoolId: " + schoolId);
         return list;
     }
 
     @Transactional(readOnly = true)
-    public List<Programme> getProgrammesByDepartment(String departmentId) {
+    public List<MasterProgramme> getProgrammesByDepartment(String departmentId) {
         System.out.println("[AcademicService] getProgrammesByDepartment called | departmentId: " + departmentId);
         CurrentUserScope scope = getScope();
         if (scope != null && scope.isHod()) {
@@ -1398,19 +1444,19 @@ public class AcademicService {
             return getAllProgrammes();
         }
         enforceDepartmentScope(departmentId);
-        List<Programme> list = programmeRepository.findByDepartmentId(departmentId);
+        List<MasterProgramme> list = masterProgrammeRepository.findByDepartmentId(departmentId);
         list.forEach(this::enrichProgrammeCoordinator);
         System.out.println("[AcademicService] Fetched programmes (" + list.size() + " items) for departmentId: " + departmentId);
         return list;
     }
 
     @Transactional
-    public Programme saveProgramme(Programme programme) {
-        System.out.println("[AcademicService] saveProgramme called | id: " + (programme != null ? programme.getId() : "null") + " | name: " + (programme != null ? programme.getName() : "null") + " | coordinator: " + (programme != null ? programme.getCoordinator() : "null") + " | coordinatorEmail: " + (programme != null ? programme.getCoordinatorEmail() : "null"));
+    public MasterProgramme saveProgramme(MasterProgramme programme) {
+        System.out.println("[AcademicService] saveMasterProgramme called | id: " + (programme != null ? programme.getId() : "null") + " | name: " + (programme != null ? programme.getName() : "null") + " | coordinator: " + (programme != null ? programme.getCoordinator() : "null") + " | coordinatorEmail: " + (programme != null ? programme.getCoordinatorEmail() : "null"));
         if (programme == null) return null;
 
         if (programme.getId() != null) {
-            Programme existing = programmeRepository.findById(programme.getId()).orElse(null);
+            MasterProgramme existing = masterProgrammeRepository.findById(programme.getId()).orElse(null);
             if (existing != null) {
                 enforceProgrammeScope(existing.getId());
             }
@@ -1419,11 +1465,11 @@ public class AcademicService {
             enforceDepartmentScope(programme.getDepartmentId());
         }
 
-        Programme targetProg = programme;
+        MasterProgramme targetProg = programme;
         if (programme.getId() != null) {
-            Optional<Programme> existingOpt = programmeRepository.findById(programme.getId());
+            Optional<MasterProgramme> existingOpt = masterProgrammeRepository.findById(programme.getId());
             if (existingOpt.isPresent()) {
-                Programme existing = existingOpt.get();
+                MasterProgramme existing = existingOpt.get();
                 if (programme.getName() != null) existing.setName(programme.getName());
                 if (programme.getCode() != null) existing.setCode(programme.getCode());
                 if (programme.getDepartmentId() != null) existing.setDepartmentId(programme.getDepartmentId());
@@ -1445,7 +1491,7 @@ public class AcademicService {
             targetProg.setCoordinatorEmail(programme.getCoordinatorEmail());
         }
 
-        final Programme finalProg = targetProg;
+        final MasterProgramme finalProg = targetProg;
         enrichProgrammeCoordinator(finalProg);
 
         // Populate department name if missing
@@ -1475,77 +1521,81 @@ public class AcademicService {
             }
         }
 
-        Programme saved = programmeRepository.save(finalProg);
+        boolean isNewProg = (finalProg.getId() == null || !masterProgrammeRepository.existsById(finalProg.getId()));
+        MasterProgramme saved = masterProgrammeRepository.save(finalProg);
+        if (auditLogService != null) {
+            auditLogService.recordSuccess(isNewProg ? com.dypiu.nba.audit.AuditAction.CREATE : com.dypiu.nba.audit.AuditAction.UPDATE, com.dypiu.nba.audit.ResourceType.MASTER_PROGRAMME, saved.getId(), null, "ACTIVE", isNewProg ? "Created MasterProgramme" : "Updated MasterProgramme", java.util.Map.of("code", saved.getCode() != null ? saved.getCode() : "", "name", saved.getName() != null ? saved.getName() : ""));
+        }
         System.out.println("[AcademicService] Saved programme with id: " + saved.getId() + ", coordinator: " + saved.getCoordinator() + ", coordinatorEmail: " + saved.getCoordinatorEmail());
         return saved;
     }
 
     @Transactional
     public void deleteProgramme(String id) {
-        System.out.println("[AcademicService] deleteProgramme called | id: " + id);
+        System.out.println("[AcademicService] deleteMasterProgramme called | id: " + id);
         enforceProgrammeScope(id);
-        programmeRepository.deleteById(id);
+        masterProgrammeRepository.deleteById(id);
         System.out.println("[AcademicService] Deleted programme with id: " + id);
     }
 
     // --- Batches ---
     @Transactional(readOnly = true)
-    public List<Batch> getAllBatches() {
+    public List<ProgrammeBatch> getAllBatches() {
         System.out.println("[AcademicService] getAllBatches called");
         CurrentUserScope scope = getScope();
         if (scope != null && scope.isDirector()) {
             List<Department> depts = departmentRepository.findBySchoolId(scope.getRequiredSchoolId());
             List<String> deptIds = depts.stream().map(Department::getId).toList();
-            List<Programme> progs = deptIds.isEmpty() ? Collections.emptyList() : programmeRepository.findByDepartmentIdIn(deptIds);
-            List<String> progIds = progs.stream().map(Programme::getId).toList();
-            return progIds.isEmpty() ? Collections.emptyList() : batchRepository.findByProgrammeIdIn(progIds);
+            List<MasterProgramme> progs = deptIds.isEmpty() ? Collections.emptyList() : masterProgrammeRepository.findByDepartmentIdIn(deptIds);
+            List<String> progIds = progs.stream().map(MasterProgramme::getId).toList();
+            return progIds.isEmpty() ? Collections.emptyList() : programmeBatchRepository.findByMasterProgrammeIdIn(progIds);
         }
         if (scope != null && scope.isHod()) {
-            List<Programme> progs = programmeRepository.findByDepartmentId(scope.getRequiredDepartmentId());
-            List<String> progIds = progs.stream().map(Programme::getId).toList();
-            return progIds.isEmpty() ? Collections.emptyList() : batchRepository.findByProgrammeIdIn(progIds);
+            List<MasterProgramme> progs = masterProgrammeRepository.findByDepartmentId(scope.getRequiredDepartmentId());
+            List<String> progIds = progs.stream().map(MasterProgramme::getId).toList();
+            return progIds.isEmpty() ? Collections.emptyList() : programmeBatchRepository.findByMasterProgrammeIdIn(progIds);
         }
         if (scope != null && scope.isProgrammeCoordinator()) {
-            return batchRepository.findByProgrammeId(scope.getRequiredProgrammeId());
+            return programmeBatchRepository.findByMasterProgrammeId(scope.getRequiredProgrammeId());
         }
         if (scope != null && scope.isFaculty()) {
-            List<CourseOffering> allOfferings = courseOfferingRepository.findAll();
+            List<ProgrammeBatchCourse> allOfferings = programmeBatchCourseRepository.findAll();
             Set<String> assignedBatchIds = allOfferings.stream()
                     .filter(o -> {
                         boolean isCoord = (o.getCourseCoordinatorId() != null && Objects.equals(o.getCourseCoordinatorId(), scope.getUserId()))
                                 ;
                         return isCoord || (o.getAssignedFaculty() != null && (o.getAssignedFaculty().contains(scope.getEmail()) || o.getAssignedFaculty().contains(scope.getName())));
                     })
-                    .map(CourseOffering::getBatchId)
+                    .map(ProgrammeBatchCourse::getBatchId)
                     .filter(Objects::nonNull)
                     .collect(Collectors.toSet());
-            return assignedBatchIds.isEmpty() ? Collections.emptyList() : batchRepository.findAllById(assignedBatchIds);
+            return assignedBatchIds.isEmpty() ? Collections.emptyList() : programmeBatchRepository.findAllById(assignedBatchIds);
         }
-        List<Batch> list = batchRepository.findAll();
+        List<ProgrammeBatch> list = programmeBatchRepository.findAll();
         System.out.println("[AcademicService] Fetched all batches (" + list.size() + " items)");
         return list;
     }
 
     @Transactional(readOnly = true)
-    public List<Batch> getBatchesByProgramme(String programmeId) {
-        System.out.println("[AcademicService] getBatchesByProgramme called | programmeId: " + programmeId);
+    public List<ProgrammeBatch> getBatchesByProgramme(String programmeId) {
+        System.out.println("[AcademicService] getBatchesByMasterProgramme called | programmeId: " + programmeId);
         enforceProgrammeScope(programmeId);
-        List<Batch> list = batchRepository.findByProgrammeId(programmeId);
+        List<ProgrammeBatch> list = programmeBatchRepository.findByMasterProgrammeId(programmeId);
         System.out.println("[AcademicService] Fetched batches (" + list.size() + " items) for programmeId: " + programmeId);
         return list;
     }
 
     @Transactional(readOnly = true)
-    public Batch getBatchById(String id) {
+    public ProgrammeBatch getBatchById(String id) {
         System.out.println("[AcademicService] getBatchById called | id: " + id);
         enforceBatchScope(id);
-        Batch batch = batchRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Batch not found with id: " + id));
+        ProgrammeBatch batch = programmeBatchRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("ProgrammeBatch not found with id: " + id));
         return batch;
     }
 
     @Transactional(readOnly = true)
-    public List<Batch> getBatchesScoped(String programmeId, String userEmail, String role) {
+    public List<ProgrammeBatch> getBatchesScoped(String programmeId, String userEmail, String role) {
         System.out.println("================================================================================");
         System.out.println("[AcademicService] >>> getBatchesScoped | programmeId: " + programmeId + " | userEmail: " + userEmail + " | role: " + role);
 
@@ -1573,21 +1623,21 @@ public class AcademicService {
 
         // 5. Admin / Global roles
         if (scope != null && (scope.isAdmin() || scope.isIqac())) {
-            return batchRepository.findAll();
+            return programmeBatchRepository.findAll();
         }
 
-        // 6. Fallback for other callers (Course Coordinator/Faculty)
+        // 6. Fallback for other callers (MasterCourse Coordinator/Faculty)
         return getAllBatches();
     }
 
     @Transactional
-    public Batch saveBatch(Batch batch) {
-        System.out.println("[AcademicService] saveBatch called | name: " + (batch != null ? batch.getName() : "null"));
+    public ProgrammeBatch saveBatch(ProgrammeBatch batch) {
+        System.out.println("[AcademicService] saveProgrammeBatch called | name: " + (batch != null ? batch.getName() : "null"));
         if (batch == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Batch details cannot be null.");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "ProgrammeBatch details cannot be null.");
         }
         if (batch.getId() != null) {
-            Batch existing = batchRepository.findById(batch.getId()).orElse(null);
+            ProgrammeBatch existing = programmeBatchRepository.findById(batch.getId()).orElse(null);
             if (existing != null) {
                 enforceProgrammeScope(existing.getProgrammeId());
             }
@@ -1596,79 +1646,83 @@ public class AcademicService {
             enforceProgrammeScope(batch.getProgrammeId());
         }
         if (batch.getId() == null) batch.setId("batch-" + UUID.randomUUID().toString().substring(0, 8));
-        Batch saved = batchRepository.save(batch);
+        boolean isNewBatch = (batch.getId() == null || !programmeBatchRepository.existsById(batch.getId()));
+        ProgrammeBatch saved = programmeBatchRepository.save(batch);
+        if (auditLogService != null) {
+            auditLogService.recordSuccess(isNewBatch ? com.dypiu.nba.audit.AuditAction.CREATE : com.dypiu.nba.audit.AuditAction.UPDATE, com.dypiu.nba.audit.ResourceType.PROGRAMME_BATCH, saved.getId(), null, "ACTIVE", isNewBatch ? "Created ProgrammeBatch" : "Updated ProgrammeBatch", java.util.Map.of("name", saved.getName() != null ? saved.getName() : ""));
+        }
         System.out.println("[AcademicService] Saved batch with id: " + saved.getId());
         return saved;
     }
 
     @Transactional
     public void deleteBatch(String id) {
-        System.out.println("[AcademicService] deleteBatch called | id: " + id);
-        Batch batch = batchRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Batch not found with id: " + id));
+        System.out.println("[AcademicService] deleteProgrammeBatch called | id: " + id);
+        ProgrammeBatch batch = programmeBatchRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("ProgrammeBatch not found with id: " + id));
         enforceProgrammeScope(batch.getProgrammeId());
-        batchRepository.deleteById(id);
+        programmeBatchRepository.deleteById(id);
         System.out.println("[AcademicService] Deleted batch with id: " + id);
     }
 
     // --- Courses ---
     @Transactional(readOnly = true)
-    public List<Course> getAllCourses() {
+    public List<MasterCourse> getAllCourses() {
         System.out.println("[AcademicService] getAllCourses called");
         CurrentUserScope scope = getScope();
         if (scope != null && scope.isDirector()) {
             List<Department> depts = departmentRepository.findBySchoolId(scope.getRequiredSchoolId());
             List<String> deptIds = depts.stream().map(Department::getId).toList();
-            List<Programme> progs = deptIds.isEmpty() ? Collections.emptyList() : programmeRepository.findByDepartmentIdIn(deptIds);
-            List<String> progIds = progs.stream().map(Programme::getId).toList();
-            return progIds.isEmpty() ? Collections.emptyList() : courseRepository.findByProgrammeIdIn(progIds);
+            List<MasterProgramme> progs = deptIds.isEmpty() ? Collections.emptyList() : masterProgrammeRepository.findByDepartmentIdIn(deptIds);
+            List<String> progIds = progs.stream().map(MasterProgramme::getId).toList();
+            return progIds.isEmpty() ? Collections.emptyList() : masterCourseRepository.findByMasterProgrammeIdIn(progIds);
         }
         if (scope != null && scope.isHod()) {
-            List<Programme> progs = programmeRepository.findByDepartmentId(scope.getRequiredDepartmentId());
-            List<String> progIds = progs.stream().map(Programme::getId).toList();
-            return progIds.isEmpty() ? Collections.emptyList() : courseRepository.findByProgrammeIdIn(progIds);
+            List<MasterProgramme> progs = masterProgrammeRepository.findByDepartmentId(scope.getRequiredDepartmentId());
+            List<String> progIds = progs.stream().map(MasterProgramme::getId).toList();
+            return progIds.isEmpty() ? Collections.emptyList() : masterCourseRepository.findByMasterProgrammeIdIn(progIds);
         }
         if (scope != null && scope.isProgrammeCoordinator()) {
-            return courseRepository.findByProgrammeId(scope.getRequiredProgrammeId());
+            return masterCourseRepository.findByMasterProgrammeId(scope.getRequiredProgrammeId());
         }
         if (scope != null && scope.isFaculty()) {
-            List<CourseOffering> allOfferings = courseOfferingRepository.findAll();
+            List<ProgrammeBatchCourse> allOfferings = programmeBatchCourseRepository.findAll();
             Set<String> assignedCourseIds = allOfferings.stream()
                     .filter(o -> {
                         boolean isCoord = (o.getCourseCoordinatorId() != null && Objects.equals(o.getCourseCoordinatorId(), scope.getUserId()))
                                 ;
                         return isCoord || (o.getAssignedFaculty() != null && (o.getAssignedFaculty().contains(scope.getEmail()) || o.getAssignedFaculty().contains(scope.getName())));
                     })
-                    .map(CourseOffering::getCourseId)
+                    .map(ProgrammeBatchCourse::getCourseId)
                     .filter(Objects::nonNull)
                     .collect(Collectors.toSet());
-            return assignedCourseIds.isEmpty() ? Collections.emptyList() : courseRepository.findAllById(assignedCourseIds);
+            return assignedCourseIds.isEmpty() ? Collections.emptyList() : masterCourseRepository.findAllById(assignedCourseIds);
         }
-        List<Course> list = courseRepository.findAll();
+        List<MasterCourse> list = masterCourseRepository.findAll();
         System.out.println("[AcademicService] Fetched all courses (" + list.size() + " items)");
         return list;
     }
 
     @Transactional(readOnly = true)
-    public Course getCourseById(String id) {
+    public MasterCourse getCourseById(String id) {
         System.out.println("[AcademicService] getCourseById called | id: " + id);
-        Course course = courseRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Course not found with id: " + id));
+        MasterCourse course = masterCourseRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("MasterCourse not found with id: " + id));
         enforceCourseScope(id);
         return course;
     }
 
     @Transactional(readOnly = true)
-    public List<Course> getCoursesByProgramme(String programmeId, String batchId) {
-        System.out.println("[AcademicService] getCoursesByProgramme called | programmeId: " + programmeId + " | batchId: " + batchId);
+    public List<MasterCourse> getCoursesByProgramme(String programmeId, String batchId) {
+        System.out.println("[AcademicService] getCoursesByMasterProgramme called | programmeId: " + programmeId + " | batchId: " + batchId);
         enforceProgrammeScope(programmeId);
-        List<Course> list = courseRepository.findByProgrammeId(programmeId);
+        List<MasterCourse> list = masterCourseRepository.findByMasterProgrammeId(programmeId);
         
         if (batchId != null && !batchId.isBlank()) {
-            for (Course course : list) {
-                List<CourseOffering> offerings = courseOfferingRepository.findByCourseId(course.getId());
-                CourseOffering targetOffering = offerings.stream()
-                        .filter(o -> batchId.equals(o.getBatchId()))
+            for (MasterCourse course : list) {
+                List<ProgrammeBatchCourse> offerings = programmeBatchCourseRepository.findByMasterCourseId(course.getId());
+                ProgrammeBatchCourse targetOffering = offerings.stream()
+                        .filter(o -> batchId.equals(o.getProgrammeBatchId()))
                         .findFirst()
                         .orElse(null);
                 
@@ -1677,7 +1731,7 @@ public class AcademicService {
                     course.setCoordinator(targetOffering.getCourseCoordinatorName());
                     course.setFaculty(targetOffering.getCourseCoordinatorName());
                     course.setAssignedFaculty(targetOffering.getAssignedFaculty());
-                    course.setCourseOfferingId(targetOffering.getId());
+                    course.setProgrammeBatchCourseId(targetOffering.getId());
                     
                     // We also need coordinatorEmail if we can extract it from assignedFaculty
                     if (targetOffering.getAssignedFaculty() != null && targetOffering.getAssignedFaculty().contains("(")) {
@@ -1693,13 +1747,13 @@ public class AcademicService {
     }
 
     @Transactional
-    public Course saveCourse(Course course) {
-        System.out.println("[AcademicService] saveCourse called | name: " + (course != null ? course.getName() : "null"));
+    public MasterCourse saveCourse(MasterCourse course) {
+        System.out.println("[AcademicService] saveMasterCourse called | name: " + (course != null ? course.getName() : "null"));
         if (course == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Course details cannot be null.");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "MasterCourse details cannot be null.");
         }
         if (course.getId() != null) {
-            Course existing = courseRepository.findById(course.getId()).orElse(null);
+            MasterCourse existing = masterCourseRepository.findById(course.getId()).orElse(null);
             if (existing != null) {
                 enforceProgrammeScope(existing.getProgrammeId());
             }
@@ -1708,29 +1762,33 @@ public class AcademicService {
             enforceProgrammeScope(course.getProgrammeId());
         }
         if (course.getId() == null) course.setId("crs-" + UUID.randomUUID().toString().substring(0, 8));
-        Course saved = courseRepository.save(course);
+        boolean isNewCourse = (course.getId() == null || !masterCourseRepository.existsById(course.getId()));
+        MasterCourse saved = masterCourseRepository.save(course);
+        if (auditLogService != null) {
+            auditLogService.recordSuccess(isNewCourse ? com.dypiu.nba.audit.AuditAction.CREATE : com.dypiu.nba.audit.AuditAction.UPDATE, com.dypiu.nba.audit.ResourceType.MASTER_COURSE, saved.getId(), null, "ACTIVE", isNewCourse ? "Created MasterCourse" : "Updated MasterCourse", java.util.Map.of("code", saved.getCode() != null ? saved.getCode() : "", "name", saved.getName() != null ? saved.getName() : ""));
+        }
         System.out.println("[AcademicService] Saved course with id: " + saved.getId());
         return saved;
     }
 
     @Transactional
     public void deleteCourse(String id) {
-        System.out.println("[AcademicService] deleteCourse called | id: " + id);
-        Course course = courseRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Course not found with id: " + id));
+        System.out.println("[AcademicService] deleteMasterCourse called | id: " + id);
+        MasterCourse course = masterCourseRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("MasterCourse not found with id: " + id));
         enforceProgrammeScope(course.getProgrammeId());
-        courseRepository.deleteById(id);
+        masterCourseRepository.deleteById(id);
         System.out.println("[AcademicService] Deleted course with id: " + id);
     }
 
     // --- Students ---
     @Transactional(readOnly = true)
     public List<Student> getStudentsByBatch(String batchId) {
-        System.out.println("[AcademicService] getStudentsByBatch called | batchId: " + batchId);
+        System.out.println("[AcademicService] getStudentsByProgrammeBatch called | batchId: " + batchId);
         if (batchId != null && !batchId.isBlank()) {
             enforceBatchScope(batchId);
         }
-        List<Student> list = studentRepository.findByBatchId(batchId);
+        List<Student> list = studentRepository.findByProgrammeBatchId(batchId);
         System.out.println("[AcademicService] Fetched students (" + list.size() + " items) for batchId: " + batchId);
         return list;
     }
@@ -1826,7 +1884,7 @@ public class AcademicService {
         }
 
         // Programmes under department
-        List<Programme> programmes = programmeRepository.findByDepartmentId(deptId);
+        List<MasterProgramme> programmes = masterProgrammeRepository.findByDepartmentId(deptId);
         int programmeCount = programmes.size();
 
         // Count assigned coordinators
@@ -1835,10 +1893,10 @@ public class AcademicService {
                 .count();
 
         // Courses under department's programmes
-        List<String> progIds = programmes.stream().map(Programme::getId).toList();
+        List<String> progIds = programmes.stream().map(MasterProgramme::getId).toList();
         int courseCount = 0;
         if (!progIds.isEmpty()) {
-            courseCount = courseRepository.findByProgrammeIdIn(progIds).size();
+            courseCount = masterCourseRepository.findByMasterProgrammeIdIn(progIds).size();
         }
 
         HodSetupProgressDto progressDto = getHodSetupProgress(deptId, resolvedHodEmail);
@@ -2123,7 +2181,7 @@ public class AcademicService {
         if (scope != null && scope.isProgrammeCoordinator()) {
             if (programmeId != null && !programmeId.isBlank()) {
                 if (!programmeId.trim().equals(scope.getRequiredProgrammeId())) {
-                    throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Programme is outside your assigned scope.");
+                    throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: MasterProgramme is outside your assigned scope.");
                 }
             }
             return scope.getRequiredProgrammeId();
@@ -2133,8 +2191,8 @@ public class AcademicService {
         }
         if (coordinatorEmail != null && !coordinatorEmail.isBlank()) {
             String emailTrim = coordinatorEmail.trim().toLowerCase();
-            List<Programme> list = programmeRepository.findAll();
-            Programme p = list.stream().filter(pr -> (pr.getCoordinatorEmail() != null && emailTrim.equalsIgnoreCase(pr.getCoordinatorEmail().trim())) || (pr.getCoordinator() != null && emailTrim.equalsIgnoreCase(pr.getCoordinator().trim()))).findFirst().orElse(null);
+            List<MasterProgramme> list = masterProgrammeRepository.findAll();
+            MasterProgramme p = list.stream().filter(pr -> (pr.getCoordinatorEmail() != null && emailTrim.equalsIgnoreCase(pr.getCoordinatorEmail().trim())) || (pr.getCoordinator() != null && emailTrim.equalsIgnoreCase(pr.getCoordinator().trim()))).findFirst().orElse(null);
             if (p != null) return p.getId();
         }
         if (scope != null && scope.getProgrammeId() != null) {
@@ -2143,35 +2201,35 @@ public class AcademicService {
         return null;
     }
 
-    // --- Programme Coordinator Summary & Setup Progress ---
+    // --- MasterProgramme Coordinator Summary & Setup Progress ---
     @Transactional(readOnly = true)
     public ProgrammeCoordinatorSummaryDto getProgrammeCoordinatorSummary(String coordinatorEmail, String programmeId) {
         System.out.println("[AcademicService] getProgrammeCoordinatorSummary called | coordinatorEmail: " + coordinatorEmail + " | programmeId: " + programmeId);
 
         String targetProgId = resolveTargetProgId(programmeId, coordinatorEmail);
         if (targetProgId == null || targetProgId.isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Programme scope cannot be determined.");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "MasterProgramme scope cannot be determined.");
         }
         enforceProgrammeScope(targetProgId);
 
-        Programme prog = programmeRepository.findById(targetProgId)
-                .orElseThrow(() -> new ResourceNotFoundException("Programme not found: " + targetProgId));
+        MasterProgramme prog = masterProgrammeRepository.findById(targetProgId)
+                .orElseThrow(() -> new ResourceNotFoundException("MasterProgramme not found: " + targetProgId));
         enrichProgrammeCoordinator(prog);
 
-        List<Programme> assignedProgrammes = List.of(prog);
+        List<MasterProgramme> assignedProgrammes = List.of(prog);
         CurrentUserScope scope = getScope();
         if (scope != null && (scope.isAdmin() || scope.isIqac())) {
-            assignedProgrammes = programmeRepository.findAll();
+            assignedProgrammes = masterProgrammeRepository.findAll();
             assignedProgrammes.forEach(this::enrichProgrammeCoordinator);
         } else if (scope != null && scope.isHod()) {
-            assignedProgrammes = programmeRepository.findByDepartmentId(scope.getRequiredDepartmentId());
+            assignedProgrammes = masterProgrammeRepository.findByDepartmentId(scope.getRequiredDepartmentId());
             assignedProgrammes.forEach(this::enrichProgrammeCoordinator);
         } else if (scope != null && scope.isDirector()) {
             assignedProgrammes = getProgrammesBySchool(scope.getRequiredSchoolId());
             assignedProgrammes.forEach(this::enrichProgrammeCoordinator);
         }
 
-        String resolvedName = "Programme Coordinator";
+        String resolvedName = "MasterProgramme Coordinator";
         String resolvedEmail = coordinatorEmail != null ? coordinatorEmail : "";
 
         if (prog.getCoordinator() != null && !prog.getCoordinator().isBlank()) {
@@ -2181,11 +2239,11 @@ public class AcademicService {
             resolvedEmail = prog.getCoordinatorEmail();
         }
 
-        List<Course> courses = courseRepository.findByProgrammeId(targetProgId);
-        List<ProgrammeOutcome> pos = programmeOutcomeRepository.findByProgrammeId(targetProgId);
-        List<ProgrammeSpecificOutcome> psos = programmeSpecificOutcomeRepository.findByProgrammeId(targetProgId);
-        List<PeoOutcome> peos = peoOutcomeRepository.findByProgrammeId(targetProgId);
-        List<Batch> batches = batchRepository.findByProgrammeId(targetProgId);
+        List<MasterCourse> courses = masterCourseRepository.findByMasterProgrammeId(targetProgId);
+        List<ProgrammeBatch> batches = programmeBatchRepository.findByMasterProgrammeId(targetProgId);
+        List<ProgrammeOutcome> pos = (!batches.isEmpty() ? programmeOutcomeRepository.findByProgrammeBatchIdOrderByCodeAsc(batches.get(0).getId()) : List.of());
+        List<ProgrammeSpecificOutcome> psos = (!batches.isEmpty() ? programmeSpecificOutcomeRepository.findByProgrammeBatchIdOrderByCodeAsc(batches.get(0).getId()) : List.of());
+        List<PeoOutcome> peos = (!batches.isEmpty() ? peoOutcomeRepository.findByProgrammeBatchIdOrderByCodeAsc(batches.get(0).getId()) : List.of());
 
         ProgrammeCoordinatorSetupProgressDto progressDto = getProgrammeCoordinatorSetupProgress(coordinatorEmail, targetProgId);
 
@@ -2215,19 +2273,19 @@ public class AcademicService {
 
         String targetProgId = resolveTargetProgId(programmeId, coordinatorEmail);
         if (targetProgId == null || targetProgId.isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Programme scope cannot be determined.");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "MasterProgramme scope cannot be determined.");
         }
         enforceProgrammeScope(targetProgId);
 
         String targetBatchId = batchId;
         if (targetBatchId == null || targetBatchId.isBlank()) {
-            List<Batch> batches = batchRepository.findByProgrammeId(targetProgId);
+            List<ProgrammeBatch> batches = programmeBatchRepository.findByMasterProgrammeId(targetProgId);
             targetBatchId = !batches.isEmpty() ? batches.get(0).getId() : null;
         }
 
         final String finalProgId = targetProgId;
         final String finalBatchId = targetBatchId;
-        ProgrammeCoordinatorSetupProgress progress = pcSetupProgressRepository.findByProgrammeIdAndBatchId(finalProgId, finalBatchId)
+        ProgrammeCoordinatorSetupProgress progress = pcSetupProgressRepository.findByProgrammeBatchId(finalBatchId)
                 .orElseGet(() -> createDefaultPcProgress(finalProgId, finalBatchId, coordinatorEmail));
 
         return buildPcSetupProgressDto(progress);
@@ -2245,19 +2303,19 @@ public class AcademicService {
 
         String targetProgId = resolveTargetProgId(programmeId, coordinatorEmail);
         if (targetProgId == null || targetProgId.isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Programme scope cannot be determined.");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "MasterProgramme scope cannot be determined.");
         }
         enforceProgrammeScope(targetProgId);
 
         String targetBatchId = batchId;
         if (targetBatchId == null || targetBatchId.isBlank()) {
-            List<Batch> batches = batchRepository.findByProgrammeId(targetProgId);
+            List<ProgrammeBatch> batches = programmeBatchRepository.findByMasterProgrammeId(targetProgId);
             targetBatchId = !batches.isEmpty() ? batches.get(0).getId() : "batch-" + targetProgId;
         }
 
         final String finalProgId = targetProgId;
         final String finalBatchId = targetBatchId;
-        ProgrammeCoordinatorSetupProgress progress = pcSetupProgressRepository.findByProgrammeIdAndBatchId(finalProgId, finalBatchId)
+        ProgrammeCoordinatorSetupProgress progress = pcSetupProgressRepository.findByProgrammeBatchId(finalBatchId)
                 .orElseGet(() -> createDefaultPcProgress(finalProgId, finalBatchId, coordinatorEmail));
 
         progress.setBatchId(finalBatchId);
@@ -2333,13 +2391,12 @@ public class AcademicService {
     private ProgrammeCoordinatorSetupProgress createDefaultPcProgress(String programmeId, String batchId, String coordinatorEmail) {
         String finalBatchId = batchId;
         if (finalBatchId == null || finalBatchId.isBlank()) {
-            List<Batch> batches = batchRepository.findByProgrammeId(programmeId);
+            List<ProgrammeBatch> batches = programmeBatchRepository.findByMasterProgrammeId(programmeId);
             finalBatchId = !batches.isEmpty() ? batches.get(0).getId() : "batch-" + programmeId;
         }
         return ProgrammeCoordinatorSetupProgress.builder()
                 .id("pcprog-" + UUID.randomUUID().toString().substring(0, 8))
-                .programmeId(programmeId)
-                .batchId(finalBatchId)
+                .programmeBatchId(finalBatchId)
                 .coordinatorEmail(coordinatorEmail)
                 .currentStep(0)
                 .overallStatus(SetupStepStatus.IN_PROGRESS)
@@ -2361,9 +2418,17 @@ public class AcademicService {
                 ? Arrays.stream(progress.getPendingSteps().split(",")).map(String::trim).filter(s -> !s.isEmpty()).toList()
                 : List.of();
 
+        String progId = progress.getProgrammeId();
+        if (progress.getProgrammeBatchId() != null) {
+            ProgrammeBatch b = programmeBatchRepository.findById(progress.getProgrammeBatchId()).orElse(null);
+            if (b != null && b.getMasterProgrammeId() != null) {
+                progId = b.getMasterProgrammeId();
+            }
+        }
+
         return ProgrammeCoordinatorSetupProgressDto.builder()
                 .id(progress.getId())
-                .programmeId(progress.getProgrammeId())
+                .programmeId(progId)
                 .batchId(progress.getBatchId())
                 .coordinatorEmail(progress.getCoordinatorEmail())
                 .currentStep(progress.getCurrentStep())
@@ -2384,12 +2449,12 @@ public class AcademicService {
         if (targetDeptId != null && !targetDeptId.isBlank()) {
             enforceDepartmentScope(targetDeptId);
         }
-        List<Programme> progs = (targetDeptId != null && !targetDeptId.isBlank())
-                ? programmeRepository.findByDepartmentId(targetDeptId)
+        List<MasterProgramme> progs = (targetDeptId != null && !targetDeptId.isBlank())
+                ? masterProgrammeRepository.findByDepartmentId(targetDeptId)
                 : getAllProgrammes();
 
         List<Map<String, Object>> list = new ArrayList<>();
-        for (Programme p : progs) {
+        for (MasterProgramme p : progs) {
             enrichProgrammeCoordinator(p);
             Map<String, Object> item = new LinkedHashMap<>();
             item.put("id", p.getId());
@@ -2425,7 +2490,7 @@ public class AcademicService {
 
         if (progId != null) {
             enforceProgrammeScope(progId);
-            Programme p = programmeRepository.findById(progId).orElse(null);
+            MasterProgramme p = masterProgrammeRepository.findById(progId).orElse(null);
             if (p != null) {
                 p.setCoordinator(name);
                 p.setCoordinatorEmail(email);
@@ -2434,7 +2499,10 @@ public class AcademicService {
         }
         Map<String, Object> res = new LinkedHashMap<>();
         res.put("success", true);
-        res.put("message", "Programme coordinator assigned successfully.");
+        res.put("message", "MasterProgramme coordinator assigned successfully.");
+        if (auditLogService != null && progId != null) {
+            auditLogService.recordSuccess(com.dypiu.nba.audit.AuditAction.ASSIGN_COORDINATOR, com.dypiu.nba.audit.ResourceType.MASTER_PROGRAMME, progId, null, null, "Assigned PC coordinator " + name, java.util.Map.of("coordinatorEmail", email != null ? email : ""));
+        }
         return res;
     }
 
@@ -2447,6 +2515,9 @@ public class AcademicService {
     public Map<String, Object> allocateCourses(String programmeId, String batchId, List<Map<String, Object>> allocations, boolean submit) {
         if (programmeId != null) {
             enforceProgrammeScope(programmeId);
+            if (isAllocationApproved(programmeId)) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Cannot modify approved Course Allocation. A revision must be requested first.");
+            }
         }
         if (allocations != null) {
             for (Map<String, Object> item : allocations) {
@@ -2456,12 +2527,12 @@ public class AcademicService {
 
                 if (courseId != null) {
                     enforceCourseScope(courseId);
-                    Course course = courseRepository.findById(courseId).orElse(null);
+                    MasterCourse course = masterCourseRepository.findById(courseId).orElse(null);
                     if (course != null) {
                         course.setCoordinator(name);
                         course.setFaculty(name);
                         course.setAssignedFaculty(name + " (" + email + ")");
-                        courseRepository.save(course);
+                        masterCourseRepository.save(course);
                     }
 
                     if (batchId != null && !batchId.isBlank()) {
@@ -2471,10 +2542,10 @@ public class AcademicService {
                             coordinatorUser = userRepository.findByEmail(email).orElse(null);
                         }
                         
-                        // Check if CourseOffering already exists for courseId + batchId
-                        List<CourseOffering> existingOfferings = courseOfferingRepository.findByCourseId(courseId);
-                        CourseOffering targetOffering = existingOfferings.stream()
-                                .filter(o -> batchId.equals(o.getBatchId()))
+                        // Check if ProgrammeBatchCourse already exists for courseId + batchId
+                        List<ProgrammeBatchCourse> existingOfferings = programmeBatchCourseRepository.findByMasterCourseId(courseId);
+                        ProgrammeBatchCourse targetOffering = existingOfferings.stream()
+                                .filter(o -> batchId.equals(o.getProgrammeBatchId()))
                                 .findFirst()
                                 .orElse(null);
                                 
@@ -2482,11 +2553,11 @@ public class AcademicService {
                         Integer parsedSem = (semStr != null && semStr.trim().matches("\\d+")) ? Integer.parseInt(semStr.trim()) : 1;
 
                         if (targetOffering == null) {
-                            // Create exactly one CourseOffering
-                            targetOffering = CourseOffering.builder()
+                            // Create exactly one ProgrammeBatchCourse
+                            targetOffering = ProgrammeBatchCourse.builder()
                                     .id("off-" + UUID.randomUUID().toString().substring(0, 8))
-                                    .courseId(courseId)
-                                    .batchId(batchId)
+                                    .masterCourseId(courseId)
+                                    .programmeBatchId(batchId)
                                     .semester(parsedSem)
                                     .courseCoordinatorName(name)
                                     .assignedFaculty(name + " (" + email + ")")
@@ -2505,13 +2576,13 @@ public class AcademicService {
                             targetOffering.setCourseCoordinatorId(coordinatorUser.getId());
                         }
                         
-                        courseOfferingRepository.save(targetOffering);
+                        programmeBatchCourseRepository.save(targetOffering);
                     } else {
                         // Fallback to update existing offerings if batchId is not provided
                         String semStr = item.get("semester") != null ? item.get("semester").toString() : (course != null ? course.getSemester() : null);
                         Integer parsedSem = (semStr != null && semStr.trim().matches("\\d+")) ? Integer.parseInt(semStr.trim()) : null;
-                        List<CourseOffering> offerings = courseOfferingRepository.findByCourseId(courseId);
-                        for (CourseOffering off : offerings) {
+                        List<ProgrammeBatchCourse> offerings = programmeBatchCourseRepository.findByMasterCourseId(courseId);
+                        for (ProgrammeBatchCourse off : offerings) {
                             off.setCourseCoordinatorName(name);
                             off.setAssignedFaculty(name + " (" + email + ")");
                             if (parsedSem != null) {
@@ -2520,7 +2591,7 @@ public class AcademicService {
                             if (!email.isBlank()) {
                                 userRepository.findByEmail(email).ifPresent(u -> off.setCourseCoordinatorId(u.getId()));
                             }
-                            courseOfferingRepository.save(off);
+                            programmeBatchCourseRepository.save(off);
                         }
                     }
                 }
@@ -2531,11 +2602,11 @@ public class AcademicService {
             ApprovalRequest req = ApprovalRequest.builder()
                     .id("app-alloc-" + UUID.randomUUID().toString().substring(0, 8))
                     .type(ApprovalType.COURSE_ALLOCATION)
-                    .title("Course Allocation for Programme " + programmeId)
-                    .programmeId(programmeId)
+                    .title("MasterCourse Allocation for MasterProgramme " + programmeId)
+                    .masterProgrammeId(programmeId)
                     .resourceId("allocation-" + programmeId)
                     .status(ApprovalStatus.PENDING)
-                    .submittedBy("Programme Coordinator")
+                    .submittedBy("MasterProgramme Coordinator")
                     .submittedAt(ZonedDateTime.now())
                     .remarks("Allocations submitted for HOD review.")
                     .build();
@@ -2544,8 +2615,18 @@ public class AcademicService {
 
         Map<String, Object> res = new LinkedHashMap<>();
         res.put("success", true);
-        res.put("message", submit ? "Course allocations saved and submitted for verification." : "Course allocations saved successfully.");
+        res.put("message", submit ? "MasterCourse allocations saved and submitted for verification." : "MasterCourse allocations saved successfully.");
         return res;
+    }
+
+    public boolean isAllocationApproved(String programmeId) {
+        if (programmeId == null || programmeId.isBlank()) return false;
+        String progId = programmeId.replace("allocation-", "").replace("allocation_", "").replace("allocation", "");
+        return approvalRequestRepository.findAll().stream()
+                .filter(a -> a.getType() == ApprovalType.COURSE_ALLOCATION && (progId.equalsIgnoreCase(a.getMasterProgrammeId()) || progId.equalsIgnoreCase(a.getProgrammeId()) || programmeId.equalsIgnoreCase(a.getResourceId())))
+                .max(java.util.Comparator.comparing(ApprovalRequest::getUpdatedAt, java.util.Comparator.nullsFirst(java.util.Comparator.naturalOrder())))
+                .map(a -> a.getStatus() == ApprovalStatus.APPROVED)
+                .orElse(false);
     }
 
     @Transactional(readOnly = true)
@@ -2566,9 +2647,22 @@ public class AcademicService {
             return data;
         }
         String pId = programmeId.trim();
-        List<ProgrammeOutcome> pos = programmeOutcomeRepository.findByProgrammeIdOrderByCodeAsc(pId);
-        List<ProgrammeSpecificOutcome> psos = programmeSpecificOutcomeRepository.findByProgrammeIdOrderByCodeAsc(pId);
-        List<PeoOutcome> peos = peoOutcomeRepository.findByProgrammeIdOrderByCodeAsc(pId);
+        String targetBatchId = (batchId != null && !batchId.isBlank()) ? batchId.trim() : null;
+        if (targetBatchId == null) {
+            List<ProgrammeBatch> batches = programmeBatchRepository.findByMasterProgrammeId(pId);
+            for (ProgrammeBatch b : batches) {
+                if (!programmeOutcomeRepository.findByProgrammeBatchId(b.getId()).isEmpty()) {
+                    targetBatchId = b.getId();
+                    break;
+                }
+            }
+            if (targetBatchId == null && !batches.isEmpty()) {
+                targetBatchId = batches.get(0).getId();
+            }
+        }
+        List<ProgrammeOutcome> pos = (targetBatchId != null) ? programmeOutcomeRepository.findByProgrammeBatchIdOrderByCodeAsc(targetBatchId) : List.of();
+        List<ProgrammeSpecificOutcome> psos = (targetBatchId != null) ? programmeSpecificOutcomeRepository.findByProgrammeBatchIdOrderByCodeAsc(targetBatchId) : List.of();
+        List<PeoOutcome> peos = (targetBatchId != null) ? peoOutcomeRepository.findByProgrammeBatchIdOrderByCodeAsc(targetBatchId) : List.of();
 
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("programmeId", pId);
@@ -2583,13 +2677,13 @@ public class AcademicService {
     public Map<String, Object> saveConsolidatedOutcomes(Map<String, Object> payload) {
         String progId = payload != null && payload.get("programmeId") != null ? payload.get("programmeId").toString().trim() : null;
         if (progId == null || progId.isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Programme ID is required to save outcomes.");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "MasterProgramme ID is required to save outcomes.");
         }
         enforceProgrammeScope(progId);
 
         // 1. Process and save POs
         if (payload != null && payload.get("pos") instanceof List<?> poList) {
-            List<ProgrammeOutcome> existingPOs = programmeOutcomeRepository.findByProgrammeIdOrderByCodeAsc(progId);
+            List<ProgrammeOutcome> existingPOs = (!programmeBatchRepository.findByMasterProgrammeId(progId).isEmpty() ? programmeOutcomeRepository.findByProgrammeBatchIdOrderByCodeAsc(programmeBatchRepository.findByMasterProgrammeId(progId).get(0).getId()) : List.of());
             if (!existingPOs.isEmpty()) {
                 programmeOutcomeRepository.deleteAll(existingPOs);
                 programmeOutcomeRepository.flush();
@@ -2602,7 +2696,7 @@ public class AcademicService {
                     if (code != null && !code.isBlank()) {
                         ProgrammeOutcome po = ProgrammeOutcome.builder()
                                 .id("po-" + progId + "-" + code.toLowerCase().replaceAll("[^a-z0-9]", "-") + "-" + UUID.randomUUID().toString().substring(0, 6))
-                                .programmeId(progId)
+                                .programmeBatchId(!programmeBatchRepository.findByMasterProgrammeId(progId).isEmpty() ? programmeBatchRepository.findByMasterProgrammeId(progId).get(0).getId() : progId)
                                 .code(code.trim().toUpperCase())
                                 .statement(statement.trim())
                                 .build();
@@ -2614,7 +2708,7 @@ public class AcademicService {
 
         // 2. Process and save PSOs
         if (payload != null && payload.get("psos") instanceof List<?> psoList) {
-            List<ProgrammeSpecificOutcome> existingPSOs = programmeSpecificOutcomeRepository.findByProgrammeIdOrderByCodeAsc(progId);
+            List<ProgrammeSpecificOutcome> existingPSOs = (!programmeBatchRepository.findByMasterProgrammeId(progId).isEmpty() ? programmeSpecificOutcomeRepository.findByProgrammeBatchIdOrderByCodeAsc(programmeBatchRepository.findByMasterProgrammeId(progId).get(0).getId()) : List.of());
             if (!existingPSOs.isEmpty()) {
                 programmeSpecificOutcomeRepository.deleteAll(existingPSOs);
                 programmeSpecificOutcomeRepository.flush();
@@ -2627,7 +2721,7 @@ public class AcademicService {
                     if (code != null && !code.isBlank()) {
                         ProgrammeSpecificOutcome pso = ProgrammeSpecificOutcome.builder()
                                 .id("pso-" + progId + "-" + code.toLowerCase().replaceAll("[^a-z0-9]", "-") + "-" + UUID.randomUUID().toString().substring(0, 6))
-                                .programmeId(progId)
+                                .programmeBatchId(!programmeBatchRepository.findByMasterProgrammeId(progId).isEmpty() ? programmeBatchRepository.findByMasterProgrammeId(progId).get(0).getId() : progId)
                                 .code(code.trim().toUpperCase())
                                 .statement(statement.trim())
                                 .build();
@@ -2639,7 +2733,7 @@ public class AcademicService {
 
         // 3. Process and save PEOs
         if (payload != null && payload.get("peos") instanceof List<?> peoList) {
-            List<PeoOutcome> existingPEOs = peoOutcomeRepository.findByProgrammeIdOrderByCodeAsc(progId);
+            List<PeoOutcome> existingPEOs = (!programmeBatchRepository.findByMasterProgrammeId(progId).isEmpty() ? peoOutcomeRepository.findByProgrammeBatchIdOrderByCodeAsc(programmeBatchRepository.findByMasterProgrammeId(progId).get(0).getId()) : List.of());
             if (!existingPEOs.isEmpty()) {
                 peoOutcomeRepository.deleteAll(existingPEOs);
                 peoOutcomeRepository.flush();
@@ -2652,7 +2746,7 @@ public class AcademicService {
                     if (code != null && !code.isBlank()) {
                         PeoOutcome peo = PeoOutcome.builder()
                                 .id("peo-" + progId + "-" + code.toLowerCase().replaceAll("[^a-z0-9]", "-") + "-" + UUID.randomUUID().toString().substring(0, 6))
-                                .programmeId(progId)
+                                .programmeBatchId(!programmeBatchRepository.findByMasterProgrammeId(progId).isEmpty() ? programmeBatchRepository.findByMasterProgrammeId(progId).get(0).getId() : progId)
                                 .code(code.trim().toUpperCase())
                                 .statement(statement.trim())
                                 .build();
@@ -2677,9 +2771,9 @@ public class AcademicService {
         if (batchId != null && !batchId.isBlank()) {
             enforceBatchScope(batchId);
         }
-        List<CourseOffering> offerings = courseOfferingRepository.findByCourseId(courseId);
+        List<ProgrammeBatchCourse> offerings = programmeBatchCourseRepository.findByMasterCourseId(courseId);
         String offeringId = !offerings.isEmpty() ? offerings.get(0).getId() : courseId;
-        List<CourseOutcome> cos = courseOutcomeRepository.findByCourseOfferingId(offeringId);
+        List<CourseOutcome> cos = courseOutcomeRepository.findByProgrammeBatchCourseId(offeringId);
 
         Map<String, BigDecimal> targets = new LinkedHashMap<>();
         for (CourseOutcome co : cos) {
@@ -2697,9 +2791,9 @@ public class AcademicService {
         if (courseId != null && !courseId.isBlank()) {
             enforceCourseScope(courseId);
         }
-        List<CourseOffering> offerings = courseOfferingRepository.findByCourseId(courseId);
+        List<ProgrammeBatchCourse> offerings = programmeBatchCourseRepository.findByMasterCourseId(courseId);
         String offeringId = !offerings.isEmpty() ? offerings.get(0).getId() : courseId;
-        List<CourseOutcome> cos = courseOutcomeRepository.findByCourseOfferingId(offeringId);
+        List<CourseOutcome> cos = courseOutcomeRepository.findByProgrammeBatchCourseId(offeringId);
 
         if (coTargets != null) {
             for (CourseOutcome co : cos) {

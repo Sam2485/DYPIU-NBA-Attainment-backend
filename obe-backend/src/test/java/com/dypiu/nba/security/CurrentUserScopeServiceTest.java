@@ -129,7 +129,7 @@ public class CurrentUserScopeServiceTest {
     }
 
     @Test
-    @DisplayName("3. Successfully resolve Programme Coordinator scope with schoolId, departmentId, programmeId")
+    @DisplayName("3. Successfully resolve MasterProgramme Coordinator scope with schoolId, departmentId, programmeId")
     void testResolveProgrammeCoordinatorScope_Success() {
         String email = "pc1@gmail.com";
         setSecurityContextUser(email, "PROGRAMME_COORDINATOR");

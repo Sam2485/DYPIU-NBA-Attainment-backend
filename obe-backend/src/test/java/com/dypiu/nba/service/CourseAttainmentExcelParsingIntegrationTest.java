@@ -33,16 +33,16 @@ public class CourseAttainmentExcelParsingIntegrationTest {
     private DepartmentRepository departmentRepository;
 
     @Autowired
-    private ProgrammeRepository programmeRepository;
+    private MasterProgrammeRepository masterProgrammeRepository;
 
     @Autowired
-    private BatchRepository batchRepository;
+    private ProgrammeBatchRepository programmeBatchRepository;
 
     @Autowired
-    private CourseRepository courseRepository;
+    private MasterCourseRepository masterCourseRepository;
 
     @Autowired
-    private CourseOfferingRepository courseOfferingRepository;
+    private ProgrammeBatchCourseRepository programmeBatchCourseRepository;
 
     @Autowired
     private CourseOutcomeRepository courseOutcomeRepository;
@@ -55,11 +55,11 @@ public class CourseAttainmentExcelParsingIntegrationTest {
 
     private School school;
     private Department department;
-    private Programme programme;
-    private Batch batch;
-    private Course course;
-    private CourseOffering offeringA;
-    private CourseOffering offeringB;
+    private MasterProgramme programme;
+    private ProgrammeBatch batch;
+    private MasterCourse course;
+    private ProgrammeBatchCourse offeringA;
+    private ProgrammeBatchCourse offeringB;
 
     private static final String OFFICIAL_WORKBOOK_PATH = "/Users/rajshaikh/Desktop/testing/18. Computational Technique-Attainment-Sheet.xlsx";
 
@@ -89,7 +89,7 @@ public class CourseAttainmentExcelParsingIntegrationTest {
                 .code("MECH-" + suffix)
                 .build());
 
-        programme = programmeRepository.save(Programme.builder()
+        programme = masterProgrammeRepository.save(MasterProgramme.builder()
                 .id("prog-excel-" + suffix)
                 .departmentId(department.getId())
                 .name("B.Tech Mechanical Engineering " + suffix)
@@ -97,18 +97,14 @@ public class CourseAttainmentExcelParsingIntegrationTest {
                 .durationYears(4)
                 .build());
 
-        batch = batchRepository.save(Batch.builder()
-                .id("batch-excel-" + suffix)
-                .programmeId(programme.getId())
+        batch = programmeBatchRepository.save(ProgrammeBatch.builder().id("batch-excel-" + suffix).masterProgrammeId(programme.getId())
                 .name("2025-2029")
                 .startYear(2025)
                 .endYear(2029)
                 .durationYears(4)
                 .build());
 
-        course = courseRepository.save(Course.builder()
-                .id("crs-eme3001t-" + suffix)
-                .programmeId(programme.getId())
+        course = masterCourseRepository.save(MasterCourse.builder().id("crs-eme3001t-" + suffix).masterProgrammeId(programme.getId())
                 .code("EME 3001T")
                 .name("Computational Techniques")
                 .courseType("THEORY")
@@ -116,9 +112,7 @@ public class CourseAttainmentExcelParsingIntegrationTest {
                 .credits(4)
                 .build());
 
-        Course courseB = courseRepository.save(Course.builder()
-                .id("crs-other-" + suffix)
-                .programmeId(programme.getId())
+        MasterCourse courseB = masterCourseRepository.save(MasterCourse.builder().id("crs-other-" + suffix).masterProgrammeId(programme.getId())
                 .code("CSE 2001")
                 .name("Data Structures")
                 .courseType("THEORY")
@@ -126,18 +120,18 @@ public class CourseAttainmentExcelParsingIntegrationTest {
                 .credits(4)
                 .build());
 
-        offeringA = courseOfferingRepository.save(CourseOffering.builder()
+        offeringA = programmeBatchCourseRepository.save(ProgrammeBatchCourse.builder()
                 .id("offering-eme3001t-" + suffix)
-                .courseId(course.getId())
-                .batchId(batch.getId())
+                .masterCourseId(course.getId())
+                .programmeBatchId(batch.getId())
                 .academicYear("2025-26")
                 .semester(5)
                 .build());
 
-        offeringB = courseOfferingRepository.save(CourseOffering.builder()
+        offeringB = programmeBatchCourseRepository.save(ProgrammeBatchCourse.builder()
                 .id("offering-other-" + suffix)
-                .courseId(courseB.getId())
-                .batchId(batch.getId())
+                .masterCourseId(courseB.getId())
+                .programmeBatchId(batch.getId())
                 .academicYear("2025-26")
                 .semester(5)
                 .build());
@@ -147,7 +141,7 @@ public class CourseAttainmentExcelParsingIntegrationTest {
             String prn = OFFICIAL_PRNS.get(i);
             studentRepository.save(Student.builder()
                     .id("stud-" + prn + "-" + suffix)
-                    .batchId(batch.getId())
+                    .programmeBatchId(batch.getId())
                     .prn(prn)
                     .name("Student " + (i + 1))
                     .email("student" + (i + 1) + "@dypiu.ac.in")
@@ -158,7 +152,7 @@ public class CourseAttainmentExcelParsingIntegrationTest {
         for (int i = 1; i <= 5; i++) {
             courseOutcomeRepository.save(CourseOutcome.builder()
                     .id("co-eme-" + i + "-" + suffix)
-                    .courseOfferingId(offeringA.getId())
+                    .programmeBatchCourseId(offeringA.getId())
                     .code("CO" + i)
                     .statement("Computational Techniques CO" + i)
                     .targetLevel(new BigDecimal("2.50"))
@@ -248,7 +242,7 @@ public class CourseAttainmentExcelParsingIntegrationTest {
     }
 
     @Test
-    @DisplayName("2. Official Workbook: Course End Survey Sheet Parsing and Indirect Attainment")
+    @DisplayName("2. Official Workbook: MasterCourse End Survey Sheet Parsing and Indirect Attainment")
     void testOfficialWorkbookSurveyParsingAndIndirectAttainment() throws Exception {
         File officialFile = new File(OFFICIAL_WORKBOOK_PATH);
         if (!officialFile.exists()) {
@@ -319,7 +313,7 @@ public class CourseAttainmentExcelParsingIntegrationTest {
     }
 
     @Test
-    @DisplayName("3. Official Workbook: Combined Course CO Attainment (80% Direct + 20% Indirect)")
+    @DisplayName("3. Official Workbook: Combined MasterCourse CO Attainment (80% Direct + 20% Indirect)")
     void testCombinedCourseCoAttainmentWithOfficialWorkbookResults() throws Exception {
         File officialFile = new File(OFFICIAL_WORKBOOK_PATH);
         if (!officialFile.exists()) {
@@ -402,8 +396,8 @@ public class CourseAttainmentExcelParsingIntegrationTest {
     }
 
     @Test
-    @DisplayName("5. Course Offering Configuration Isolation")
-    void testCourseOfferingConfigurationIsolation() {
+    @DisplayName("5. MasterCourse Offering Configuration Isolation")
+    void testMasterCourseOfferingConfigurationIsolation() {
         AttainmentConfiguration cfgA = attainmentService.getAttainmentConfig(offeringA.getId());
         cfgA.setDirectThreshold(new BigDecimal("45.00"));
         cfgA.setDirectLevelsJson("""
@@ -497,8 +491,8 @@ public class CourseAttainmentExcelParsingIntegrationTest {
     }
 
     @Test
-    @DisplayName("9. Real Test File Upload: Course End Survey (survey.xlsx)")
-    void testCourseEndSurveyUploadWithSurveyFile() throws Exception {
+    @DisplayName("9. Real Test File Upload: MasterCourse End Survey (survey.xlsx)")
+    void testMasterCourseEndSurveyUploadWithSurveyFile() throws Exception {
         File file = new File("/Users/rajshaikh/Desktop/testing/survey.xlsx");
         assertTrue(file.exists(), "Test file survey.xlsx must exist on disk");
 
@@ -545,14 +539,14 @@ public class CourseAttainmentExcelParsingIntegrationTest {
             attainmentService.processAndSaveExaminationFile(offeringA.getId(), mf, new BigDecimal("45.00"), "Coordinator");
         }
 
-        // 2. Upload Course End Survey
+        // 2. Upload MasterCourse End Survey
         File surveyFile = new File("/Users/rajshaikh/Desktop/testing/survey.xlsx");
         try (FileInputStream fis = new FileInputStream(surveyFile)) {
             MockMultipartFile mf = new MockMultipartFile("file", "survey.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fis);
             attainmentService.processAndSaveSurveyFile(offeringA.getId(), mf, new BigDecimal("60.00"), "Coordinator");
         }
 
-        // 3. Compute Combined Course Attainment
+        // 3. Compute Combined MasterCourse Attainment
         Map<String, Object> combined = attainmentService.calculateCourseCoAttainment(offeringA.getId());
         assertNotNull(combined, "Combined CO attainment map should not be null");
         assertTrue(combined.containsKey("coAttainments"));
