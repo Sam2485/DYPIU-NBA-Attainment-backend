@@ -10,8 +10,8 @@ import java.time.ZonedDateTime;
         name = "cc_setup_progress",
         uniqueConstraints = {
                 @UniqueConstraint(
-                        name = "uk_cc_setup_offering",
-                        columnNames = {"course_offering_id"}
+                        name = "uk_cc_setup_batch_course",
+                        columnNames = {"programme_batch_course_id"}
                 )
         }
 )
@@ -25,8 +25,8 @@ public class CourseCoordinatorSetupProgress {
     @Id
     private String id;
 
-    @Column(name = "course_offering_id", nullable = false)
-    private String courseOfferingId;
+    @Column(name = "programme_batch_course_id", nullable = false)
+    private String programmeBatchCourseId;
 
     @Column(name = "coordinator_email")
     private String coordinatorEmail;
@@ -53,13 +53,18 @@ public class CourseCoordinatorSetupProgress {
     private String courseId;
 
     public String getCourseId() {
-        return courseId != null ? courseId : courseOfferingId;
+        return courseId != null ? courseId : programmeBatchCourseId;
     }
 
     public void setCourseId(String courseId) {
         this.courseId = courseId;
-        if (this.courseOfferingId == null) {
-            this.courseOfferingId = courseId;
-        }
+    }
+
+    public String getCourseOfferingId() {
+        return programmeBatchCourseId;
+    }
+
+    public void setCourseOfferingId(String courseOfferingId) {
+        this.programmeBatchCourseId = courseOfferingId;
     }
 }

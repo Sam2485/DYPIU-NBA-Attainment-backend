@@ -39,10 +39,10 @@ public class ProgrammeEndSurveyValidationIntegrationTest {
     private DepartmentRepository departmentRepository;
 
     @Autowired
-    private ProgrammeRepository programmeRepository;
+    private MasterProgrammeRepository masterProgrammeRepository;
 
     @Autowired
-    private BatchRepository batchRepository;
+    private ProgrammeBatchRepository programmeBatchRepository;
 
     @Autowired
     private ProgrammeOutcomeRepository programmeOutcomeRepository;
@@ -53,8 +53,8 @@ public class ProgrammeEndSurveyValidationIntegrationTest {
     @Autowired
     private UploadedDocumentRepository uploadedDocumentRepository;
 
-    private Programme programme;
-    private Batch batch;
+    private MasterProgramme programme;
+    private ProgrammeBatch batch;
 
     private static final String OFFICIAL_WORKBOOK_PATH = "/Users/rajshaikh/Desktop/testing/Final-Mapping-Attainment Values Sheet (2) (1) (1).xlsx";
 
@@ -75,7 +75,7 @@ public class ProgrammeEndSurveyValidationIntegrationTest {
                 .code("CSE-" + suffix)
                 .build());
 
-        programme = programmeRepository.save(Programme.builder()
+        programme = masterProgrammeRepository.save(MasterProgramme.builder()
                 .id("prog-psurv-" + suffix)
                 .departmentId(department.getId())
                 .name("B.Tech Computer Science " + suffix)
@@ -83,9 +83,7 @@ public class ProgrammeEndSurveyValidationIntegrationTest {
                 .durationYears(4)
                 .build());
 
-        batch = batchRepository.save(Batch.builder()
-                .id("batch-psurv-" + suffix)
-                .programmeId(programme.getId())
+        batch = programmeBatchRepository.save(ProgrammeBatch.builder().id("batch-psurv-" + suffix).masterProgrammeId(programme.getId())
                 .name("2024-2028")
                 .startYear(2024)
                 .endYear(2028)
@@ -96,7 +94,7 @@ public class ProgrammeEndSurveyValidationIntegrationTest {
         for (int i = 1; i <= 12; i++) {
             programmeOutcomeRepository.save(ProgrammeOutcome.builder()
                     .id("po-psurv-" + i + "-" + suffix)
-                    .programmeId(programme.getId())
+                    .programmeBatchId(programme.getId())
                     .code("PO" + i)
                     .statement("Program Outcome Statement " + i)
                     .build());
@@ -106,7 +104,7 @@ public class ProgrammeEndSurveyValidationIntegrationTest {
         for (int i = 1; i <= 3; i++) {
             programmeSpecificOutcomeRepository.save(ProgrammeSpecificOutcome.builder()
                     .id("pso-psurv-" + i + "-" + suffix)
-                    .programmeId(programme.getId())
+                    .programmeBatchId(programme.getId())
                     .code("PSO" + i)
                     .statement("Program Specific Outcome Statement " + i)
                     .build());
@@ -379,7 +377,7 @@ public class ProgrammeEndSurveyValidationIntegrationTest {
                         programme.getId(),
                         batch.getId(),
                         multipartFile,
-                        "Programme Coordinator"
+                        "MasterProgramme Coordinator"
                 )
         );
         assertEquals(400, ex.getStatusCode().value());

@@ -4,15 +4,16 @@ import jakarta.persistence.*;
 import lombok.*;
 import java.math.BigDecimal;
 import java.time.ZonedDateTime;
+
 @Entity
 @Table(
         name = "student_co_marks",
         uniqueConstraints = {
                 @UniqueConstraint(
-                        name = "uk_student_offering_co",
+                        name = "uq_student_co_mark",
                         columnNames = {
+                                "programme_batch_course_id",
                                 "student_id",
-                                "course_offering_id",
                                 "co_code"
                         }
                 )
@@ -31,8 +32,8 @@ public class StudentCoMark {
     @Column(name = "upload_id")
     private String uploadId;
 
-    @Column(name = "course_offering_id", nullable = false)
-    private String courseOfferingId;
+    @Column(name = "programme_batch_course_id", nullable = false)
+    private String programmeBatchCourseId;
 
     @Column(name = "student_id", nullable = false)
     private String studentId;
@@ -57,4 +58,13 @@ public class StudentCoMark {
 
     @Column(name = "created_at", insertable = false, updatable = false)
     private ZonedDateTime createdAt;
+
+    // Helper compatibility methods
+    public String getCourseOfferingId() {
+        return programmeBatchCourseId;
+    }
+
+    public void setCourseOfferingId(String offeringId) {
+        this.programmeBatchCourseId = offeringId;
+    }
 }

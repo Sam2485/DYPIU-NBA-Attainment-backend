@@ -9,7 +9,7 @@ import java.util.Optional;
 
 @Repository
 public interface CourseMappingKeywordRepository extends JpaRepository<CourseMappingKeyword, String> {
-    Optional<CourseMappingKeyword> findByCourseOfferingIdAndKeywordType(String courseOfferingId, String keywordType);
-    List<CourseMappingKeyword> findByCourseOfferingId(String courseOfferingId);
-    void deleteByCourseOfferingId(String courseOfferingId);
+    Optional<CourseMappingKeyword> findByProgrammeBatchCourseIdAndKeywordType(String programmeBatchCourseId, String keywordType);
+    List<CourseMappingKeyword> findByProgrammeBatchCourseId(String programmeBatchCourseId);
+    void deleteByProgrammeBatchCourseId(String programmeBatchCourseId);
 }

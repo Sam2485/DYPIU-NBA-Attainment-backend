@@ -37,16 +37,16 @@ public class FrontendContractHardeningIntegrationTest {
     private DepartmentRepository departmentRepository;
 
     @Autowired
-    private ProgrammeRepository programmeRepository;
+    private MasterProgrammeRepository masterProgrammeRepository;
 
     @Autowired
-    private BatchRepository batchRepository;
+    private ProgrammeBatchRepository programmeBatchRepository;
 
     @Autowired
-    private CourseRepository courseRepository;
+    private MasterCourseRepository masterCourseRepository;
 
     @Autowired
-    private CourseOfferingRepository courseOfferingRepository;
+    private ProgrammeBatchCourseRepository programmeBatchCourseRepository;
 
     @Autowired
     private CourseOutcomeRepository courseOutcomeRepository;
@@ -62,10 +62,10 @@ public class FrontendContractHardeningIntegrationTest {
 
     private School testSchool;
     private Department testDept;
-    private Programme testProg;
-    private Batch testBatch;
-    private Course testCourse;
-    private CourseOffering testOffering;
+    private MasterProgramme testProg;
+    private ProgrammeBatch testMasterProgrammeBatch;
+    private MasterCourse testMasterCourse;
+    private ProgrammeBatchCourse testOffering;
 
     @BeforeEach
     public void setup() {
@@ -86,7 +86,7 @@ public class FrontendContractHardeningIntegrationTest {
                 .hodEmail("hod.cse.test@dypiu.ac.in")
                 .build());
 
-        testProg = programmeRepository.save(Programme.builder()
+        testProg = masterProgrammeRepository.save(MasterProgramme.builder()
                 .id("prog-test-" + UUID.randomUUID().toString().substring(0, 6))
                 .departmentId(testDept.getId())
                 .code("BTECH-CSE-TEST")
@@ -95,29 +95,29 @@ public class FrontendContractHardeningIntegrationTest {
                 .coordinatorEmail("pc.cse.test@dypiu.ac.in")
                 .build());
 
-        testBatch = batchRepository.save(Batch.builder()
+        testMasterProgrammeBatch = programmeBatchRepository.save(ProgrammeBatch.builder()
                 .id("batch-test-" + UUID.randomUUID().toString().substring(0, 6))
-                .programmeId(testProg.getId())
+                .masterProgrammeId(testProg.getId())
                 .name("2022-2026")
                 .startYear(2022)
                 .endYear(2026)
                 .status("ACTIVE")
                 .build());
 
-        testCourse = courseRepository.save(Course.builder()
+        testMasterCourse = masterCourseRepository.save(MasterCourse.builder()
                 .id("crs-test-" + UUID.randomUUID().toString().substring(0, 6))
                 .code("CS301-TEST")
                 .name("Computer Networks Test")
-                .programmeId(testProg.getId())
+                .masterProgrammeId(testProg.getId())
                 .credits(4)
                 .courseType("Theory")
                 .status("ACTIVE")
                 .build());
 
-        testOffering = courseOfferingRepository.save(CourseOffering.builder()
+        testOffering = programmeBatchCourseRepository.save(ProgrammeBatchCourse.builder()
                 .id("off-test-" + UUID.randomUUID().toString().substring(0, 6))
-                .courseId(testCourse.getId())
-                .batchId(testBatch.getId())
+                .masterCourseId(testMasterCourse.getId())
+                .programmeBatchId(testMasterProgrammeBatch.getId())
                 .semester(5)
                 .courseCoordinatorName("Prof. John Doe")
                 .status("ACTIVE")
@@ -140,17 +140,17 @@ public class FrontendContractHardeningIntegrationTest {
         assertEquals("APPROVED", initialStatus.get("coStatus"));
         assertEquals("DRAFT", initialStatus.get("atrStatus"));
 
-        // Verify Course Offering ATR
+        // Verify MasterCourse Offering ATR
         Map<String, Object> verified = approvalService.verifyStatus(
                 testOffering.getId(),
                 "atrStatus",
                 "APPROVED",
-                "Course ATR verified.",
-                "Dr. Rahul Verma (Programme Coordinator)"
+                "MasterCourse ATR verified.",
+                "Dr. Rahul Verma (MasterProgramme Coordinator)"
         );
         assertEquals("APPROVED", verified.get("atrStatus"));
-        assertEquals("Course ATR verified.", verified.get("atrRemarks"));
-        assertEquals("Dr. Rahul Verma (Programme Coordinator)", verified.get("verifiedBy"));
+        assertEquals("MasterCourse ATR verified.", verified.get("atrRemarks"));
+        assertEquals("Dr. Rahul Verma (MasterProgramme Coordinator)", verified.get("verifiedBy"));
 
         // Request Revision on COs
         Map<String, Object> revised = approvalService.requestRevisionStatus(
@@ -158,9 +158,9 @@ public class FrontendContractHardeningIntegrationTest {
                 "coStatus",
                 "REVISION_REQUESTED",
                 "Revise CO2 Bloom taxonomy.",
-                "Dr. Rahul Verma (Programme Coordinator)"
+                "Dr. Rahul Verma (MasterProgramme Coordinator)"
         );
-        assertEquals("NEEDS_REVISION", revised.get("coStatus"));
+        assertEquals("REVISION_REQUESTED", revised.get("coStatus"));
         assertEquals("Revise CO2 Bloom taxonomy.", revised.get("coRemarks"));
     }
 
@@ -197,7 +197,7 @@ public class FrontendContractHardeningIntegrationTest {
                 "Dr. Ananya Joshi (HOD)"
         );
         assertNotNull(revised);
-        assertEquals("NEEDS_REVISION", revised.get("allocationStatus"));
+        assertEquals("REVISION_REQUESTED", revised.get("allocationStatus"));
         assertEquals("Reassign CS302 coordinator.", revised.get("allocationRemarks"));
     }
 
@@ -234,7 +234,7 @@ public class FrontendContractHardeningIntegrationTest {
                 "Dr. Ananya Joshi (HOD)"
         );
         assertNotNull(revised);
-        assertEquals("NEEDS_REVISION", revised.get("poPsoTargetsStatus"));
+        assertEquals("REVISION_REQUESTED", revised.get("poPsoTargetsStatus"));
         assertEquals("Adjust PSO2 target to 2.60.", revised.get("poPsoTargetsRemarks"));
     }
 
@@ -254,12 +254,12 @@ public class FrontendContractHardeningIntegrationTest {
                 progAtrKey,
                 "programmeAtrStatus",
                 "APPROVED",
-                "Programme ATR verified with HoD remarks.",
+                "MasterProgramme ATR verified with HoD remarks.",
                 "Dr. Ananya Joshi (HOD)"
         );
         assertNotNull(verified);
         assertEquals("APPROVED", verified.get("programmeAtrStatus"));
-        assertEquals("Programme ATR verified with HoD remarks.", verified.get("programmeAtrRemarks"));
+        assertEquals("MasterProgramme ATR verified with HoD remarks.", verified.get("programmeAtrRemarks"));
         assertEquals("Dr. Ananya Joshi (HOD)", verified.get("verifiedBy"));
 
         // 3. Request revision action
@@ -271,7 +271,7 @@ public class FrontendContractHardeningIntegrationTest {
                 "Dr. Ananya Joshi (HOD)"
         );
         assertNotNull(revised);
-        assertEquals("NEEDS_REVISION", revised.get("programmeAtrStatus"));
+        assertEquals("REVISION_REQUESTED", revised.get("programmeAtrStatus"));
         assertEquals("Please elaborate on action taken for PO4.", revised.get("programmeAtrRemarks"));
     }
 
@@ -292,10 +292,10 @@ public class FrontendContractHardeningIntegrationTest {
     }
 
     @Test
-    public void testCourseAllocationAndApprovalWorkflow() {
+    public void testMasterCourseAllocationAndApprovalWorkflow() {
         List<Map<String, Object>> allocations = List.of(
                 Map.of(
-                        "courseId", testCourse.getId(),
+                        "courseId", testMasterCourse.getId(),
                         "coordinatorEmail", "faculty.test@dypiu.ac.in",
                         "courseCoordinatorName", "Prof. Jane Smith"
                 )
@@ -306,9 +306,9 @@ public class FrontendContractHardeningIntegrationTest {
         assertTrue((Boolean) result.get("success"));
 
         // Verify that course coordinator name was updated
-        Course updatedCourse = courseRepository.findById(testCourse.getId()).orElse(null);
-        assertNotNull(updatedCourse);
-        assertEquals("Prof. Jane Smith", updatedCourse.getCoordinator());
+        MasterCourse updatedMasterCourse = masterCourseRepository.findById(testMasterCourse.getId()).orElse(null);
+        assertNotNull(updatedMasterCourse);
+        assertEquals("Prof. Jane Smith", updatedMasterCourse.getCoordinator());
 
         // Verify that an ApprovalRequest of type COURSE_ALLOCATION was generated
         List<ApprovalRequest> reqs = approvalRequestRepository.findAll().stream()
@@ -323,7 +323,7 @@ public class FrontendContractHardeningIntegrationTest {
         // Create 3 course outcomes
         courseOutcomeRepository.save(CourseOutcome.builder()
                 .id("co-t1-" + UUID.randomUUID().toString().substring(0, 6))
-                .courseOfferingId(testOffering.getId())
+                .programmeBatchCourseId(testOffering.getId())
                 .code("CO1")
                 .statement("Analyze algorithms")
                 .targetLevel(new BigDecimal("2.50"))
@@ -332,7 +332,7 @@ public class FrontendContractHardeningIntegrationTest {
 
         courseOutcomeRepository.save(CourseOutcome.builder()
                 .id("co-t2-" + UUID.randomUUID().toString().substring(0, 6))
-                .courseOfferingId(testOffering.getId())
+                .programmeBatchCourseId(testOffering.getId())
                 .code("CO2")
                 .statement("Apply data structures")
                 .targetLevel(new BigDecimal("2.50"))
@@ -360,10 +360,10 @@ public class FrontendContractHardeningIntegrationTest {
     }
 
     @Test
-    public void testCourseMappingMatrixCalculation() {
+    public void testMasterCourseMappingMatrixCalculation() {
         CourseOutcome co1 = courseOutcomeRepository.save(CourseOutcome.builder()
                 .id("co-map1-" + UUID.randomUUID().toString().substring(0, 6))
-                .courseOfferingId(testOffering.getId())
+                .programmeBatchCourseId(testOffering.getId())
                 .code("CO1")
                 .statement("Test CO1")
                 .targetLevel(new BigDecimal("2.50"))
@@ -393,25 +393,25 @@ public class FrontendContractHardeningIntegrationTest {
         assertNotNull(assignRes);
         assertTrue((Boolean) assignRes.get("success"));
 
-        Programme updatedProg = programmeRepository.findById(testProg.getId()).orElse(null);
+        MasterProgramme updatedProg = masterProgrammeRepository.findById(testProg.getId()).orElse(null);
         assertNotNull(updatedProg);
         assertEquals("Dr. New Coordinator", updatedProg.getCoordinator());
     }
 
     @Test
     public void testConsolidatedOutcomesAndCoTargets() {
-        Map<String, Object> outcomes = academicService.getConsolidatedOutcomes(testProg.getId(), testBatch.getId());
+        Map<String, Object> outcomes = academicService.getConsolidatedOutcomes(testProg.getId(), testMasterProgrammeBatch.getId());
         assertNotNull(outcomes);
         assertTrue(outcomes.containsKey("pos"));
         assertTrue(outcomes.containsKey("psos"));
         assertTrue(outcomes.containsKey("peos"));
 
-        Map<String, Object> coTargets = academicService.getCourseCoTargets(testCourse.getId(), testBatch.getId());
+        Map<String, Object> coTargets = academicService.getCourseCoTargets(testMasterCourse.getId(), testMasterProgrammeBatch.getId());
         assertNotNull(coTargets);
         assertTrue(coTargets.containsKey("coTargets"));
 
         Map<String, Object> updateTargets = Map.of("CO1", new BigDecimal("2.80"), "CO2", new BigDecimal("2.60"));
-        Map<String, Object> savedTargetsRes = academicService.saveCourseCoTargets(testCourse.getId(), updateTargets);
+        Map<String, Object> savedTargetsRes = academicService.saveCourseCoTargets(testMasterCourse.getId(), updateTargets);
         assertNotNull(savedTargetsRes);
         assertTrue((Boolean) savedTargetsRes.get("success"));
     }
@@ -423,7 +423,7 @@ public class FrontendContractHardeningIntegrationTest {
                 .type(ApprovalType.COURSE_ALLOCATION)
                 .title("Allocations for " + testProg.getName())
                 .resourceId("allocation-" + testProg.getId())
-                .programmeId(testProg.getId())
+                .masterProgrammeId(testProg.getId())
                 .schoolId(testSchool.getId())
                 .submittedBy("Test PC")
                 .build();
@@ -448,7 +448,7 @@ public class FrontendContractHardeningIntegrationTest {
 
         // Test action: REJECT / REQUEST_REVISION
         ApprovalRequest revised = approvalService.actionRequest(submitted.getId(), "REQUEST_REVISION", "Please revise allocations", "Test HOD", "HOD");
-        assertEquals(ApprovalStatus.NEEDS_REVISION, revised.getStatus());
+        assertEquals(ApprovalStatus.REVISION_REQUESTED, revised.getStatus());
         assertEquals("Please revise allocations", revised.getRemarks());
     }
 }

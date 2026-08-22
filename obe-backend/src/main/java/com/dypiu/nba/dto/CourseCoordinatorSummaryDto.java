@@ -1,7 +1,8 @@
 package com.dypiu.nba.dto;
 
-import com.dypiu.nba.entity.Course;
+import com.dypiu.nba.entity.MasterCourse;
 import lombok.*;
+
 import java.util.List;
 
 @Getter
@@ -10,12 +11,15 @@ import java.util.List;
 @AllArgsConstructor
 @Builder
 public class CourseCoordinatorSummaryDto {
-    private String coordinatorName;
     private String coordinatorEmail;
+    private String coordinatorName;
+    private String courseCode;
+    private String courseName;
     private int assignedCourseCount;
-    private List<Course> assignedCourses;
-    private CourseCoordinatorSetupProgressDto setupProgress;
     private int courseOutcomesCount;
     private int poCount;
     private int psoCount;
+    private int peoCount;
+    private List<MasterCourse> assignedCourses;
+    private CourseCoordinatorSetupProgressDto setupProgress;
 }

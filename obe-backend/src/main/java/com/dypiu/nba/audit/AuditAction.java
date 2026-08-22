@@ -1,0 +1,21 @@
+package com.dypiu.nba.audit;
+
+public enum AuditAction {
+    CREATE,
+    UPDATE,
+    DELETE,
+    SUBMIT,
+    APPROVE,
+    REQUEST_REVISION,
+    RESUBMIT,
+    ASSIGN_COORDINATOR,
+    ALLOCATE_COURSES,
+    UPLOAD_MARKS,
+    UPLOAD_SURVEY,
+    DELETE_REQUESTED,
+    DELETE_APPROVED,
+    DELETE_REJECTED,
+    DELETE_EXECUTED,
+    LOGIN,
+    LOGOUT
+}

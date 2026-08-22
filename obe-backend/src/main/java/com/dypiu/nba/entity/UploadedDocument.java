@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.*;
 import java.math.BigDecimal;
 import java.time.ZonedDateTime;
+
 @Entity
 @Table(name = "uploaded_documents")
 @Getter
@@ -16,11 +17,11 @@ public class UploadedDocument {
     @Id
     private String id;
 
-    @Column(name = "batch_id", nullable = false)
-    private String batchId;
+    @Column(name = "programme_batch_id", nullable = false)
+    private String programmeBatchId;
 
-    @Column(name = "course_offering_id")
-    private String courseOfferingId;
+    @Column(name = "programme_batch_course_id")
+    private String programmeBatchCourseId;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "document_type", nullable = false, length = 50)
@@ -46,4 +47,21 @@ public class UploadedDocument {
 
     @Column(name = "uploaded_at")
     private ZonedDateTime uploadedAt;
+
+    // Helper compatibility methods
+    public String getBatchId() {
+        return programmeBatchId;
+    }
+
+    public void setBatchId(String batchId) {
+        this.programmeBatchId = batchId;
+    }
+
+    public String getCourseOfferingId() {
+        return programmeBatchCourseId;
+    }
+
+    public void setCourseOfferingId(String offeringId) {
+        this.programmeBatchCourseId = offeringId;
+    }
 }

@@ -40,19 +40,19 @@ public class CourseOfferingUploadAlignmentTest {
     private StudentRepository studentRepository;
 
     @Mock
-    private BatchRepository batchRepository;
+    private ProgrammeBatchRepository programmeBatchRepository;
 
     @Mock
     private UploadedDocumentRepository uploadedDocumentRepository;
 
     @Mock
-    private CourseRepository courseRepository;
+    private MasterCourseRepository masterCourseRepository;
 
     @Mock
-    private CourseOfferingRepository courseOfferingRepository;
+    private ProgrammeBatchCourseRepository programmeBatchCourseRepository;
 
     @Mock
-    private ProgrammeRepository programmeRepository;
+    private MasterProgrammeRepository masterProgrammeRepository;
 
     @Mock
     private DepartmentRepository departmentRepository;
@@ -68,8 +68,8 @@ public class CourseOfferingUploadAlignmentTest {
 
     private ReportAccessService reportAccessService;
 
-    private CourseOffering offering2025;
-    private CourseOffering offering2024;
+    private ProgrammeBatchCourse offering2025;
+    private ProgrammeBatchCourse offering2024;
     private Student student2025;
     private Student student2024;
 
@@ -79,25 +79,25 @@ public class CourseOfferingUploadAlignmentTest {
                 userRepository,
                 schoolRepository,
                 departmentRepository,
-                programmeRepository,
-                batchRepository,
-                courseRepository,
-                courseOfferingRepository
+                masterProgrammeRepository,
+                programmeBatchRepository,
+                masterCourseRepository,
+                programmeBatchCourseRepository
         );
 
-        offering2025 = CourseOffering.builder()
+        offering2025 = ProgrammeBatchCourse.builder()
                 .id("offering-cs301-2025")
-                .courseId("crs-cs301")
-                .batchId("batch-2025-29")
+                .masterCourseId("crs-cs301")
+                .programmeBatchId("batch-2025-29")
                 .semester(3)
                 .courseCoordinatorId(101L)
                 .courseCoordinatorName("Dr. Alice Smith")
                 .build();
 
-        offering2024 = CourseOffering.builder()
+        offering2024 = ProgrammeBatchCourse.builder()
                 .id("offering-cs301-2024")
-                .courseId("crs-cs301")
-                .batchId("batch-2024-28")
+                .masterCourseId("crs-cs301")
+                .programmeBatchId("batch-2024-28")
                 .semester(3)
                 .courseCoordinatorId(102L)
                 .courseCoordinatorName("Dr. Bob Jones")
@@ -108,7 +108,7 @@ public class CourseOfferingUploadAlignmentTest {
                 .prn("PRN-2025-001")
                 .name("Student 2025")
                 .email("student2025@dypiu.edu")
-                .batchId("batch-2025-29")
+                .programmeBatchId("batch-2025-29")
                 .build();
 
         student2024 = Student.builder()
@@ -116,15 +116,15 @@ public class CourseOfferingUploadAlignmentTest {
                 .prn("PRN-2024-001")
                 .name("Student 2024")
                 .email("student2024@dypiu.edu")
-                .batchId("batch-2024-28")
+                .programmeBatchId("batch-2024-28")
                 .build();
     }
 
     @Test
     @DisplayName("TEST 1: Correct batch student marks upload - SUCCESS")
     void testUploadMarks_CorrectBatch_Success() {
-        when(courseOfferingRepository.existsById("offering-cs301-2025")).thenReturn(true);
-        when(courseOfferingRepository.findById("offering-cs301-2025")).thenReturn(Optional.of(offering2025));
+        when(programmeBatchCourseRepository.existsById("offering-cs301-2025")).thenReturn(true);
+        when(programmeBatchCourseRepository.findById("offering-cs301-2025")).thenReturn(Optional.of(offering2025));
         when(studentRepository.findByPrn("PRN-2025-001")).thenReturn(Optional.of(student2025));
 
         StudentMarksRowDto row = StudentMarksRowDto.builder()
@@ -140,15 +140,15 @@ public class CourseOfferingUploadAlignmentTest {
                 List.of(row)
         ));
 
-        verify(studentCoMarkRepository).deleteByCourseOfferingId("offering-cs301-2025");
+        verify(studentCoMarkRepository).deleteByProgrammeBatchCourseId("offering-cs301-2025");
         verify(studentCoMarkRepository).saveAll(any());
     }
 
     @Test
     @DisplayName("TEST 2: Wrong batch student PRN in upload - REJECT ROW / ERROR")
     void testUploadMarks_WrongBatch_Rejected() {
-        when(courseOfferingRepository.existsById("offering-cs301-2025")).thenReturn(true);
-        when(courseOfferingRepository.findById("offering-cs301-2025")).thenReturn(Optional.of(offering2025));
+        when(programmeBatchCourseRepository.existsById("offering-cs301-2025")).thenReturn(true);
+        when(programmeBatchCourseRepository.findById("offering-cs301-2025")).thenReturn(Optional.of(offering2025));
         when(studentRepository.findByPrn("PRN-2024-001")).thenReturn(Optional.of(student2024));
 
         StudentMarksRowDto row = StudentMarksRowDto.builder()
@@ -173,14 +173,14 @@ public class CourseOfferingUploadAlignmentTest {
     }
 
     @Test
-    @DisplayName("TEST 3: Same Course, Different Batch - Isolated Marks without Overwriting")
+    @DisplayName("TEST 3: Same Course, Different ProgrammeBatch - Isolated Marks without Overwriting")
     void testUploadMarks_SameCourseDifferentBatches_Isolation() {
-        when(courseOfferingRepository.existsById("offering-cs301-2025")).thenReturn(true);
-        when(courseOfferingRepository.findById("offering-cs301-2025")).thenReturn(Optional.of(offering2025));
+        when(programmeBatchCourseRepository.existsById("offering-cs301-2025")).thenReturn(true);
+        when(programmeBatchCourseRepository.findById("offering-cs301-2025")).thenReturn(Optional.of(offering2025));
         when(studentRepository.findByPrn("PRN-2025-001")).thenReturn(Optional.of(student2025));
 
-        when(courseOfferingRepository.existsById("offering-cs301-2024")).thenReturn(true);
-        when(courseOfferingRepository.findById("offering-cs301-2024")).thenReturn(Optional.of(offering2024));
+        when(programmeBatchCourseRepository.existsById("offering-cs301-2024")).thenReturn(true);
+        when(programmeBatchCourseRepository.findById("offering-cs301-2024")).thenReturn(Optional.of(offering2024));
         when(studentRepository.findByPrn("PRN-2024-001")).thenReturn(Optional.of(student2024));
 
         // Save Offering 2025 marks
@@ -200,15 +200,15 @@ public class CourseOfferingUploadAlignmentTest {
         calculationService.saveStudentCoMarksToDatabase("offering-cs301-2024", Map.of("CO1", new BigDecimal("20")), List.of(row2024));
 
         // Verify distinct deletions and scopes
-        verify(studentCoMarkRepository).deleteByCourseOfferingId("offering-cs301-2025");
-        verify(studentCoMarkRepository).deleteByCourseOfferingId("offering-cs301-2024");
+        verify(studentCoMarkRepository).deleteByProgrammeBatchCourseId("offering-cs301-2025");
+        verify(studentCoMarkRepository).deleteByProgrammeBatchCourseId("offering-cs301-2024");
     }
 
     @Test
-    @DisplayName("TEST 4: Non-existent CourseOffering - HTTP 404 NOT FOUND")
+    @DisplayName("TEST 4: Non-existent ProgrammeBatchCourse - HTTP 404 NOT FOUND")
     void testUploadMarks_InvalidCourseOffering_NotFound() {
-        when(courseOfferingRepository.existsById("non-existent-offering")).thenReturn(false);
-        when(courseOfferingRepository.findByCourseId("non-existent-offering")).thenReturn(List.of());
+        when(programmeBatchCourseRepository.existsById("non-existent-offering")).thenReturn(false);
+        when(programmeBatchCourseRepository.findByMasterCourseId("non-existent-offering")).thenReturn(List.of());
 
         StudentMarksRowDto row = StudentMarksRowDto.builder()
                 .srNo(1)
@@ -228,7 +228,7 @@ public class CourseOfferingUploadAlignmentTest {
     }
 
     @Test
-    @DisplayName("TEST 5: Unauthorized Course Coordinator access - HTTP 403 FORBIDDEN")
+    @DisplayName("TEST 5: Unauthorized MasterCourse Coordinator access - HTTP 403 FORBIDDEN")
     void testReportAccess_UnauthorizedCourseCoordinator_Forbidden() {
         User coordinatorB = User.builder()
                 .id(202L)
@@ -238,7 +238,7 @@ public class CourseOfferingUploadAlignmentTest {
                 .role(UserRole.FACULTY)
                 .build();
 
-        when(courseOfferingRepository.findById("offering-cs301-2025")).thenReturn(Optional.of(offering2025));
+        when(programmeBatchCourseRepository.findById("offering-cs301-2025")).thenReturn(Optional.of(offering2025));
 
         ResponseStatusException exception = assertThrows(ResponseStatusException.class, () ->
                 reportAccessService.validateCourseOfferingAccess(coordinatorB, "offering-cs301-2025")
@@ -249,10 +249,10 @@ public class CourseOfferingUploadAlignmentTest {
     }
 
     @Test
-    @DisplayName("TEST 6: Course survey isolation across different offerings")
-    void testCourseSurvey_CrossBatchIsolation() {
-        when(courseOfferingRepository.existsById("offering-cs301-2025")).thenReturn(true);
-        when(courseOfferingRepository.existsById("offering-cs301-2024")).thenReturn(true);
+    @DisplayName("TEST 6: MasterCourse survey isolation across different offerings")
+    void testMasterCourseSurvey_CrossBatchIsolation() {
+        when(programmeBatchCourseRepository.existsById("offering-cs301-2025")).thenReturn(true);
+        when(programmeBatchCourseRepository.existsById("offering-cs301-2024")).thenReturn(true);
 
         SurveyMarksPayloadDto payload2025 = SurveyMarksPayloadDto.builder()
                 .courseId("offering-cs301-2025")

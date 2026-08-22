@@ -7,11 +7,11 @@ import java.time.ZonedDateTime;
 
 @Entity
 @Table(
-        name = "course_offerings",
+        name = "programme_batch_courses",
         uniqueConstraints = {
                 @UniqueConstraint(
-                        name = "uk_batch_course_semester",
-                        columnNames = {"batch_id", "course_id", "semester"}
+                        name = "uk_batch_course_sem",
+                        columnNames = {"programme_batch_id", "master_course_id", "semester"}
                 )
         }
 )
@@ -20,16 +20,16 @@ import java.time.ZonedDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class CourseOffering {
+public class ProgrammeBatchCourse {
 
     @Id
     private String id;
 
-    @Column(name = "course_id", nullable = false)
-    private String courseId;
+    @Column(name = "master_course_id", nullable = false)
+    private String masterCourseId;
 
-    @Column(name = "batch_id", nullable = false)
-    private String batchId;
+    @Column(name = "programme_batch_id", nullable = false)
+    private String programmeBatchId;
 
     @Column(nullable = false)
     private Integer semester;
@@ -46,6 +46,12 @@ public class CourseOffering {
     @Builder.Default
     @Column(nullable = false, length = 30)
     private String status = "ACTIVE";
+
+    @Column(name = "deleted_at")
+    private ZonedDateTime deletedAt;
+
+    @Column(name = "deleted_by")
+    private String deletedBy;
 
     @Column(name = "created_at", insertable = false, updatable = false)
     private ZonedDateTime createdAt;
@@ -72,5 +78,22 @@ public class CourseOffering {
 
     public void setCoordinator(String coordinator) {
         this.courseCoordinatorName = coordinator;
+    }
+
+    // Helper compatibility methods
+    public String getCourseId() {
+        return masterCourseId;
+    }
+
+    public void setCourseId(String courseId) {
+        this.masterCourseId = courseId;
+    }
+
+    public String getBatchId() {
+        return programmeBatchId;
+    }
+
+    public void setBatchId(String batchId) {
+        this.programmeBatchId = batchId;
     }
 }

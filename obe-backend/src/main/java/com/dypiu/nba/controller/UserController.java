@@ -3,19 +3,20 @@ package com.dypiu.nba.controller;
 import com.dypiu.nba.dto.ApiResponse;
 import com.dypiu.nba.dto.UserDto;
 import com.dypiu.nba.entity.Department;
-import com.dypiu.nba.entity.Programme;
+import com.dypiu.nba.entity.MasterProgramme;
 import com.dypiu.nba.entity.School;
 import com.dypiu.nba.entity.User;
 import com.dypiu.nba.entity.UserRole;
 import com.dypiu.nba.exception.BadRequestException;
 import com.dypiu.nba.exception.ResourceNotFoundException;
 import com.dypiu.nba.repository.DepartmentRepository;
-import com.dypiu.nba.repository.ProgrammeRepository;
+import com.dypiu.nba.repository.MasterProgrammeRepository;
 import com.dypiu.nba.repository.SchoolRepository;
 import com.dypiu.nba.repository.UserRepository;
 import com.dypiu.nba.security.CurrentUserScope;
 import com.dypiu.nba.security.CurrentUserScopeService;
 import com.dypiu.nba.service.AcademicService;
+import com.dypiu.nba.service.AuditLogService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -37,8 +38,9 @@ public class UserController {
     private final UserRepository userRepository;
     private final SchoolRepository schoolRepository;
     private final DepartmentRepository departmentRepository;
-    private final ProgrammeRepository programmeRepository;
+    private final MasterProgrammeRepository masterProgrammeRepository;
     private final PasswordEncoder passwordEncoder;
+    private final AuditLogService auditLogService;
 
     private CurrentUserScope getScope() {
         try {
@@ -144,6 +146,9 @@ public class UserController {
                 .build();
 
         User saved = userRepository.save(user);
+        if (auditLogService != null) {
+            auditLogService.recordSuccess(com.dypiu.nba.audit.AuditAction.CREATE, com.dypiu.nba.audit.ResourceType.USER, String.valueOf(saved.getId()), null, "ACTIVE", "Created User " + saved.getName(), java.util.Map.of("username", saved.getUsername(), "role", saved.getRole() != null ? saved.getRole().name() : ""));
+        }
 
         return ResponseEntity.ok(ApiResponse.<UserDto>builder()
                 .success(true)
@@ -228,6 +233,9 @@ public class UserController {
         user.setProgrammeId(finalProgId);
 
         User saved = userRepository.save(user);
+        if (auditLogService != null) {
+            auditLogService.recordSuccess(com.dypiu.nba.audit.AuditAction.CREATE, com.dypiu.nba.audit.ResourceType.USER, String.valueOf(saved.getId()), null, "ACTIVE", "Created User " + saved.getName(), java.util.Map.of("username", saved.getUsername(), "role", saved.getRole() != null ? saved.getRole().name() : ""));
+        }
 
         // Sync leadership mapping if Director
         if (saved.getRole() == UserRole.DIRECTOR && finalSchoolId != null) {
@@ -316,21 +324,21 @@ public class UserController {
             }
         }
 
-        // 3. Validate Programme if provided
+        // 3. Validate MasterProgramme if provided
         if (rawProgId != null) {
-            Programme prog = programmeRepository.findById(rawProgId)
-                    .orElseGet(() -> programmeRepository.findAll().stream()
+            MasterProgramme prog = masterProgrammeRepository.findById(rawProgId)
+                    .orElseGet(() -> masterProgrammeRepository.findAll().stream()
                             .filter(p -> (p.getName() != null && p.getName().equalsIgnoreCase(rawProgId))
                                     || (p.getCode() != null && p.getCode().equalsIgnoreCase(rawProgId)))
                             .findFirst()
-                            .orElseThrow(() -> new BadRequestException("Invalid Programme: Programme with ID '" + rawProgId + "' does not exist.")));
+                            .orElseThrow(() -> new BadRequestException("Invalid Programme: MasterProgramme with ID '" + rawProgId + "' does not exist.")));
 
             programmeId = prog.getId();
 
-            // Check Department-Programme relationship integrity
+            // Check Department-MasterProgramme relationship integrity
             if (prog.getDepartmentId() != null) {
                 if (departmentId != null && !prog.getDepartmentId().equals(departmentId)) {
-                    throw new BadRequestException("Programme '" + prog.getName() + "' does not belong to the selected Department.");
+                    throw new BadRequestException("MasterProgramme '" + prog.getName() + "' does not belong to the selected Department.");
                 }
                 // If departmentId was not set, automatically resolve it from the programme
                 departmentId = prog.getDepartmentId();
@@ -358,8 +366,8 @@ public class UserController {
 
         String progName = null;
         if (user.getProgrammeId() != null) {
-            progName = programmeRepository.findById(user.getProgrammeId())
-                    .map(Programme::getName)
+            progName = masterProgrammeRepository.findById(user.getProgrammeId())
+                    .map(MasterProgramme::getName)
                     .orElse(user.getProgrammeId());
         }
 

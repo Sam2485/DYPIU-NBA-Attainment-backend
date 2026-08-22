@@ -10,8 +10,8 @@ import java.time.ZonedDateTime;
         name = "pc_setup_progress",
         uniqueConstraints = {
                 @UniqueConstraint(
-                        name = "uk_pc_setup_programme_batch",
-                        columnNames = {"programme_id", "batch_id"}
+                        name = "uk_pc_setup_batch",
+                        columnNames = {"programme_batch_id"}
                 )
         }
 )
@@ -25,11 +25,8 @@ public class ProgrammeCoordinatorSetupProgress {
     @Id
     private String id;
 
-    @Column(name = "programme_id", nullable = false)
-    private String programmeId;
-
-    @Column(name = "batch_id", nullable = false)
-    private String batchId;
+    @Column(name = "programme_batch_id", nullable = false)
+    private String programmeBatchId;
 
     @Column(name = "coordinator_email")
     private String coordinatorEmail;
@@ -51,4 +48,25 @@ public class ProgrammeCoordinatorSetupProgress {
 
     @Column(name = "updated_at")
     private ZonedDateTime updatedAt;
+
+    @Transient
+    private String programmeId;
+
+    public String getBatchId() {
+        return programmeBatchId;
+    }
+
+    public void setBatchId(String batchId) {
+        this.programmeBatchId = batchId;
+    }
+
+    public String getProgrammeId() {
+        return programmeId != null ? programmeId : programmeBatchId;
+    }
+
+    public void setProgrammeId(String programmeId) {
+        if (this.programmeBatchId == null) {
+            this.programmeBatchId = programmeId;
+        }
+    }
 }

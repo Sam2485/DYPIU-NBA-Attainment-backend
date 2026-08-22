@@ -23,22 +23,24 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class OutcomeService {
 
-    private final ProgrammeRepository programmeRepository;
+    private final MasterProgrammeRepository masterProgrammeRepository;
     private final ProgrammeOutcomeRepository poRepository;
     private final ProgrammeSpecificOutcomeRepository psoRepository;
     private final PeoOutcomeRepository peoRepository;
     private final CourseOutcomeRepository coRepository;
     private final PoCompetencyRepository poCompetencyRepository;
     private final PsoCompetencyRepository psoCompetencyRepository;
-    private final CourseRepository courseRepository;
-    private final CourseOfferingRepository courseOfferingRepository;
+    private final MasterCourseRepository masterCourseRepository;
+    private final ProgrammeBatchCourseRepository programmeBatchCourseRepository;
     private final CoPoMappingRepository coPoMappingRepository;
     private final CoPsoMappingRepository coPsoMappingRepository;
     private final CourseMappingKeywordRepository courseMappingKeywordRepository;
-    private final BatchRepository batchRepository;
+    private final ProgrammeBatchRepository programmeBatchRepository;
     private final DepartmentRepository departmentRepository;
     private final SchoolRepository schoolRepository;
     private final CurrentUserScopeService currentUserScopeService;
+    private final AuditLogService auditLogService;
+    private final ApprovalService approvalService;
     private final ObjectMapper objectMapper;
 
     private static final Comparator<String> NATURAL_CODE_COMPARATOR = (c1, c2) -> {
@@ -97,6 +99,15 @@ public class OutcomeService {
         }
     }
 
+        private void enforceBatchOrProgrammeScope(String programmeOrBatchId) {
+        if (programmeOrBatchId == null || programmeOrBatchId.isBlank()) return;
+        if (programmeBatchRepository.existsById(programmeOrBatchId)) {
+            enforceBatchScope(programmeOrBatchId);
+        } else {
+            enforceProgrammeScope(programmeOrBatchId);
+        }
+    }
+
     private void enforceProgrammeScope(String programmeId) {
         CurrentUserScope scope = getScope();
         if (scope == null || scope.isAdmin() || scope.isIqac()) return;
@@ -109,7 +120,7 @@ public class OutcomeService {
             }
         }
 
-        Programme prog = programmeRepository.findById(programmeId)
+        MasterProgramme prog = masterProgrammeRepository.findById(programmeId)
                 .orElseThrow(() -> new ResourceNotFoundException("Programme not found: " + programmeId));
         if (prog.getDepartmentId() != null) {
             enforceDepartmentScope(prog.getDepartmentId());
@@ -124,14 +135,13 @@ public class OutcomeService {
         CurrentUserScope scope = getScope();
         if (scope == null || scope.isAdmin() || scope.isIqac()) return;
         if (batchId == null || batchId.isBlank()) return;
-        Batch batch = batchRepository.findById(batchId)
+        ProgrammeBatch batch = programmeBatchRepository.findById(batchId)
                 .orElseThrow(() -> new ResourceNotFoundException("Batch not found: " + batchId));
 
         if (scope.isFaculty()) {
-            List<CourseOffering> offerings = courseOfferingRepository.findByBatchId(batchId);
+            List<ProgrammeBatchCourse> offerings = programmeBatchCourseRepository.findByProgrammeBatchId(batchId);
             boolean hasAssigned = offerings.stream().anyMatch(o -> {
-                boolean isCoord = (o.getCourseCoordinatorId() != null && Objects.equals(o.getCourseCoordinatorId(), scope.getUserId()))
-                        ;
+                boolean isCoord = (o.getCourseCoordinatorId() != null && Objects.equals(o.getCourseCoordinatorId(), scope.getUserId()));
                 return isCoord || (o.getAssignedFaculty() != null && (o.getAssignedFaculty().contains(scope.getEmail()) || o.getAssignedFaculty().contains(scope.getName())));
             });
             if (!hasAssigned) {
@@ -140,21 +150,20 @@ public class OutcomeService {
             return;
         }
 
-        enforceProgrammeScope(batch.getProgrammeId());
+        enforceProgrammeScope(batch.getMasterProgrammeId());
     }
 
     private void enforceCourseScope(String courseId) {
         CurrentUserScope scope = getScope();
         if (scope == null || scope.isAdmin() || scope.isIqac()) return;
         if (courseId == null || courseId.isBlank()) return;
-        Course course = courseRepository.findById(courseId)
+        MasterCourse course = masterCourseRepository.findById(courseId)
                 .orElseThrow(() -> new ResourceNotFoundException("Course not found: " + courseId));
 
         if (scope.isFaculty()) {
-            List<CourseOffering> offerings = courseOfferingRepository.findByCourseId(courseId);
+            List<ProgrammeBatchCourse> offerings = programmeBatchCourseRepository.findByMasterCourseId(courseId);
             boolean hasAssigned = offerings.stream().anyMatch(o -> {
-                boolean isCoord = (o.getCourseCoordinatorId() != null && Objects.equals(o.getCourseCoordinatorId(), scope.getUserId()))
-                        ;
+                boolean isCoord = (o.getCourseCoordinatorId() != null && Objects.equals(o.getCourseCoordinatorId(), scope.getUserId()));
                 return isCoord || (o.getAssignedFaculty() != null && (o.getAssignedFaculty().contains(scope.getEmail()) || o.getAssignedFaculty().contains(scope.getName())));
             });
             if (!hasAssigned) {
@@ -163,19 +172,18 @@ public class OutcomeService {
             return;
         }
 
-        enforceProgrammeScope(course.getProgrammeId());
+        enforceProgrammeScope(course.getMasterProgrammeId());
     }
 
     private void enforceOfferingScope(String offeringId) {
         CurrentUserScope scope = getScope();
         if (scope == null || scope.isAdmin() || scope.isIqac()) return;
         if (offeringId == null || offeringId.isBlank()) return;
-        CourseOffering offering = courseOfferingRepository.findById(offeringId)
+        ProgrammeBatchCourse offering = programmeBatchCourseRepository.findById(offeringId)
                 .orElseThrow(() -> new ResourceNotFoundException("Course offering not found: " + offeringId));
 
         if (scope.isFaculty()) {
-            boolean isCoordinator = (offering.getCourseCoordinatorId() != null && Objects.equals(offering.getCourseCoordinatorId(), scope.getUserId()))
-                    ;
+            boolean isCoordinator = (offering.getCourseCoordinatorId() != null && Objects.equals(offering.getCourseCoordinatorId(), scope.getUserId()));
             boolean isAssigned = isCoordinator || (offering.getAssignedFaculty() != null && (offering.getAssignedFaculty().contains(scope.getEmail()) || offering.getAssignedFaculty().contains(scope.getName())));
             if (!isAssigned) {
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: You are not assigned to this Course Offering.");
@@ -183,62 +191,69 @@ public class OutcomeService {
             return;
         }
 
-        if (offering.getBatchId() != null) enforceBatchScope(offering.getBatchId());
-        if (offering.getCourseId() != null) enforceCourseScope(offering.getCourseId());
+        if (offering.getProgrammeBatchId() != null) enforceBatchScope(offering.getProgrammeBatchId());
+        if (offering.getMasterCourseId() != null) enforceCourseScope(offering.getMasterCourseId());
     }
 
     private void enforceCourseOrOfferingScope(String courseIdOrOfferingId) {
         CurrentUserScope scope = getScope();
         if (scope == null || scope.isAdmin() || scope.isIqac()) return;
         if (courseIdOrOfferingId == null || courseIdOrOfferingId.isBlank()) return;
-        if (courseOfferingRepository.existsById(courseIdOrOfferingId)) {
+        if (programmeBatchCourseRepository.existsById(courseIdOrOfferingId)) {
             enforceOfferingScope(courseIdOrOfferingId);
-        } else if (courseRepository.existsById(courseIdOrOfferingId)) {
+        } else if (masterCourseRepository.existsById(courseIdOrOfferingId)) {
             enforceCourseScope(courseIdOrOfferingId);
         }
     }
 
-    @Transactional(readOnly = true)
-    public List<ProgrammeOutcome> getPOsByProgramme(String programmeId) {
-        System.out.println("================================================================================");
-        System.out.println("[OutcomeService] >>> getPOsByProgramme called | programmeId: " + programmeId);
-        if (programmeId != null && !programmeId.isBlank()) {
-            enforceProgrammeScope(programmeId);
+    private String resolveBatchId(String programmeOrBatchId) {
+        if (programmeOrBatchId == null || programmeOrBatchId.isBlank()) return null;
+        if (programmeBatchRepository.existsById(programmeOrBatchId)) {
+            return programmeOrBatchId;
         }
-        if (programmeId == null || programmeId.isBlank() || !programmeRepository.existsById(programmeId)) {
-            System.out.println("[OutcomeService] Programme not found in DB: " + programmeId + ". Returning empty list.");
+        List<ProgrammeBatch> batches = programmeBatchRepository.findByMasterProgrammeId(programmeOrBatchId);
+        if (!batches.isEmpty()) {
+            for (ProgrammeBatch b : batches) {
+                if (!poRepository.findByProgrammeBatchId(b.getId()).isEmpty()) {
+                    return b.getId();
+                }
+            }
+            return batches.get(0).getId();
+        }
+        return programmeOrBatchId;
+    }
+
+    @Transactional(readOnly = true)
+    public List<ProgrammeOutcome> getPOsByProgramme(String programmeOrBatchId) {
+        System.out.println("[OutcomeService] getPOsByProgramme called | programmeOrBatchId: " + programmeOrBatchId);
+        enforceBatchOrProgrammeScope(programmeOrBatchId);
+        String batchId = resolveBatchId(programmeOrBatchId);
+        if (batchId == null || batchId.isBlank()) {
             return Collections.emptyList();
         }
-        List<ProgrammeOutcome> list = poRepository.findByProgrammeIdOrderByCodeAsc(programmeId);
+        List<ProgrammeOutcome> list = poRepository.findByProgrammeBatchIdOrderByCodeAsc(batchId);
         for (ProgrammeOutcome po : list) {
             List<PoCompetency> comps = poCompetencyRepository.findByPoIdOrderByCodeAsc(po.getId());
             comps.sort(Comparator.comparing(PoCompetency::getCode, NATURAL_CODE_COMPARATOR));
             po.setCompetencies(comps);
-            System.out.println("  [PO ENTRY] Code: " + po.getCode() + " | Statement: " + po.getStatement());
-            for (PoCompetency comp : comps) {
-                System.out.println("      -> Competency Code: " + comp.getCode() + " | Statement: " + comp.getStatement());
-            }
         }
         list.sort(Comparator.comparing(ProgrammeOutcome::getCode, NATURAL_CODE_COMPARATOR));
-        System.out.println("[OutcomeService] <<< OUTGOING POs Payload (" + list.size() + " items) for programmeId: " + programmeId);
-        System.out.println("================================================================================");
         return list;
     }
 
     @Transactional
-    public List<ProgrammeOutcome> savePOs(String programmeId, List<ProgrammeOutcome> pos) {
-        System.out.println("[OutcomeService] savePOs called | programmeId: " + programmeId + " | count: " + (pos != null ? pos.size() : 0));
-        if (programmeId != null && !programmeId.isBlank()) {
-            enforceProgrammeScope(programmeId);
-        }
-        if (programmeId == null || programmeId.isBlank() || !programmeRepository.existsById(programmeId)) {
-            throw new com.dypiu.nba.exception.ResourceNotFoundException("Programme not found: " + programmeId);
+    public List<ProgrammeOutcome> savePOs(String programmeOrBatchId, List<ProgrammeOutcome> pos) {
+        System.out.println("[OutcomeService] savePOs called | programmeOrBatchId: " + programmeOrBatchId + " | count: " + (pos != null ? pos.size() : 0));
+        enforceBatchOrProgrammeScope(programmeOrBatchId);
+        String batchId = resolveBatchId(programmeOrBatchId);
+        if (batchId == null || batchId.isBlank()) {
+            throw new ResourceNotFoundException("Programme Batch not found: " + programmeOrBatchId);
         }
         
-        List<ProgrammeOutcome> existing = poRepository.findByProgrammeId(programmeId);
-        Map<String, ProgrammeOutcome> existingByCodeAndYear = existing.stream()
+        List<ProgrammeOutcome> existing = poRepository.findByProgrammeBatchId(batchId);
+        Map<String, ProgrammeOutcome> existingByCode = existing.stream()
                 .collect(Collectors.toMap(
-                        p -> (p.getCode() + "_" + (p.getAcademicYear() != null ? p.getAcademicYear() : "2025-26")).toLowerCase(),
+                        p -> p.getCode().toLowerCase(),
                         p -> p,
                         (e1, e2) -> e1
                 ));
@@ -249,15 +264,12 @@ public class OutcomeService {
 
         if (pos != null) {
             for (ProgrammeOutcome po : pos) {
-                po.setProgrammeId(programmeId);
-                if (po.getAcademicYear() == null || po.getAcademicYear().isBlank()) {
-                    po.setAcademicYear("2025-26");
-                }
+                po.setProgrammeBatchId(batchId);
 
-                String key = (po.getCode() + "_" + po.getAcademicYear()).toLowerCase();
+                String key = po.getCode().toLowerCase();
                 ProgrammeOutcome targetPo;
-                if (existingByCodeAndYear.containsKey(key)) {
-                    targetPo = existingByCodeAndYear.get(key);
+                if (existingByCode.containsKey(key)) {
+                    targetPo = existingByCode.get(key);
                     targetPo.setStatement(po.getStatement());
                     if (po.getTarget() != null) {
                         targetPo.setTarget(po.getTarget());
@@ -280,7 +292,6 @@ public class OutcomeService {
                 .filter(p -> !processedIds.contains(p.getId()))
                 .collect(Collectors.toList());
         if (!toDelete.isEmpty()) {
-            System.out.println("[OutcomeService] Deleting " + toDelete.size() + " obsolete POs for programmeId: " + programmeId);
             for (ProgrammeOutcome delPo : toDelete) {
                 poCompetencyRepository.deleteByPoId(delPo.getId());
             }
@@ -289,7 +300,6 @@ public class OutcomeService {
 
         List<ProgrammeOutcome> saved = poRepository.saveAll(toSave);
 
-        // Sync competencies for each saved PO
         for (ProgrammeOutcome po : saved) {
             poCompetencyRepository.deleteByPoId(po.getId());
             poCompetencyRepository.flush();
@@ -325,51 +335,40 @@ public class OutcomeService {
         }
 
         saved.sort(Comparator.comparing(ProgrammeOutcome::getCode, NATURAL_CODE_COMPARATOR));
-        System.out.println("[OutcomeService] Saved POs (" + saved.size() + " items) with competencies for programmeId: " + programmeId);
         return saved;
     }
 
     @Transactional(readOnly = true)
-    public List<ProgrammeSpecificOutcome> getPSOsByProgramme(String programmeId) {
-        System.out.println("================================================================================");
-        System.out.println("[OutcomeService] >>> getPSOsByProgramme called | programmeId: " + programmeId);
-        if (programmeId != null && !programmeId.isBlank()) {
-            enforceProgrammeScope(programmeId);
-        }
-        if (programmeId == null || programmeId.isBlank() || !programmeRepository.existsById(programmeId)) {
-            System.out.println("[OutcomeService] Programme not found in DB: " + programmeId + ". Returning empty list.");
+    public List<ProgrammeSpecificOutcome> getPSOsByProgramme(String programmeOrBatchId) {
+        System.out.println("[OutcomeService] getPSOsByProgramme called | programmeOrBatchId: " + programmeOrBatchId);
+        enforceBatchOrProgrammeScope(programmeOrBatchId);
+        String batchId = resolveBatchId(programmeOrBatchId);
+        if (batchId == null || batchId.isBlank()) {
             return Collections.emptyList();
         }
-        List<ProgrammeSpecificOutcome> list = psoRepository.findByProgrammeIdOrderByCodeAsc(programmeId);
+        List<ProgrammeSpecificOutcome> list = psoRepository.findByProgrammeBatchIdOrderByCodeAsc(batchId);
         for (ProgrammeSpecificOutcome pso : list) {
             List<PsoCompetency> comps = psoCompetencyRepository.findByPsoIdOrderByCodeAsc(pso.getId());
             comps.sort(Comparator.comparing(PsoCompetency::getCode, NATURAL_CODE_COMPARATOR));
             pso.setCompetencies(comps);
-            System.out.println("  [PSO ENTRY] Code: " + pso.getCode() + " | Statement: " + pso.getStatement());
-            for (PsoCompetency comp : comps) {
-                System.out.println("      -> Competency Code: " + comp.getCode() + " | Statement: " + comp.getStatement());
-            }
         }
         list.sort(Comparator.comparing(ProgrammeSpecificOutcome::getCode, NATURAL_CODE_COMPARATOR));
-        System.out.println("[OutcomeService] <<< OUTGOING PSOs Payload (" + list.size() + " items) for programmeId: " + programmeId);
-        System.out.println("================================================================================");
         return list;
     }
 
     @Transactional
-    public List<ProgrammeSpecificOutcome> savePSOs(String programmeId, List<ProgrammeSpecificOutcome> psos) {
-        System.out.println("[OutcomeService] savePSOs called | programmeId: " + programmeId + " | count: " + (psos != null ? psos.size() : 0));
-        if (programmeId != null && !programmeId.isBlank()) {
-            enforceProgrammeScope(programmeId);
-        }
-        if (programmeId == null || programmeId.isBlank() || !programmeRepository.existsById(programmeId)) {
-            throw new com.dypiu.nba.exception.ResourceNotFoundException("Programme not found: " + programmeId);
+    public List<ProgrammeSpecificOutcome> savePSOs(String programmeOrBatchId, List<ProgrammeSpecificOutcome> psos) {
+        System.out.println("[OutcomeService] savePSOs called | programmeOrBatchId: " + programmeOrBatchId + " | count: " + (psos != null ? psos.size() : 0));
+        enforceBatchOrProgrammeScope(programmeOrBatchId);
+        String batchId = resolveBatchId(programmeOrBatchId);
+        if (batchId == null || batchId.isBlank()) {
+            throw new ResourceNotFoundException("Programme Batch not found: " + programmeOrBatchId);
         }
 
-        List<ProgrammeSpecificOutcome> existing = psoRepository.findByProgrammeId(programmeId);
-        Map<String, ProgrammeSpecificOutcome> existingByCodeAndYear = existing.stream()
+        List<ProgrammeSpecificOutcome> existing = psoRepository.findByProgrammeBatchId(batchId);
+        Map<String, ProgrammeSpecificOutcome> existingByCode = existing.stream()
                 .collect(Collectors.toMap(
-                        p -> (p.getCode() + "_" + (p.getAcademicYear() != null ? p.getAcademicYear() : "2025-26")).toLowerCase(),
+                        p -> p.getCode().toLowerCase(),
                         p -> p,
                         (e1, e2) -> e1
                 ));
@@ -380,15 +379,12 @@ public class OutcomeService {
 
         if (psos != null) {
             for (ProgrammeSpecificOutcome pso : psos) {
-                pso.setProgrammeId(programmeId);
-                if (pso.getAcademicYear() == null || pso.getAcademicYear().isBlank()) {
-                    pso.setAcademicYear("2025-26");
-                }
+                pso.setProgrammeBatchId(batchId);
 
-                String key = (pso.getCode() + "_" + pso.getAcademicYear()).toLowerCase();
+                String key = pso.getCode().toLowerCase();
                 ProgrammeSpecificOutcome targetPso;
-                if (existingByCodeAndYear.containsKey(key)) {
-                    targetPso = existingByCodeAndYear.get(key);
+                if (existingByCode.containsKey(key)) {
+                    targetPso = existingByCode.get(key);
                     targetPso.setStatement(pso.getStatement());
                     if (pso.getTarget() != null) {
                         targetPso.setTarget(pso.getTarget());
@@ -406,12 +402,10 @@ public class OutcomeService {
             }
         }
 
-        // Delete obsolete PSOs & their competencies
         List<ProgrammeSpecificOutcome> toDelete = existing.stream()
                 .filter(p -> !processedIds.contains(p.getId()))
                 .collect(Collectors.toList());
         if (!toDelete.isEmpty()) {
-            System.out.println("[OutcomeService] Deleting " + toDelete.size() + " obsolete PSOs for programmeId: " + programmeId);
             for (ProgrammeSpecificOutcome delPso : toDelete) {
                 psoCompetencyRepository.deleteByPsoId(delPso.getId());
             }
@@ -420,7 +414,6 @@ public class OutcomeService {
 
         List<ProgrammeSpecificOutcome> saved = psoRepository.saveAll(toSave);
 
-        // Sync competencies for each saved PSO
         for (ProgrammeSpecificOutcome pso : saved) {
             psoCompetencyRepository.deleteByPsoId(pso.getId());
             psoCompetencyRepository.flush();
@@ -456,40 +449,35 @@ public class OutcomeService {
         }
 
         saved.sort(Comparator.comparing(ProgrammeSpecificOutcome::getCode, NATURAL_CODE_COMPARATOR));
-        System.out.println("[OutcomeService] Saved PSOs (" + saved.size() + " items) with competencies for programmeId: " + programmeId);
         return saved;
     }
 
     @Transactional(readOnly = true)
-    public List<PeoOutcome> getPEOsByProgramme(String programmeId) {
-        System.out.println("[OutcomeService] getPEOsByProgramme called | programmeId: " + programmeId);
-        if (programmeId != null && !programmeId.isBlank()) {
-            enforceProgrammeScope(programmeId);
-        }
-        if (programmeId == null || programmeId.isBlank() || !programmeRepository.existsById(programmeId)) {
-            System.out.println("[OutcomeService] Programme not found in DB: " + programmeId + ". Returning empty list.");
+    public List<PeoOutcome> getPEOsByProgramme(String programmeOrBatchId) {
+        System.out.println("[OutcomeService] getPEOsByProgramme called | programmeOrBatchId: " + programmeOrBatchId);
+        enforceBatchOrProgrammeScope(programmeOrBatchId);
+        String batchId = resolveBatchId(programmeOrBatchId);
+        if (batchId == null || batchId.isBlank()) {
             return Collections.emptyList();
         }
-        List<PeoOutcome> list = peoRepository.findByProgrammeIdOrderByCodeAsc(programmeId);
+        List<PeoOutcome> list = peoRepository.findByProgrammeBatchIdOrderByCodeAsc(batchId);
         list.sort(Comparator.comparing(PeoOutcome::getCode, NATURAL_CODE_COMPARATOR));
-        System.out.println("[OutcomeService] Fetched PEOs (" + list.size() + " items) for programmeId: " + programmeId);
         return list;
     }
 
     @Transactional
-    public List<PeoOutcome> savePEOs(String programmeId, List<PeoOutcome> peos) {
-        System.out.println("[OutcomeService] savePEOs called | programmeId: " + programmeId + " | count: " + (peos != null ? peos.size() : 0));
-        if (programmeId != null && !programmeId.isBlank()) {
-            enforceProgrammeScope(programmeId);
-        }
-        if (programmeId == null || programmeId.isBlank() || !programmeRepository.existsById(programmeId)) {
-            throw new com.dypiu.nba.exception.ResourceNotFoundException("Programme not found: " + programmeId);
+    public List<PeoOutcome> savePEOs(String programmeOrBatchId, List<PeoOutcome> peos) {
+        System.out.println("[OutcomeService] savePEOs called | programmeOrBatchId: " + programmeOrBatchId + " | count: " + (peos != null ? peos.size() : 0));
+        enforceBatchOrProgrammeScope(programmeOrBatchId);
+        String batchId = resolveBatchId(programmeOrBatchId);
+        if (batchId == null || batchId.isBlank()) {
+            throw new ResourceNotFoundException("Programme Batch not found: " + programmeOrBatchId);
         }
 
-        List<PeoOutcome> existing = peoRepository.findByProgrammeId(programmeId);
-        Map<String, PeoOutcome> existingByCodeAndYear = existing.stream()
+        List<PeoOutcome> existing = peoRepository.findByProgrammeBatchId(batchId);
+        Map<String, PeoOutcome> existingByCode = existing.stream()
                 .collect(Collectors.toMap(
-                        p -> (p.getCode() + "_" + (p.getAcademicYear() != null ? p.getAcademicYear() : "2025-26")).toLowerCase(),
+                        p -> p.getCode().toLowerCase(),
                         p -> p,
                         (e1, e2) -> e1
                 ));
@@ -499,15 +487,12 @@ public class OutcomeService {
 
         if (peos != null) {
             for (PeoOutcome peo : peos) {
-                peo.setProgrammeId(programmeId);
-                if (peo.getAcademicYear() == null || peo.getAcademicYear().isBlank()) {
-                    peo.setAcademicYear("2025-26");
-                }
+                peo.setProgrammeBatchId(batchId);
 
-                String key = (peo.getCode() + "_" + peo.getAcademicYear()).toLowerCase();
+                String key = peo.getCode().toLowerCase();
                 PeoOutcome targetPeo;
-                if (existingByCodeAndYear.containsKey(key)) {
-                    targetPeo = existingByCodeAndYear.get(key);
+                if (existingByCode.containsKey(key)) {
+                    targetPeo = existingByCode.get(key);
                     targetPeo.setStatement(peo.getStatement());
                 } else {
                     targetPeo = peo;
@@ -525,22 +510,20 @@ public class OutcomeService {
                 .filter(p -> !processedIds.contains(p.getId()))
                 .collect(Collectors.toList());
         if (!toDelete.isEmpty()) {
-            System.out.println("[OutcomeService] Deleting " + toDelete.size() + " obsolete PEOs for programmeId: " + programmeId);
             peoRepository.deleteAll(toDelete);
         }
 
         List<PeoOutcome> saved = peoRepository.saveAll(toSave);
         saved.sort(Comparator.comparing(PeoOutcome::getCode, NATURAL_CODE_COMPARATOR));
-        System.out.println("[OutcomeService] Saved PEOs (" + saved.size() + " items) for programmeId: " + programmeId);
         return saved;
     }
 
     private String resolveOfferingId(String offeringOrCourseId) {
         if (offeringOrCourseId == null || offeringOrCourseId.isBlank()) return null;
-        if (courseOfferingRepository.existsById(offeringOrCourseId)) {
+        if (programmeBatchCourseRepository.existsById(offeringOrCourseId)) {
             return offeringOrCourseId;
         }
-        List<CourseOffering> offerings = courseOfferingRepository.findByCourseId(offeringOrCourseId);
+        List<ProgrammeBatchCourse> offerings = programmeBatchCourseRepository.findByMasterCourseId(offeringOrCourseId);
         if (!offerings.isEmpty()) {
             return offerings.get(0).getId();
         }
@@ -554,7 +537,7 @@ public class OutcomeService {
             enforceCourseOrOfferingScope(courseIdOrOfferingId);
         }
         String targetOfferingId = resolveOfferingId(courseIdOrOfferingId);
-        List<CourseOutcome> list = coRepository.findByCourseOfferingId(targetOfferingId);
+        List<CourseOutcome> list = coRepository.findByProgrammeBatchCourseId(targetOfferingId);
         list.sort(Comparator.comparing(CourseOutcome::getCode, NATURAL_CODE_COMPARATOR));
         return list;
     }
@@ -566,7 +549,10 @@ public class OutcomeService {
             enforceCourseOrOfferingScope(courseIdOrOfferingId);
         }
         String targetOfferingId = resolveOfferingId(courseIdOrOfferingId);
-        List<CourseOutcome> existing = coRepository.findByCourseOfferingId(targetOfferingId);
+        if (approvalService != null && approvalService.isCoDefinitionApproved(targetOfferingId)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Cannot modify approved Course Outcomes. A revision must be requested first.");
+        }
+        List<CourseOutcome> existing = coRepository.findByProgrammeBatchCourseId(targetOfferingId);
         Map<String, CourseOutcome> existingByCode = existing.stream()
                 .collect(Collectors.toMap(
                         c -> c.getCode().toLowerCase(),
@@ -579,7 +565,7 @@ public class OutcomeService {
 
         if (cos != null) {
             for (CourseOutcome co : cos) {
-                co.setCourseOfferingId(targetOfferingId);
+                co.setProgrammeBatchCourseId(targetOfferingId);
 
                 String key = co.getCode().toLowerCase();
                 CourseOutcome targetCo;
@@ -618,22 +604,20 @@ public class OutcomeService {
 
     // --- Programme Target Benchmark Levels ---
     @Transactional(readOnly = true)
-    public ProgrammeTargetDto getProgrammeTargets(String programmeId) {
-        System.out.println("[OutcomeService] getProgrammeTargets called | programmeId: " + programmeId);
-        if (programmeId != null && !programmeId.isBlank()) {
-            enforceProgrammeScope(programmeId);
-        }
-        if (programmeId == null || programmeId.isBlank() || !programmeRepository.existsById(programmeId)) {
-            System.out.println("[OutcomeService] Programme not found in DB: " + programmeId + ". Returning empty targets.");
+    public ProgrammeTargetDto getProgrammeTargets(String programmeOrBatchId) {
+        System.out.println("[OutcomeService] getProgrammeTargets called | programmeOrBatchId: " + programmeOrBatchId);
+        enforceBatchOrProgrammeScope(programmeOrBatchId);
+        String batchId = resolveBatchId(programmeOrBatchId);
+        if (batchId == null || batchId.isBlank()) {
             return ProgrammeTargetDto.builder()
-                    .programmeId(programmeId)
+                    .programmeId(programmeOrBatchId)
                     .poTargets(Collections.emptyMap())
                     .psoTargets(Collections.emptyMap())
                     .build();
         }
 
-        List<ProgrammeOutcome> pos = poRepository.findByProgrammeIdOrderByCodeAsc(programmeId);
-        List<ProgrammeSpecificOutcome> psos = psoRepository.findByProgrammeIdOrderByCodeAsc(programmeId);
+        List<ProgrammeOutcome> pos = poRepository.findByProgrammeBatchIdOrderByCodeAsc(batchId);
+        List<ProgrammeSpecificOutcome> psos = psoRepository.findByProgrammeBatchIdOrderByCodeAsc(batchId);
 
         Map<String, BigDecimal> poTargets = new LinkedHashMap<>();
         Map<String, BigDecimal> psoTargets = new LinkedHashMap<>();
@@ -650,7 +634,8 @@ public class OutcomeService {
         }
 
         return ProgrammeTargetDto.builder()
-                .programmeId(programmeId)
+                .programmeId(programmeOrBatchId)
+                .batchId(batchId)
                 .poTargets(poTargets)
                 .psoTargets(psoTargets)
                 .build();
@@ -658,38 +643,26 @@ public class OutcomeService {
 
     @Transactional(readOnly = true)
     public ProgrammeTargetDto getBatchProgrammeTargets(String batchId) {
-        System.out.println("[OutcomeService] getBatchProgrammeTargets called | batchId: " + batchId);
-        if (batchId != null && !batchId.isBlank()) {
-            enforceBatchScope(batchId);
-        }
-        Batch batch = batchRepository.findById(batchId).orElse(null);
-        String progId = batch != null ? batch.getProgrammeId() : null;
-        if (progId == null) {
-            return ProgrammeTargetDto.builder()
-                    .batchId(batchId)
-                    .poTargets(Collections.emptyMap())
-                    .psoTargets(Collections.emptyMap())
-                    .build();
-        }
-        return getProgrammeTargets(progId);
+        return getProgrammeTargets(batchId);
     }
 
     @Transactional
-    public ProgrammeTargetDto saveProgrammeTargets(String programmeId, ProgrammeTargetDto dto) {
-        System.out.println("[OutcomeService] saveProgrammeTargets called | programmeId: " + programmeId);
-        if (programmeId != null && !programmeId.isBlank()) {
-            enforceProgrammeScope(programmeId);
+    public ProgrammeTargetDto saveProgrammeTargets(String programmeOrBatchId, ProgrammeTargetDto dto) {
+        System.out.println("[OutcomeService] saveProgrammeTargets called | programmeOrBatchId: " + programmeOrBatchId);
+        enforceBatchOrProgrammeScope(programmeOrBatchId);
+        if (approvalService != null && approvalService.isPoPsoTargetsApproved(programmeOrBatchId)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Cannot modify approved Programme PO/PSO targets. A revision must be requested first.");
         }
-        if (dto != null && dto.getBatchId() != null && !dto.getBatchId().isBlank()) {
-            enforceBatchScope(dto.getBatchId());
-        }
-        if (programmeId == null || programmeId.isBlank() || !programmeRepository.existsById(programmeId)) {
-            throw new com.dypiu.nba.exception.ResourceNotFoundException("Programme not found: " + programmeId);
-        }
-        if (dto == null) return getProgrammeTargets(programmeId);
+        String batchId = (dto != null && dto.getBatchId() != null && !dto.getBatchId().isBlank())
+                ? dto.getBatchId()
+                : resolveBatchId(programmeOrBatchId);
 
-        if (dto.getPoTargets() != null && !dto.getPoTargets().isEmpty()) {
-            List<ProgrammeOutcome> pos = new ArrayList<>(poRepository.findByProgrammeId(programmeId));
+        if (batchId == null || batchId.isBlank()) {
+            throw new ResourceNotFoundException("Programme Batch not found: " + programmeOrBatchId);
+        }
+
+        if (dto != null && dto.getPoTargets() != null && !dto.getPoTargets().isEmpty()) {
+            List<ProgrammeOutcome> pos = new ArrayList<>(poRepository.findByProgrammeBatchId(batchId));
             Map<String, ProgrammeOutcome> poMap = pos.stream()
                     .filter(p -> p.getCode() != null)
                     .collect(Collectors.toMap(p -> p.getCode().trim().toUpperCase(), p -> p, (a, b) -> a));
@@ -712,7 +685,7 @@ public class OutcomeService {
                     String finalCode = rawCode.matches("\\d+") ? "PO" + rawCode : rawCode;
                     ProgrammeOutcome newPo = ProgrammeOutcome.builder()
                             .id("po-" + UUID.randomUUID().toString().substring(0, 8))
-                            .programmeId(programmeId)
+                            .programmeBatchId(batchId)
                             .code(finalCode)
                             .statement("Programme Outcome " + finalCode)
                             .target(val)
@@ -725,8 +698,8 @@ public class OutcomeService {
             }
         }
 
-        if (dto.getPsoTargets() != null && !dto.getPsoTargets().isEmpty()) {
-            List<ProgrammeSpecificOutcome> psos = new ArrayList<>(psoRepository.findByProgrammeId(programmeId));
+        if (dto != null && dto.getPsoTargets() != null && !dto.getPsoTargets().isEmpty()) {
+            List<ProgrammeSpecificOutcome> psos = new ArrayList<>(psoRepository.findByProgrammeBatchId(batchId));
             Map<String, ProgrammeSpecificOutcome> psoMap = psos.stream()
                     .filter(p -> p.getCode() != null)
                     .collect(Collectors.toMap(p -> p.getCode().trim().toUpperCase(), p -> p, (a, b) -> a));
@@ -749,7 +722,7 @@ public class OutcomeService {
                     String finalCode = rawCode.matches("\\d+") ? "PSO" + rawCode : rawCode;
                     ProgrammeSpecificOutcome newPso = ProgrammeSpecificOutcome.builder()
                             .id("pso-" + UUID.randomUUID().toString().substring(0, 8))
-                            .programmeId(programmeId)
+                            .programmeBatchId(batchId)
                             .code(finalCode)
                             .statement("Programme Specific Outcome " + finalCode)
                             .target(val)
@@ -762,7 +735,7 @@ public class OutcomeService {
             }
         }
 
-        return getProgrammeTargets(programmeId);
+        return getProgrammeTargets(batchId);
     }
 
     @Transactional
@@ -772,15 +745,16 @@ public class OutcomeService {
             enforceCourseOrOfferingScope(courseIdOrOfferingId);
         }
         String targetOfferingId = resolveOfferingId(courseIdOrOfferingId);
-        CourseOffering offering = courseOfferingRepository.findById(targetOfferingId).orElse(null);
-        String courseId = offering != null ? offering.getCourseId() : targetOfferingId;
+        ProgrammeBatchCourse offering = programmeBatchCourseRepository.findById(targetOfferingId).orElse(null);
+        String courseId = offering != null ? offering.getMasterCourseId() : targetOfferingId;
+        String batchId = offering != null ? offering.getProgrammeBatchId() : null;
 
-        Course course = courseRepository.findById(courseId).orElse(null);
-        String progId = course != null ? course.getProgrammeId() : null;
+        MasterCourse course = masterCourseRepository.findById(courseId).orElse(null);
+        String progId = course != null ? course.getMasterProgrammeId() : null;
 
         List<CourseOutcome> cos = getCOsByCourse(targetOfferingId);
-        List<ProgrammeOutcome> pos = (progId != null) ? getPOsByProgramme(progId) : Collections.emptyList();
-        List<ProgrammeSpecificOutcome> psos = (progId != null) ? getPSOsByProgramme(progId) : Collections.emptyList();
+        List<ProgrammeOutcome> pos = (batchId != null) ? getPOsByProgramme(batchId) : ((progId != null) ? getPOsByProgramme(progId) : Collections.emptyList());
+        List<ProgrammeSpecificOutcome> psos = (batchId != null) ? getPSOsByProgramme(batchId) : ((progId != null) ? getPSOsByProgramme(progId) : Collections.emptyList());
 
         List<String> coIds = cos.stream().map(CourseOutcome::getId).collect(Collectors.toList());
 
@@ -790,7 +764,7 @@ public class OutcomeService {
         Map<String, Object> poKw = Collections.emptyMap();
         Map<String, Object> psoKw = Collections.emptyMap();
 
-        Optional<CourseMappingKeyword> poKwOpt = courseMappingKeywordRepository.findByCourseOfferingIdAndKeywordType(targetOfferingId, "PO");
+        Optional<CourseMappingKeyword> poKwOpt = courseMappingKeywordRepository.findByProgrammeBatchCourseIdAndKeywordType(targetOfferingId, "PO");
         if (poKwOpt.isPresent()) {
             try {
                 poKw = objectMapper.readValue(poKwOpt.get().getKeywordsJson(), new TypeReference<Map<String, Object>>() {});
@@ -799,7 +773,7 @@ public class OutcomeService {
             poKw = coursePoKeywordsMap.get(targetOfferingId);
         }
 
-        Optional<CourseMappingKeyword> psoKwOpt = courseMappingKeywordRepository.findByCourseOfferingIdAndKeywordType(targetOfferingId, "PSO");
+        Optional<CourseMappingKeyword> psoKwOpt = courseMappingKeywordRepository.findByProgrammeBatchCourseIdAndKeywordType(targetOfferingId, "PSO");
         if (psoKwOpt.isPresent()) {
             try {
                 psoKw = objectMapper.readValue(psoKwOpt.get().getKeywordsJson(), new TypeReference<Map<String, Object>>() {});
@@ -866,7 +840,6 @@ public class OutcomeService {
                 .build();
     }
 
-
     @Transactional
     public CourseMappingMatrixDto saveCourseMappings(String courseIdOrOfferingId, CourseMappingMatrixDto dto) {
         System.out.println("[OutcomeService] saveCourseMappings called | courseIdOrOfferingId: " + courseIdOrOfferingId);
@@ -874,11 +847,15 @@ public class OutcomeService {
             enforceCourseOrOfferingScope(courseIdOrOfferingId);
         }
         String targetOfferingId = resolveOfferingId(courseIdOrOfferingId);
-        CourseOffering offering = courseOfferingRepository.findById(targetOfferingId).orElse(null);
-        String courseId = offering != null ? offering.getCourseId() : targetOfferingId;
+        if (approvalService != null && approvalService.isCoDefinitionApproved(targetOfferingId)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Cannot modify approved Course Outcomes / Mappings. A revision must be requested first.");
+        }
+        ProgrammeBatchCourse offering = programmeBatchCourseRepository.findById(targetOfferingId).orElse(null);
+        String courseId = offering != null ? offering.getMasterCourseId() : targetOfferingId;
+        String batchId = offering != null ? offering.getProgrammeBatchId() : null;
 
-        Course course = courseRepository.findById(courseId).orElse(null);
-        String progId = course != null ? course.getProgrammeId() : (dto != null && dto.getProgrammeId() != null ? dto.getProgrammeId() : null);
+        MasterCourse course = masterCourseRepository.findById(courseId).orElse(null);
+        String progId = course != null ? course.getMasterProgrammeId() : (dto != null && dto.getProgrammeId() != null ? dto.getProgrammeId() : null);
 
         Map<String, Object> poKwToReturn = Collections.emptyMap();
         Map<String, Object> psoKwToReturn = Collections.emptyMap();
@@ -888,10 +865,10 @@ public class OutcomeService {
             coursePoKeywordsMap.put(targetOfferingId, poKwToReturn);
             try {
                 String poJson = objectMapper.writeValueAsString(poKwToReturn);
-                CourseMappingKeyword entity = courseMappingKeywordRepository.findByCourseOfferingIdAndKeywordType(targetOfferingId, "PO")
+                CourseMappingKeyword entity = courseMappingKeywordRepository.findByProgrammeBatchCourseIdAndKeywordType(targetOfferingId, "PO")
                         .orElse(CourseMappingKeyword.builder()
                                 .id("kw-po-" + UUID.randomUUID().toString().substring(0, 8))
-                                .courseOfferingId(targetOfferingId)
+                                .programmeBatchCourseId(targetOfferingId)
                                 .keywordType("PO")
                                 .build());
                 entity.setKeywordsJson(poJson);
@@ -904,10 +881,10 @@ public class OutcomeService {
             coursePsoKeywordsMap.put(targetOfferingId, psoKwToReturn);
             try {
                 String psoJson = objectMapper.writeValueAsString(psoKwToReturn);
-                CourseMappingKeyword entity = courseMappingKeywordRepository.findByCourseOfferingIdAndKeywordType(targetOfferingId, "PSO")
+                CourseMappingKeyword entity = courseMappingKeywordRepository.findByProgrammeBatchCourseIdAndKeywordType(targetOfferingId, "PSO")
                         .orElse(CourseMappingKeyword.builder()
                                 .id("kw-pso-" + UUID.randomUUID().toString().substring(0, 8))
-                                .courseOfferingId(targetOfferingId)
+                                .programmeBatchCourseId(targetOfferingId)
                                 .keywordType("PSO")
                                 .build());
                 entity.setKeywordsJson(psoJson);
@@ -916,7 +893,6 @@ public class OutcomeService {
         }
 
         List<CourseOutcome> cos = getCOsByCourse(targetOfferingId);
-
         List<String> coIds = cos.stream().map(CourseOutcome::getId).collect(Collectors.toList());
 
         if (!coIds.isEmpty()) {
@@ -940,7 +916,6 @@ public class OutcomeService {
             savedPo = coPoMappingRepository.saveAll(uniquePoMap.values());
             coPoMappingRepository.flush();
         }
-        System.out.println("  [SAVED PO MAPPINGS COUNT]: " + savedPo.size());
 
         List<CoPsoMapping> savedPso = Collections.emptyList();
         if (dto != null && dto.getPsoMappings() != null && !dto.getPsoMappings().isEmpty()) {
@@ -956,11 +931,9 @@ public class OutcomeService {
             savedPso = coPsoMappingRepository.saveAll(uniquePsoMap.values());
             coPsoMappingRepository.flush();
         }
-        System.out.println("  [SAVED PSO MAPPINGS COUNT]: " + savedPso.size());
-        System.out.println("================================================================================");
 
-        List<ProgrammeOutcome> pos = (progId != null) ? getPOsByProgramme(progId) : Collections.emptyList();
-        List<ProgrammeSpecificOutcome> psos = (progId != null) ? getPSOsByProgramme(progId) : Collections.emptyList();
+        List<ProgrammeOutcome> pos = (batchId != null) ? getPOsByProgramme(batchId) : ((progId != null) ? getPOsByProgramme(progId) : Collections.emptyList());
+        List<ProgrammeSpecificOutcome> psos = (batchId != null) ? getPSOsByProgramme(batchId) : ((progId != null) ? getPSOsByProgramme(progId) : Collections.emptyList());
 
         return CourseMappingMatrixDto.builder()
                 .courseId(courseIdOrOfferingId)
@@ -981,11 +954,10 @@ public class OutcomeService {
         if (offeringId != null && !offeringId.isBlank()) {
             enforceOfferingScope(offeringId);
         }
-        CourseOffering offering = courseOfferingRepository.findById(offeringId)
-                .orElseThrow(() -> new com.dypiu.nba.exception.ResourceNotFoundException("Course Offering not found: " + offeringId));
+        ProgrammeBatchCourse offering = programmeBatchCourseRepository.findById(offeringId)
+                .orElseThrow(() -> new ResourceNotFoundException("Course Offering not found: " + offeringId));
         return getCOsByCourse(offering.getId());
     }
-
 
     @Transactional
     public List<CourseOutcome> saveOutcomesByOffering(String offeringId, List<CourseOutcome> cos) {
@@ -993,9 +965,9 @@ public class OutcomeService {
         if (offeringId != null && !offeringId.isBlank()) {
             enforceOfferingScope(offeringId);
         }
-        CourseOffering offering = courseOfferingRepository.findById(offeringId)
-                .orElseThrow(() -> new com.dypiu.nba.exception.ResourceNotFoundException("Course Offering not found: " + offeringId));
-        return saveCOs(offering.getCourseId(), cos);
+        ProgrammeBatchCourse offering = programmeBatchCourseRepository.findById(offeringId)
+                .orElseThrow(() -> new ResourceNotFoundException("Course Offering not found: " + offeringId));
+        return saveCOs(offering.getId(), cos);
     }
 
     @Transactional
@@ -1004,9 +976,9 @@ public class OutcomeService {
         if (offeringId != null && !offeringId.isBlank()) {
             enforceOfferingScope(offeringId);
         }
-        CourseOffering offering = courseOfferingRepository.findById(offeringId)
-                .orElseThrow(() -> new com.dypiu.nba.exception.ResourceNotFoundException("Course Offering not found: " + offeringId));
-        return getCourseMappings(offering.getCourseId());
+        ProgrammeBatchCourse offering = programmeBatchCourseRepository.findById(offeringId)
+                .orElseThrow(() -> new ResourceNotFoundException("Course Offering not found: " + offeringId));
+        return getCourseMappings(offering.getId());
     }
 
     @Transactional
@@ -1015,9 +987,8 @@ public class OutcomeService {
         if (offeringId != null && !offeringId.isBlank()) {
             enforceOfferingScope(offeringId);
         }
-        CourseOffering offering = courseOfferingRepository.findById(offeringId)
-                .orElseThrow(() -> new com.dypiu.nba.exception.ResourceNotFoundException("Course Offering not found: " + offeringId));
-        return saveCourseMappings(offering.getCourseId(), dto);
+        ProgrammeBatchCourse offering = programmeBatchCourseRepository.findById(offeringId)
+                .orElseThrow(() -> new ResourceNotFoundException("Course Offering not found: " + offeringId));
+        return saveCourseMappings(offering.getId(), dto);
     }
 }
-

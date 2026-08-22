@@ -67,16 +67,16 @@ public class CourseCoordinatorScopeSecurityTest {
     private DepartmentRepository departmentRepository;
 
     @Autowired
-    private ProgrammeRepository programmeRepository;
+    private MasterProgrammeRepository masterProgrammeRepository;
 
     @Autowired
-    private BatchRepository batchRepository;
+    private ProgrammeBatchRepository programmeBatchRepository;
 
     @Autowired
-    private CourseRepository courseRepository;
+    private MasterCourseRepository masterCourseRepository;
 
     @Autowired
-    private CourseOfferingRepository courseOfferingRepository;
+    private ProgrammeBatchCourseRepository programmeBatchCourseRepository;
 
     @Autowired
     private CourseOutcomeRepository courseOutcomeRepository;
@@ -92,19 +92,19 @@ public class CourseCoordinatorScopeSecurityTest {
     private Department deptA1;
     private Department deptA2;
     private Department deptB1;
-    private Programme progA1;
-    private Programme progA2;
-    private Programme progB1;
-    private Batch batchA1;
-    private Batch batchA2;
-    private Batch batchB1;
-    private Course courseA1;
-    private Course courseA2;
-    private Course courseB1;
+    private MasterProgramme progA1;
+    private MasterProgramme progA2;
+    private MasterProgramme progB1;
+    private ProgrammeBatch batchA1;
+    private ProgrammeBatch batchA2;
+    private ProgrammeBatch batchB1;
+    private MasterCourse courseA1;
+    private MasterCourse courseA2;
+    private MasterCourse courseB1;
 
-    private CourseOffering offeringA1;
-    private CourseOffering offeringA2;
-    private CourseOffering offeringB1;
+    private ProgrammeBatchCourse offeringA1;
+    private ProgrammeBatchCourse offeringA2;
+    private ProgrammeBatchCourse offeringB1;
 
     private CourseOutcome coA1;
     private CourseOutcome coA2;
@@ -170,21 +170,21 @@ public class CourseCoordinatorScopeSecurityTest {
                 .build());
 
         // 3. Programmes
-        progA1 = programmeRepository.save(Programme.builder()
+        progA1 = masterProgrammeRepository.save(MasterProgramme.builder()
                 .id("prog-cc-a1-" + System.nanoTime())
                 .departmentId(deptA1.getId())
                 .name("B.Tech Computer Science")
                 .code("BT-CS")
                 .build());
 
-        progA2 = programmeRepository.save(Programme.builder()
+        progA2 = masterProgrammeRepository.save(MasterProgramme.builder()
                 .id("prog-cc-a2-" + System.nanoTime())
                 .departmentId(deptA2.getId())
                 .name("B.Tech Mechanical")
                 .code("BT-ME")
                 .build());
 
-        progB1 = programmeRepository.save(Programme.builder()
+        progB1 = masterProgrammeRepository.save(MasterProgramme.builder()
                 .id("prog-cc-b1-" + System.nanoTime())
                 .departmentId(deptB1.getId())
                 .name("MBA")
@@ -192,53 +192,53 @@ public class CourseCoordinatorScopeSecurityTest {
                 .build());
 
         // 4. Batches
-        batchA1 = batchRepository.save(Batch.builder()
+        batchA1 = programmeBatchRepository.save(ProgrammeBatch.builder()
                 .id("batch-cc-a1-" + System.nanoTime())
-                .programmeId(progA1.getId())
-                .name("Batch CS 2022-2026")
+                .masterProgrammeId(progA1.getId())
+                .name("ProgrammeBatch CS 2022-2026")
                 .startYear(2022)
                 .endYear(2026)
                 .build());
 
-        batchA2 = batchRepository.save(Batch.builder()
+        batchA2 = programmeBatchRepository.save(ProgrammeBatch.builder()
                 .id("batch-cc-a2-" + System.nanoTime())
-                .programmeId(progA2.getId())
-                .name("Batch ME 2022-2026")
+                .masterProgrammeId(progA2.getId())
+                .name("ProgrammeBatch ME 2022-2026")
                 .startYear(2022)
                 .endYear(2026)
                 .build());
 
-        batchB1 = batchRepository.save(Batch.builder()
+        batchB1 = programmeBatchRepository.save(ProgrammeBatch.builder()
                 .id("batch-cc-b1-" + System.nanoTime())
-                .programmeId(progB1.getId())
-                .name("Batch MBA 2023-2025")
+                .masterProgrammeId(progB1.getId())
+                .name("ProgrammeBatch MBA 2023-2025")
                 .startYear(2023)
                 .endYear(2025)
                 .durationYears(2)
                 .build());
 
         // 5. Courses
-        courseA1 = courseRepository.save(Course.builder()
+        courseA1 = masterCourseRepository.save(MasterCourse.builder()
                 .id("crs-cc-a1-" + System.nanoTime())
-                .programmeId(progA1.getId())
+                .masterProgrammeId(progA1.getId())
                 .name("Data Structures")
                 .code("CS201")
                 .credits(4)
                 .courseType("CORE")
                 .build());
 
-        courseA2 = courseRepository.save(Course.builder()
+        courseA2 = masterCourseRepository.save(MasterCourse.builder()
                 .id("crs-cc-a2-" + System.nanoTime())
-                .programmeId(progA2.getId())
+                .masterProgrammeId(progA2.getId())
                 .name("Thermodynamics")
                 .code("ME201")
                 .credits(4)
                 .courseType("CORE")
                 .build());
 
-        courseB1 = courseRepository.save(Course.builder()
+        courseB1 = masterCourseRepository.save(MasterCourse.builder()
                 .id("crs-cc-b1-" + System.nanoTime())
-                .programmeId(progB1.getId())
+                .masterProgrammeId(progB1.getId())
                 .name("Financial Management")
                 .code("MBA101")
                 .credits(3)
@@ -357,41 +357,41 @@ public class CourseCoordinatorScopeSecurityTest {
                 .isActive(true)
                 .build());
 
-        // 7. Course Offerings
-        offeringA1 = courseOfferingRepository.save(CourseOffering.builder()
+        // 7. MasterCourse Offerings
+        offeringA1 = programmeBatchCourseRepository.save(ProgrammeBatchCourse.builder()
                 .id("off-cc-a1-" + System.nanoTime())
-                .courseId(courseA1.getId())
-                .batchId(batchA1.getId())
+                .masterCourseId(courseA1.getId())
+                .programmeBatchId(batchA1.getId())
                 .semester(3)
                 .courseCoordinatorId(ccUserA1.getId())
                 .courseCoordinatorName(ccUserA1.getName())
                 .assignedFaculty(ccUserA1.getName() + " (" + ccUserA1.getEmail() + "), " + facultyUserA1.getName() + " (" + facultyUserA1.getEmail() + ")")
                 .build());
 
-        offeringA2 = courseOfferingRepository.save(CourseOffering.builder()
+        offeringA2 = programmeBatchCourseRepository.save(ProgrammeBatchCourse.builder()
                 .id("off-cc-a2-" + System.nanoTime())
-                .courseId(courseA2.getId())
-                .batchId(batchA2.getId())
+                .masterCourseId(courseA2.getId())
+                .programmeBatchId(batchA2.getId())
                 .semester(3)
                 .courseCoordinatorId(otherCoordinatorUser.getId())
                 .courseCoordinatorName(otherCoordinatorUser.getName())
                 .assignedFaculty(otherCoordinatorUser.getName() + " (" + otherCoordinatorUser.getEmail() + ")")
                 .build());
 
-        offeringB1 = courseOfferingRepository.save(CourseOffering.builder()
+        offeringB1 = programmeBatchCourseRepository.save(ProgrammeBatchCourse.builder()
                 .id("off-cc-b1-" + System.nanoTime())
-                .courseId(courseB1.getId())
-                .batchId(batchB1.getId())
+                .masterCourseId(courseB1.getId())
+                .programmeBatchId(batchB1.getId())
                 .semester(1)
                 .courseCoordinatorId(ccUserB1.getId())
                 .courseCoordinatorName(ccUserB1.getName())
                 .assignedFaculty(ccUserB1.getName() + " (" + ccUserB1.getEmail() + ")")
                 .build());
 
-        // 8. Course Outcomes
+        // 8. MasterCourse Outcomes
         coA1 = courseOutcomeRepository.save(CourseOutcome.builder()
                 .id("co-cc-a1-" + System.nanoTime())
-                .courseOfferingId(offeringA1.getId())
+                .programmeBatchCourseId(offeringA1.getId())
                 .code("CO1")
                 .statement("Apply data structures algorithms")
                 .targetLevel(new BigDecimal("2.50"))
@@ -400,7 +400,7 @@ public class CourseCoordinatorScopeSecurityTest {
 
         coA2 = courseOutcomeRepository.save(CourseOutcome.builder()
                 .id("co-cc-a2-" + System.nanoTime())
-                .courseOfferingId(offeringA2.getId())
+                .programmeBatchCourseId(offeringA2.getId())
                 .code("CO1")
                 .statement("Analyze heat transfer mechanisms")
                 .targetLevel(new BigDecimal("2.50"))
@@ -409,7 +409,7 @@ public class CourseCoordinatorScopeSecurityTest {
 
         coB1 = courseOutcomeRepository.save(CourseOutcome.builder()
                 .id("co-cc-b1-" + System.nanoTime())
-                .courseOfferingId(offeringB1.getId())
+                .programmeBatchCourseId(offeringB1.getId())
                 .code("CO1")
                 .statement("Evaluate corporate balance sheet")
                 .targetLevel(new BigDecimal("2.50"))
@@ -419,7 +419,7 @@ public class CourseCoordinatorScopeSecurityTest {
         // 9. Attainment Config
         configRepository.save(AttainmentConfiguration.builder()
                 .id("cfg-" + offeringA1.getId())
-                .courseOfferingId(offeringA1.getId())
+                .programmeBatchCourseId(offeringA1.getId())
                 .directWeight(new BigDecimal("80.00"))
                 .indirectWeight(new BigDecimal("20.00"))
                 .directThreshold(new BigDecimal("60.00"))
@@ -453,14 +453,14 @@ public class CourseCoordinatorScopeSecurityTest {
     // =========================================================================
 
     @Test
-    @DisplayName("Scenario 1: Course Coordinator accesses own offering -> 200 OK")
+    @DisplayName("Scenario 1: MasterCourse Coordinator accesses own offering -> 200 OK")
     void testScenario1_CCAccessesOwnOffering() {
         authenticateUser(ccUserA1);
         assertDoesNotThrow(() -> reportAccessService.validateCourseOfferingAccess(ccUserA1, offeringA1.getId()));
     }
 
     @Test
-    @DisplayName("Scenario 2: Course Coordinator accesses another offering -> 403 Forbidden")
+    @DisplayName("Scenario 2: MasterCourse Coordinator accesses another offering -> 403 Forbidden")
     void testScenario2_CCAccessesAnotherOffering() {
         authenticateUser(ccUserA1);
         ResponseStatusException ex = assertThrows(ResponseStatusException.class,
@@ -469,7 +469,7 @@ public class CourseCoordinatorScopeSecurityTest {
     }
 
     @Test
-    @DisplayName("Scenario 3: Course Coordinator accesses another course -> 403 Forbidden")
+    @DisplayName("Scenario 3: MasterCourse Coordinator accesses another course -> 403 Forbidden")
     void testScenario3_CCAccessesAnotherCourse() {
         authenticateUser(ccUserA1);
         ResponseStatusException ex = assertThrows(ResponseStatusException.class,
@@ -478,7 +478,7 @@ public class CourseCoordinatorScopeSecurityTest {
     }
 
     @Test
-    @DisplayName("Scenario 4: Course Coordinator accesses another programme offering -> 403 Forbidden")
+    @DisplayName("Scenario 4: MasterCourse Coordinator accesses another programme offering -> 403 Forbidden")
     void testScenario4_CCAccessesAnotherProgrammeOffering() {
         authenticateUser(ccUserA1);
         ResponseStatusException ex = assertThrows(ResponseStatusException.class,
@@ -487,7 +487,7 @@ public class CourseCoordinatorScopeSecurityTest {
     }
 
     @Test
-    @DisplayName("Scenario 5: Course Coordinator accesses another school offering -> 403 Forbidden")
+    @DisplayName("Scenario 5: MasterCourse Coordinator accesses another school offering -> 403 Forbidden")
     void testScenario5_CCAccessesAnotherSchoolOffering() {
         authenticateUser(ccUserA1);
         ResponseStatusException ex = assertThrows(ResponseStatusException.class,
@@ -649,7 +649,7 @@ public class CourseCoordinatorScopeSecurityTest {
     }
 
     @Test
-    @DisplayName("Scenario 22: Foreign courseOfferingId in Course ATR -> 403 Forbidden")
+    @DisplayName("Scenario 22: Foreign courseOfferingId in MasterCourse ATR -> 403 Forbidden")
     void testScenario22_ForeignOfferingIdInCourseAtr() {
         authenticateUser(ccUserA1);
         ResponseStatusException ex = assertThrows(ResponseStatusException.class,
@@ -658,7 +658,7 @@ public class CourseCoordinatorScopeSecurityTest {
     }
 
     @Test
-    @DisplayName("Scenario 23: Teaching Faculty cannot submit Course ATR unless they are Course Coordinator -> 403 Forbidden")
+    @DisplayName("Scenario 23: Teaching Faculty cannot submit MasterCourse ATR unless they are MasterCourse Coordinator -> 403 Forbidden")
     void testScenario23_TeachingFacultyCannotSubmitCourseAtr() {
         authenticateUser(facultyUserA1);
         ResponseStatusException ex = assertThrows(ResponseStatusException.class,
@@ -667,7 +667,7 @@ public class CourseCoordinatorScopeSecurityTest {
     }
 
     @Test
-    @DisplayName("Scenario 24: Course Coordinator can complete authorized setup -> Success")
+    @DisplayName("Scenario 24: MasterCourse Coordinator can complete authorized setup -> Success")
     void testScenario24_CCCanCompleteAuthorizedSetup() {
         authenticateUser(ccUserA1);
         CourseCoordinatorSetupProgressDto progress = academicService.completeCourseCoordinatorSetup(ccUserA1.getEmail(), offeringA1.getId());
@@ -677,7 +677,7 @@ public class CourseCoordinatorScopeSecurityTest {
     }
 
     @Test
-    @DisplayName("Scenario 25: Course Coordinator can access authorized ATR -> Success")
+    @DisplayName("Scenario 25: MasterCourse Coordinator can access authorized ATR -> Success")
     void testScenario25_CCCanAccessAuthorizedAtr() {
         authenticateUser(ccUserA1);
         CourseAtrReportDto atr = atrService.getCourseAtrReport(offeringA1.getId());

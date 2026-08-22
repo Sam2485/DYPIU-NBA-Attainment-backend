@@ -34,16 +34,16 @@ class AttainmentCalculationServiceTest {
     private StudentRepository studentRepository;
 
     @Mock
-    private BatchRepository batchRepository;
+    private ProgrammeBatchRepository programmeBatchRepository;
 
     @Mock
     private UploadedDocumentRepository uploadedDocumentRepository;
 
     @Mock
-    private CourseRepository courseRepository;
+    private MasterCourseRepository masterCourseRepository;
 
     @Mock
-    private CourseOfferingRepository courseOfferingRepository;
+    private ProgrammeBatchCourseRepository programmeBatchCourseRepository;
 
     @Mock
     private CoPoMappingRepository coPoMappingRepository;
@@ -56,20 +56,20 @@ class AttainmentCalculationServiceTest {
 
     private AttainmentConfiguration config;
     private CourseOutcome co1;
-    private CourseOffering offering;
+    private ProgrammeBatchCourse offering;
 
     @BeforeEach
     void setUp() {
-        offering = CourseOffering.builder()
+        offering = ProgrammeBatchCourse.builder()
                 .id("offering-1")
-                .courseId("crs-1")
-                .batchId("batch-1")
+                .masterCourseId("crs-1")
+                .programmeBatchId("batch-1")
                 .semester(5)
                 .build();
 
         config = AttainmentConfiguration.builder()
                 .id("cfg-offering-1")
-                .courseOfferingId("offering-1")
+                .programmeBatchCourseId("offering-1")
                 .directWeight(new BigDecimal("80.00"))
                 .indirectWeight(new BigDecimal("20.00"))
                 .directThreshold(new BigDecimal("60.00"))
@@ -78,7 +78,7 @@ class AttainmentCalculationServiceTest {
 
         co1 = CourseOutcome.builder()
                 .id("co-1-1")
-                .courseOfferingId("offering-1")
+                .programmeBatchCourseId("offering-1")
                 .code("C321.1")
                 .statement("Interpret fundamental concepts")
                 .build();
@@ -86,15 +86,15 @@ class AttainmentCalculationServiceTest {
 
     @Test
     void testCalculateCourseCoAttainment_FormulaVerification() {
-        when(courseOfferingRepository.existsById("offering-1")).thenReturn(true);
-        when(configRepository.findByCourseOfferingId("offering-1")).thenReturn(Optional.of(config));
-        when(courseOutcomeRepository.findByCourseOfferingId("offering-1")).thenReturn(List.of(co1));
+        when(programmeBatchCourseRepository.existsById("offering-1")).thenReturn(true);
+        when(configRepository.findByProgrammeBatchCourseId("offering-1")).thenReturn(Optional.of(config));
+        when(courseOutcomeRepository.findByProgrammeBatchCourseId("offering-1")).thenReturn(List.of(co1));
 
         StudentCoMark m1 = StudentCoMark.builder().coCode("C321.1").marksObtained(new BigDecimal("75")).maxMarks(new BigDecimal("100")).build();
         StudentCoMark m2 = StudentCoMark.builder().coCode("C321.1").marksObtained(new BigDecimal("80")).maxMarks(new BigDecimal("100")).build();
         StudentCoMark m3 = StudentCoMark.builder().coCode("C321.1").marksObtained(new BigDecimal("50")).maxMarks(new BigDecimal("100")).build();
 
-        when(studentCoMarkRepository.findByCourseOfferingId("offering-1")).thenReturn(List.of(m1, m2, m3));
+        when(studentCoMarkRepository.findByProgrammeBatchCourseId("offering-1")).thenReturn(List.of(m1, m2, m3));
 
         Map<String, Object> result = calculationService.calculateCourseCoAttainment("offering-1");
 

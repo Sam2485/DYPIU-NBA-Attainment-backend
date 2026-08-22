@@ -12,11 +12,12 @@ import java.util.List;
 
 @Repository
 public interface StudentCoMarkRepository extends JpaRepository<StudentCoMark, String> {
-    List<StudentCoMark> findByCourseOfferingId(String courseOfferingId);
-    List<StudentCoMark> findByCourseOfferingIdAndCoCode(String courseOfferingId, String coCode);
-    List<StudentCoMark> findByCourseOfferingIdIn(Collection<String> courseOfferingIds);
+    List<StudentCoMark> findByProgrammeBatchCourseId(String programmeBatchCourseId);
+    List<StudentCoMark> findByProgrammeBatchCourseIdAndCoCode(String programmeBatchCourseId, String coCode);
+    List<StudentCoMark> findByProgrammeBatchCourseIdIn(Collection<String> programmeBatchCourseIds);
+    List<StudentCoMark> findByProgrammeBatchCourseIdAndStudentId(String programmeBatchCourseId, String studentId);
 
     @Modifying
-    @Query("DELETE FROM StudentCoMark s WHERE s.courseOfferingId = :courseOfferingId")
-    void deleteByCourseOfferingId(@Param("courseOfferingId") String courseOfferingId);
+    @Query("DELETE FROM StudentCoMark s WHERE s.programmeBatchCourseId = :programmeBatchCourseId")
+    void deleteByProgrammeBatchCourseId(@Param("programmeBatchCourseId") String programmeBatchCourseId);
 }

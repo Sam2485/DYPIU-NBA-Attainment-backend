@@ -40,16 +40,16 @@ public class Phase5RuntimeFalsificationTest {
     private DepartmentRepository departmentRepository;
 
     @Autowired
-    private ProgrammeRepository programmeRepository;
+    private MasterProgrammeRepository masterProgrammeRepository;
 
     @Autowired
-    private BatchRepository batchRepository;
+    private ProgrammeBatchRepository programmeBatchRepository;
 
     @Autowired
-    private CourseRepository courseRepository;
+    private MasterCourseRepository masterCourseRepository;
 
     @Autowired
-    private CourseOfferingRepository courseOfferingRepository;
+    private ProgrammeBatchCourseRepository programmeBatchCourseRepository;
 
     @Autowired
     private CourseOutcomeRepository courseOutcomeRepository;
@@ -83,12 +83,12 @@ public class Phase5RuntimeFalsificationTest {
 
     private School school;
     private Department department;
-    private Programme programmeA;
-    private Programme programmeB;
-    private Batch batchA;
-    private Batch batchB;
-    private Course courseA;
-    private CourseOffering offeringA;
+    private MasterProgramme programmeA;
+    private MasterProgramme programmeB;
+    private ProgrammeBatch batchA;
+    private ProgrammeBatch batchB;
+    private MasterCourse courseA;
+    private ProgrammeBatchCourse offeringA;
 
     @BeforeEach
     void setUp() {
@@ -107,7 +107,7 @@ public class Phase5RuntimeFalsificationTest {
                 .code("CE-" + suffix)
                 .build());
 
-        programmeA = programmeRepository.save(Programme.builder()
+        programmeA = masterProgrammeRepository.save(MasterProgramme.builder()
                 .id("prog-p5-a-" + suffix)
                 .departmentId(department.getId())
                 .name("B.Tech Computer Science " + suffix)
@@ -115,7 +115,7 @@ public class Phase5RuntimeFalsificationTest {
                 .durationYears(4)
                 .build());
 
-        programmeB = programmeRepository.save(Programme.builder()
+        programmeB = masterProgrammeRepository.save(MasterProgramme.builder()
                 .id("prog-p5-b-" + suffix)
                 .departmentId(department.getId())
                 .name("B.Tech AI & Data Science " + suffix)
@@ -123,27 +123,21 @@ public class Phase5RuntimeFalsificationTest {
                 .durationYears(4)
                 .build());
 
-        batchA = batchRepository.save(Batch.builder()
-                .id("batch-p5-a-" + suffix)
-                .programmeId(programmeA.getId())
+        batchA = programmeBatchRepository.save(ProgrammeBatch.builder().id("batch-p5-a-" + suffix).masterProgrammeId(programmeA.getId())
                 .name("2024-2028")
                 .startYear(2024)
                 .endYear(2028)
                 .durationYears(4)
                 .build());
 
-        batchB = batchRepository.save(Batch.builder()
-                .id("batch-p5-b-" + suffix)
-                .programmeId(programmeB.getId())
+        batchB = programmeBatchRepository.save(ProgrammeBatch.builder().id("batch-p5-b-" + suffix).masterProgrammeId(programmeB.getId())
                 .name("2024-2028")
                 .startYear(2024)
                 .endYear(2028)
                 .durationYears(4)
                 .build());
 
-        courseA = courseRepository.save(Course.builder()
-                .id("crs-p5-cs301-" + suffix)
-                .programmeId(programmeA.getId())
+        courseA = masterCourseRepository.save(MasterCourse.builder().id("crs-p5-cs301-" + suffix).masterProgrammeId(programmeA.getId())
                 .code("CS 301")
                 .name("Database Management Systems")
                 .courseType("THEORY")
@@ -151,19 +145,19 @@ public class Phase5RuntimeFalsificationTest {
                 .credits(4)
                 .build());
 
-        offeringA = courseOfferingRepository.save(CourseOffering.builder()
+        offeringA = programmeBatchCourseRepository.save(ProgrammeBatchCourse.builder()
                 .id("offering-p5-cs301-" + suffix)
-                .courseId(courseA.getId())
-                .batchId(batchA.getId())
+                .masterCourseId(courseA.getId())
+                .programmeBatchId(batchA.getId())
                 .academicYear("2025-26")
                 .semester(5)
                 .build());
 
-        // Register 5 active students in Batch A
+        // Register 5 active students in ProgrammeBatch A
         for (int i = 1; i <= 5; i++) {
             studentRepository.save(Student.builder()
                     .id("stud-p5-" + i + "-" + suffix)
-                    .batchId(batchA.getId())
+                    .programmeBatchId(batchA.getId())
                     .prn("PRN-P5-" + i)
                     .name("Student " + i)
                     .email("student" + i + "@dypiu.ac.in")
@@ -219,7 +213,7 @@ public class Phase5RuntimeFalsificationTest {
         for (int i = 1; i <= 4; i++) {
             courseOutcomeRepository.save(CourseOutcome.builder()
                     .id("co-a-" + i + "-" + offId)
-                    .courseOfferingId(offId)
+                    .programmeBatchCourseId(offId)
                     .code("CO" + i)
                     .statement("Outcome statement CO" + i)
                     .targetLevel(new BigDecimal("2.50"))
@@ -229,7 +223,7 @@ public class Phase5RuntimeFalsificationTest {
         for (int i = 1; i <= 5; i++) {
             programmeOutcomeRepository.save(ProgrammeOutcome.builder()
                     .id("po-a-" + i + "-" + progId)
-                    .programmeId(progId)
+                    .programmeBatchId(batchA.getId())
                     .code("PO" + i)
                     .statement("Engineering Outcome PO" + i)
                     .build());
@@ -238,7 +232,7 @@ public class Phase5RuntimeFalsificationTest {
         for (int i = 1; i <= 2; i++) {
             programmeSpecificOutcomeRepository.save(ProgrammeSpecificOutcome.builder()
                     .id("pso-a-" + i + "-" + progId)
-                    .programmeId(progId)
+                    .programmeBatchId(batchA.getId())
                     .code("PSO" + i)
                     .statement("Specialized Domain Competency PSO" + i)
                     .build());
@@ -261,10 +255,10 @@ public class Phase5RuntimeFalsificationTest {
         assertEquals(4, examResult.getCoMaxMarks().size());
         assertEquals(4, examResult.getCoAttainmentLevels().size());
 
-        List<StudentCoMark> savedMarks = studentCoMarkRepository.findByCourseOfferingId(offId);
+        List<StudentCoMark> savedMarks = studentCoMarkRepository.findByProgrammeBatchCourseId(offId);
         assertEquals(20, savedMarks.size(), "5 students x 4 COs = 20 persisted StudentCoMark entities");
 
-        List<UploadedDocument> docs = uploadedDocumentRepository.findByCourseOfferingId(offId);
+        List<UploadedDocument> docs = uploadedDocumentRepository.findByProgrammeBatchCourseId(offId);
         assertEquals(1, docs.size());
         assertEquals(5, docs.get(0).getRecordsProcessed());
     }
@@ -278,7 +272,7 @@ public class Phase5RuntimeFalsificationTest {
         for (int i = 1; i <= 6; i++) {
             courseOutcomeRepository.save(CourseOutcome.builder()
                     .id("co-b-" + i + "-" + offId)
-                    .courseOfferingId(offId)
+                    .programmeBatchCourseId(offId)
                     .code("CO" + i)
                     .statement("Outcome statement CO" + i)
                     .targetLevel(new BigDecimal("2.50"))
@@ -288,7 +282,7 @@ public class Phase5RuntimeFalsificationTest {
         for (int i = 1; i <= 8; i++) {
             programmeOutcomeRepository.save(ProgrammeOutcome.builder()
                     .id("po-b-" + i + "-" + progId)
-                    .programmeId(progId)
+                    .programmeBatchId(batchA.getId())
                     .code("PO" + i)
                     .statement("Engineering Outcome PO" + i)
                     .build());
@@ -297,7 +291,7 @@ public class Phase5RuntimeFalsificationTest {
         for (int i = 1; i <= 4; i++) {
             programmeSpecificOutcomeRepository.save(ProgrammeSpecificOutcome.builder()
                     .id("pso-b-" + i + "-" + progId)
-                    .programmeId(progId)
+                    .programmeBatchId(batchA.getId())
                     .code("PSO" + i)
                     .statement("Specialized Domain Competency PSO" + i)
                     .build());
@@ -320,7 +314,7 @@ public class Phase5RuntimeFalsificationTest {
         assertEquals(6, examResult.getCoMaxMarks().size());
         assertEquals(6, examResult.getCoAttainmentLevels().size());
 
-        List<StudentCoMark> savedMarks = studentCoMarkRepository.findByCourseOfferingId(offId);
+        List<StudentCoMark> savedMarks = studentCoMarkRepository.findByProgrammeBatchCourseId(offId);
         assertEquals(30, savedMarks.size(), "5 students x 6 COs = 30 persisted StudentCoMark entities");
     }
 
@@ -329,15 +323,15 @@ public class Phase5RuntimeFalsificationTest {
     // =========================================================================
 
     @Test
-    @DisplayName("Falsification 3: Cross-Batch Student PRN Rejected With HTTP 400 & Rollback")
+    @DisplayName("Falsification 3: Cross-ProgrammeBatch Student PRN Rejected With HTTP 400 & Rollback")
     void testCrossBatchStudentRejection() throws Exception {
         String offId = offeringA.getId();
 
         studentRepository.save(Student.builder()
                 .id("stud-cross-batch")
-                .batchId(batchB.getId())
+                .programmeBatchId(batchB.getId())
                 .prn("PRN-CROSS-BATCH")
-                .name("Cross Batch Student")
+                .name("Cross ProgrammeBatch Student")
                 .email("cross@dypiu.ac.in")
                 .build());
 
@@ -355,7 +349,7 @@ public class Phase5RuntimeFalsificationTest {
         assertTrue(ex.getStatusCode().is4xxClientError());
         assertTrue(ex.getReason().contains("Cross-batch") || ex.getReason().contains("belongs to batch"));
 
-        List<StudentCoMark> saved = studentCoMarkRepository.findByCourseOfferingId(offId);
+        List<StudentCoMark> saved = studentCoMarkRepository.findByProgrammeBatchCourseId(offId);
         assertTrue(saved.isEmpty(), "Database must not contain partial student marks after rejected upload");
     }
 
@@ -378,7 +372,7 @@ public class Phase5RuntimeFalsificationTest {
         assertTrue(ex.getStatusCode().is4xxClientError());
         assertTrue(ex.getReason().contains("not registered in the system"));
 
-        List<StudentCoMark> saved = studentCoMarkRepository.findByCourseOfferingId(offId);
+        List<StudentCoMark> saved = studentCoMarkRepository.findByProgrammeBatchCourseId(offId);
         assertTrue(saved.isEmpty(), "Database must remain clean on rejection");
     }
 
@@ -413,13 +407,13 @@ public class Phase5RuntimeFalsificationTest {
     // =========================================================================
 
     @Test
-    @DisplayName("Falsification 6: Course ATR Draft Save vs Submit Status Transition")
-    void testCourseAtrLifecycleAndStatusTransition() {
+    @DisplayName("Falsification 6: MasterCourse ATR Draft Save vs Submit Status Transition")
+    void testMasterCourseAtrLifecycleAndStatusTransition() {
         String offId = offeringA.getId();
 
         courseOutcomeRepository.save(CourseOutcome.builder()
                 .id("co-atr-test-" + offId)
-                .courseOfferingId(offId)
+                .programmeBatchCourseId(offId)
                 .code("CO1")
                 .statement("Understand Database Transactions")
                 .targetLevel(new BigDecimal("2.50"))
@@ -438,7 +432,7 @@ public class Phase5RuntimeFalsificationTest {
         assertNotNull(savedDraft);
         assertEquals("DRAFT", savedDraft.getStatus());
 
-        List<CourseAtr> persistedList = courseAtrRepository.findByCourseOfferingId(offId);
+        List<CourseAtr> persistedList = courseAtrRepository.findByProgrammeBatchCourseId(offId);
         assertFalse(persistedList.isEmpty());
         assertEquals("DRAFT", persistedList.get(0).getStatus().name());
 
@@ -451,20 +445,20 @@ public class Phase5RuntimeFalsificationTest {
         assertEquals("Prof. Lead Faculty", submitted.getSubmittedBy());
         assertNotNull(submitted.getSubmittedAt());
 
-        List<CourseAtr> postSubmit = courseAtrRepository.findByCourseOfferingId(offId);
+        List<CourseAtr> postSubmit = courseAtrRepository.findByProgrammeBatchCourseId(offId);
         assertFalse(postSubmit.isEmpty());
         assertEquals("SUBMITTED_FOR_VERIFICATION", postSubmit.get(0).getStatus().name());
     }
 
     @Test
-    @DisplayName("Falsification 7: Programme ATR Draft Save vs Submit Status Transition")
-    void testProgrammeAtrLifecycleAndStatusTransition() {
+    @DisplayName("Falsification 7: MasterProgramme ATR Draft Save vs Submit Status Transition")
+    void testMasterProgrammeAtrLifecycleAndStatusTransition() {
         String progId = programmeA.getId();
         String bId = batchA.getId();
 
         programmeOutcomeRepository.save(ProgrammeOutcome.builder()
                 .id("po-atr-test-" + progId)
-                .programmeId(progId)
+                .programmeBatchId(batchA.getId())
                 .code("PO1")
                 .statement("Apply Engineering Mathematics")
                 .build());
@@ -482,15 +476,15 @@ public class Phase5RuntimeFalsificationTest {
         assertNotNull(savedDraft);
         assertEquals("DRAFT", savedDraft.getStatus());
 
-        Optional<ProgrammeAtr> persistedOpt = programmeAtrRepository.findByProgrammeIdAndBatchId(progId, bId);
+        Optional<ProgrammeAtr> persistedOpt = programmeAtrRepository.findByProgrammeBatchId(bId);
         assertTrue(persistedOpt.isPresent());
         assertEquals("DRAFT", persistedOpt.get().getStatus().name());
 
-        ProgrammeAtr submitted = atrService.submitProgrammeAtr(progId, bId, "Dr. Programme Coordinator");
+        ProgrammeAtr submitted = atrService.submitProgrammeAtr(progId, bId, "Dr. MasterProgramme Coordinator");
         assertNotNull(submitted);
         assertEquals("SUBMITTED_FOR_VERIFICATION", submitted.getStatus().name());
 
-        Optional<ProgrammeAtr> postSubmit = programmeAtrRepository.findByProgrammeIdAndBatchId(progId, bId);
+        Optional<ProgrammeAtr> postSubmit = programmeAtrRepository.findByProgrammeBatchId(bId);
         assertTrue(postSubmit.isPresent());
         assertEquals("SUBMITTED_FOR_VERIFICATION", postSubmit.get().getStatus().name());
     }

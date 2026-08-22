@@ -49,16 +49,16 @@ public class ProgrammeCoordinatorScopeSecurityTest {
     private DepartmentRepository departmentRepository;
 
     @Autowired
-    private ProgrammeRepository programmeRepository;
+    private MasterProgrammeRepository masterProgrammeRepository;
 
     @Autowired
-    private BatchRepository batchRepository;
+    private ProgrammeBatchRepository programmeBatchRepository;
 
     @Autowired
-    private CourseRepository courseRepository;
+    private MasterCourseRepository masterCourseRepository;
 
     @Autowired
-    private CourseOfferingRepository courseOfferingRepository;
+    private ProgrammeBatchCourseRepository programmeBatchCourseRepository;
 
     @Autowired
     private UserRepository userRepository;
@@ -68,15 +68,15 @@ public class ProgrammeCoordinatorScopeSecurityTest {
     private Department deptA1;
     private Department deptA2;
     private Department deptB1;
-    private Programme progA1; // PC A1 assigned
-    private Programme progA2; // Same school, same dept, different prog
-    private Programme progB1; // School B, Dept B1
-    private Batch batchA1;
-    private Batch batchA2;
-    private Batch batchB1;
-    private Course courseA1;
-    private Course courseA2;
-    private Course courseB1;
+    private MasterProgramme progA1; // PC A1 assigned
+    private MasterProgramme progA2; // Same school, same dept, different prog
+    private MasterProgramme progB1; // School B, Dept B1
+    private ProgrammeBatch batchA1;
+    private ProgrammeBatch batchA2;
+    private ProgrammeBatch batchB1;
+    private MasterCourse courseA1;
+    private MasterCourse courseA2;
+    private MasterCourse courseB1;
 
     private User pcA1;
     private User pcB1;
@@ -132,21 +132,21 @@ public class ProgrammeCoordinatorScopeSecurityTest {
                 .build());
 
         // 3. Programmes
-        progA1 = programmeRepository.save(Programme.builder()
+        progA1 = masterProgrammeRepository.save(MasterProgramme.builder()
                 .id("prog-pc-a1-" + System.nanoTime())
                 .departmentId(deptA1.getId())
                 .name("B.Tech Computer Science")
                 .code("BT-CS")
                 .build());
 
-        progA2 = programmeRepository.save(Programme.builder()
+        progA2 = masterProgrammeRepository.save(MasterProgramme.builder()
                 .id("prog-pc-a2-" + System.nanoTime())
                 .departmentId(deptA1.getId())
                 .name("B.Tech AI & Data Science")
                 .code("BT-AI")
                 .build());
 
-        progB1 = programmeRepository.save(Programme.builder()
+        progB1 = masterProgrammeRepository.save(MasterProgramme.builder()
                 .id("prog-pc-b1-" + System.nanoTime())
                 .departmentId(deptB1.getId())
                 .name("MBA Finance")
@@ -154,53 +154,53 @@ public class ProgrammeCoordinatorScopeSecurityTest {
                 .build());
 
         // 4. Batches
-        batchA1 = batchRepository.save(Batch.builder()
+        batchA1 = programmeBatchRepository.save(ProgrammeBatch.builder()
                 .id("batch-pc-a1-" + System.nanoTime())
-                .programmeId(progA1.getId())
-                .name("Batch CS 2022-2026")
+                .masterProgrammeId(progA1.getId())
+                .name("ProgrammeBatch CS 2022-2026")
                 .startYear(2022)
                 .endYear(2026)
                 .build());
 
-        batchA2 = batchRepository.save(Batch.builder()
+        batchA2 = programmeBatchRepository.save(ProgrammeBatch.builder()
                 .id("batch-pc-a2-" + System.nanoTime())
-                .programmeId(progA2.getId())
-                .name("Batch AI 2022-2026")
+                .masterProgrammeId(progA2.getId())
+                .name("ProgrammeBatch AI 2022-2026")
                 .startYear(2022)
                 .endYear(2026)
                 .build());
 
-        batchB1 = batchRepository.save(Batch.builder()
+        batchB1 = programmeBatchRepository.save(ProgrammeBatch.builder()
                 .id("batch-pc-b1-" + System.nanoTime())
-                .programmeId(progB1.getId())
-                .name("Batch MBA 2023-2025")
+                .masterProgrammeId(progB1.getId())
+                .name("ProgrammeBatch MBA 2023-2025")
                 .startYear(2023)
                 .endYear(2025)
                 .durationYears(2)
                 .build());
 
         // 5. Courses
-        courseA1 = courseRepository.save(Course.builder()
+        courseA1 = masterCourseRepository.save(MasterCourse.builder()
                 .id("crs-pc-a1-" + System.nanoTime())
-                .programmeId(progA1.getId())
+                .masterProgrammeId(progA1.getId())
                 .name("Data Structures")
                 .code("CS201")
                 .credits(4)
                 .courseType("CORE")
                 .build());
 
-        courseA2 = courseRepository.save(Course.builder()
+        courseA2 = masterCourseRepository.save(MasterCourse.builder()
                 .id("crs-pc-a2-" + System.nanoTime())
-                .programmeId(progA2.getId())
+                .masterProgrammeId(progA2.getId())
                 .name("Machine Learning")
                 .code("AI301")
                 .credits(4)
                 .courseType("CORE")
                 .build());
 
-        courseB1 = courseRepository.save(Course.builder()
+        courseB1 = masterCourseRepository.save(MasterCourse.builder()
                 .id("crs-pc-b1-" + System.nanoTime())
-                .programmeId(progB1.getId())
+                .masterProgrammeId(progB1.getId())
                 .name("Financial Accounting")
                 .code("MBA101")
                 .credits(3)
@@ -329,7 +329,7 @@ public class ProgrammeCoordinatorScopeSecurityTest {
     @DisplayName("Case 6: PC gets all programmes -> returns only assigned programme")
     void testCase6_PCGetAllProgrammesReturnsOnlyAssigned() {
         authenticateUser(pcA1);
-        List<Programme> programmes = academicService.getAllProgrammes();
+        List<MasterProgramme> programmes = academicService.getAllProgrammes();
         assertNotNull(programmes);
         assertEquals(1, programmes.size());
         assertEquals(progA1.getId(), programmes.get(0).getId());
@@ -339,7 +339,7 @@ public class ProgrammeCoordinatorScopeSecurityTest {
     @DisplayName("Case 7: PC gets own programme by ID -> 200 OK")
     void testCase7_PCGetProgrammeByIdOwn() {
         authenticateUser(pcA1);
-        Programme p = academicService.getProgrammeById(progA1.getId());
+        MasterProgramme p = academicService.getProgrammeById(progA1.getId());
         assertNotNull(p);
         assertEquals(progA1.getId(), p.getId());
     }
@@ -360,7 +360,7 @@ public class ProgrammeCoordinatorScopeSecurityTest {
     @DisplayName("Case 9: PC gets all batches -> returns only batches for assigned programme")
     void testCase9_PCGetAllBatchesReturnsOnlyAssigned() {
         authenticateUser(pcA1);
-        List<Batch> batches = academicService.getAllBatches();
+        List<ProgrammeBatch> batches = academicService.getAllBatches();
         assertNotNull(batches);
         assertEquals(1, batches.size());
         assertEquals(batchA1.getId(), batches.get(0).getId());
@@ -370,7 +370,7 @@ public class ProgrammeCoordinatorScopeSecurityTest {
     @DisplayName("Case 10: PC gets batches for assigned programme -> 200 OK")
     void testCase10_PCGetBatchesByAssignedProgramme() {
         authenticateUser(pcA1);
-        List<Batch> batches = academicService.getBatchesByProgramme(progA1.getId());
+        List<ProgrammeBatch> batches = academicService.getBatchesByProgramme(progA1.getId());
         assertNotNull(batches);
         assertEquals(1, batches.size());
         assertEquals(batchA1.getId(), batches.get(0).getId());
@@ -392,7 +392,7 @@ public class ProgrammeCoordinatorScopeSecurityTest {
     @DisplayName("Case 12: PC gets batch by ID for assigned programme -> 200 OK")
     void testCase12_PCGetBatchByIdAssigned() {
         authenticateUser(pcA1);
-        Batch b = academicService.getBatchById(batchA1.getId());
+        ProgrammeBatch b = academicService.getBatchById(batchA1.getId());
         assertNotNull(b);
         assertEquals(batchA1.getId(), b.getId());
     }
@@ -413,13 +413,13 @@ public class ProgrammeCoordinatorScopeSecurityTest {
     @DisplayName("Case 14: PC creates batch for assigned programme -> 200 OK")
     void testCase14_PCCreatesBatchForAssignedProgramme() {
         authenticateUser(pcA1);
-        Batch newBatch = Batch.builder()
-                .programmeId(progA1.getId())
-                .name("Batch CS 2024-2028")
+        ProgrammeBatch newBatch = ProgrammeBatch.builder()
+                .masterProgrammeId(progA1.getId())
+                .name("ProgrammeBatch CS 2024-2028")
                 .startYear(2024)
                 .endYear(2028)
                 .build();
-        Batch saved = academicService.saveBatch(newBatch);
+        ProgrammeBatch saved = academicService.saveBatch(newBatch);
         assertNotNull(saved);
         assertEquals(progA1.getId(), saved.getProgrammeId());
     }
@@ -428,9 +428,9 @@ public class ProgrammeCoordinatorScopeSecurityTest {
     @DisplayName("Case 15: PC creates batch for another programme -> 403 Forbidden")
     void testCase15_PCCreatesBatchForOtherProgrammeForbidden() {
         authenticateUser(pcA1);
-        Batch otherProgBatch = Batch.builder()
-                .programmeId(progB1.getId())
-                .name("Batch MBA 2024-2026")
+        ProgrammeBatch otherProgBatch = ProgrammeBatch.builder()
+                .masterProgrammeId(progB1.getId())
+                .name("ProgrammeBatch MBA 2024-2026")
                 .startYear(2024)
                 .endYear(2026)
                 .durationYears(2)
@@ -444,7 +444,7 @@ public class ProgrammeCoordinatorScopeSecurityTest {
     @DisplayName("Case 16: PC gets all courses -> returns only courses for assigned programme")
     void testCase16_PCGetAllCoursesReturnsOnlyAssigned() {
         authenticateUser(pcA1);
-        List<Course> courses = academicService.getAllCourses();
+        List<MasterCourse> courses = academicService.getAllCourses();
         assertNotNull(courses);
         assertEquals(1, courses.size());
         assertEquals(courseA1.getId(), courses.get(0).getId());
@@ -454,7 +454,7 @@ public class ProgrammeCoordinatorScopeSecurityTest {
     @DisplayName("Case 17: PC gets course by ID for assigned programme -> 200 OK")
     void testCase17_PCGetCourseByIdAssigned() {
         authenticateUser(pcA1);
-        Course c = academicService.getCourseById(courseA1.getId());
+        MasterCourse c = academicService.getCourseById(courseA1.getId());
         assertNotNull(c);
         assertEquals(courseA1.getId(), c.getId());
     }
@@ -475,14 +475,14 @@ public class ProgrammeCoordinatorScopeSecurityTest {
     @DisplayName("Case 19: PC creates course for assigned programme -> 200 OK")
     void testCase19_PCCreatesCourseForAssignedProgramme() {
         authenticateUser(pcA1);
-        Course newCourse = Course.builder()
-                .programmeId(progA1.getId())
+        MasterCourse newCourse = MasterCourse.builder()
+                .masterProgrammeId(progA1.getId())
                 .name("Operating Systems")
                 .code("CS301")
                 .credits(4)
                 .courseType("CORE")
                 .build();
-        Course saved = academicService.saveCourse(newCourse);
+        MasterCourse saved = academicService.saveCourse(newCourse);
         assertNotNull(saved);
         assertEquals(progA1.getId(), saved.getProgrammeId());
     }
@@ -491,8 +491,8 @@ public class ProgrammeCoordinatorScopeSecurityTest {
     @DisplayName("Case 20: PC creates course for another programme -> 403 Forbidden")
     void testCase20_PCCreatesCourseForOtherProgrammeForbidden() {
         authenticateUser(pcA1);
-        Course otherProgCourse = Course.builder()
-                .programmeId(progB1.getId())
+        MasterCourse otherProgCourse = MasterCourse.builder()
+                .masterProgrammeId(progB1.getId())
                 .name("Marketing Management")
                 .code("MBA201")
                 .credits(3)
@@ -526,7 +526,7 @@ public class ProgrammeCoordinatorScopeSecurityTest {
         List<PeoOutcome> savedPeos = outcomeService.savePEOs(progA1.getId(), peos);
         assertNotNull(savedPeos);
 
-        // Programme Targets
+        // MasterProgramme Targets
         ProgrammeTargetDto targetDto = ProgrammeTargetDto.builder()
                 .programmeId(progA1.getId())
                 .batchId(batchA1.getId())
@@ -629,7 +629,7 @@ public class ProgrammeCoordinatorScopeSecurityTest {
     }
 
     @Test
-    @DisplayName("Case 25: PC accesses/saves Programme ATR for assigned programme -> 200 OK; another programme -> 403 Forbidden")
+    @DisplayName("Case 25: PC accesses/saves MasterProgramme ATR for assigned programme -> 200 OK; another programme -> 403 Forbidden")
     void testCase25_PCProgrammeAtrScopeEnforcement() {
         authenticateUser(pcA1);
 

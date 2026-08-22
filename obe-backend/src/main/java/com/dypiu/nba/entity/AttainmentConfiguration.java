@@ -13,8 +13,8 @@ import java.util.Map;
         name = "attainment_configurations",
         uniqueConstraints = {
                 @UniqueConstraint(
-                        name = "uk_attainment_config_offering",
-                        columnNames = {"course_offering_id"}
+                        name = "uq_attainment_config_batch_course",
+                        columnNames = {"programme_batch_course_id"}
                 )
         }
 )
@@ -23,13 +23,14 @@ import java.util.Map;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
 public class AttainmentConfiguration {
 
     @Id
     private String id;
 
-    @Column(name = "course_offering_id", nullable = false)
-    private String courseOfferingId;
+    @Column(name = "programme_batch_course_id", nullable = false)
+    private String programmeBatchCourseId;
 
     @Column(name = "direct_weight", nullable = false)
     @Builder.Default
@@ -68,6 +69,15 @@ public class AttainmentConfiguration {
     @Column(name = "updated_at")
     private ZonedDateTime updatedAt;
 
+    // Helper compatibility methods
+    public String getCourseOfferingId() {
+        return programmeBatchCourseId;
+    }
+
+    public void setCourseOfferingId(String offeringId) {
+        this.programmeBatchCourseId = offeringId;
+    }
+
     @Transient
     public List<Map<String, Object>> getDirectLevels() {
         return List.of(
@@ -77,6 +87,10 @@ public class AttainmentConfiguration {
         );
     }
 
+    public void setDirectLevels(List<Map<String, Object>> directLevels) {
+        // Ignored, computed from thresholds
+    }
+
     @Transient
     public List<Map<String, Object>> getIndirectLevels() {
         return List.of(
@@ -84,5 +98,9 @@ public class AttainmentConfiguration {
                 Map.of("level", 2, "minPercentage", 50, "maxPercentage", 70),
                 Map.of("level", 3, "minPercentage", 70, "maxPercentage", 100)
         );
+    }
+
+    public void setIndirectLevels(List<Map<String, Object>> indirectLevels) {
+        // Ignored, computed from thresholds
     }
 }

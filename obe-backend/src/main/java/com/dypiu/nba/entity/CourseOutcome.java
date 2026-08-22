@@ -11,8 +11,8 @@ import java.time.ZonedDateTime;
         name = "course_outcomes",
         uniqueConstraints = {
                 @UniqueConstraint(
-                        name = "uk_offering_co_code",
-                        columnNames = {"course_offering_id", "code"}
+                        name = "uk_batch_course_co_code",
+                        columnNames = {"programme_batch_course_id", "code"}
                 )
         }
 )
@@ -26,8 +26,8 @@ public class CourseOutcome {
     @Id
     private String id;
 
-    @Column(name = "course_offering_id", nullable = false)
-    private String courseOfferingId;
+    @Column(name = "programme_batch_course_id", nullable = false)
+    private String programmeBatchCourseId;
 
     @Column(nullable = false, length = 30)
     private String code;
@@ -42,6 +42,11 @@ public class CourseOutcome {
     @Column(name = "blooms_level", length = 50)
     @Builder.Default
     private String bloomsLevel = "L3 - Apply";
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 30)
+    @Builder.Default
+    private ApprovalStatus status = ApprovalStatus.DRAFT;
 
     @Column(name = "created_at", insertable = false, updatable = false)
     private ZonedDateTime createdAt;
@@ -58,5 +63,14 @@ public class CourseOutcome {
         if (target != null) {
             this.targetLevel = target;
         }
+    }
+
+    // Helper compatibility methods
+    public String getCourseOfferingId() {
+        return programmeBatchCourseId;
+    }
+
+    public void setCourseOfferingId(String offeringId) {
+        this.programmeBatchCourseId = offeringId;
     }
 }

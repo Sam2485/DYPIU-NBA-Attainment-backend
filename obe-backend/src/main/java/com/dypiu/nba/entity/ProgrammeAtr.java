@@ -11,7 +11,7 @@ import java.time.ZonedDateTime;
         uniqueConstraints = {
                 @UniqueConstraint(
                         name = "uk_programme_batch_atr",
-                        columnNames = {"programme_id", "batch_id"}
+                        columnNames = {"programme_batch_id"}
                 )
         }
 )
@@ -25,11 +25,8 @@ public class ProgrammeAtr {
     @Id
     private String id;
 
-    @Column(name = "programme_id", nullable = false)
-    private String programmeId;
-
-    @Column(name = "batch_id", nullable = false)
-    private String batchId;
+    @Column(name = "programme_batch_id", nullable = false)
+    private String programmeBatchId;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)
@@ -50,6 +47,12 @@ public class ProgrammeAtr {
     @Column(name = "verified_at")
     private ZonedDateTime verifiedAt;
 
+    @Column(name = "approved_by")
+    private String approvedBy;
+
+    @Column(name = "approved_at")
+    private ZonedDateTime approvedAt;
+
     @Column(name = "verification_comments", columnDefinition = "TEXT")
     private String verificationComments;
 
@@ -61,4 +64,21 @@ public class ProgrammeAtr {
 
     @Column(name = "updated_at")
     private ZonedDateTime updatedAt;
+
+    // Helper compatibility methods
+    public String getBatchId() {
+        return programmeBatchId;
+    }
+
+    public void setBatchId(String batchId) {
+        this.programmeBatchId = batchId;
+    }
+
+    public String getProgrammeId() {
+        return programmeBatchId;
+    }
+
+    public void setProgrammeId(String programmeId) {
+        // preserved for compatibility
+    }
 }

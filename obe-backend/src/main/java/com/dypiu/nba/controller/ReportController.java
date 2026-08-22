@@ -24,10 +24,10 @@ public class ReportController {
     private final ReportAccessService reportAccessService;
     private final AcademicService academicService;
     private final AttainmentCalculationService attainmentCalculationService;
-    private final CourseOfferingRepository courseOfferingRepository;
-    private final CourseRepository courseRepository;
-    private final ProgrammeRepository programmeRepository;
-    private final BatchRepository batchRepository;
+    private final ProgrammeBatchCourseRepository programmeBatchCourseRepository;
+    private final MasterCourseRepository masterCourseRepository;
+    private final MasterProgrammeRepository masterProgrammeRepository;
+    private final ProgrammeBatchRepository programmeBatchRepository;
     private final CourseAtrRepository courseAtrRepository;
     private final ProgrammeAtrRepository programmeAtrRepository;
     private final com.dypiu.nba.service.AttainmentReportExportService exportService;
@@ -42,7 +42,7 @@ public class ReportController {
                 .build());
     }
 
-    // --- Course ATR Endpoints ---
+    // --- MasterCourse ATR Endpoints ---
 
     @GetMapping("/course-atr/{courseOfferingId}")
     public ResponseEntity<ApiResponse<CourseAtrReportDto>> getCourseAtrReport(
@@ -75,7 +75,7 @@ public class ReportController {
 
         return ResponseEntity.ok(ApiResponse.<CourseAtrReportDto>builder()
                 .success(true)
-                .message("Course ATR saved successfully")
+                .message("MasterCourse ATR saved successfully")
                 .data(atrService.saveCourseAtrReport(dto))
                 .build());
     }
@@ -87,10 +87,10 @@ public class ReportController {
         User user = reportAccessService.getAuthenticatedUser(principal);
         reportAccessService.validateCourseAtrAccess(user, courseOfferingId);
 
-        String submitter = user != null ? user.getName() : "Course Coordinator";
+        String submitter = user != null ? user.getName() : "MasterCourse Coordinator";
         return ResponseEntity.ok(ApiResponse.<CourseAtr>builder()
                 .success(true)
-                .message("Course ATR submitted for verification")
+                .message("MasterCourse ATR submitted for verification")
                 .data(atrService.submitCourseAtr(courseOfferingId, submitter))
                 .build());
     }
@@ -103,13 +103,13 @@ public class ReportController {
             Principal principal) {
         User user = reportAccessService.getAuthenticatedUser(principal);
 
-        List<CourseOffering> offerings;
+        List<ProgrammeBatchCourse> offerings;
         if (batchId != null && !batchId.isBlank()) {
-            offerings = courseOfferingRepository.findByBatchId(batchId);
+            offerings = programmeBatchCourseRepository.findByProgrammeBatchId(batchId);
         } else if (courseId != null && !courseId.isBlank()) {
-            offerings = courseOfferingRepository.findByCourseId(courseId);
+            offerings = programmeBatchCourseRepository.findByMasterCourseId(courseId);
         } else {
-            offerings = courseOfferingRepository.findAll();
+            offerings = programmeBatchCourseRepository.findAll();
         }
 
         List<CourseAtrReportDto> reports = offerings.stream()
@@ -130,7 +130,7 @@ public class ReportController {
                 .build());
     }
 
-    // --- Programme ATR Endpoints ---
+    // --- MasterProgramme ATR Endpoints ---
 
     @GetMapping("/programme-atr/{programmeId}/batch/{batchId}")
     public ResponseEntity<ApiResponse<ProgrammeAtrReportDto>> getProgrammeAtrReport(
@@ -165,7 +165,7 @@ public class ReportController {
 
         return ResponseEntity.ok(ApiResponse.<ProgrammeAtrReportDto>builder()
                 .success(true)
-                .message("Programme ATR saved successfully")
+                .message("MasterProgramme ATR saved successfully")
                 .data(atrService.saveProgrammeAtrReport(dto))
                 .build());
     }
@@ -178,10 +178,10 @@ public class ReportController {
         User user = reportAccessService.getAuthenticatedUser(principal);
         reportAccessService.validateProgrammeAtrAccess(user, programmeId, batchId);
 
-        String submitter = user != null ? user.getName() : "Programme Coordinator";
+        String submitter = user != null ? user.getName() : "MasterProgramme Coordinator";
         return ResponseEntity.ok(ApiResponse.<ProgrammeAtr>builder()
                 .success(true)
-                .message("Programme ATR submitted for verification")
+                .message("MasterProgramme ATR submitted for verification")
                 .data(atrService.submitProgrammeAtr(programmeId, batchId, submitter))
                 .build());
     }
@@ -196,13 +196,13 @@ public class ReportController {
             return ResponseEntity.ok(ApiResponse.<List<ProgrammeAtrReportDto>>builder().success(true).data(Collections.emptyList()).build());
         }
 
-        List<Batch> batches;
+        List<ProgrammeBatch> batches;
         if (batchId != null && !batchId.isBlank()) {
-            batches = batchRepository.findById(batchId).map(List::of).orElse(Collections.emptyList());
+            batches = programmeBatchRepository.findById(batchId).map(List::of).orElse(Collections.emptyList());
         } else if (programmeId != null && !programmeId.isBlank()) {
-            batches = batchRepository.findByProgrammeId(programmeId);
+            batches = programmeBatchRepository.findByMasterProgrammeId(programmeId);
         } else {
-            batches = batchRepository.findAll();
+            batches = programmeBatchRepository.findAll();
         }
 
         List<ProgrammeAtrReportDto> reports = batches.stream()
@@ -223,7 +223,7 @@ public class ReportController {
                 .build());
     }
 
-    // --- Historical & Batch Summary Endpoints ---
+    // --- Historical & ProgrammeBatch Summary Endpoints ---
 
     @GetMapping("/programmes/{programmeId}/batch-comparison")
     public ResponseEntity<ApiResponse<BatchComparisonDto>> getProgrammeBatchComparison(
@@ -276,8 +276,8 @@ public class ReportController {
         User user = reportAccessService.getAuthenticatedUser(principal);
         reportAccessService.validateCourseOfferingAccess(user, courseOfferingId);
 
-        CourseOffering offering = courseOfferingRepository.findById(courseOfferingId)
-                .orElseThrow(() -> new com.dypiu.nba.exception.ResourceNotFoundException("Course Offering not found: " + courseOfferingId));
+        ProgrammeBatchCourse offering = programmeBatchCourseRepository.findById(courseOfferingId)
+                .orElseThrow(() -> new com.dypiu.nba.exception.ResourceNotFoundException("MasterCourse Offering not found: " + courseOfferingId));
 
         return ResponseEntity.ok(ApiResponse.<Map<String, Object>>builder()
                 .success(true)
@@ -339,10 +339,10 @@ public class ReportController {
             @RequestParam(required = false) String reportType,
             Principal principal) {
         if (courseId == null || courseId.isBlank()) {
-            throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST, "Course ID is required for export.");
+            throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST, "MasterCourse ID is required for export.");
         }
         User user = reportAccessService.getAuthenticatedUser(principal);
-        if (courseOfferingRepository.existsById(courseId)) {
+        if (programmeBatchCourseRepository.existsById(courseId)) {
             reportAccessService.validateCourseOfferingAccess(user, courseId);
         } else {
             reportAccessService.validateCourseAccess(user, courseId);
@@ -365,10 +365,10 @@ public class ReportController {
             @RequestParam(required = false) String reportType,
             Principal principal) {
         if (courseId == null || courseId.isBlank()) {
-            throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST, "Course ID is required for export.");
+            throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST, "MasterCourse ID is required for export.");
         }
         User user = reportAccessService.getAuthenticatedUser(principal);
-        if (courseOfferingRepository.existsById(courseId)) {
+        if (programmeBatchCourseRepository.existsById(courseId)) {
             reportAccessService.validateCourseOfferingAccess(user, courseId);
         } else {
             reportAccessService.validateCourseAccess(user, courseId);

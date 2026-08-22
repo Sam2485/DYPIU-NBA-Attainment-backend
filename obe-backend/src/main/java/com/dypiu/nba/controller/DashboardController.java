@@ -27,10 +27,10 @@ public class DashboardController {
     private final CurrentUserScopeService currentUserScopeService;
     private final SchoolRepository schoolRepository;
     private final DepartmentRepository departmentRepository;
-    private final ProgrammeRepository programmeRepository;
-    private final BatchRepository batchRepository;
-    private final CourseRepository courseRepository;
-    private final CourseOfferingRepository courseOfferingRepository;
+    private final MasterProgrammeRepository masterProgrammeRepository;
+    private final ProgrammeBatchRepository programmeBatchRepository;
+    private final MasterCourseRepository masterCourseRepository;
+    private final ProgrammeBatchCourseRepository programmeBatchCourseRepository;
     private final CourseAtrRepository courseAtrRepository;
     private final UserRepository userRepository;
     private final ApprovalRequestRepository approvalRequestRepository;
@@ -76,9 +76,9 @@ public class DashboardController {
 
         List<Department> depts = departmentRepository.findBySchoolId(finalSchoolId);
         List<String> deptIds = depts.stream().map(Department::getId).toList();
-        List<Programme> progs = deptIds.isEmpty() ? Collections.emptyList() : programmeRepository.findByDepartmentIdIn(deptIds);
-        List<String> progIds = progs.stream().map(Programme::getId).toList();
-        List<Batch> activeBatches = progIds.isEmpty() ? Collections.emptyList() : batchRepository.findByProgrammeIdIn(progIds).stream()
+        List<MasterProgramme> progs = deptIds.isEmpty() ? Collections.emptyList() : masterProgrammeRepository.findByDepartmentIdIn(deptIds);
+        List<String> progIds = progs.stream().map(MasterProgramme::getId).toList();
+        List<ProgrammeBatch> activeBatches = progIds.isEmpty() ? Collections.emptyList() : programmeBatchRepository.findByMasterProgrammeIdIn(progIds).stream()
                 .filter(b -> "ACTIVE".equalsIgnoreCase(b.getStatus()))
                 .collect(Collectors.toList());
 
@@ -168,14 +168,14 @@ public class DashboardController {
         }
 
         List<Department> matchedDepts = List.of(primaryDept);
-        List<Programme> progs = programmeRepository.findByDepartmentId(finalDeptId);
-        Set<String> progIds = progs.stream().map(Programme::getId).collect(Collectors.toSet());
-        List<Batch> activeBatches = progIds.isEmpty() ? Collections.emptyList() : batchRepository.findByProgrammeIdIn(progIds).stream()
+        List<MasterProgramme> progs = masterProgrammeRepository.findByDepartmentId(finalDeptId);
+        Set<String> progIds = progs.stream().map(MasterProgramme::getId).collect(Collectors.toSet());
+        List<ProgrammeBatch> activeBatches = progIds.isEmpty() ? Collections.emptyList() : programmeBatchRepository.findByMasterProgrammeIdIn(progIds).stream()
                 .filter(b -> "ACTIVE".equalsIgnoreCase(b.getStatus()))
                 .collect(Collectors.toList());
-        Set<String> batchIds = activeBatches.stream().map(Batch::getId).collect(Collectors.toSet());
-        List<CourseOffering> offerings = batchIds.isEmpty() ? Collections.emptyList() : courseOfferingRepository.findByBatchIdIn(batchIds);
-        List<Course> courses = progIds.isEmpty() ? Collections.emptyList() : courseRepository.findByProgrammeIdIn(new ArrayList<>(progIds));
+        Set<String> batchIds = activeBatches.stream().map(ProgrammeBatch::getId).collect(Collectors.toSet());
+        List<ProgrammeBatchCourse> offerings = batchIds.isEmpty() ? Collections.emptyList() : programmeBatchCourseRepository.findByProgrammeBatchIdIn(batchIds);
+        List<MasterCourse> courses = progIds.isEmpty() ? Collections.emptyList() : masterCourseRepository.findByMasterProgrammeIdIn(new ArrayList<>(progIds));
 
         long allocationsPending = progIds.isEmpty() ? 0 : approvalRequestRepository.findAll().stream()
                 .filter(a -> a.getType() == ApprovalType.COURSE_ALLOCATION && progIds.contains(a.getProgrammeId()) && a.getStatus() == ApprovalStatus.PENDING)
@@ -208,7 +208,7 @@ public class DashboardController {
         stats.put("pendingApprovalsCount", pendingApprovalsCount);
         stats.put("pendingBreakdown", pendingBreakdown);
 
-        Batch activeBatch = activeBatches.isEmpty() ? null : activeBatches.get(0);
+        ProgrammeBatch activeProgrammeBatch = activeBatches.isEmpty() ? null : activeBatches.get(0);
 
         Map<String, Boolean> workflowProgress = new LinkedHashMap<>();
         workflowProgress.put("1", !progs.isEmpty());
@@ -220,7 +220,7 @@ public class DashboardController {
         data.put("department", primaryDept);
         data.put("departments", matchedDepts);
         data.put("setupProgress", progress);
-        data.put("activeBatch", activeBatch != null ? activeBatch.getName() : "");
+        data.put("activeBatch", activeProgrammeBatch != null ? activeProgrammeBatch.getName() : "");
         data.put("workflowProgress", workflowProgress);
         data.put("statistics", stats);
 
@@ -237,7 +237,7 @@ public class DashboardController {
         if (scope.isProgrammeCoordinator()) {
             if (programmeId != null && !programmeId.isBlank()) {
                 if (!programmeId.trim().equals(scope.getRequiredProgrammeId())) {
-                    throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Programme is outside your assigned scope.");
+                    throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: MasterProgramme is outside your assigned scope.");
                 }
             }
             targetProgId = scope.getRequiredProgrammeId();
@@ -262,49 +262,49 @@ public class DashboardController {
         }
 
         if (targetProgId == null || targetProgId.isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Programme scope cannot be determined for Programme Coordinator dashboard.");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "MasterProgramme scope cannot be determined for MasterProgramme Coordinator dashboard.");
         }
 
         final String finalProgId = targetProgId;
-        Programme prog = programmeRepository.findById(finalProgId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Programme not found: " + finalProgId));
+        MasterProgramme prog = masterProgrammeRepository.findById(finalProgId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "MasterProgramme not found: " + finalProgId));
 
         if (scope.isProgrammeCoordinator()) {
             if (scope.hasDepartmentScope() && prog.getDepartmentId() != null && !prog.getDepartmentId().equals(scope.getRequiredDepartmentId())) {
-                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Programme does not belong to your assigned department.");
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: MasterProgramme does not belong to your assigned department.");
             }
             if (scope.hasSchoolScope() && prog.getDepartmentId() != null) {
                 Department dept = departmentRepository.findById(prog.getDepartmentId()).orElse(null);
                 if (dept != null && dept.getSchoolId() != null && !dept.getSchoolId().equals(scope.getRequiredSchoolId())) {
-                    throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Programme does not belong to your assigned school.");
+                    throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: MasterProgramme does not belong to your assigned school.");
                 }
             }
         } else if (scope.isHod()) {
             if (prog.getDepartmentId() != null && !prog.getDepartmentId().equals(scope.getRequiredDepartmentId())) {
-                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Programme does not belong to your assigned department.");
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: MasterProgramme does not belong to your assigned department.");
             }
         } else if (scope.isDirector()) {
             if (prog.getDepartmentId() != null) {
                 Department dept = departmentRepository.findById(prog.getDepartmentId()).orElse(null);
                 if (dept != null && dept.getSchoolId() != null && !dept.getSchoolId().equals(scope.getRequiredSchoolId())) {
-                    throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Programme does not belong to your assigned school.");
+                    throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: MasterProgramme does not belong to your assigned school.");
                 }
             }
         }
 
-        List<Batch> batches = batchRepository.findByProgrammeId(finalProgId);
-        Set<String> batchIds = batches.stream().map(Batch::getId).collect(Collectors.toSet());
-        List<CourseOffering> offerings = batchIds.isEmpty() ? Collections.emptyList() : courseOfferingRepository.findByBatchIdIn(batchIds);
-        List<Course> courses = courseRepository.findByProgrammeId(finalProgId);
+        List<ProgrammeBatch> batches = programmeBatchRepository.findByMasterProgrammeId(finalProgId);
+        Set<String> batchIds = batches.stream().map(ProgrammeBatch::getId).collect(Collectors.toSet());
+        List<ProgrammeBatchCourse> offerings = batchIds.isEmpty() ? Collections.emptyList() : programmeBatchCourseRepository.findByProgrammeBatchIdIn(batchIds);
+        List<MasterCourse> courses = masterCourseRepository.findByMasterProgrammeId(finalProgId);
 
-        List<String> offeringIds = offerings.stream().map(CourseOffering::getId).collect(Collectors.toList());
+        List<String> offeringIds = offerings.stream().map(ProgrammeBatchCourse::getId).collect(Collectors.toList());
         long configPending = offeringIds.isEmpty() ? 0 : configRepository.findAll().stream()
-                .filter(c -> offeringIds.contains(c.getCourseOfferingId()) && (c.getStatus() == AttainmentConfigStatus.DRAFT || c.getStatus() == null))
+                .filter(c -> offeringIds.contains(c.getProgrammeBatchCourseId()) && (c.getStatus() == AttainmentConfigStatus.DRAFT || c.getStatus() == null))
                 .count();
         long coTargetsPending = offeringIds.isEmpty() ? 0 : approvalRequestRepository.findAll().stream()
-                .filter(a -> (a.getType() == ApprovalType.CO_DEFINITION || a.getType() == ApprovalType.CO_TARGETS) && offeringIds.contains(a.getCourseOfferingId()) && a.getStatus() == ApprovalStatus.PENDING)
+                .filter(a -> (a.getType() == ApprovalType.CO_DEFINITION || a.getType() == ApprovalType.CO_TARGETS) && offeringIds.contains(a.getProgrammeBatchCourseId()) && a.getStatus() == ApprovalStatus.PENDING)
                 .count();
-        long courseAtrPending = offeringIds.isEmpty() ? 0 : courseAtrRepository.findByCourseOfferingIdIn(offeringIds).stream()
+        long courseAtrPending = offeringIds.isEmpty() ? 0 : courseAtrRepository.findByProgrammeBatchCourseIdIn(offeringIds).stream()
                 .filter(a -> a.getStatus() == CourseAtrStatus.SUBMITTED_FOR_VERIFICATION)
                 .count();
         long pendingVerifications = configPending + coTargetsPending + courseAtrPending;
@@ -327,7 +327,7 @@ public class DashboardController {
         stats.put("pendingVerifications", pendingVerifications);
         stats.put("pendingBreakdown", pendingBreakdown);
 
-        Batch activeBatch = batches.stream().filter(b -> "ACTIVE".equalsIgnoreCase(b.getStatus())).findFirst().orElse(batches.isEmpty() ? null : batches.get(0));
+        ProgrammeBatch activeProgrammeBatch = batches.stream().filter(b -> "ACTIVE".equalsIgnoreCase(b.getStatus())).findFirst().orElse(batches.isEmpty() ? null : batches.get(0));
 
         Map<String, Boolean> workflowProgress = new LinkedHashMap<>();
         workflowProgress.put("1", !courses.isEmpty());
@@ -340,7 +340,7 @@ public class DashboardController {
         data.put("programme", prog);
         data.put("setupProgress", progress);
         data.put("batches", batches);
-        data.put("activeBatch", activeBatch != null ? activeBatch.getName() : "");
+        data.put("activeBatch", activeProgrammeBatch != null ? activeProgrammeBatch.getName() : "");
         data.put("workflowProgress", workflowProgress);
         data.put("statistics", stats);
 
@@ -355,49 +355,49 @@ public class DashboardController {
         User user = reportAccessService.getAuthenticatedUser(principal);
         CurrentUserScope scope = currentUserScopeService.getCurrentUserScope(principal);
 
-        List<CourseOffering> allOfferings = courseOfferingRepository.findAll();
-        List<CourseOffering> assignedOfferings = allOfferings.stream()
+        List<ProgrammeBatchCourse> allOfferings = programmeBatchCourseRepository.findAll();
+        List<ProgrammeBatchCourse> assignedOfferings = allOfferings.stream()
                 .filter(o -> user != null && o.getCourseCoordinatorId() != null && java.util.Objects.equals(o.getCourseCoordinatorId(), user.getId()))
                 .collect(Collectors.toList());
 
-        CourseOffering targetOffering = null;
+        ProgrammeBatchCourse targetOffering = null;
         if (courseId != null && !courseId.isBlank()) {
             if (scope != null && scope.isFaculty()) {
-                boolean assignedToCourse = assignedOfferings.stream().anyMatch(o -> 
-                        (o.getCourseId() != null && o.getCourseId().equalsIgnoreCase(courseId.trim())) || 
+                boolean assignedToMasterCourse = assignedOfferings.stream().anyMatch(o -> 
+                        (o.getMasterCourseId() != null && o.getMasterCourseId().equalsIgnoreCase(courseId.trim())) || 
                         (o.getId() != null && o.getId().equalsIgnoreCase(courseId.trim())));
-                if (!assignedToCourse) {
-                    throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: You are not assigned to this Course / Course Offering.");
+                if (!assignedToMasterCourse) {
+                    throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: You are not assigned to this MasterCourse / MasterCourse Offering.");
                 }
             }
-            targetOffering = courseOfferingRepository.findByCourseId(courseId.trim()).stream()
+            targetOffering = programmeBatchCourseRepository.findByMasterCourseId(courseId.trim()).stream()
                     .filter(o -> scope == null || !scope.isFaculty() || assignedOfferings.contains(o))
                     .findFirst()
                     .orElse(null);
             if (targetOffering == null) {
-                targetOffering = courseOfferingRepository.findById(courseId.trim()).orElse(null);
+                targetOffering = programmeBatchCourseRepository.findById(courseId.trim()).orElse(null);
             }
         }
         if (targetOffering == null && !assignedOfferings.isEmpty()) {
             targetOffering = assignedOfferings.get(0);
         }
 
-        Course course = null;
+        MasterCourse course = null;
         String offeringId = targetOffering != null ? targetOffering.getId() : null;
         String targetCrsId = targetOffering != null ? targetOffering.getCourseId() : courseId;
         if (targetCrsId != null && !targetCrsId.isBlank()) {
-            course = courseRepository.findById(targetCrsId).orElse(null);
+            course = masterCourseRepository.findById(targetCrsId).orElse(null);
         }
 
-        List<CourseOutcome> cos = (offeringId != null) ? courseOutcomeRepository.findByCourseOfferingId(offeringId) : Collections.emptyList();
+        List<CourseOutcome> cos = (offeringId != null) ? courseOutcomeRepository.findByProgrammeBatchCourseId(offeringId) : Collections.emptyList();
         List<String> coIds = cos.stream().map(CourseOutcome::getId).toList();
 
         boolean outcomesDone = !cos.isEmpty();
         boolean targetsDone = outcomesDone && cos.stream().allMatch(c -> c.getTargetLevel() != null);
         boolean mappingDone = !coIds.isEmpty() && (!coPoMappingRepository.findByCourseOutcomeIdIn(coIds).isEmpty() || !coPsoMappingRepository.findByCourseOutcomeIdIn(coIds).isEmpty());
-        boolean configDone = (offeringId != null) && configRepository.findByCourseOfferingId(offeringId).isPresent();
-        boolean marksDone = (offeringId != null) && (!studentCoMarkRepository.findByCourseOfferingId(offeringId).isEmpty() || !uploadedDocumentRepository.findByCourseOfferingId(offeringId).isEmpty());
-        boolean atrDone = (offeringId != null) && !courseAtrRepository.findByCourseOfferingId(offeringId).isEmpty();
+        boolean configDone = (offeringId != null) && configRepository.findByProgrammeBatchCourseId(offeringId).isPresent();
+        boolean marksDone = (offeringId != null) && (!studentCoMarkRepository.findByProgrammeBatchCourseId(offeringId).isEmpty() || !uploadedDocumentRepository.findByProgrammeBatchCourseId(offeringId).isEmpty());
+        boolean atrDone = (offeringId != null) && !courseAtrRepository.findByProgrammeBatchCourseId(offeringId).isEmpty();
 
         Map<String, Boolean> workflowProgress = new LinkedHashMap<>();
         workflowProgress.put("/outcomes", outcomesDone);
@@ -408,11 +408,11 @@ public class DashboardController {
         workflowProgress.put("/course-atr", atrDone);
 
         boolean isConfigRevision = (offeringId != null) && approvalRequestRepository.findAll().stream()
-                .anyMatch(a -> a.getType() == ApprovalType.ATTAINMENT_CONFIGURATION && offeringId.equalsIgnoreCase(a.getCourseOfferingId()) && a.getStatus() == ApprovalStatus.NEEDS_REVISION);
+                .anyMatch(a -> a.getType() == ApprovalType.ATTAINMENT_CONFIGURATION && offeringId.equalsIgnoreCase(a.getProgrammeBatchCourseId()) && a.getStatus() == ApprovalStatus.REVISION_REQUESTED);
         boolean isCoRevision = (offeringId != null) && approvalRequestRepository.findAll().stream()
-                .anyMatch(a -> (a.getType() == ApprovalType.CO_DEFINITION || a.getType() == ApprovalType.CO_TARGETS) && offeringId.equalsIgnoreCase(a.getCourseOfferingId()) && a.getStatus() == ApprovalStatus.NEEDS_REVISION);
-        boolean isAtrRevision = (offeringId != null) && courseAtrRepository.findByCourseOfferingId(offeringId).stream()
-                .anyMatch(a -> a.getStatus() == CourseAtrStatus.NEEDS_REVISION);
+                .anyMatch(a -> (a.getType() == ApprovalType.CO_DEFINITION || a.getType() == ApprovalType.CO_TARGETS) && offeringId.equalsIgnoreCase(a.getProgrammeBatchCourseId()) && a.getStatus() == ApprovalStatus.REVISION_REQUESTED);
+        boolean isAtrRevision = (offeringId != null) && courseAtrRepository.findByProgrammeBatchCourseId(offeringId).stream()
+                .anyMatch(a -> a.getStatus() == CourseAtrStatus.REVISION_REQUESTED);
         boolean hasRevision = isConfigRevision || isCoRevision || isAtrRevision;
 
         Map<String, Boolean> revisions = new LinkedHashMap<>();
@@ -422,13 +422,13 @@ public class DashboardController {
         revisions.put("isAtrRevision", isAtrRevision);
 
         Map<String, Object> stats = new LinkedHashMap<>();
-        stats.put("assignedCourseOfferingsCount", assignedOfferings.size());
+        stats.put("assignedProgrammeBatchCoursesCount", assignedOfferings.size());
 
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("course", course);
         data.put("workflowProgress", workflowProgress);
         data.put("revisions", revisions);
-        data.put("assignedCourseOfferings", assignedOfferings);
+        data.put("assignedProgrammeBatchCourses", assignedOfferings);
         data.put("statistics", stats);
 
         return ResponseEntity.ok(ApiResponse.<Map<String, Object>>builder().success(true).data(data).build());

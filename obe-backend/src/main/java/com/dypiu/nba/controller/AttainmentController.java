@@ -21,7 +21,7 @@ public class AttainmentController {
     private final com.dypiu.nba.service.AttainmentReportExportService exportService;
     private final com.dypiu.nba.repository.UploadedDocumentRepository uploadedDocumentRepository;
     private final com.dypiu.nba.service.ReportAccessService reportAccessService;
-    private final com.dypiu.nba.repository.CourseOfferingRepository courseOfferingRepository;
+    private final com.dypiu.nba.repository.ProgrammeBatchCourseRepository programmeBatchCourseRepository;
 
     @GetMapping({"/config/{courseId}", "/configs/{courseId}"})
     public ResponseEntity<ApiResponse<AttainmentConfiguration>> getConfig(
@@ -29,7 +29,7 @@ public class AttainmentController {
             @RequestParam(required = false) String batchId,
             java.security.Principal principal) {
         com.dypiu.nba.entity.User user = reportAccessService.getAuthenticatedUser(principal);
-        if (courseOfferingRepository.existsById(courseId)) {
+        if (programmeBatchCourseRepository.existsById(courseId)) {
             reportAccessService.validateCourseOfferingAccess(user, courseId);
         } else {
             reportAccessService.validateCourseAccess(user, courseId);
@@ -47,7 +47,7 @@ public class AttainmentController {
             @RequestParam(required = false) String batchId,
             java.security.Principal principal) {
         com.dypiu.nba.entity.User user = reportAccessService.getAuthenticatedUser(principal);
-        if (courseOfferingRepository.existsById(courseId)) {
+        if (programmeBatchCourseRepository.existsById(courseId)) {
             reportAccessService.validateCourseOfferingAccess(user, courseId);
         } else {
             reportAccessService.validateCourseAccess(user, courseId);
@@ -65,7 +65,7 @@ public class AttainmentController {
             @RequestParam(required = false) String batchId,
             java.security.Principal principal) {
         com.dypiu.nba.entity.User user = reportAccessService.getAuthenticatedUser(principal);
-        if (courseOfferingRepository.existsById(courseId)) {
+        if (programmeBatchCourseRepository.existsById(courseId)) {
             reportAccessService.validateCourseOfferingAccess(user, courseId);
         } else {
             reportAccessService.validateCourseAccess(user, courseId);
@@ -83,7 +83,7 @@ public class AttainmentController {
             @RequestParam(required = false) String batchId,
             java.security.Principal principal) {
         com.dypiu.nba.entity.User user = reportAccessService.getAuthenticatedUser(principal);
-        if (courseOfferingRepository.existsById(courseId)) {
+        if (programmeBatchCourseRepository.existsById(courseId)) {
             reportAccessService.validateCourseOfferingAccess(user, courseId);
         } else {
             reportAccessService.validateCourseAccess(user, courseId);
@@ -100,7 +100,7 @@ public class AttainmentController {
             @RequestParam(required = false) String batchId,
             java.security.Principal principal) {
         com.dypiu.nba.entity.User user = reportAccessService.getAuthenticatedUser(principal);
-        if (courseOfferingRepository.existsById(courseId)) {
+        if (programmeBatchCourseRepository.existsById(courseId)) {
             reportAccessService.validateCourseOfferingAccess(user, courseId);
         } else {
             reportAccessService.validateCourseAccess(user, courseId);
@@ -137,7 +137,7 @@ public class AttainmentController {
             throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST, "Course or Course Offering ID is required.");
         }
         com.dypiu.nba.entity.User user = reportAccessService.getAuthenticatedUser(principal);
-        if (courseOfferingRepository.existsById(targetId)) {
+        if (programmeBatchCourseRepository.existsById(targetId)) {
             reportAccessService.validateCourseOfferingAccess(user, targetId);
         } else {
             reportAccessService.validateCourseAccess(user, targetId);
@@ -171,7 +171,7 @@ public class AttainmentController {
             throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST, "Course or Course Offering ID is required.");
         }
         com.dypiu.nba.entity.User user = reportAccessService.getAuthenticatedUser(principal);
-        if (courseOfferingRepository.existsById(targetId)) {
+        if (programmeBatchCourseRepository.existsById(targetId)) {
             reportAccessService.validateCourseOfferingAccess(user, targetId);
         } else {
             reportAccessService.validateCourseAccess(user, targetId);
@@ -406,7 +406,7 @@ public class AttainmentController {
         } catch (Exception ignored) {}
 
         com.dypiu.nba.entity.UploadedDocument doc = (dt != null)
-                ? uploadedDocumentRepository.findFirstByCourseOfferingIdAndDocumentTypeOrderByUploadedAtDesc(offeringId, dt).orElse(null)
+                ? uploadedDocumentRepository.findFirstByProgrammeBatchCourseIdAndDocumentTypeOrderByUploadedAtDesc(offeringId, dt).orElse(null)
                 : null;
 
         if (doc == null || doc.getSavedPath() == null) {
@@ -438,7 +438,7 @@ public class AttainmentController {
             @RequestParam(value = "batchId", required = false) String batchId,
             java.security.Principal principal) {
         com.dypiu.nba.entity.User user = reportAccessService.getAuthenticatedUser(principal);
-        if (courseOfferingRepository.existsById(courseId)) {
+        if (programmeBatchCourseRepository.existsById(courseId)) {
             reportAccessService.validateCourseOfferingAccess(user, courseId);
         } else {
             reportAccessService.validateCourseAccess(user, courseId);
@@ -458,7 +458,7 @@ public class AttainmentController {
             @RequestParam(value = "batchId", required = false) String batchId,
             java.security.Principal principal) {
         com.dypiu.nba.entity.User user = reportAccessService.getAuthenticatedUser(principal);
-        if (courseOfferingRepository.existsById(courseId)) {
+        if (programmeBatchCourseRepository.existsById(courseId)) {
             reportAccessService.validateCourseOfferingAccess(user, courseId);
         } else {
             reportAccessService.validateCourseAccess(user, courseId);
