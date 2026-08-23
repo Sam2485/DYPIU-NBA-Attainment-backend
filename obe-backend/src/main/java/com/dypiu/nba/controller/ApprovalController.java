@@ -18,16 +18,27 @@ public class ApprovalController {
 
     private final ApprovalService approvalService;
 
+    public ResponseEntity<ApiResponse<List<ApprovalRequest>>> getApprovals(
+            String role,
+            String status,
+            String type,
+            String schoolId,
+            String programmeId) {
+        return getApprovals(role, status, type, schoolId, null, programmeId);
+    }
+
     @GetMapping({"", "/"})
     public ResponseEntity<ApiResponse<List<ApprovalRequest>>> getApprovals(
             @RequestParam(required = false) String role,
             @RequestParam(required = false) String status,
             @RequestParam(required = false) String type,
             @RequestParam(required = false) String schoolId,
+            @RequestParam(required = false) String masterProgrammeId,
             @RequestParam(required = false) String programmeId) {
+        String effectiveProgId = (masterProgrammeId != null && !masterProgrammeId.isBlank()) ? masterProgrammeId : programmeId;
         return ResponseEntity.ok(ApiResponse.<List<ApprovalRequest>>builder()
                 .success(true)
-                .data(approvalService.getApprovals(role, status, type, schoolId, programmeId))
+                .data(approvalService.getApprovals(role, status, type, schoolId, effectiveProgId))
                 .build());
     }
 
@@ -35,10 +46,12 @@ public class ApprovalController {
     public ResponseEntity<ApiResponse<List<ApprovalRequest>>> getPendingApprovals(
             @RequestParam(required = false) String role,
             @RequestParam(required = false) String schoolId,
+            @RequestParam(required = false) String masterProgrammeId,
             @RequestParam(required = false) String programmeId) {
+        String effectiveProgId = (masterProgrammeId != null && !masterProgrammeId.isBlank()) ? masterProgrammeId : programmeId;
         return ResponseEntity.ok(ApiResponse.<List<ApprovalRequest>>builder()
                 .success(true)
-                .data(approvalService.getPendingApprovals(role, schoolId, programmeId))
+                .data(approvalService.getPendingApprovals(role, schoolId, effectiveProgId))
                 .build());
     }
 
@@ -67,10 +80,13 @@ public class ApprovalController {
     }
 
     @GetMapping("/hod")
-    public ResponseEntity<ApiResponse<List<ApprovalRequest>>> getHodApprovals(@RequestParam(required = false) String programmeId) {
+    public ResponseEntity<ApiResponse<List<ApprovalRequest>>> getHodApprovals(
+            @RequestParam(required = false) String masterProgrammeId,
+            @RequestParam(required = false) String programmeId) {
+        String effectiveProgId = (masterProgrammeId != null && !masterProgrammeId.isBlank()) ? masterProgrammeId : programmeId;
         return ResponseEntity.ok(ApiResponse.<List<ApprovalRequest>>builder()
                 .success(true)
-                .data(approvalService.getHodApprovals(programmeId))
+                .data(approvalService.getHodApprovals(effectiveProgId))
                 .build());
     }
 

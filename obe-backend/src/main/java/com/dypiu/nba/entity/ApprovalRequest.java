@@ -14,6 +14,7 @@ import java.time.ZonedDateTime;
 public class ApprovalRequest {
 
     @Id
+    @com.fasterxml.jackson.annotation.JsonProperty("approvalRequestId")
     private String id;
 
     @Enumerated(EnumType.STRING)

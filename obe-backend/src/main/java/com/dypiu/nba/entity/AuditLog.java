@@ -18,6 +18,7 @@ public class AuditLog {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @com.fasterxml.jackson.annotation.JsonProperty("auditLogId")
     private Long id;
 
     @Column(name = "actor_id", length = 100)

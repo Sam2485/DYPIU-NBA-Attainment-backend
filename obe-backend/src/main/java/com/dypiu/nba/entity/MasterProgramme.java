@@ -3,6 +3,8 @@ package com.dypiu.nba.entity;
 import jakarta.persistence.*;
 import lombok.*;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 import java.time.ZonedDateTime;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -26,6 +28,7 @@ public class MasterProgramme {
     public static final Map<String, String[]> COORDINATOR_CACHE = new ConcurrentHashMap<>();
 
     @Id
+    @JsonProperty("masterProgrammeId")
     private String id;
 
     @Column(name = "department_id", nullable = false)

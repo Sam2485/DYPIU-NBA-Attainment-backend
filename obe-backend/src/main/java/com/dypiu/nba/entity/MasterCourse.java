@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.ZonedDateTime;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.List;
 
 @Entity
@@ -24,6 +25,7 @@ import java.util.List;
 public class MasterCourse {
 
     @Id
+    @JsonProperty("masterCourseId")
     private String id;
 
     @Column(nullable = false, length = 50)
