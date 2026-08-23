@@ -11,6 +11,12 @@ import java.util.List;
 @AllArgsConstructor
 @Builder
 public class CourseCoordinatorSummaryDto {
+    private String schoolName;
+    private String departmentName;
+    private String programmeName;
+    private String batchName;
+    private String courseOfferingId;
+    private String programmeBatchCourseId;
     private String coordinatorEmail;
     private String coordinatorName;
     private String courseCode;

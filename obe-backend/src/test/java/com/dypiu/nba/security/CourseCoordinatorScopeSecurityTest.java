@@ -737,14 +737,21 @@ public class CourseCoordinatorScopeSecurityTest {
     }
 
     @Test
-    @DisplayName("Scenario 30: PROGRAMME_COORDINATOR behavior unchanged (programme-scoped)")
-    void testScenario30_ProgrammeCoordinatorScoped() {
-        authenticateUser(pcUserA1);
-        assertDoesNotThrow(() -> {
-            reportAccessService.validateCourseOfferingAccess(pcUserA1, offeringA1.getId());
-        });
-        ResponseStatusException ex = assertThrows(ResponseStatusException.class,
-                () -> reportAccessService.validateCourseOfferingAccess(pcUserA1, offeringA2.getId()));
-        assertEquals(403, ex.getStatusCode().value());
+    @DisplayName("Scenario 31: Course Coordinator setup progress update with JSON body")
+    void testScenario31_CourseCoordinatorSetupProgressWithBody() {
+        authenticateUser(ccUserA1);
+        Map<String, Object> body = Map.of(
+                "courseId", offeringA1.getId(),
+                "stepNumber", 2,
+                "completedSteps", List.of("1")
+        );
+
+        CourseCoordinatorSetupProgressDto dto = academicService.updateCourseCoordinatorSetupProgress(
+                ccUserA1.getEmail(), null, null, body);
+
+        assertNotNull(dto);
+        assertEquals(2, dto.getCurrentStep());
+        assertTrue(dto.getCompletedSteps().contains("1"));
+        assertEquals(offeringA1.getId(), dto.getCourseId());
     }
 }

@@ -43,6 +43,12 @@ public class ProgrammeBatchCourse {
     @Column(name = "assigned_faculty", columnDefinition = "TEXT")
     private String assignedFaculty;
 
+    @Column(name = "course_code_override", length = 50)
+    private String courseCodeOverride;
+
+    @Column(name = "course_name_override", length = 255)
+    private String courseNameOverride;
+
     @Builder.Default
     @Column(nullable = false, length = 30)
     private String status = "ACTIVE";
@@ -95,5 +101,19 @@ public class ProgrammeBatchCourse {
 
     public void setBatchId(String batchId) {
         this.programmeBatchId = batchId;
+    }
+
+    public String getEffectiveCourseCode(MasterCourse masterCourse) {
+        if (courseCodeOverride != null && !courseCodeOverride.isBlank()) {
+            return courseCodeOverride;
+        }
+        return masterCourse != null ? masterCourse.getCode() : "";
+    }
+
+    public String getEffectiveCourseName(MasterCourse masterCourse) {
+        if (courseNameOverride != null && !courseNameOverride.isBlank()) {
+            return courseNameOverride;
+        }
+        return masterCourse != null ? masterCourse.getName() : "";
     }
 }

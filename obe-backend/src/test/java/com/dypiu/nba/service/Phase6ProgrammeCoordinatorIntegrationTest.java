@@ -50,6 +50,12 @@ public class Phase6ProgrammeCoordinatorIntegrationTest {
     private ProgrammeSpecificOutcomeRepository programmeSpecificOutcomeRepository;
 
     @Autowired
+    private PoCompetencyRepository poCompetencyRepository;
+
+    @Autowired
+    private PsoCompetencyRepository psoCompetencyRepository;
+
+    @Autowired
     private ApprovalRequestRepository approvalRequestRepository;
 
     private String progId1;
@@ -197,17 +203,32 @@ public class Phase6ProgrammeCoordinatorIntegrationTest {
     @DisplayName("TEST D: Step 2 PO/PSO Dynamic Dimension & Target Benchmarks Persistence")
     void testStep2TargetBenchmarksPersistence() {
         // Create 3 POs and 2 PSOs dynamically
-        programmeOutcomeRepository.save(ProgrammeOutcome.builder().id("po-1-" + UUID.randomUUID().toString().substring(0, 4)).programmeBatchId(batchId1).code("PO1").statement("PO1 Stmt").build());
+        ProgrammeOutcome savedPo1 = programmeOutcomeRepository.save(ProgrammeOutcome.builder().id("po-1-" + UUID.randomUUID().toString().substring(0, 4)).programmeBatchId(batchId1).code("PO1").statement("PO1 Stmt").build());
         programmeOutcomeRepository.save(ProgrammeOutcome.builder().id("po-2-" + UUID.randomUUID().toString().substring(0, 4)).programmeBatchId(batchId1).code("PO2").statement("PO2 Stmt").build());
         programmeOutcomeRepository.save(ProgrammeOutcome.builder().id("po-3-" + UUID.randomUUID().toString().substring(0, 4)).programmeBatchId(batchId1).code("PO3").statement("PO3 Stmt").build());
-        programmeSpecificOutcomeRepository.save(ProgrammeSpecificOutcome.builder().id("pso-1-" + UUID.randomUUID().toString().substring(0, 4)).programmeBatchId(batchId1).code("PSO1").statement("PSO1 Stmt").build());
+        ProgrammeSpecificOutcome savedPso1 = programmeSpecificOutcomeRepository.save(ProgrammeSpecificOutcome.builder().id("pso-1-" + UUID.randomUUID().toString().substring(0, 4)).programmeBatchId(batchId1).code("PSO1").statement("PSO1 Stmt").build());
         programmeSpecificOutcomeRepository.save(ProgrammeSpecificOutcome.builder().id("pso-2-" + UUID.randomUUID().toString().substring(0, 4)).programmeBatchId(batchId1).code("PSO2").statement("PSO2 Stmt").build());
 
+        // Add competencies
+        poCompetencyRepository.save(PoCompetency.builder().id("pocomp-1").poId(savedPo1.getId()).code("PO1.1").statement("Competency 1.1").build());
+        psoCompetencyRepository.save(PsoCompetency.builder().id("psocomp-1").psoId(savedPso1.getId()).code("PSO1.1").statement("PSO Competency 1.1").build());
+
         Map<String, Object> outcomes = academicService.getConsolidatedOutcomes(progId1, batchId1);
-        List<?> pos = (List<?>) outcomes.get("pos");
-        List<?> psos = (List<?>) outcomes.get("psos");
+        @SuppressWarnings("unchecked")
+        List<ProgrammeOutcome> pos = (List<ProgrammeOutcome>) outcomes.get("pos");
+        @SuppressWarnings("unchecked")
+        List<ProgrammeSpecificOutcome> psos = (List<ProgrammeSpecificOutcome>) outcomes.get("psos");
         assertEquals(3, pos.size());
         assertEquals(2, psos.size());
+
+        // Verify competencies are populated in consolidated outcomes
+        assertNotNull(pos.get(0).getCompetencies());
+        assertEquals(1, pos.get(0).getCompetencies().size());
+        assertEquals("PO1.1", pos.get(0).getCompetencies().get(0).getCode());
+
+        assertNotNull(psos.get(0).getCompetencies());
+        assertEquals(1, psos.get(0).getCompetencies().size());
+        assertEquals("PSO1.1", psos.get(0).getCompetencies().get(0).getCode());
 
         // Save targets via OutcomeService
         Map<String, BigDecimal> poTargets = Map.of("PO1", new BigDecimal("2.20"), "PO2", new BigDecimal("2.60"), "PO3", new BigDecimal("2.80"));
@@ -228,7 +249,67 @@ public class Phase6ProgrammeCoordinatorIntegrationTest {
     }
 
     @Test
-    @DisplayName("TEST E: Complete Workflow Transition")
+    @DisplayName("TEST E: Save Consolidated Outcomes with Competencies via Payload")
+    void testSaveConsolidatedOutcomesWithCompetencies() {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("programmeId", progId1);
+        payload.put("batchId", batchId1);
+
+        Map<String, Object> po1 = new LinkedHashMap<>();
+        po1.put("code", "PO1");
+        po1.put("statement", "Engineering knowledge statement");
+        po1.put("target", 2.8);
+        po1.put("competencies", List.of(
+                Map.of("code", "PO1.1", "statement", "Mathematics application"),
+                Map.of("code", "PO1.2", "statement", "Computing principles")
+        ));
+
+        Map<String, Object> pso1 = new LinkedHashMap<>();
+        pso1.put("code", "PSO1");
+        pso1.put("statement", "Software systems engineering");
+        pso1.put("target", 2.6);
+        pso1.put("competencies", List.of(
+                Map.of("code", "PSO1.1", "statement", "Scalable backend design")
+        ));
+
+        Map<String, Object> peo1 = new LinkedHashMap<>();
+        peo1.put("code", "PEO1");
+        peo1.put("statement", "Industry leadership");
+
+        payload.put("pos", List.of(po1));
+        payload.put("psos", List.of(pso1));
+        payload.put("peos", List.of(peo1));
+
+        Map<String, Object> result = academicService.saveConsolidatedOutcomes(payload);
+        assertNotNull(result);
+
+        Map<String, Object> savedData = academicService.getConsolidatedOutcomes(progId1, batchId1);
+        @SuppressWarnings("unchecked")
+        List<ProgrammeOutcome> pos = (List<ProgrammeOutcome>) savedData.get("pos");
+        @SuppressWarnings("unchecked")
+        List<ProgrammeSpecificOutcome> psos = (List<ProgrammeSpecificOutcome>) savedData.get("psos");
+        @SuppressWarnings("unchecked")
+        List<PeoOutcome> peos = (List<PeoOutcome>) savedData.get("peos");
+
+        assertEquals(1, pos.size());
+        assertEquals("PO1", pos.get(0).getCode());
+        assertNotNull(pos.get(0).getCompetencies());
+        assertEquals(2, pos.get(0).getCompetencies().size());
+        assertEquals("PO1.1", pos.get(0).getCompetencies().get(0).getCode());
+        assertEquals("PO1.2", pos.get(0).getCompetencies().get(1).getCode());
+
+        assertEquals(1, psos.size());
+        assertEquals("PSO1", psos.get(0).getCode());
+        assertNotNull(psos.get(0).getCompetencies());
+        assertEquals(1, psos.get(0).getCompetencies().size());
+        assertEquals("PSO1.1", psos.get(0).getCompetencies().get(0).getCode());
+
+        assertEquals(1, peos.size());
+        assertEquals("PEO1", peos.get(0).getCode());
+    }
+
+    @Test
+    @DisplayName("TEST F: Complete Workflow Transition")
     void testCompleteWorkflowTransition() {
         ProgrammeCoordinatorSetupProgressDto completed = academicService.completeProgrammeCoordinatorSetup(coordinatorEmail, progId1, batchId1);
         assertNotNull(completed);

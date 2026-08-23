@@ -13,11 +13,14 @@ import com.dypiu.nba.dto.UserDto;
 import com.dypiu.nba.dto.ApiResponse;
 import com.dypiu.nba.entity.*;
 import com.dypiu.nba.service.AcademicService;
+import com.dypiu.nba.service.MappingService;
+import com.dypiu.nba.service.BatchLifecycleService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -27,6 +30,8 @@ import java.util.Map;
 public class AcademicController {
 
     private final AcademicService academicService;
+    private final MappingService mappingService;
+    private final BatchLifecycleService batchLifecycleService;
     private final com.dypiu.nba.service.OutcomeService outcomeService;
 
 
@@ -278,10 +283,15 @@ public class AcademicController {
 
     @GetMapping("/course-coordinator/summary")
     public ResponseEntity<ApiResponse<CourseCoordinatorSummaryDto>> getCourseCoordinatorSummary(
-            @RequestParam(required = false) String coordinatorEmail) {
+            @RequestParam(required = false) String coordinatorEmail,
+            @RequestParam(required = false) String courseId,
+            @RequestParam(required = false) String offeringId,
+            @RequestParam(required = false) String courseOfferingId,
+            @RequestParam(required = false) String programmeBatchCourseId) {
+        String targetCourseId = courseId != null ? courseId : (offeringId != null ? offeringId : (courseOfferingId != null ? courseOfferingId : programmeBatchCourseId));
         return ResponseEntity.ok(ApiResponse.<CourseCoordinatorSummaryDto>builder()
                 .success(true)
-                .data(academicService.getCourseCoordinatorSummary(coordinatorEmail))
+                .data(academicService.getCourseCoordinatorSummary(coordinatorEmail, targetCourseId))
                 .build());
     }
 
@@ -295,26 +305,49 @@ public class AcademicController {
                 .build());
     }
 
-    @PostMapping("/course-coordinator/setup-progress")
+    @RequestMapping(value = {"/course-coordinator/setup-progress", "/course-coordinator/setup"}, method = {RequestMethod.POST, RequestMethod.PUT})
     public ResponseEntity<ApiResponse<CourseCoordinatorSetupProgressDto>> updateCourseCoordinatorSetupProgress(
             @RequestParam(required = false) String coordinatorEmail,
             @RequestParam(required = false) String courseId,
-            @RequestParam(required = false, defaultValue = "1") Integer currentStep) {
+            @RequestParam(required = false) String offeringId,
+            @RequestParam(required = false) String courseOfferingId,
+            @RequestParam(required = false) String programmeBatchCourseId,
+            @RequestParam(required = false) Integer currentStep,
+            @RequestParam(required = false) Integer stepNumber,
+            @RequestParam(required = false) Integer step,
+            @RequestBody(required = false) Map<String, Object> body,
+            java.security.Principal principal) {
+        String targetCourseId = courseId != null ? courseId : (offeringId != null ? offeringId : (courseOfferingId != null ? courseOfferingId : programmeBatchCourseId));
+        Integer targetStep = currentStep != null ? currentStep : (stepNumber != null ? stepNumber : step);
+        String targetEmail = (coordinatorEmail != null && !coordinatorEmail.isBlank())
+                ? coordinatorEmail
+                : (principal != null ? principal.getName() : null);
+
         return ResponseEntity.ok(ApiResponse.<CourseCoordinatorSetupProgressDto>builder()
                 .success(true)
-                .message("MasterCourse Coordinator setup progress updated successfully")
-                .data(academicService.updateCourseCoordinatorSetupProgress(coordinatorEmail, courseId, currentStep))
+                .message("Course Coordinator setup progress updated successfully")
+                .data(academicService.updateCourseCoordinatorSetupProgress(targetEmail, targetCourseId, targetStep, body))
                 .build());
     }
 
-    @PostMapping("/course-coordinator/setup-progress/complete")
+    @RequestMapping(value = {"/course-coordinator/setup-progress/complete", "/course-coordinator/complete-setup"}, method = {RequestMethod.POST, RequestMethod.PUT})
     public ResponseEntity<ApiResponse<CourseCoordinatorSetupProgressDto>> completeCourseCoordinatorSetup(
             @RequestParam(required = false) String coordinatorEmail,
-            @RequestParam(required = false) String courseId) {
+            @RequestParam(required = false) String courseId,
+            @RequestParam(required = false) String offeringId,
+            @RequestParam(required = false) String courseOfferingId,
+            @RequestParam(required = false) String programmeBatchCourseId,
+            @RequestBody(required = false) Map<String, Object> body,
+            java.security.Principal principal) {
+        String targetCourseId = courseId != null ? courseId : (offeringId != null ? offeringId : (courseOfferingId != null ? courseOfferingId : programmeBatchCourseId));
+        String targetEmail = (coordinatorEmail != null && !coordinatorEmail.isBlank())
+                ? coordinatorEmail
+                : (principal != null ? principal.getName() : null);
+
         return ResponseEntity.ok(ApiResponse.<CourseCoordinatorSetupProgressDto>builder()
                 .success(true)
-                .message("MasterCourse Coordinator setup marked as completed successfully")
-                .data(academicService.completeCourseCoordinatorSetup(coordinatorEmail, courseId))
+                .message("Course Coordinator setup marked as completed successfully")
+                .data(academicService.completeCourseCoordinatorSetup(targetEmail, targetCourseId, body))
                 .build());
     }
 
@@ -533,6 +566,40 @@ public class AcademicController {
                 .build());
     }
 
+    @PostMapping("/batches/{id}/status")
+    public ResponseEntity<ApiResponse<ProgrammeBatch>> changeBatchStatus(
+            @PathVariable String id,
+            @RequestBody java.util.Map<String, String> payload) {
+        return ResponseEntity.ok(ApiResponse.<ProgrammeBatch>builder()
+                .success(true)
+                .message("Batch status updated successfully.")
+                .data(batchLifecycleService.changeBatchStatus(id, payload.get("status"), payload.get("reason")))
+                .build());
+    }
+
+    @PostMapping("/batches/{id}/reopen")
+    public ResponseEntity<ApiResponse<ProgrammeBatch>> reopenBatch(
+            @PathVariable String id,
+            @RequestBody java.util.Map<String, String> payload) {
+        java.time.ZonedDateTime until = java.time.ZonedDateTime.parse(payload.get("editingWindowUntil"));
+        return ResponseEntity.ok(ApiResponse.<ProgrammeBatch>builder()
+                .success(true)
+                .message("Batch reopened successfully.")
+                .data(batchLifecycleService.reopenGraduatedBatch(id, until, payload.get("reason")))
+                .build());
+    }
+
+    @PostMapping("/batches/{id}/close-reopening")
+    public ResponseEntity<ApiResponse<ProgrammeBatch>> closeReopening(
+            @PathVariable String id,
+            @RequestBody java.util.Map<String, String> payload) {
+        return ResponseEntity.ok(ApiResponse.<ProgrammeBatch>builder()
+                .success(true)
+                .message("Batch reopening window closed successfully.")
+                .data(batchLifecycleService.closeReopeningWindow(id, payload.get("reason")))
+                .build());
+    }
+
     @DeleteMapping("/batches/{id}")
     public ResponseEntity<ApiResponse<Void>> deleteBatch(@PathVariable String id) {
         academicService.deleteBatch(id);
@@ -586,10 +653,13 @@ public class AcademicController {
 
     // --- MasterCourse Offerings (ProgrammeBatch Specific) ---
     @GetMapping("/course-offerings")
-    public ResponseEntity<ApiResponse<List<com.dypiu.nba.entity.ProgrammeBatchCourse>>> getProgrammeBatchCourses(@RequestParam String batchId) {
+    public ResponseEntity<ApiResponse<List<com.dypiu.nba.entity.ProgrammeBatchCourse>>> getProgrammeBatchCourses(
+            @RequestParam(required = false) String programmeBatchId,
+            @RequestParam(required = false) String batchId) {
+        String targetBatchId = (programmeBatchId != null && !programmeBatchId.isBlank()) ? programmeBatchId : batchId;
         return ResponseEntity.ok(ApiResponse.<List<com.dypiu.nba.entity.ProgrammeBatchCourse>>builder()
                 .success(true)
-                .data(academicService.getProgrammeBatchCoursesByBatch(batchId))
+                .data(academicService.getProgrammeBatchCoursesByBatch(targetBatchId))
                 .build());
     }
 
@@ -602,11 +672,22 @@ public class AcademicController {
     }
 
     @PostMapping("/course-offerings")
-    public ResponseEntity<ApiResponse<com.dypiu.nba.entity.ProgrammeBatchCourse>> saveProgrammeBatchCourse(@RequestBody com.dypiu.nba.entity.ProgrammeBatchCourse offering) {
+    public ResponseEntity<ApiResponse<com.dypiu.nba.entity.ProgrammeBatchCourse>> saveProgrammeBatchCourse(@RequestBody com.dypiu.nba.dto.CourseOfferingRequestDto requestDto) {
         return ResponseEntity.ok(ApiResponse.<com.dypiu.nba.entity.ProgrammeBatchCourse>builder()
                 .success(true)
-                .message("MasterCourse Offering saved successfully")
-                .data(academicService.saveProgrammeBatchCourse(offering))
+                .message("Course offering created successfully")
+                .data(academicService.createCourseOffering(requestDto))
+                .build());
+    }
+
+    @PutMapping("/course-offerings/{offeringId}")
+    public ResponseEntity<ApiResponse<com.dypiu.nba.entity.ProgrammeBatchCourse>> updateProgrammeBatchCourse(
+            @PathVariable String offeringId,
+            @RequestBody com.dypiu.nba.dto.CourseOfferingRequestDto requestDto) {
+        return ResponseEntity.ok(ApiResponse.<com.dypiu.nba.entity.ProgrammeBatchCourse>builder()
+                .success(true)
+                .message("Course offering updated successfully")
+                .data(academicService.updateCourseOffering(offeringId, requestDto))
                 .build());
     }
 
@@ -730,11 +811,26 @@ public class AcademicController {
     }
 
     @RequestMapping(value = "/outcomes", method = {RequestMethod.POST, RequestMethod.PUT})
-    public ResponseEntity<ApiResponse<Map<String, Object>>> saveConsolidatedOutcomes(@RequestBody Map<String, Object> body) {
+    public ResponseEntity<ApiResponse<Map<String, Object>>> saveConsolidatedOutcomes(
+            @RequestParam(required = false) String programmeId,
+            @RequestParam(required = false) String batchId,
+            @RequestBody(required = false) Map<String, Object> body) {
+        Map<String, Object> payload = (body != null) ? new LinkedHashMap<>(body) : new LinkedHashMap<>();
+        if (programmeId != null && !programmeId.isBlank() && !payload.containsKey("programmeId")) {
+            payload.put("programmeId", programmeId.trim());
+        }
+        if (batchId != null && !batchId.isBlank() && !payload.containsKey("batchId")) {
+            payload.put("batchId", batchId.trim());
+        }
+        Map<String, Object> result = academicService.saveConsolidatedOutcomes(payload);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> outcomeData = (result != null && result.containsKey("data") && result.get("data") instanceof Map<?, ?>)
+                ? (Map<String, Object>) result.get("data")
+                : result;
         return ResponseEntity.ok(ApiResponse.<Map<String, Object>>builder()
                 .success(true)
                 .message("Outcomes updated successfully.")
-                .data(academicService.saveConsolidatedOutcomes(body))
+                .data(outcomeData)
                 .build());
     }
 
