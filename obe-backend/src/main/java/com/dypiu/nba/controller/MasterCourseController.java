@@ -25,9 +25,13 @@ public class MasterCourseController {
     @GetMapping
     public ResponseEntity<ApiResponse<List<MasterCourse>>> getAllMasterCourses(
             @RequestParam(required = false) String masterProgrammeId,
-            @RequestParam(required = false) String programmeBatchId) {
-        List<MasterCourse> courses = (masterProgrammeId != null && !masterProgrammeId.isBlank())
-                ? academicService.getCoursesByProgramme(masterProgrammeId, programmeBatchId)
+            @RequestParam(required = false) String programmeId,
+            @RequestParam(required = false) String programmeBatchId,
+            @RequestParam(required = false) String batchId) {
+        String effectiveProgId = (masterProgrammeId != null && !masterProgrammeId.isBlank()) ? masterProgrammeId : programmeId;
+        String effectiveBatchId = (programmeBatchId != null && !programmeBatchId.isBlank()) ? programmeBatchId : batchId;
+        List<MasterCourse> courses = (effectiveProgId != null && !effectiveProgId.isBlank())
+                ? academicService.getCoursesByProgramme(effectiveProgId, effectiveBatchId)
                 : academicService.getAllCourses();
         return ResponseEntity.ok(ApiResponse.<List<MasterCourse>>builder()
                 .success(true)

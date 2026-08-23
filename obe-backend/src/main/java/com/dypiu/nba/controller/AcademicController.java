@@ -606,17 +606,21 @@ public class AcademicController {
         return ResponseEntity.ok(ApiResponse.<Void>builder().success(true).message("ProgrammeBatch deleted").build());
     }
 
-    @GetMapping("/courses")
+    @GetMapping({"/master-courses", "/courses"})
     public ResponseEntity<ApiResponse<List<MasterCourse>>> getCourses(
+            @RequestParam(required = false) String masterProgrammeId,
             @RequestParam(required = false) String programmeId,
+            @RequestParam(required = false) String programmeBatchId,
             @RequestParam(required = false) String batchId) {
-        List<MasterCourse> courses = programmeId != null 
-            ? academicService.getCoursesByProgramme(programmeId, batchId) 
+        String effectiveProgId = (masterProgrammeId != null && !masterProgrammeId.isBlank()) ? masterProgrammeId : programmeId;
+        String effectiveBatchId = (programmeBatchId != null && !programmeBatchId.isBlank()) ? programmeBatchId : batchId;
+        List<MasterCourse> courses = (effectiveProgId != null && !effectiveProgId.isBlank())
+            ? academicService.getCoursesByProgramme(effectiveProgId, effectiveBatchId) 
             : academicService.getAllCourses();
         return ResponseEntity.ok(ApiResponse.<List<MasterCourse>>builder().success(true).data(courses).build());
     }
 
-    @GetMapping("/courses/{id}")
+    @GetMapping({"/master-courses/{id}", "/courses/{id}"})
     public ResponseEntity<ApiResponse<MasterCourse>> getCourseById(@PathVariable String id) {
         return ResponseEntity.ok(ApiResponse.<MasterCourse>builder()
                 .success(true)
@@ -624,7 +628,7 @@ public class AcademicController {
                 .build());
     }
 
-    @PostMapping("/courses")
+    @PostMapping({"/master-courses", "/courses"})
     public ResponseEntity<ApiResponse<MasterCourse>> saveCourse(@RequestBody MasterCourse course) {
         return ResponseEntity.ok(ApiResponse.<MasterCourse>builder()
                 .success(true)
@@ -633,7 +637,7 @@ public class AcademicController {
                 .build());
     }
 
-    @PutMapping("/courses/{id}")
+    @PutMapping({"/master-courses/{id}", "/courses/{id}"})
     public ResponseEntity<ApiResponse<MasterCourse>> updateCourse(
             @PathVariable String id,
             @RequestBody MasterCourse course) {
@@ -645,7 +649,7 @@ public class AcademicController {
                 .build());
     }
 
-    @DeleteMapping("/courses/{id}")
+    @DeleteMapping({"/master-courses/{id}", "/courses/{id}"})
     public ResponseEntity<ApiResponse<Void>> deleteCourse(@PathVariable String id) {
         academicService.deleteCourse(id);
         return ResponseEntity.ok(ApiResponse.<Void>builder().success(true).message("MasterCourse deleted").build());
