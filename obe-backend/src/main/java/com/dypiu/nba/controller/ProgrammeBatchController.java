@@ -138,10 +138,13 @@ public class ProgrammeBatchController {
     public ResponseEntity<ApiResponse<Object>> getAverageMappingReport(
             @PathVariable String programmeBatchId) {
         ProgrammeBatch batch = academicService.getBatchById(programmeBatchId);
-        ProgrammeAttainmentDatasetDto dataset = calculationService.getProgrammeAttainmentDataset(batch.getMasterProgrammeId(), programmeBatchId);
+        ProgrammeBatchAttainmentReportDto report = attainmentReportService.getOrCreateProgrammeAttainmentReport(batch.getMasterProgrammeId(), programmeBatchId);
         return ResponseEntity.ok(ApiResponse.builder()
                 .success(true)
-                .data(dataset.getAverageMapping())
+                .data(java.util.Map.of(
+                        "poMappings", report.getReport1AverageMappingPO() != null ? report.getReport1AverageMappingPO() : java.util.Collections.emptyList(),
+                        "psoMappings", report.getReport1AverageMappingPSO() != null ? report.getReport1AverageMappingPSO() : java.util.Collections.emptyList()
+                ))
                 .build());
     }
 
@@ -150,10 +153,13 @@ public class ProgrammeBatchController {
     public ResponseEntity<ApiResponse<Object>> getDirectAttainmentReport(
             @PathVariable String programmeBatchId) {
         ProgrammeBatch batch = academicService.getBatchById(programmeBatchId);
-        ProgrammeAttainmentDatasetDto dataset = calculationService.getProgrammeAttainmentDataset(batch.getMasterProgrammeId(), programmeBatchId);
+        ProgrammeBatchAttainmentReportDto report = attainmentReportService.getOrCreateProgrammeAttainmentReport(batch.getMasterProgrammeId(), programmeBatchId);
         return ResponseEntity.ok(ApiResponse.builder()
                 .success(true)
-                .data(dataset.getAverageDirectAttainment())
+                .data(java.util.Map.of(
+                        "poDirectAttainment", report.getReport2DirectAttainmentPO() != null ? report.getReport2DirectAttainmentPO() : java.util.Collections.emptyList(),
+                        "psoDirectAttainment", report.getReport2DirectAttainmentPSO() != null ? report.getReport2DirectAttainmentPSO() : java.util.Collections.emptyList()
+                ))
                 .build());
     }
 
@@ -162,10 +168,13 @@ public class ProgrammeBatchController {
     public ResponseEntity<ApiResponse<Object>> getIndirectAttainmentReport(
             @PathVariable String programmeBatchId) {
         ProgrammeBatch batch = academicService.getBatchById(programmeBatchId);
-        ProgrammeAttainmentDatasetDto dataset = calculationService.getProgrammeAttainmentDataset(batch.getMasterProgrammeId(), programmeBatchId);
+        ProgrammeBatchAttainmentReportDto report = attainmentReportService.getOrCreateProgrammeAttainmentReport(batch.getMasterProgrammeId(), programmeBatchId);
         return ResponseEntity.ok(ApiResponse.builder()
                 .success(true)
-                .data(dataset.getAverageIndirectAttainment())
+                .data(java.util.Map.of(
+                        "poIndirectAttainment", report.getReport3IndirectAttainmentPO() != null ? report.getReport3IndirectAttainmentPO() : java.util.Collections.emptyList(),
+                        "psoIndirectAttainment", report.getReport3IndirectAttainmentPSO() != null ? report.getReport3IndirectAttainmentPSO() : java.util.Collections.emptyList()
+                ))
                 .build());
     }
 
@@ -174,10 +183,13 @@ public class ProgrammeBatchController {
     public ResponseEntity<ApiResponse<Object>> getOverallAttainmentReport(
             @PathVariable String programmeBatchId) {
         ProgrammeBatch batch = academicService.getBatchById(programmeBatchId);
-        ProgrammeAttainmentDatasetDto dataset = calculationService.getProgrammeAttainmentDataset(batch.getMasterProgrammeId(), programmeBatchId);
+        ProgrammeBatchAttainmentReportDto report = attainmentReportService.getOrCreateProgrammeAttainmentReport(batch.getMasterProgrammeId(), programmeBatchId);
         return ResponseEntity.ok(ApiResponse.builder()
                 .success(true)
-                .data(dataset.getOverallAttainment())
+                .data(java.util.Map.of(
+                        "poOverallAttainment", report.getReport4OverallAttainmentPO() != null ? report.getReport4OverallAttainmentPO() : java.util.Collections.emptyList(),
+                        "psoOverallAttainment", report.getReport4OverallAttainmentPSO() != null ? report.getReport4OverallAttainmentPSO() : java.util.Collections.emptyList()
+                ))
                 .build());
     }
 

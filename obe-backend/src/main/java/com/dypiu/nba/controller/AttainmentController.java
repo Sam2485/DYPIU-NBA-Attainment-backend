@@ -18,6 +18,7 @@ import java.util.Map;
 public class AttainmentController {
 
     private final AttainmentCalculationService calculationService;
+    private final com.dypiu.nba.service.AttainmentReportService attainmentReportService;
     private final com.dypiu.nba.service.AttainmentReportExportService exportService;
     private final com.dypiu.nba.repository.UploadedDocumentRepository uploadedDocumentRepository;
     private final com.dypiu.nba.service.ReportAccessService reportAccessService;
@@ -218,10 +219,13 @@ public class AttainmentController {
             java.security.Principal principal) {
         com.dypiu.nba.entity.User user = reportAccessService.getAuthenticatedUser(principal);
         reportAccessService.validateProgrammeAtrAccess(user, programmeId, batchId);
-        ProgrammeAttainmentDatasetDto dataset = calculationService.getProgrammeAttainmentDataset(programmeId, batchId);
+        ProgrammeBatchAttainmentReportDto report = attainmentReportService.getOrCreateProgrammeAttainmentReport(programmeId, batchId);
         return ResponseEntity.ok(ApiResponse.builder()
                 .success(true)
-                .data(dataset.getAverageMapping())
+                .data(java.util.Map.of(
+                        "poMappings", report.getReport1AverageMappingPO() != null ? report.getReport1AverageMappingPO() : java.util.Collections.emptyList(),
+                        "psoMappings", report.getReport1AverageMappingPSO() != null ? report.getReport1AverageMappingPSO() : java.util.Collections.emptyList()
+                ))
                 .build());
     }
 
@@ -232,10 +236,13 @@ public class AttainmentController {
             java.security.Principal principal) {
         com.dypiu.nba.entity.User user = reportAccessService.getAuthenticatedUser(principal);
         reportAccessService.validateProgrammeAtrAccess(user, programmeId, batchId);
-        ProgrammeAttainmentDatasetDto dataset = calculationService.getProgrammeAttainmentDataset(programmeId, batchId);
+        ProgrammeBatchAttainmentReportDto report = attainmentReportService.getOrCreateProgrammeAttainmentReport(programmeId, batchId);
         return ResponseEntity.ok(ApiResponse.builder()
                 .success(true)
-                .data(dataset.getAverageDirectAttainment())
+                .data(java.util.Map.of(
+                        "poDirectAttainment", report.getReport2DirectAttainmentPO() != null ? report.getReport2DirectAttainmentPO() : java.util.Collections.emptyList(),
+                        "psoDirectAttainment", report.getReport2DirectAttainmentPSO() != null ? report.getReport2DirectAttainmentPSO() : java.util.Collections.emptyList()
+                ))
                 .build());
     }
 
@@ -246,10 +253,13 @@ public class AttainmentController {
             java.security.Principal principal) {
         com.dypiu.nba.entity.User user = reportAccessService.getAuthenticatedUser(principal);
         reportAccessService.validateProgrammeAtrAccess(user, programmeId, batchId);
-        ProgrammeAttainmentDatasetDto dataset = calculationService.getProgrammeAttainmentDataset(programmeId, batchId);
+        ProgrammeBatchAttainmentReportDto report = attainmentReportService.getOrCreateProgrammeAttainmentReport(programmeId, batchId);
         return ResponseEntity.ok(ApiResponse.builder()
                 .success(true)
-                .data(dataset.getAverageIndirectAttainment())
+                .data(java.util.Map.of(
+                        "poIndirectAttainment", report.getReport3IndirectAttainmentPO() != null ? report.getReport3IndirectAttainmentPO() : java.util.Collections.emptyList(),
+                        "psoIndirectAttainment", report.getReport3IndirectAttainmentPSO() != null ? report.getReport3IndirectAttainmentPSO() : java.util.Collections.emptyList()
+                ))
                 .build());
     }
 
@@ -260,10 +270,13 @@ public class AttainmentController {
             java.security.Principal principal) {
         com.dypiu.nba.entity.User user = reportAccessService.getAuthenticatedUser(principal);
         reportAccessService.validateProgrammeAtrAccess(user, programmeId, batchId);
-        ProgrammeAttainmentDatasetDto dataset = calculationService.getProgrammeAttainmentDataset(programmeId, batchId);
+        ProgrammeBatchAttainmentReportDto report = attainmentReportService.getOrCreateProgrammeAttainmentReport(programmeId, batchId);
         return ResponseEntity.ok(ApiResponse.builder()
                 .success(true)
-                .data(dataset.getOverallAttainment())
+                .data(java.util.Map.of(
+                        "poOverallAttainment", report.getReport4OverallAttainmentPO() != null ? report.getReport4OverallAttainmentPO() : java.util.Collections.emptyList(),
+                        "psoOverallAttainment", report.getReport4OverallAttainmentPSO() != null ? report.getReport4OverallAttainmentPSO() : java.util.Collections.emptyList()
+                ))
                 .build());
     }
 

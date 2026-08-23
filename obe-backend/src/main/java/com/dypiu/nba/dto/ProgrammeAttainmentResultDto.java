@@ -46,6 +46,7 @@ public class ProgrammeAttainmentResultDto {
     }
 
     @Data @Builder @NoArgsConstructor @AllArgsConstructor
+    @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
     public static class OutcomeMappingItem {
         private String poCode;
         private String psoCode;
@@ -67,6 +68,7 @@ public class ProgrammeAttainmentResultDto {
     }
 
     @Data @Builder @NoArgsConstructor @AllArgsConstructor
+    @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
     public static class OutcomeDirectItem {
         private String poCode;
         private String psoCode;
@@ -81,6 +83,7 @@ public class ProgrammeAttainmentResultDto {
     }
 
     @Data @Builder @NoArgsConstructor @AllArgsConstructor
+    @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
     public static class OutcomeAttainmentItem {
         private String poCode;
         private String psoCode;
