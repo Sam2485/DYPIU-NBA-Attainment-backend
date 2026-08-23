@@ -26,6 +26,8 @@ public class MappingService {
     private final MasterProgrammeRepository masterProgrammeRepository;
     private final DepartmentRepository departmentRepository;
     private final CurrentUserScopeService currentUserScopeService;
+    private final ApprovalService approvalService;
+    private final BatchLifecycleService batchLifecycleService;
 
     private CurrentUserScope getScope() {
         try {
@@ -79,6 +81,17 @@ public class MappingService {
         }
     }
 
+    private void enforceOutcomeEditability(String courseOutcomeId) {
+        if (courseOutcomeId == null || courseOutcomeId.isBlank()) return;
+        CourseOutcome co = courseOutcomeRepository.findById(courseOutcomeId).orElse(null);
+        if (co != null && co.getProgrammeBatchCourseId() != null) {
+            ProgrammeBatchCourse offering = programmeBatchCourseRepository.findById(co.getProgrammeBatchCourseId()).orElse(null);
+            if (offering != null && offering.getBatchId() != null) {
+                batchLifecycleService.enforceBatchEditability(offering.getBatchId());
+            }
+        }
+    }
+
     @Transactional(readOnly = true)
     public List<CoPoMapping> getCoPoMappings(String courseOutcomeId) {
         System.out.println("[MappingService] getCoPoMappings called | courseOutcomeId: " + courseOutcomeId);
@@ -90,6 +103,7 @@ public class MappingService {
     public List<CoPoMapping> saveCoPoMappings(String courseOutcomeId, List<CoPoMapping> mappings) {
         System.out.println("[MappingService] saveCoPoMappings called | courseOutcomeId: " + courseOutcomeId + " | count: " + (mappings != null ? mappings.size() : 0));
         enforceOutcomeScope(courseOutcomeId);
+        enforceOutcomeEditability(courseOutcomeId);
         coPoMappingRepository.deleteByCourseOutcomeId(courseOutcomeId);
         mappings.forEach(m -> {
             m.setCourseOutcomeId(courseOutcomeId);
@@ -109,6 +123,7 @@ public class MappingService {
     public List<CoPsoMapping> saveCoPsoMappings(String courseOutcomeId, List<CoPsoMapping> mappings) {
         System.out.println("[MappingService] saveCoPsoMappings called | courseOutcomeId: " + courseOutcomeId + " | count: " + (mappings != null ? mappings.size() : 0));
         enforceOutcomeScope(courseOutcomeId);
+        enforceOutcomeEditability(courseOutcomeId);
         coPsoMappingRepository.deleteByCourseOutcomeId(courseOutcomeId);
         mappings.forEach(m -> {
             m.setCourseOutcomeId(courseOutcomeId);

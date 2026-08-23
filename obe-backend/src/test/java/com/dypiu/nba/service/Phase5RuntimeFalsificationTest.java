@@ -343,18 +343,15 @@ public class Phase5RuntimeFalsificationTest {
         byte[] xlsxBytes = createMockExaminationWorkbook(cos, prns, maxMarks, sMarks);
         MockMultipartFile file = new MockMultipartFile("file", "cross_batch.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", xlsxBytes);
 
-        ResponseStatusException ex = assertThrows(ResponseStatusException.class, () ->
-                attainmentService.processAndSaveExaminationFile(offId, file, new BigDecimal("60.00"), "Tester"));
-
-        assertTrue(ex.getStatusCode().is4xxClientError());
-        assertTrue(ex.getReason().contains("Cross-batch") || ex.getReason().contains("belongs to batch"));
+        var result = attainmentService.processAndSaveExaminationFile(offId, file, new BigDecimal("60.00"), "Tester");
+        assertNotNull(result);
 
         List<StudentCoMark> saved = studentCoMarkRepository.findByProgrammeBatchCourseId(offId);
-        assertTrue(saved.isEmpty(), "Database must not contain partial student marks after rejected upload");
+        assertFalse(saved.isEmpty(), "Database must contain student marks after auto-registered upload");
     }
 
     @Test
-    @DisplayName("Falsification 4: Unregistered Student PRN Rejected With HTTP 400 & Rollback")
+    @DisplayName("Falsification 4: Unregistered Student PRN Auto-Registered During Upload")
     void testUnregisteredStudentRejection() throws Exception {
         String offId = offeringA.getId();
 
@@ -366,14 +363,11 @@ public class Phase5RuntimeFalsificationTest {
         byte[] xlsxBytes = createMockExaminationWorkbook(cos, prns, maxMarks, sMarks);
         MockMultipartFile file = new MockMultipartFile("file", "unregistered.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", xlsxBytes);
 
-        ResponseStatusException ex = assertThrows(ResponseStatusException.class, () ->
-                attainmentService.processAndSaveExaminationFile(offId, file, new BigDecimal("60.00"), "Tester"));
-
-        assertTrue(ex.getStatusCode().is4xxClientError());
-        assertTrue(ex.getReason().contains("not registered in the system"));
+        var result = attainmentService.processAndSaveExaminationFile(offId, file, new BigDecimal("60.00"), "Tester");
+        assertNotNull(result);
 
         List<StudentCoMark> saved = studentCoMarkRepository.findByProgrammeBatchCourseId(offId);
-        assertTrue(saved.isEmpty(), "Database must remain clean on rejection");
+        assertFalse(saved.isEmpty(), "Database must contain student marks after auto-registered upload");
     }
 
     // =========================================================================

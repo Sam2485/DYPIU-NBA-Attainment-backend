@@ -21,6 +21,7 @@ import java.util.stream.Collectors;
 public class ReportController {
 
     private final AtrService atrService;
+    private final com.dypiu.nba.service.AttainmentReportService attainmentReportService;
     private final ReportAccessService reportAccessService;
     private final AcademicService academicService;
     private final AttainmentCalculationService attainmentCalculationService;
@@ -282,6 +283,74 @@ public class ReportController {
         return ResponseEntity.ok(ApiResponse.<Map<String, Object>>builder()
                 .success(true)
                 .data(attainmentCalculationService.calculateCourseCoAttainment(offering.getId()))
+                .build());
+    }
+
+    // --- Phase 10: Persisted Course Attainment Report Endpoints ---
+
+    @GetMapping("/course-attainment/{courseOfferingId}")
+    public ResponseEntity<ApiResponse<CourseAttainmentReportDto>> getCourseAttainmentReport(
+            @PathVariable String courseOfferingId) {
+        return ResponseEntity.ok(ApiResponse.<CourseAttainmentReportDto>builder()
+                .success(true)
+                .data(attainmentReportService.getOrCreateCourseAttainmentReport(courseOfferingId))
+                .build());
+    }
+
+    @PostMapping("/course-attainment/{courseOfferingId}/finalize")
+    public ResponseEntity<ApiResponse<CourseAttainmentReportDto>> finalizeCourseAttainmentReport(
+            @PathVariable String courseOfferingId,
+            Principal principal) {
+        String actorName = principal != null ? principal.getName() : "Course Coordinator";
+        return ResponseEntity.ok(ApiResponse.<CourseAttainmentReportDto>builder()
+                .success(true)
+                .message("Course Attainment Report finalized successfully")
+                .data(attainmentReportService.finalizeCourseReport(courseOfferingId, actorName))
+                .build());
+    }
+
+    // --- Phase 10: Persisted Programme Attainment Report Endpoints ---
+
+    @GetMapping("/programme-attainment/{programmeId}/batch/{batchId}")
+    public ResponseEntity<ApiResponse<ProgrammeBatchAttainmentReportDto>> getProgrammeBatchAttainmentReport(
+            @PathVariable String programmeId,
+            @PathVariable String batchId) {
+        return ResponseEntity.ok(ApiResponse.<ProgrammeBatchAttainmentReportDto>builder()
+                .success(true)
+                .data(attainmentReportService.getOrCreateProgrammeAttainmentReport(programmeId, batchId))
+                .build());
+    }
+
+    @PostMapping("/programme-attainment/{programmeId}/batch/{batchId}/finalize")
+    public ResponseEntity<ApiResponse<ProgrammeBatchAttainmentReportDto>> finalizeProgrammeBatchAttainmentReport(
+            @PathVariable String programmeId,
+            @PathVariable String batchId,
+            Principal principal) {
+        String actorName = principal != null ? principal.getName() : "Programme Coordinator";
+        return ResponseEntity.ok(ApiResponse.<ProgrammeBatchAttainmentReportDto>builder()
+                .success(true)
+                .message("Programme Attainment Report finalized successfully")
+                .data(attainmentReportService.finalizeProgrammeReport(programmeId, batchId, actorName))
+                .build());
+    }
+
+    // --- Phase 10: Historical Report Discovery Endpoints ---
+
+    @GetMapping("/historical/courses/{masterCourseId}/attainment")
+    public ResponseEntity<ApiResponse<List<CourseAttainmentReportDto>>> getHistoricalCourseAttainmentReports(
+            @PathVariable String masterCourseId) {
+        return ResponseEntity.ok(ApiResponse.<List<CourseAttainmentReportDto>>builder()
+                .success(true)
+                .data(attainmentReportService.getHistoricalCourseAttainmentReports(masterCourseId))
+                .build());
+    }
+
+    @GetMapping("/historical/programmes/{masterProgrammeId}/attainment")
+    public ResponseEntity<ApiResponse<List<ProgrammeBatchAttainmentReportDto>>> getHistoricalProgrammeAttainmentReports(
+            @PathVariable String masterProgrammeId) {
+        return ResponseEntity.ok(ApiResponse.<List<ProgrammeBatchAttainmentReportDto>>builder()
+                .success(true)
+                .data(attainmentReportService.getHistoricalProgrammeAttainmentReports(masterProgrammeId))
                 .build());
     }
 

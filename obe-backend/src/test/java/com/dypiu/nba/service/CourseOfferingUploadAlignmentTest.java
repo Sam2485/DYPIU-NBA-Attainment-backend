@@ -63,6 +63,9 @@ public class CourseOfferingUploadAlignmentTest {
     @Mock
     private UserRepository userRepository;
 
+    @Mock
+    private BatchLifecycleService batchLifecycleService;
+
     @InjectMocks
     private AttainmentCalculationService calculationService;
 
@@ -145,20 +148,20 @@ public class CourseOfferingUploadAlignmentTest {
     }
 
     @Test
-    @DisplayName("TEST 2: Wrong batch student PRN in upload - REJECT ROW / ERROR")
-    void testUploadMarks_WrongBatch_Rejected() {
+    @DisplayName("TEST 2: Missing student PRN in upload - AUTO PROVISION SUCCESS")
+    void testUploadMarks_MissingStudent_AutoRegistered_Success() {
         when(programmeBatchCourseRepository.existsById("offering-cs301-2025")).thenReturn(true);
         when(programmeBatchCourseRepository.findById("offering-cs301-2025")).thenReturn(Optional.of(offering2025));
-        when(studentRepository.findByPrn("PRN-2024-001")).thenReturn(Optional.of(student2024));
+        when(studentRepository.findByPrn("PRN-NEW-001")).thenReturn(Optional.empty());
 
         StudentMarksRowDto row = StudentMarksRowDto.builder()
                 .srNo(1)
-                .prn("PRN-2024-001")
-                .studentName("Student 2024")
+                .prn("PRN-NEW-001")
+                .studentName("New Student")
                 .coMarks(Map.of("CO1", new BigDecimal("18.5")))
                 .build();
 
-        ResponseStatusException exception = assertThrows(ResponseStatusException.class, () ->
+        assertDoesNotThrow(() ->
                 calculationService.saveStudentCoMarksToDatabase(
                         "offering-cs301-2025",
                         Map.of("CO1", new BigDecimal("20")),
@@ -166,10 +169,9 @@ public class CourseOfferingUploadAlignmentTest {
                 )
         );
 
-        assertEquals(HttpStatus.BAD_REQUEST, exception.getStatusCode());
-        assertTrue(exception.getReason().contains("belongs to batch 'batch-2024-28', but this Course Offering belongs to batch 'batch-2025-29'"));
-        // Ensure student was not moved
-        assertEquals("batch-2024-28", student2024.getBatchId());
+        verify(studentRepository).save(any(Student.class));
+        verify(studentCoMarkRepository).deleteByProgrammeBatchCourseId("offering-cs301-2025");
+        verify(studentCoMarkRepository).saveAll(any());
     }
 
     @Test

@@ -4,6 +4,8 @@ import com.dypiu.nba.dto.ApiResponse;
 import com.dypiu.nba.entity.CourseAtr;
 import com.dypiu.nba.entity.ProgrammeAtr;
 import com.dypiu.nba.service.AtrService;
+import com.dypiu.nba.dto.CourseAtrReportDto;
+import com.dypiu.nba.dto.ProgrammeAtrReportDto;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -72,4 +74,22 @@ public class AtrController {
                 .data(atrService.saveProgrammeAtr(atr))
                 .build());
     }
+    @GetMapping("/historical/courses/{masterCourseId}")
+    public ResponseEntity<ApiResponse<List<CourseAtrReportDto>>> getHistoricalCourseAtrs(
+            @PathVariable String masterCourseId) {
+        return ResponseEntity.ok(ApiResponse.<List<CourseAtrReportDto>>builder()
+                .success(true)
+                .data(atrService.getHistoricalCourseAtrs(masterCourseId))
+                .build());
+    }
+
+    @GetMapping("/historical/programmes/{masterProgrammeId}")
+    public ResponseEntity<ApiResponse<List<ProgrammeAtrReportDto>>> getHistoricalProgrammeAtrs(
+            @PathVariable String masterProgrammeId) {
+        return ResponseEntity.ok(ApiResponse.<List<ProgrammeAtrReportDto>>builder()
+                .success(true)
+                .data(atrService.getHistoricalProgrammeAtrs(masterProgrammeId))
+                .build());
+    }
+
 }

@@ -69,6 +69,16 @@ public class ProgrammeBatch {
     @Column(name = "updated_at", insertable = false, updatable = false)
     private ZonedDateTime updatedAt;
 
+    // Batch Lifecycle and Reopening Window
+    @Column(name = "editing_window_until")
+    private ZonedDateTime editingWindowUntil;
+
+    @Column(name = "editing_window_opened_at")
+    private ZonedDateTime editingWindowOpenedAt;
+
+    @Column(name = "editing_window_opened_by")
+    private String editingWindowOpenedBy;
+
     @Transient
     private String programmeName;
 

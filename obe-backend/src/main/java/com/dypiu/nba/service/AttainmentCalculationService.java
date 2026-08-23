@@ -22,6 +22,10 @@ import java.io.FileInputStream;
 import java.io.InputStream;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.time.ZonedDateTime;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -47,13 +51,72 @@ public class AttainmentCalculationService {
     private final CoPsoMappingRepository coPsoMappingRepository;
     private final com.dypiu.nba.security.CurrentUserScopeService currentUserScopeService;
     private final ApprovalService approvalService;
+    private final AuditLogService auditLogService;
+    private final MappingService mappingService;
+    private final BatchLifecycleService batchLifecycleService;
 
-    @org.springframework.beans.factory.annotation.Value("${app.upload.dir:uploads}")
+    @org.springframework.beans.factory.annotation.Value("${app.upload-dir:${app.upload.dir:/Users/rajshaikh/Desktop/uploads}}")
     private String baseUploadDir;
 
     private final Map<String, ExaminationAttainmentResultDto> examinationAttainmentStore = new ConcurrentHashMap<>();
     private final Map<String, SurveyAttainmentResultDto> surveyAttainmentStore = new ConcurrentHashMap<>();
     private final Map<String, ProgrammeSurveyResultDto> programmeSurveyStore = new ConcurrentHashMap<>();
+
+    private String sanitizeFilename(String filename) {
+        if (filename == null || filename.isBlank()) {
+            return "file.xlsx";
+        }
+        String name = Paths.get(filename).getFileName().toString();
+        return name.replaceAll("[^a-zA-Z0-9._-]", "_");
+    }
+
+    public Path saveUploadedFile(MultipartFile file, String subCategory, String courseOfferingId) {
+        if (file == null || file.isEmpty()) {
+            return null;
+        }
+        try {
+            String base = (baseUploadDir != null && !baseUploadDir.isBlank()) ? baseUploadDir : "/Users/rajshaikh/Desktop/uploads";
+            Path targetDirectory = Paths.get(base, subCategory, courseOfferingId).toAbsolutePath().normalize();
+            Files.createDirectories(targetDirectory);
+
+            String originalFilename = file.getOriginalFilename();
+            String safeFileName = System.currentTimeMillis() + "_" + sanitizeFilename(originalFilename);
+            Path targetFilePath = targetDirectory.resolve(safeFileName);
+
+            try (InputStream is = file.getInputStream()) {
+                Files.copy(is, targetFilePath, StandardCopyOption.REPLACE_EXISTING);
+            }
+            log.info("[AttainmentCalculationService] Successfully stored uploaded file: {}", targetFilePath);
+            return targetFilePath;
+        } catch (Exception e) {
+            log.error("[AttainmentCalculationService] Failed to store uploaded file: {}", e.getMessage(), e);
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to store uploaded file: " + e.getMessage(), e);
+        }
+    }
+
+    public Path saveProgrammeSurveyUploadedFile(MultipartFile file, String programmeId, String batchId) {
+        if (file == null || file.isEmpty()) {
+            return null;
+        }
+        try {
+            String base = (baseUploadDir != null && !baseUploadDir.isBlank()) ? baseUploadDir : "/Users/rajshaikh/Desktop/uploads";
+            Path targetDirectory = Paths.get(base, "programme-survey", programmeId, batchId).toAbsolutePath().normalize();
+            Files.createDirectories(targetDirectory);
+
+            String originalFilename = file.getOriginalFilename();
+            String safeFileName = System.currentTimeMillis() + "_" + sanitizeFilename(originalFilename);
+            Path targetFilePath = targetDirectory.resolve(safeFileName);
+
+            try (InputStream is = file.getInputStream()) {
+                Files.copy(is, targetFilePath, StandardCopyOption.REPLACE_EXISTING);
+            }
+            log.info("[AttainmentCalculationService] Successfully stored programme survey file: {}", targetFilePath);
+            return targetFilePath;
+        } catch (Exception e) {
+            log.error("[AttainmentCalculationService] Failed to store programme survey file: {}", e.getMessage(), e);
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to store programme survey file: " + e.getMessage(), e);
+        }
+    }
 
     public String resolveOfferingId(String offeringOrCourseId) {
         if (offeringOrCourseId == null || offeringOrCourseId.isBlank()) return null;
@@ -72,6 +135,17 @@ public class AttainmentCalculationService {
             return currentUserScopeService != null ? currentUserScopeService.getCurrentUserScope() : null;
         } catch (Exception e) {
             return null;
+        }
+    }
+
+    private void enforceOfferingEditability(String courseOfferingOrCourseId) {
+        if (courseOfferingOrCourseId == null || courseOfferingOrCourseId.isBlank()) return;
+        String offeringId = resolveOfferingId(courseOfferingOrCourseId);
+        if (offeringId != null) {
+            ProgrammeBatchCourse offering = programmeBatchCourseRepository.findById(offeringId).orElse(null);
+            if (offering != null && offering.getBatchId() != null) {
+                batchLifecycleService.enforceBatchEditability(offering.getBatchId());
+            }
         }
     }
 
@@ -146,6 +220,7 @@ public class AttainmentCalculationService {
     public AttainmentConfiguration saveAttainmentConfig(String courseOfferingOrCourseId, AttainmentConfiguration config) {
         System.out.println("[AttainmentCalculationService] saveAttainmentConfig called | courseOfferingOrCourseId: " + courseOfferingOrCourseId);
         enforceOfferingOrCourseScope(courseOfferingOrCourseId);
+        enforceOfferingEditability(courseOfferingOrCourseId);
         String offeringId = resolveOfferingId(courseOfferingOrCourseId);
         if (approvalService != null && approvalService.isAttainmentConfigApproved(offeringId)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Cannot modify approved Attainment Configuration. A revision must be requested first.");
@@ -162,28 +237,37 @@ public class AttainmentCalculationService {
         System.out.println("[AttainmentCalculationService] saveStudentCoMarksToDatabase called | courseOfferingOrCourseId: " + courseOfferingOrCourseId + " | students: " + (studentList != null ? studentList.size() : 0));
         if (courseOfferingOrCourseId == null || studentList == null || studentList.isEmpty()) return;
 
+        enforceOfferingOrCourseScope(courseOfferingOrCourseId);
+        enforceOfferingEditability(courseOfferingOrCourseId);
+
         String offeringId = resolveOfferingId(courseOfferingOrCourseId);
         ProgrammeBatchCourse offering = programmeBatchCourseRepository.findById(offeringId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Course Offering not found: " + offeringId));
 
         String batchId = offering.getBatchId();
 
-        // 1. Strict Cohort/Batch Validation: Validate that all students belong to the Course Offering's batch
+        // 1. Ensure all students in the upload exist; auto-create any missing students for this batch
         for (StudentMarksRowDto st : studentList) {
             String prn = st.getPrn();
             if (prn == null || prn.isBlank()) continue;
 
             Optional<Student> studentOpt = studentRepository.findByPrn(prn);
             if (studentOpt.isEmpty()) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                        "Validation Error: Student with PRN '" + prn + "' is not registered in the system. Mark upload rejected.");
-            }
-
-            Student student = studentOpt.get();
-            if (student.getBatchId() == null || !student.getBatchId().equals(batchId)) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                        "Validation Error: Student PRN '" + prn + "' belongs to batch '" + student.getBatchId()
-                                + "', but this Course Offering belongs to batch '" + batchId + "'. Cross-batch mark upload rejected.");
+                Student newStudent = Student.builder()
+                        .id("std-" + UUID.randomUUID().toString().substring(0, 8))
+                        .prn(prn.trim())
+                        .name(st.getStudentName() != null && !st.getStudentName().isBlank() ? st.getStudentName().trim() : "Student " + prn.trim())
+                        .email(prn.trim().toLowerCase() + "@dypiu.ac.in")
+                        .programmeBatchId(batchId)
+                        .status(StudentStatus.ENROLLED)
+                        .build();
+                studentRepository.save(newStudent);
+            } else {
+                Student student = studentOpt.get();
+                if (student.getProgrammeBatchId() == null) {
+                    student.setProgrammeBatchId(batchId);
+                    studentRepository.save(student);
+                }
             }
         }
 
@@ -191,12 +275,14 @@ public class AttainmentCalculationService {
         studentCoMarkRepository.deleteByProgrammeBatchCourseId(offeringId);
         studentCoMarkRepository.flush();
 
-        // 3. Save validated Student CO marks
+        // 3. Save Student CO marks
         List<StudentCoMark> markEntities = new ArrayList<>();
         for (StudentMarksRowDto st : studentList) {
             String prn = st.getPrn();
+            if (prn == null || prn.isBlank()) continue;
             Student student = studentRepository.findByPrn(prn).orElse(null);
-            if (student == null) continue;
+            String studentId = student != null ? student.getId() : ("std-" + prn.trim());
+            String studentName = student != null ? student.getName() : (st.getStudentName() != null ? st.getStudentName() : "Student " + prn.trim());
 
             if (st.getCoMarks() != null) {
                 for (Map.Entry<String, BigDecimal> entry : st.getCoMarks().entrySet()) {
@@ -207,9 +293,9 @@ public class AttainmentCalculationService {
                     StudentCoMark markEntity = StudentCoMark.builder()
                             .id("mrk-" + UUID.randomUUID().toString().substring(0, 8))
                             .programmeBatchCourseId(offeringId)
-                            .studentId(student.getId())
-                            .prn(student.getPrn())
-                            .studentName(student.getName())
+                            .studentId(studentId)
+                            .prn(prn.trim())
+                            .studentName(studentName)
                             .coCode(coCode)
                             .marksObtained(marksObtained)
                             .maxMarks(maxMarks)
@@ -571,6 +657,8 @@ public class AttainmentCalculationService {
     @Transactional
     public ExaminationAttainmentResultDto processAndSaveExaminationFile(String courseOfferingOrCourseId, MultipartFile file, BigDecimal thresholdPercentage, String uploadedBy) {
         System.out.println("[AttainmentCalculationService] processAndSaveExaminationFile called | courseOfferingOrCourseId: " + courseOfferingOrCourseId);
+        enforceOfferingOrCourseScope(courseOfferingOrCourseId);
+        enforceOfferingEditability(courseOfferingOrCourseId);
         String offeringId = resolveOfferingId(courseOfferingOrCourseId);
         ProgrammeBatchCourse offering = programmeBatchCourseRepository.findById(offeringId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Course Offering not found: " + offeringId));
@@ -583,17 +671,13 @@ public class AttainmentCalculationService {
         List<StudentMarksRowDto> studentList = new ArrayList<>();
 
         if (file != null && !file.isEmpty()) {
+            Path targetFilePath = null;
             try {
-                String uploadDir = (baseUploadDir != null ? baseUploadDir : "uploads") + "/examination/" + offeringId;
-                File dir = new File(uploadDir);
-                if (!dir.exists()) dir.mkdirs();
-
+                targetFilePath = saveUploadedFile(file, "examination", offeringId);
                 String originalFilename = file.getOriginalFilename() != null ? file.getOriginalFilename() : "exam_marks.xlsx";
-                String savedFileName = System.currentTimeMillis() + "_" + originalFilename;
-                File targetFile = new File(dir, savedFileName);
-                file.transferTo(targetFile);
-
-                try (InputStream is = new FileInputStream(targetFile);
+                String savedFileName = targetFilePath.getFileName().toString();
+                String savedPath = targetFilePath.toAbsolutePath().toString();
+                try (InputStream is = Files.newInputStream(targetFilePath);
                      Workbook workbook = WorkbookFactory.create(is)) {
                     FormulaEvaluator evaluator = workbook.getCreationHelper().createFormulaEvaluator();
                     Sheet sheet = findExaminationSheet(workbook);
@@ -763,7 +847,7 @@ public class AttainmentCalculationService {
                         .documentType(DocumentType.EXAMINATION)
                         .fileName(originalFilename)
                         .savedFileName(savedFileName)
-                        .savedPath(targetFile.getAbsolutePath())
+                        .savedPath(savedPath)
                         .fileSize(file.getSize())
                         .recordsProcessed(studentList.size())
                         .thresholdPercentage(threshold)
@@ -979,6 +1063,8 @@ public class AttainmentCalculationService {
     @Transactional
     public SurveyAttainmentResultDto processAndSaveSurveyFile(String courseOfferingOrCourseId, MultipartFile file, BigDecimal thresholdPercentage, String uploadedBy) {
         System.out.println("[AttainmentCalculationService] processAndSaveSurveyFile called | courseOfferingOrCourseId: " + courseOfferingOrCourseId);
+        enforceOfferingOrCourseScope(courseOfferingOrCourseId);
+        enforceOfferingEditability(courseOfferingOrCourseId);
         String offeringId = resolveOfferingId(courseOfferingOrCourseId);
         ProgrammeBatchCourse offering = programmeBatchCourseRepository.findById(offeringId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Course Offering not found: " + offeringId));
@@ -987,17 +1073,13 @@ public class AttainmentCalculationService {
         List<SurveyResponseRowDto> surveyResponses = new ArrayList<>();
 
         if (file != null && !file.isEmpty()) {
+            Path targetFilePath = null;
             try {
-                String uploadDir = (baseUploadDir != null ? baseUploadDir : "uploads") + "/survey/" + offeringId;
-                File dir = new File(uploadDir);
-                if (!dir.exists()) dir.mkdirs();
-
+                targetFilePath = saveUploadedFile(file, "survey", offeringId);
                 String originalFilename = file.getOriginalFilename() != null ? file.getOriginalFilename() : "survey_responses.xlsx";
-                String savedFileName = System.currentTimeMillis() + "_" + originalFilename;
-                File targetFile = new File(dir, savedFileName);
-                file.transferTo(targetFile);
-
-                try (InputStream is = new FileInputStream(targetFile);
+                String savedFileName = targetFilePath.getFileName().toString();
+                String savedPath = targetFilePath.toAbsolutePath().toString();
+                try (InputStream is = Files.newInputStream(targetFilePath);
                      Workbook workbook = WorkbookFactory.create(is)) {
                     FormulaEvaluator evaluator = workbook.getCreationHelper().createFormulaEvaluator();
                     Sheet sheet = findSurveySheet(workbook);
@@ -1128,20 +1210,27 @@ public class AttainmentCalculationService {
                     throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "No valid survey response rows found in the Survey sheet.");
                 }
 
-                // Validate student PRNs against Course Offering's batch if PRNs are provided
+                // Auto-register student PRNs if not already present
                 for (SurveyResponseRowDto sr : surveyResponses) {
                     String prn = sr.getPrn();
                     if (prn != null && !prn.isBlank() && !prn.startsWith("SRV-")) {
                         Optional<Student> studentOpt = studentRepository.findByPrn(prn);
                         if (studentOpt.isEmpty()) {
-                            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                                    "Validation Error: Student with PRN '" + prn + "' is not registered in the system. Survey upload rejected.");
-                        }
-                        Student student = studentOpt.get();
-                        if (student.getBatchId() == null || !student.getBatchId().equals(batchId)) {
-                            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                                    "Validation Error: Student PRN '" + prn + "' belongs to batch '" + student.getBatchId()
-                                            + "', but this Course Offering belongs to batch '" + batchId + "'. Cross-batch survey upload rejected.");
+                            Student newStudent = Student.builder()
+                                    .id("std-" + UUID.randomUUID().toString().substring(0, 8))
+                                    .prn(prn.trim())
+                                    .name(sr.getStudentName() != null && !sr.getStudentName().isBlank() ? sr.getStudentName().trim() : "Student " + prn.trim())
+                                    .email(prn.trim().toLowerCase() + "@dypiu.ac.in")
+                                    .programmeBatchId(batchId)
+                                    .status(StudentStatus.ENROLLED)
+                                    .build();
+                            studentRepository.save(newStudent);
+                        } else {
+                            Student student = studentOpt.get();
+                            if (student.getProgrammeBatchId() == null) {
+                                student.setProgrammeBatchId(batchId);
+                                studentRepository.save(student);
+                            }
                         }
                     }
                 }
@@ -1154,7 +1243,7 @@ public class AttainmentCalculationService {
                         .documentType(DocumentType.SURVEY)
                         .fileName(originalFilename)
                         .savedFileName(savedFileName)
-                        .savedPath(targetFile.getAbsolutePath())
+                        .savedPath(savedPath)
                         .fileSize(file.getSize())
                         .recordsProcessed(surveyResponses.size())
                         .thresholdPercentage(thresholdPercentage)
@@ -1390,6 +1479,9 @@ public class AttainmentCalculationService {
     @Transactional
     public ProgrammeSurveyResultDto processAndSaveProgrammeSurveyFile(String programmeId, String batchId, MultipartFile file, String uploadedBy) {
         System.out.println("[AttainmentCalculationService] processAndSaveProgrammeSurveyFile called | programmeId: " + programmeId + " | batchId: " + batchId);
+        if (batchId != null) {
+            batchLifecycleService.enforceBatchEditability(batchId);
+        }
         String key = programmeId + "::" + batchId;
 
         // Load authoritative configured POs and PSOs for the programme
@@ -1432,18 +1524,13 @@ public class AttainmentCalculationService {
         int rowsProcessed = 0;
 
         if (file != null && !file.isEmpty()) {
-            File targetFile = null;
+            Path targetFilePath = null;
             try {
-                String uploadDir = (baseUploadDir != null ? baseUploadDir : "uploads") + "/programme_survey/" + programmeId + "/" + batchId;
-                File dir = new File(uploadDir);
-                if (!dir.exists()) dir.mkdirs();
-
+                targetFilePath = saveProgrammeSurveyUploadedFile(file, programmeId, batchId);
                 String originalFileName = file.getOriginalFilename() != null ? file.getOriginalFilename() : "programme_survey.xlsx";
-                String savedFileName = System.currentTimeMillis() + "_" + originalFileName;
-                targetFile = new File(dir, savedFileName);
-                file.transferTo(targetFile);
-
-                try (InputStream is = new FileInputStream(targetFile);
+                String savedFileName = targetFilePath.getFileName().toString();
+                String savedPath = targetFilePath.toAbsolutePath().toString();
+                try (InputStream is = Files.newInputStream(targetFilePath);
                      Workbook workbook = WorkbookFactory.create(is)) {
                     FormulaEvaluator evaluator = workbook.getCreationHelper().createFormulaEvaluator();
                     Sheet sheet = findProgrammeSurveySheet(workbook);
@@ -1629,7 +1716,7 @@ public class AttainmentCalculationService {
                             .documentType(DocumentType.SURVEY)
                             .fileName(originalFileName)
                             .savedFileName(savedFileName)
-                            .savedPath(targetFile.getAbsolutePath())
+                            .savedPath(savedPath)
                             .fileSize(file.getSize())
                             .recordsProcessed(rowsProcessed)
                             .uploadedBy(uploadedBy != null ? uploadedBy : "Programme Coordinator")
@@ -1638,10 +1725,14 @@ public class AttainmentCalculationService {
                     uploadedDocumentRepository.save(doc);
                 }
             } catch (ResponseStatusException rse) {
-                if (targetFile != null && targetFile.exists()) targetFile.delete();
+                if (targetFilePath != null && Files.exists(targetFilePath)) {
+                    try { Files.deleteIfExists(targetFilePath); } catch (Exception ignored) {}
+                }
                 throw rse;
             } catch (Exception e) {
-                if (targetFile != null && targetFile.exists()) targetFile.delete();
+                if (targetFilePath != null && Files.exists(targetFilePath)) {
+                    try { Files.deleteIfExists(targetFilePath); } catch (Exception ignored) {}
+                }
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Failed to parse Programme End Survey file: " + e.getMessage());
             }
         } else {

@@ -41,6 +41,7 @@ public class OutcomeService {
     private final CurrentUserScopeService currentUserScopeService;
     private final AuditLogService auditLogService;
     private final ApprovalService approvalService;
+    private final BatchLifecycleService batchLifecycleService;
     private final ObjectMapper objectMapper;
 
     private static final Comparator<String> NATURAL_CODE_COMPARATOR = (c1, c2) -> {
@@ -195,6 +196,17 @@ public class OutcomeService {
         if (offering.getMasterCourseId() != null) enforceCourseScope(offering.getMasterCourseId());
     }
 
+    private void enforceOfferingEditability(String courseIdOrOfferingId) {
+        if (courseIdOrOfferingId == null || courseIdOrOfferingId.isBlank()) return;
+        String offeringId = resolveOfferingId(courseIdOrOfferingId);
+        if (offeringId != null) {
+            ProgrammeBatchCourse offering = programmeBatchCourseRepository.findById(offeringId).orElse(null);
+            if (offering != null && offering.getBatchId() != null) {
+                batchLifecycleService.enforceBatchEditability(offering.getBatchId());
+            }
+        }
+    }
+
     private void enforceCourseOrOfferingScope(String courseIdOrOfferingId) {
         CurrentUserScope scope = getScope();
         if (scope == null || scope.isAdmin() || scope.isIqac()) return;
@@ -249,6 +261,7 @@ public class OutcomeService {
         if (batchId == null || batchId.isBlank()) {
             throw new ResourceNotFoundException("Programme Batch not found: " + programmeOrBatchId);
         }
+        batchLifecycleService.enforceBatchEditability(batchId);
         
         List<ProgrammeOutcome> existing = poRepository.findByProgrammeBatchId(batchId);
         Map<String, ProgrammeOutcome> existingByCode = existing.stream()
@@ -364,6 +377,7 @@ public class OutcomeService {
         if (batchId == null || batchId.isBlank()) {
             throw new ResourceNotFoundException("Programme Batch not found: " + programmeOrBatchId);
         }
+        batchLifecycleService.enforceBatchEditability(batchId);
 
         List<ProgrammeSpecificOutcome> existing = psoRepository.findByProgrammeBatchId(batchId);
         Map<String, ProgrammeSpecificOutcome> existingByCode = existing.stream()
@@ -473,6 +487,7 @@ public class OutcomeService {
         if (batchId == null || batchId.isBlank()) {
             throw new ResourceNotFoundException("Programme Batch not found: " + programmeOrBatchId);
         }
+        batchLifecycleService.enforceBatchEditability(batchId);
 
         List<PeoOutcome> existing = peoRepository.findByProgrammeBatchId(batchId);
         Map<String, PeoOutcome> existingByCode = existing.stream()
@@ -547,6 +562,7 @@ public class OutcomeService {
         System.out.println("[OutcomeService] saveCOs called | courseIdOrOfferingId: " + courseIdOrOfferingId + " | count: " + (cos != null ? cos.size() : 0));
         if (courseIdOrOfferingId != null && !courseIdOrOfferingId.isBlank()) {
             enforceCourseOrOfferingScope(courseIdOrOfferingId);
+            enforceOfferingEditability(courseIdOrOfferingId);
         }
         String targetOfferingId = resolveOfferingId(courseIdOrOfferingId);
         if (approvalService != null && approvalService.isCoDefinitionApproved(targetOfferingId)) {
@@ -660,6 +676,7 @@ public class OutcomeService {
         if (batchId == null || batchId.isBlank()) {
             throw new ResourceNotFoundException("Programme Batch not found: " + programmeOrBatchId);
         }
+        batchLifecycleService.enforceBatchEditability(batchId);
 
         if (dto != null && dto.getPoTargets() != null && !dto.getPoTargets().isEmpty()) {
             List<ProgrammeOutcome> pos = new ArrayList<>(poRepository.findByProgrammeBatchId(batchId));
@@ -845,6 +862,7 @@ public class OutcomeService {
         System.out.println("[OutcomeService] saveCourseMappings called | courseIdOrOfferingId: " + courseIdOrOfferingId);
         if (courseIdOrOfferingId != null && !courseIdOrOfferingId.isBlank()) {
             enforceCourseOrOfferingScope(courseIdOrOfferingId);
+            enforceOfferingEditability(courseIdOrOfferingId);
         }
         String targetOfferingId = resolveOfferingId(courseIdOrOfferingId);
         if (approvalService != null && approvalService.isCoDefinitionApproved(targetOfferingId)) {

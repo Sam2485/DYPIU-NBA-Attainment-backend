@@ -13,6 +13,9 @@ public interface ProgrammeBatchCourseRepository extends JpaRepository<ProgrammeB
     List<ProgrammeBatchCourse> findByProgrammeBatchId(String programmeBatchId);
     List<ProgrammeBatchCourse> findByProgrammeBatchIdIn(Collection<String> programmeBatchIds);
     List<ProgrammeBatchCourse> findByMasterCourseId(String masterCourseId);
+    List<ProgrammeBatchCourse> findByProgrammeBatchIdAndMasterCourseId(String programmeBatchId, String masterCourseId);
+    boolean existsByProgrammeBatchIdAndMasterCourseId(String programmeBatchId, String masterCourseId);
+    boolean existsByProgrammeBatchIdAndMasterCourseIdAndIdNot(String programmeBatchId, String masterCourseId, String id);
     Optional<ProgrammeBatchCourse> findByProgrammeBatchIdAndMasterCourseIdAndSemester(String programmeBatchId, String masterCourseId, Integer semester);
     List<ProgrammeBatchCourse> findByCourseCoordinatorId(Long courseCoordinatorId);
     List<ProgrammeBatchCourse> findByCourseCoordinatorNameContainingIgnoreCaseOrAssignedFacultyContainingIgnoreCase(String name, String faculty);
