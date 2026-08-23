@@ -304,15 +304,15 @@ public class Phase102CoPoMappingArchitectureIntegrationTest {
         assertFalse(courseReport.getTable1Mapping().isEmpty());
 
         // Verify Table 2 has PO1 direct contribution
-        assertNotNull(courseReport.getTable2Direct());
-        boolean hasPo1 = courseReport.getTable2Direct().stream().anyMatch(r -> "PO1".equals(r.getOutcomeCode()));
+        assertNotNull(courseReport.getTable2DirectPO());
+        boolean hasPo1 = courseReport.getTable2DirectPO().stream().anyMatch(r -> "PO1".equals(r.getPoCode()));
         assertTrue(hasPo1, "Table 2 must contain PO1 direct contribution calculated from average mapping");
 
         // Generate Programme Batch Attainment Report
         ProgrammeBatchAttainmentReportDto progReport = attainmentReportService.getOrCreateProgrammeAttainmentReport(prog.getId(), batch2024.getId());
 
         assertNotNull(progReport);
-        assertNotNull(progReport.getReport1AverageMapping());
-        assertFalse(progReport.getReport1AverageMapping().isEmpty());
+        assertNotNull(progReport.getReport1AverageMappingPO());
+        assertFalse(progReport.getReport1AverageMappingPO().isEmpty());
     }
 }

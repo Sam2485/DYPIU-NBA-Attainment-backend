@@ -6,6 +6,8 @@ import lombok.*;
 import java.math.BigDecimal;
 import java.time.ZonedDateTime;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 @Entity
 @Table(
         name = "course_outcomes",
@@ -24,6 +26,7 @@ import java.time.ZonedDateTime;
 public class CourseOutcome {
 
     @Id
+    @JsonProperty("courseOutcomeId")
     private String id;
 
     @Column(name = "programme_batch_course_id", nullable = false)

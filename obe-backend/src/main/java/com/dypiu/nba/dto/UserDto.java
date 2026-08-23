@@ -7,6 +7,7 @@ import lombok.*;
 @NoArgsConstructor
 @AllArgsConstructor
 public class UserDto {
+    @com.fasterxml.jackson.annotation.JsonProperty("userId")
     private Long id;
     private String username;
     private String name;
@@ -14,7 +15,7 @@ public class UserDto {
     private String role;
     private String schoolId;
     private String departmentId;
-    private String programmeId;
+    private String masterProgrammeId;
     private String department;
     private String programme;
 }

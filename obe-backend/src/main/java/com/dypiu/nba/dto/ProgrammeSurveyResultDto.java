@@ -10,17 +10,23 @@ import java.util.List;
 @AllArgsConstructor
 public class ProgrammeSurveyResultDto {
     private String uploadId;
-    private String programmeId;
-    private String batchId;
+    private String masterProgrammeId;
+    private String programmeBatchId;
     private String surveyType;
     private int recordsProcessed;
-    private List<OutcomeIndirectItem> poIndirectAttainment;
-    private List<OutcomeIndirectItem> psoIndirectAttainment;
+    private List<PoIndirectItem> poIndirectAttainment;
+    private List<PsoIndirectItem> psoIndirectAttainment;
     private String status;
 
     @Data @Builder @NoArgsConstructor @AllArgsConstructor
-    public static class OutcomeIndirectItem {
-        private String outcomeCode;
+    public static class PoIndirectItem {
+        private String poCode;
+        private BigDecimal indirectAttainment;
+    }
+
+    @Data @Builder @NoArgsConstructor @AllArgsConstructor
+    public static class PsoIndirectItem {
+        private String psoCode;
         private BigDecimal indirectAttainment;
     }
 }

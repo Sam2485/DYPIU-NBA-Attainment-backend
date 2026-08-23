@@ -1519,8 +1519,8 @@ public class AttainmentCalculationService {
                 .map(p -> p.getCode().toUpperCase().replaceAll("\\s+", ""))
                 .collect(Collectors.toCollection(LinkedHashSet::new));
 
-        List<ProgrammeSurveyResultDto.OutcomeIndirectItem> poItems = new ArrayList<>();
-        List<ProgrammeSurveyResultDto.OutcomeIndirectItem> psoItems = new ArrayList<>();
+        List<ProgrammeSurveyResultDto.PoIndirectItem> poItems = new ArrayList<>();
+        List<ProgrammeSurveyResultDto.PsoIndirectItem> psoItems = new ArrayList<>();
         int rowsProcessed = 0;
 
         if (file != null && !file.isEmpty()) {
@@ -1688,8 +1688,8 @@ public class AttainmentCalculationService {
                         } else {
                             avgVal = BigDecimal.ZERO;
                         }
-                        poItems.add(ProgrammeSurveyResultDto.OutcomeIndirectItem.builder()
-                                .outcomeCode(poCode)
+                        poItems.add(ProgrammeSurveyResultDto.PoIndirectItem.builder()
+                                .poCode(poCode)
                                 .indirectAttainment(avgVal)
                                 .build());
                     }
@@ -1703,8 +1703,8 @@ public class AttainmentCalculationService {
                         } else {
                             avgVal = BigDecimal.ZERO;
                         }
-                        psoItems.add(ProgrammeSurveyResultDto.OutcomeIndirectItem.builder()
-                                .outcomeCode(psoCode)
+                        psoItems.add(ProgrammeSurveyResultDto.PsoIndirectItem.builder()
+                                .psoCode(psoCode)
                                 .indirectAttainment(avgVal)
                                 .build());
                     }
@@ -1738,17 +1738,17 @@ public class AttainmentCalculationService {
         } else {
             // When no survey file is uploaded yet, initialize zero attainment for configured outcomes
             for (String poCode : configuredPOCodes) {
-                poItems.add(ProgrammeSurveyResultDto.OutcomeIndirectItem.builder().outcomeCode(poCode).indirectAttainment(BigDecimal.ZERO).build());
+                poItems.add(ProgrammeSurveyResultDto.PoIndirectItem.builder().poCode(poCode).indirectAttainment(BigDecimal.ZERO).build());
             }
             for (String psoCode : configuredPSOCodes) {
-                psoItems.add(ProgrammeSurveyResultDto.OutcomeIndirectItem.builder().outcomeCode(psoCode).indirectAttainment(BigDecimal.ZERO).build());
+                psoItems.add(ProgrammeSurveyResultDto.PsoIndirectItem.builder().psoCode(psoCode).indirectAttainment(BigDecimal.ZERO).build());
             }
         }
 
         ProgrammeSurveyResultDto result = ProgrammeSurveyResultDto.builder()
                 .uploadId("psurvey-" + UUID.randomUUID().toString().substring(0, 8))
-                .programmeId(programmeId)
-                .batchId(batchId)
+                .masterProgrammeId(programmeId)
+                .programmeBatchId(batchId)
                 .surveyType("PROGRAMME_INDIRECT")
                 .recordsProcessed(rowsProcessed)
                 .poIndirectAttainment(poItems)
@@ -1961,15 +1961,15 @@ public class AttainmentCalculationService {
 
         Map<String, BigDecimal> exitSurveyPoMap = new HashMap<>();
         if (exitSurvey.getPoIndirectAttainment() != null) {
-            for (ProgrammeSurveyResultDto.OutcomeIndirectItem it : exitSurvey.getPoIndirectAttainment()) {
-                exitSurveyPoMap.put(it.getOutcomeCode().toUpperCase(), it.getIndirectAttainment());
+            for (ProgrammeSurveyResultDto.PoIndirectItem it : exitSurvey.getPoIndirectAttainment()) {
+                exitSurveyPoMap.put(it.getPoCode().toUpperCase(), it.getIndirectAttainment());
             }
         }
 
         Map<String, BigDecimal> exitSurveyPsoMap = new HashMap<>();
         if (exitSurvey.getPsoIndirectAttainment() != null) {
-            for (ProgrammeSurveyResultDto.OutcomeIndirectItem it : exitSurvey.getPsoIndirectAttainment()) {
-                exitSurveyPsoMap.put(it.getOutcomeCode().toUpperCase(), it.getIndirectAttainment());
+            for (ProgrammeSurveyResultDto.PsoIndirectItem it : exitSurvey.getPsoIndirectAttainment()) {
+                exitSurveyPsoMap.put(it.getPsoCode().toUpperCase(), it.getIndirectAttainment());
             }
         }
 

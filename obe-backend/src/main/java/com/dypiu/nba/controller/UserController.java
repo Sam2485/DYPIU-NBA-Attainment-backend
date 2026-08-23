@@ -379,7 +379,7 @@ public class UserController {
                 .role(user.getRole() != null ? user.getRole().name() : "FACULTY")
                 .schoolId(user.getSchoolId())
                 .departmentId(user.getDepartmentId())
-                .programmeId(user.getProgrammeId())
+                .masterProgrammeId(user.getProgrammeId())
                 .department(deptName)
                 .programme(progName)
                 .build();

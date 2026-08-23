@@ -136,7 +136,8 @@ public class AttainmentReportService {
         }
 
         // --- Table 2: Course PO/PSO Direct Attainment Contribution ---
-        List<CourseAttainmentReportDto.Table2Row> table2 = new ArrayList<>();
+        List<CourseAttainmentReportDto.Table2PoRow> table2PO = new ArrayList<>();
+        List<CourseAttainmentReportDto.Table2PsoRow> table2PSO = new ArrayList<>();
         @SuppressWarnings("unchecked")
         Map<String, BigDecimal> poAtt = (Map<String, BigDecimal>) calcResult.getOrDefault("poAttainment", Collections.emptyMap());
         @SuppressWarnings("unchecked")
@@ -147,15 +148,15 @@ public class AttainmentReportService {
         Map<String, BigDecimal> psoAvg = (Map<String, BigDecimal>) calcResult.getOrDefault("psoAverages", Collections.emptyMap());
 
         for (Map.Entry<String, BigDecimal> e : poAtt.entrySet()) {
-            table2.add(CourseAttainmentReportDto.Table2Row.builder()
-                    .outcomeCode(e.getKey())
+            table2PO.add(CourseAttainmentReportDto.Table2PoRow.builder()
+                    .poCode(e.getKey())
                     .averageMapping(poAvg.getOrDefault(e.getKey(), BigDecimal.ZERO))
                     .directContribution(e.getValue())
                     .build());
         }
         for (Map.Entry<String, BigDecimal> e : psoAtt.entrySet()) {
-            table2.add(CourseAttainmentReportDto.Table2Row.builder()
-                    .outcomeCode(e.getKey())
+            table2PSO.add(CourseAttainmentReportDto.Table2PsoRow.builder()
+                    .psoCode(e.getKey())
                     .averageMapping(psoAvg.getOrDefault(e.getKey(), BigDecimal.ZERO))
                     .directContribution(e.getValue())
                     .build());
@@ -212,7 +213,7 @@ public class AttainmentReportService {
         report.setDirectAttainment(direct);
         report.setIndirectAttainment(indirect);
         report.setTable1MappingJson(toJson(table1));
-        report.setTable2DirectJson(toJson(table2));
+        report.setTable2DirectJson(toJson(java.util.Map.of("po", table2PO, "pso", table2PSO)));
         report.setTable3CoAttainmentJson(toJson(table3));
         report.setUpdatedAt(ZonedDateTime.now());
 
@@ -220,11 +221,11 @@ public class AttainmentReportService {
 
         return CourseAttainmentReportDto.builder()
                 .id(report.getId())
-                .offeringId(offering.getId())
+                .programmeBatchCourseId(offering.getId())
                 .masterCourseId(course != null ? course.getId() : offering.getMasterCourseId())
                 .courseCode(offering.getEffectiveCourseCode(course))
                 .courseName(offering.getEffectiveCourseName(course))
-                .batchId(batch != null ? batch.getId() : offering.getProgrammeBatchId())
+                .programmeBatchId(batch != null ? batch.getId() : offering.getProgrammeBatchId())
                 .batchName(batch != null ? batch.getName() : "Batch")
                 .semester(offering.getSemester())
                 .status(report.getStatus())
@@ -232,7 +233,7 @@ public class AttainmentReportService {
                 .directAttainment(direct)
                 .indirectAttainment(indirect)
                 .table1Mapping(table1)
-                .table2Direct(table2)
+                .table2DirectPO(table2PO).table2DirectPSO(table2PSO)
                 .table3CoAttainments(table3)
                 .submittedBy(report.getSubmittedBy())
                 .submittedAt(report.getSubmittedAt())
@@ -246,16 +247,18 @@ public class AttainmentReportService {
         ProgrammeBatch batch = programmeBatchRepository.findById(offering.getProgrammeBatchId()).orElse(null);
 
         List<CourseAttainmentReportDto.Table1Row> table1 = fromJson(report.getTable1MappingJson(), new TypeReference<>() {});
-        List<CourseAttainmentReportDto.Table2Row> table2 = fromJson(report.getTable2DirectJson(), new TypeReference<>() {});
+        java.util.Map<String, Object> t2Map = fromJson(report.getTable2DirectJson(), new TypeReference<>() {});
+        List<CourseAttainmentReportDto.Table2PoRow> table2PO = t2Map == null ? null : objectMapper.convertValue(t2Map.get("po"), new TypeReference<>() {});
+        List<CourseAttainmentReportDto.Table2PsoRow> table2PSO = t2Map == null ? null : objectMapper.convertValue(t2Map.get("pso"), new TypeReference<>() {});
         List<CourseAttainmentReportDto.Table3Row> table3 = fromJson(report.getTable3CoAttainmentJson(), new TypeReference<>() {});
 
         return CourseAttainmentReportDto.builder()
                 .id(report.getId())
-                .offeringId(offering.getId())
+                .programmeBatchCourseId(offering.getId())
                 .masterCourseId(course != null ? course.getId() : offering.getMasterCourseId())
                 .courseCode(offering.getEffectiveCourseCode(course))
                 .courseName(offering.getEffectiveCourseName(course))
-                .batchId(batch != null ? batch.getId() : offering.getProgrammeBatchId())
+                .programmeBatchId(batch != null ? batch.getId() : offering.getProgrammeBatchId())
                 .batchName(batch != null ? batch.getName() : "Batch")
                 .semester(offering.getSemester())
                 .status(report.getStatus())
@@ -263,7 +266,7 @@ public class AttainmentReportService {
                 .directAttainment(report.getDirectAttainment())
                 .indirectAttainment(report.getIndirectAttainment())
                 .table1Mapping(table1 != null ? table1 : Collections.emptyList())
-                .table2Direct(table2 != null ? table2 : Collections.emptyList())
+                .table2DirectPO(table2PO != null ? table2PO : Collections.emptyList()).table2DirectPSO(table2PSO != null ? table2PSO : Collections.emptyList())
                 .table3CoAttainments(table3 != null ? table3 : Collections.emptyList())
                 .submittedBy(report.getSubmittedBy())
                 .submittedAt(report.getSubmittedAt())
@@ -336,19 +339,15 @@ public class AttainmentReportService {
     public ProgrammeBatchAttainmentReportDto generateAndSaveProgrammeReport(MasterProgramme prog, ProgrammeBatch batch, ReportStatus status) {
         ProgrammeAttainmentResultDto calcResult = calculationService.calculateProgrammeAttainment(prog.getId(), batch.getId());
 
-        // Report 1: Average Mapping Report
-        List<ProgrammeBatchAttainmentReportDto.Report1Row> report1 = new ArrayList<>();
+        List<ProgrammeBatchAttainmentReportDto.Report1PoRow> report1PO = new ArrayList<>();
+        List<ProgrammeBatchAttainmentReportDto.Report1PsoRow> report1PSO = new ArrayList<>();
         if (calcResult.getAverageMapping() != null && calcResult.getAverageMapping().getPos() != null) {
             for (ProgrammeAttainmentResultDto.OutcomeMappingItem item : calcResult.getAverageMapping().getPos()) {
                 List<ProgrammeBatchAttainmentReportDto.SemesterContribution> sList = item.getSemesterValues() != null
                         ? item.getSemesterValues().stream().map(sv -> ProgrammeBatchAttainmentReportDto.SemesterContribution.builder()
-                        .semester(sv.getSemester())
-                        .value(sv.getAverageMapping())
-                        .build()).collect(Collectors.toList())
-                        : Collections.emptyList();
-
-                report1.add(ProgrammeBatchAttainmentReportDto.Report1Row.builder()
-                        .outcomeCode(item.getPoCode())
+                        .semester(sv.getSemester()).value(sv.getAverageMapping()).build()).collect(Collectors.toList()) : Collections.emptyList();
+                report1PO.add(ProgrammeBatchAttainmentReportDto.Report1PoRow.builder()
+                        .poCode(item.getPoCode())
                         .semesterAverages(sList)
                         .programmeAverageMapping(item.getOverallAverage())
                         .build());
@@ -358,32 +357,24 @@ public class AttainmentReportService {
             for (ProgrammeAttainmentResultDto.OutcomeMappingItem item : calcResult.getAverageMapping().getPsos()) {
                 List<ProgrammeBatchAttainmentReportDto.SemesterContribution> sList = item.getSemesterValues() != null
                         ? item.getSemesterValues().stream().map(sv -> ProgrammeBatchAttainmentReportDto.SemesterContribution.builder()
-                        .semester(sv.getSemester())
-                        .value(sv.getAverageMapping())
-                        .build()).collect(Collectors.toList())
-                        : Collections.emptyList();
-
-                report1.add(ProgrammeBatchAttainmentReportDto.Report1Row.builder()
-                        .outcomeCode(item.getPsoCode() != null ? item.getPsoCode() : item.getPoCode())
+                        .semester(sv.getSemester()).value(sv.getAverageMapping()).build()).collect(Collectors.toList()) : Collections.emptyList();
+                report1PSO.add(ProgrammeBatchAttainmentReportDto.Report1PsoRow.builder()
+                        .psoCode(item.getPsoCode())
                         .semesterAverages(sList)
                         .programmeAverageMapping(item.getOverallAverage())
                         .build());
             }
         }
 
-        // Report 2: Direct Attainment Report
-        List<ProgrammeBatchAttainmentReportDto.Report2Row> report2 = new ArrayList<>();
+        List<ProgrammeBatchAttainmentReportDto.Report2PoRow> report2PO = new ArrayList<>();
+        List<ProgrammeBatchAttainmentReportDto.Report2PsoRow> report2PSO = new ArrayList<>();
         if (calcResult.getAverageDirectAttainment() != null && calcResult.getAverageDirectAttainment().getPos() != null) {
             for (ProgrammeAttainmentResultDto.OutcomeDirectItem item : calcResult.getAverageDirectAttainment().getPos()) {
                 List<ProgrammeBatchAttainmentReportDto.SemesterContribution> sList = item.getSemesterValues() != null
                         ? item.getSemesterValues().stream().map(sv -> ProgrammeBatchAttainmentReportDto.SemesterContribution.builder()
-                        .semester(sv.getSemester())
-                        .value(sv.getAverageAttainment())
-                        .build()).collect(Collectors.toList())
-                        : Collections.emptyList();
-
-                report2.add(ProgrammeBatchAttainmentReportDto.Report2Row.builder()
-                        .outcomeCode(item.getPoCode())
+                        .semester(sv.getSemester()).value(sv.getAverageAttainment()).build()).collect(Collectors.toList()) : Collections.emptyList();
+                report2PO.add(ProgrammeBatchAttainmentReportDto.Report2PoRow.builder()
+                        .poCode(item.getPoCode())
                         .semesterDirectAttainments(sList)
                         .programmeDirectAttainment(item.getOverallAverage())
                         .build());
@@ -393,96 +384,66 @@ public class AttainmentReportService {
             for (ProgrammeAttainmentResultDto.OutcomeDirectItem item : calcResult.getAverageDirectAttainment().getPsos()) {
                 List<ProgrammeBatchAttainmentReportDto.SemesterContribution> sList = item.getSemesterValues() != null
                         ? item.getSemesterValues().stream().map(sv -> ProgrammeBatchAttainmentReportDto.SemesterContribution.builder()
-                        .semester(sv.getSemester())
-                        .value(sv.getAverageAttainment())
-                        .build()).collect(Collectors.toList())
-                        : Collections.emptyList();
-
-                report2.add(ProgrammeBatchAttainmentReportDto.Report2Row.builder()
-                        .outcomeCode(item.getPsoCode() != null ? item.getPsoCode() : item.getPoCode())
+                        .semester(sv.getSemester()).value(sv.getAverageAttainment()).build()).collect(Collectors.toList()) : Collections.emptyList();
+                report2PSO.add(ProgrammeBatchAttainmentReportDto.Report2PsoRow.builder()
+                        .psoCode(item.getPsoCode())
                         .semesterDirectAttainments(sList)
                         .programmeDirectAttainment(item.getOverallAverage())
                         .build());
             }
         }
 
-        // Report 3: Indirect Attainment Report
-        List<ProgrammeBatchAttainmentReportDto.Report3Row> report3 = new ArrayList<>();
+        List<ProgrammeBatchAttainmentReportDto.Report3PoRow> report3PO = new ArrayList<>();
+        List<ProgrammeBatchAttainmentReportDto.Report3PsoRow> report3PSO = new ArrayList<>();
         if (calcResult.getAverageIndirectAttainment() != null) {
             for (Map.Entry<String, BigDecimal> entry : calcResult.getAverageIndirectAttainment().entrySet()) {
-                report3.add(ProgrammeBatchAttainmentReportDto.Report3Row.builder()
-                        .outcomeCode(entry.getKey())
-                        .percentageSubstantial(new BigDecimal("100.00"))
-                        .percentageModerate(BigDecimal.ZERO)
-                        .percentageSlight(BigDecimal.ZERO)
-                        .weightedScore(entry.getValue())
-                        .indirectPercentage(new BigDecimal("100.00"))
-                        .indirectAttainmentLevel(entry.getValue())
-                        .build());
+                String code = entry.getKey();
+                BigDecimal indirect = entry.getValue();
+                if (code.startsWith("PO")) {
+                    report3PO.add(ProgrammeBatchAttainmentReportDto.Report3PoRow.builder()
+                        .poCode(code).percentageSubstantial(new BigDecimal("100.00")).percentageModerate(BigDecimal.ZERO).percentageSlight(BigDecimal.ZERO).weightedScore(indirect).indirectPercentage(new BigDecimal("100.00")).indirectAttainmentLevel(indirect).build());
+                } else {
+                    report3PSO.add(ProgrammeBatchAttainmentReportDto.Report3PsoRow.builder()
+                        .psoCode(code).percentageSubstantial(new BigDecimal("100.00")).percentageModerate(BigDecimal.ZERO).percentageSlight(BigDecimal.ZERO).weightedScore(indirect).indirectPercentage(new BigDecimal("100.00")).indirectAttainmentLevel(indirect).build());
+                }
             }
         }
 
-        // Report 4: Overall Programme Attainment Report (80/20)
-        List<ProgrammeBatchAttainmentReportDto.Report4Row> report4 = new ArrayList<>();
+        List<ProgrammeBatchAttainmentReportDto.Report4PoRow> report4PO = new ArrayList<>();
+        List<ProgrammeBatchAttainmentReportDto.Report4PsoRow> report4PSO = new ArrayList<>();
         BigDecimal sumOverall = BigDecimal.ZERO;
         int countOverall = 0;
 
         if (calcResult.getOverallAttainment() != null && calcResult.getOverallAttainment().getPos() != null) {
             for (ProgrammeAttainmentResultDto.OutcomeAttainmentItem item : calcResult.getOverallAttainment().getPos()) {
-                String code = item.getPoCode() != null ? item.getPoCode() : item.getOutcomeCode();
+                String code = item.getPoCode();
                 BigDecimal target = item.getTarget() != null ? item.getTarget() : new BigDecimal("2.50");
                 BigDecimal finalVal = item.getOverallAttainment();
                 boolean targetMet = finalVal != null && finalVal.compareTo(target) >= 0;
-                String obs = item.getObservation() != null ? item.getObservation()
-                        : (targetMet ? "PO target attained (" + finalVal + " >= " + target + ")" : "PO target not attained (" + finalVal + " < " + target + ")");
+                String obs = item.getObservation() != null ? item.getObservation() : (targetMet ? "PO target attained (" + finalVal + " >= " + target + ")" : "PO target not attained (" + finalVal + " < " + target + ")");
 
-                report4.add(ProgrammeBatchAttainmentReportDto.Report4Row.builder()
-                        .outcomeCode(code)
-                        .statement(item.getOutcomeStatement() != null ? item.getOutcomeStatement() : "Programme Outcome " + code)
-                        .targetLevel(target)
-                        .directAttainment(item.getDirectAttainment())
-                        .indirectAttainment(item.getIndirectAttainment())
-                        .finalAttainment(finalVal)
-                        .targetMet(targetMet)
-                        .observation(obs)
-                        .build());
-
-                if (finalVal != null) {
-                    sumOverall = sumOverall.add(finalVal);
-                    countOverall++;
-                }
+                report4PO.add(ProgrammeBatchAttainmentReportDto.Report4PoRow.builder()
+                        .poCode(code).statement(item.getOutcomeStatement() != null ? item.getOutcomeStatement() : "Programme Outcome " + code)
+                        .targetLevel(target).directAttainment(item.getDirectAttainment()).indirectAttainment(item.getIndirectAttainment()).finalAttainment(finalVal).targetMet(targetMet).observation(obs).build());
+                if (finalVal != null) { sumOverall = sumOverall.add(finalVal); countOverall++; }
             }
         }
         if (calcResult.getOverallAttainment() != null && calcResult.getOverallAttainment().getPsos() != null) {
             for (ProgrammeAttainmentResultDto.OutcomeAttainmentItem item : calcResult.getOverallAttainment().getPsos()) {
-                String code = item.getPsoCode() != null ? item.getPsoCode() : item.getOutcomeCode();
+                String code = item.getPsoCode();
                 BigDecimal target = item.getTarget() != null ? item.getTarget() : new BigDecimal("2.50");
                 BigDecimal finalVal = item.getOverallAttainment();
                 boolean targetMet = finalVal != null && finalVal.compareTo(target) >= 0;
-                String obs = item.getObservation() != null ? item.getObservation()
-                        : (targetMet ? "PSO target attained (" + finalVal + " >= " + target + ")" : "PSO target not attained (" + finalVal + " < " + target + ")");
+                String obs = item.getObservation() != null ? item.getObservation() : (targetMet ? "PSO target attained (" + finalVal + " >= " + target + ")" : "PSO target not attained (" + finalVal + " < " + target + ")");
 
-                report4.add(ProgrammeBatchAttainmentReportDto.Report4Row.builder()
-                        .outcomeCode(code)
-                        .statement(item.getOutcomeStatement() != null ? item.getOutcomeStatement() : "Programme Specific Outcome " + code)
-                        .targetLevel(target)
-                        .directAttainment(item.getDirectAttainment())
-                        .indirectAttainment(item.getIndirectAttainment())
-                        .finalAttainment(finalVal)
-                        .targetMet(targetMet)
-                        .observation(obs)
-                        .build());
-
-                if (finalVal != null) {
-                    sumOverall = sumOverall.add(finalVal);
-                    countOverall++;
-                }
+                report4PSO.add(ProgrammeBatchAttainmentReportDto.Report4PsoRow.builder()
+                        .psoCode(code).statement(item.getOutcomeStatement() != null ? item.getOutcomeStatement() : "Programme Specific Outcome " + code)
+                        .targetLevel(target).directAttainment(item.getDirectAttainment()).indirectAttainment(item.getIndirectAttainment()).finalAttainment(finalVal).targetMet(targetMet).observation(obs).build());
+                if (finalVal != null) { sumOverall = sumOverall.add(finalVal); countOverall++; }
             }
         }
 
-        BigDecimal overall = countOverall > 0
-                ? sumOverall.divide(BigDecimal.valueOf(countOverall), 2, RoundingMode.HALF_UP)
-                : BigDecimal.ZERO;
+        BigDecimal overall = countOverall > 0 ? sumOverall.divide(BigDecimal.valueOf(countOverall), 2, RoundingMode.HALF_UP) : BigDecimal.ZERO;
 
         ProgrammeBatchAttainmentReport report = programmeBatchAttainmentReportRepository.findByProgrammeBatchId(batch.getId())
                 .orElse(ProgrammeBatchAttainmentReport.builder()
@@ -492,27 +453,27 @@ public class AttainmentReportService {
 
         report.setStatus(status);
         report.setOverallProgrammeAttainment(overall);
-        report.setAverageMappingReportJson(toJson(report1));
-        report.setDirectAttainmentReportJson(toJson(report2));
-        report.setIndirectAttainmentReportJson(toJson(report3));
-        report.setOverallAttainmentReportJson(toJson(report4));
+        report.setAverageMappingReportJson(toJson(java.util.Map.of("po", report1PO, "pso", report1PSO)));
+        report.setDirectAttainmentReportJson(toJson(java.util.Map.of("po", report2PO, "pso", report2PSO)));
+        report.setIndirectAttainmentReportJson(toJson(java.util.Map.of("po", report3PO, "pso", report3PSO)));
+        report.setOverallAttainmentReportJson(toJson(java.util.Map.of("po", report4PO, "pso", report4PSO)));
         report.setUpdatedAt(ZonedDateTime.now());
 
         programmeBatchAttainmentReportRepository.save(report);
 
         return ProgrammeBatchAttainmentReportDto.builder()
                 .id(report.getId())
-                .batchId(batch.getId())
+                .programmeBatchId(batch.getId())
                 .batchName(batch.getName())
                 .masterProgrammeId(prog.getId())
                 .programmeName(prog.getName())
                 .programmeCode(prog.getCode())
                 .status(report.getStatus())
                 .overallProgrammeAttainment(overall)
-                .report1AverageMapping(report1)
-                .report2DirectAttainment(report2)
-                .report3IndirectAttainment(report3)
-                .report4OverallAttainment(report4)
+                .report1AverageMappingPO(report1PO).report1AverageMappingPSO(report1PSO)
+                .report2DirectAttainmentPO(report2PO).report2DirectAttainmentPSO(report2PSO)
+                .report3IndirectAttainmentPO(report3PO).report3IndirectAttainmentPSO(report3PSO)
+                .report4OverallAttainmentPO(report4PO).report4OverallAttainmentPSO(report4PSO)
                 .submittedBy(report.getSubmittedBy())
                 .submittedAt(report.getSubmittedAt())
                 .approvedBy(report.getApprovedBy())
@@ -521,24 +482,35 @@ public class AttainmentReportService {
     }
 
     private ProgrammeBatchAttainmentReportDto mapToDto(ProgrammeBatchAttainmentReport report, MasterProgramme prog, ProgrammeBatch batch) {
-        List<ProgrammeBatchAttainmentReportDto.Report1Row> report1 = fromJson(report.getAverageMappingReportJson(), new TypeReference<>() {});
-        List<ProgrammeBatchAttainmentReportDto.Report2Row> report2 = fromJson(report.getDirectAttainmentReportJson(), new TypeReference<>() {});
-        List<ProgrammeBatchAttainmentReportDto.Report3Row> report3 = fromJson(report.getIndirectAttainmentReportJson(), new TypeReference<>() {});
-        List<ProgrammeBatchAttainmentReportDto.Report4Row> report4 = fromJson(report.getOverallAttainmentReportJson(), new TypeReference<>() {});
+        java.util.Map<String, Object> r1Map = fromJson(report.getAverageMappingReportJson(), new TypeReference<>() {});
+        List<ProgrammeBatchAttainmentReportDto.Report1PoRow> report1PO = r1Map == null ? null : objectMapper.convertValue(r1Map.get("po"), new TypeReference<>() {});
+        List<ProgrammeBatchAttainmentReportDto.Report1PsoRow> report1PSO = r1Map == null ? null : objectMapper.convertValue(r1Map.get("pso"), new TypeReference<>() {});
+
+        java.util.Map<String, Object> r2Map = fromJson(report.getDirectAttainmentReportJson(), new TypeReference<>() {});
+        List<ProgrammeBatchAttainmentReportDto.Report2PoRow> report2PO = r2Map == null ? null : objectMapper.convertValue(r2Map.get("po"), new TypeReference<>() {});
+        List<ProgrammeBatchAttainmentReportDto.Report2PsoRow> report2PSO = r2Map == null ? null : objectMapper.convertValue(r2Map.get("pso"), new TypeReference<>() {});
+
+        java.util.Map<String, Object> r3Map = fromJson(report.getIndirectAttainmentReportJson(), new TypeReference<>() {});
+        List<ProgrammeBatchAttainmentReportDto.Report3PoRow> report3PO = r3Map == null ? null : objectMapper.convertValue(r3Map.get("po"), new TypeReference<>() {});
+        List<ProgrammeBatchAttainmentReportDto.Report3PsoRow> report3PSO = r3Map == null ? null : objectMapper.convertValue(r3Map.get("pso"), new TypeReference<>() {});
+
+        java.util.Map<String, Object> r4Map = fromJson(report.getOverallAttainmentReportJson(), new TypeReference<>() {});
+        List<ProgrammeBatchAttainmentReportDto.Report4PoRow> report4PO = r4Map == null ? null : objectMapper.convertValue(r4Map.get("po"), new TypeReference<>() {});
+        List<ProgrammeBatchAttainmentReportDto.Report4PsoRow> report4PSO = r4Map == null ? null : objectMapper.convertValue(r4Map.get("pso"), new TypeReference<>() {});
 
         return ProgrammeBatchAttainmentReportDto.builder()
                 .id(report.getId())
-                .batchId(batch.getId())
+                .programmeBatchId(batch.getId())
                 .batchName(batch.getName())
                 .masterProgrammeId(prog.getId())
                 .programmeName(prog.getName())
                 .programmeCode(prog.getCode())
                 .status(report.getStatus())
                 .overallProgrammeAttainment(report.getOverallProgrammeAttainment())
-                .report1AverageMapping(report1 != null ? report1 : Collections.emptyList())
-                .report2DirectAttainment(report2 != null ? report2 : Collections.emptyList())
-                .report3IndirectAttainment(report3 != null ? report3 : Collections.emptyList())
-                .report4OverallAttainment(report4 != null ? report4 : Collections.emptyList())
+                .report1AverageMappingPO(report1PO != null ? report1PO : Collections.emptyList()).report1AverageMappingPSO(report1PSO != null ? report1PSO : Collections.emptyList())
+                .report2DirectAttainmentPO(report2PO != null ? report2PO : Collections.emptyList()).report2DirectAttainmentPSO(report2PSO != null ? report2PSO : Collections.emptyList())
+                .report3IndirectAttainmentPO(report3PO != null ? report3PO : Collections.emptyList()).report3IndirectAttainmentPSO(report3PSO != null ? report3PSO : Collections.emptyList())
+                .report4OverallAttainmentPO(report4PO != null ? report4PO : Collections.emptyList()).report4OverallAttainmentPSO(report4PSO != null ? report4PSO : Collections.emptyList())
                 .submittedBy(report.getSubmittedBy())
                 .submittedAt(report.getSubmittedAt())
                 .approvedBy(report.getApprovedBy())

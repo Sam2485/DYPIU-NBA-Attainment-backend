@@ -1287,7 +1287,7 @@ public class AcademicService {
                                     : UserRole.FACULTY.name())
                             .schoolId(u.getSchoolId())
                             .departmentId(u.getDepartmentId())
-                            .programmeId(u.getProgrammeId())
+                            .masterProgrammeId(u.getProgrammeId())
                             .department(u.getDepartment())
                             .programme(u.getProgramme())
                             .build();

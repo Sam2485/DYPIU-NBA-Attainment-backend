@@ -236,7 +236,7 @@ public class Phase10AttainmentReportPersistenceIntegrationTest {
         CourseAttainmentReportDto report = attainmentReportService.getOrCreateCourseAttainmentReport(offering2024.getId());
 
         assertNotNull(report);
-        assertEquals(offering2024.getId(), report.getOfferingId());
+        assertEquals(offering2024.getId(), report.getProgrammeBatchCourseId());
         assertEquals("CS401-24", report.getCourseCode());
         assertEquals("Computer Networks & Security (2024)", report.getCourseName());
         assertEquals(ReportStatus.DRAFT, report.getStatus());
@@ -246,7 +246,7 @@ public class Phase10AttainmentReportPersistenceIntegrationTest {
         assertFalse(report.getTable1Mapping().isEmpty(), "Table 1 must contain CO articulation mappings");
 
         // Verify Table 2: Course PO/PSO direct contributions
-        assertNotNull(report.getTable2Direct());
+        assertNotNull(report.getTable2DirectPO());
 
         // Verify Table 3: CO attainment breakdown
         assertNotNull(report.getTable3CoAttainments());
@@ -299,23 +299,23 @@ public class Phase10AttainmentReportPersistenceIntegrationTest {
         ProgrammeBatchAttainmentReportDto report = attainmentReportService.getOrCreateProgrammeAttainmentReport(prog.getId(), batch2024.getId());
 
         assertNotNull(report);
-        assertEquals(batch2024.getId(), report.getBatchId());
+        assertEquals(batch2024.getId(), report.getProgrammeBatchId());
         assertEquals(prog.getId(), report.getMasterProgrammeId());
         assertEquals(ReportStatus.DRAFT, report.getStatus());
 
         // Report 1: Average Mapping
-        assertNotNull(report.getReport1AverageMapping());
-        assertFalse(report.getReport1AverageMapping().isEmpty());
+        assertNotNull(report.getReport1AverageMappingPO());
+        assertFalse(report.getReport1AverageMappingPO().isEmpty());
 
         // Report 2: Direct Attainment
-        assertNotNull(report.getReport2DirectAttainment());
+        assertNotNull(report.getReport2DirectAttainmentPO());
 
         // Report 3: Indirect Attainment
-        assertNotNull(report.getReport3IndirectAttainment());
+        assertNotNull(report.getReport3IndirectAttainmentPO());
 
         // Report 4: Overall Programme Attainment (80/20)
-        assertNotNull(report.getReport4OverallAttainment());
-        assertFalse(report.getReport4OverallAttainment().isEmpty());
+        assertNotNull(report.getReport4OverallAttainmentPO());
+        assertFalse(report.getReport4OverallAttainmentPO().isEmpty());
 
         // Verify DB persistence
         var savedOpt = programmeBatchAttainmentReportRepository.findByProgrammeBatchId(batch2024.getId());

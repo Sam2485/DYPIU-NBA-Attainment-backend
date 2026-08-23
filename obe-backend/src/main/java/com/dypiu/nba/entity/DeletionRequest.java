@@ -20,6 +20,7 @@ public class DeletionRequest {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @com.fasterxml.jackson.annotation.JsonProperty("deletionRequestId")
     private Long id;
 
     @Enumerated(EnumType.STRING)

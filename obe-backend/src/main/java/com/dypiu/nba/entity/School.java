@@ -5,6 +5,8 @@ import lombok.*;
 
 import java.time.ZonedDateTime;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 @Entity
 @Table(name = "schools")
 @Getter
@@ -15,6 +17,7 @@ import java.time.ZonedDateTime;
 public class School {
 
     @Id
+    @JsonProperty("schoolId")
     private String id;
 
     @Column(nullable = false, unique = true, length = 20)

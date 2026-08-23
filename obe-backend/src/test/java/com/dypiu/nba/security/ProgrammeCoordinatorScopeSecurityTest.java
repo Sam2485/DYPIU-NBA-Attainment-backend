@@ -272,7 +272,7 @@ public class ProgrammeCoordinatorScopeSecurityTest {
         assertTrue(response.getBody().isSuccess());
         Map<String, Object> data = response.getBody().getData();
         assertNotNull(data);
-        assertEquals(progA1.getId(), data.get("programmeId"));
+        assertEquals(progA1.getId(), data.get("masterProgrammeId"));
     }
 
     @Test

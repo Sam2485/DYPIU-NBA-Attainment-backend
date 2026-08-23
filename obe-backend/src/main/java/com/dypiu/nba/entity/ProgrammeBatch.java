@@ -5,6 +5,8 @@ import lombok.*;
 
 import java.time.ZonedDateTime;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 @Entity
 @Table(
         name = "programme_batches",
@@ -23,6 +25,7 @@ import java.time.ZonedDateTime;
 public class ProgrammeBatch {
 
     @Id
+    @JsonProperty("programmeBatchId")
     private String id;
 
     @Column(name = "master_programme_id", nullable = false)

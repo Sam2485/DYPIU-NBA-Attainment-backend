@@ -139,7 +139,7 @@ public class AuthService {
                         .role(user.getRole() != null ? user.getRole().name() : "FACULTY")
                         .schoolId(user.getSchoolId())
                         .departmentId(user.getDepartmentId())
-                        .programmeId(user.getProgrammeId())
+                        .masterProgrammeId(user.getProgrammeId())
                         .department(user.getDepartment())
                         .programme(user.getProgramme())
                         .build())

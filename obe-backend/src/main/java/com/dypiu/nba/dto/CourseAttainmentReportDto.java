@@ -14,12 +14,13 @@ import java.util.Map;
 @AllArgsConstructor
 public class CourseAttainmentReportDto {
 
+    @com.fasterxml.jackson.annotation.JsonProperty("courseAttainmentReportId")
     private String id;
-    private String offeringId;
+    private String programmeBatchCourseId;
     private String masterCourseId;
     private String courseCode;
     private String courseName;
-    private String batchId;
+    private String programmeBatchId;
     private String batchName;
     private Integer semester;
     private ReportStatus status;
@@ -32,7 +33,8 @@ public class CourseAttainmentReportDto {
     private List<Table1Row> table1Mapping;
 
     // Table 2: Course PO/PSO Direct Attainment Contribution (Average Mapping * Overall CO Attainment / 3)
-    private List<Table2Row> table2Direct;
+    private List<Table2PoRow> table2DirectPO;
+    private List<Table2PsoRow> table2DirectPSO;
 
     // Table 3: CO Direct + Indirect + Final CO Attainment (80% Direct + 20% Indirect)
     private List<Table3Row> table3CoAttainments;
@@ -56,10 +58,20 @@ public class CourseAttainmentReportDto {
     @Builder
     @NoArgsConstructor
     @AllArgsConstructor
-    public static class Table2Row {
-        private String outcomeCode; // e.g. "PO1", "PSO1"
+    public static class Table2PoRow {
+        private String poCode;
         private BigDecimal averageMapping;
-        private BigDecimal directContribution; // avg * overall / 3
+        private BigDecimal directContribution;
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class Table2PsoRow {
+        private String psoCode;
+        private BigDecimal averageMapping;
+        private BigDecimal directContribution;
     }
 
     @Data
