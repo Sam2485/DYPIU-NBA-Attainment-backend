@@ -3095,7 +3095,7 @@ public class AcademicService {
                 .programmeId(progId)
                 .batchId(progress.getBatchId())
                 .coordinatorEmail(progress.getCoordinatorEmail())
-                .currentStep(progress.getCurrentStep())
+                .currentStep(progress.getCurrentStep() != null ? progress.getCurrentStep() : 0)
                 .overallStatus(progress.getOverallStatus())
                 .completedSteps(completed)
                 .pendingSteps(pending)

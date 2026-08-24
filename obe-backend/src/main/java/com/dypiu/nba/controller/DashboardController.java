@@ -362,8 +362,14 @@ public class DashboardController {
         ProgrammeCoordinatorSetupProgressDto progress = academicService.getProgrammeCoordinatorSetupProgress(targetEmail, finalProgId);
 
         Map<String, Object> stats = new LinkedHashMap<>();
+        stats.put("programmeBatches", batches.size());
+        stats.put("programmeBatchesCount", batches.size());
+        stats.put("totalProgrammeBatches", batches.size());
         stats.put("courses", courses.size());
         stats.put("coursesCount", courses.size());
+        stats.put("programmeBatchCourses", offerings.size());
+        stats.put("programmeBatchCoursesCount", offerings.size());
+        stats.put("totalProgrammeBatchCourses", offerings.size());
         stats.put("courseOfferings", offerings.size());
         stats.put("pendingCourseAtrApprovals", courseAtrPending);
         stats.put("pendingVerifications", pendingVerifications);
@@ -371,19 +377,12 @@ public class DashboardController {
 
         ProgrammeBatch activeProgrammeBatch = batches.stream().filter(b -> "ACTIVE".equalsIgnoreCase(b.getStatus())).findFirst().orElse(batches.isEmpty() ? null : batches.get(0));
 
-        Map<String, Boolean> workflowProgress = new LinkedHashMap<>();
-        workflowProgress.put("1", !courses.isEmpty());
-        workflowProgress.put("2", !offerings.isEmpty());
-        workflowProgress.put("3", !batches.isEmpty());
-        workflowProgress.put("4", progress != null && progress.getOverallStatus() == SetupStepStatus.COMPLETED);
-
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("masterProgrammeId", prog.getId());
         data.put("programme", prog);
         data.put("setupProgress", progress);
         data.put("batches", batches);
         data.put("activeBatch", activeProgrammeBatch != null ? activeProgrammeBatch.getName() : "");
-        data.put("workflowProgress", workflowProgress);
         data.put("statistics", stats);
 
         return ResponseEntity.ok(ApiResponse.<Map<String, Object>>builder().success(true).data(data).build());
