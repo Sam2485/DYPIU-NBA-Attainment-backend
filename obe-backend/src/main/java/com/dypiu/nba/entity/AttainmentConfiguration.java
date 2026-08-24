@@ -80,27 +80,51 @@ public class AttainmentConfiguration {
 
     @Transient
     public List<Map<String, Object>> getDirectLevels() {
+        if (directLevelsJson != null && !directLevelsJson.isBlank()) {
+            try {
+                return new com.fasterxml.jackson.databind.ObjectMapper().readValue(
+                        directLevelsJson,
+                        new com.fasterxml.jackson.core.type.TypeReference<List<Map<String, Object>>>() {}
+                );
+            } catch (Exception ignored) {}
+        }
         return List.of(
-                Map.of("level", 1, "minPercentage", 0, "maxPercentage", 50),
-                Map.of("level", 2, "minPercentage", 50, "maxPercentage", 70),
-                Map.of("level", 3, "minPercentage", 70, "maxPercentage", 100)
+                Map.of("level", 1, "minPercentage", 0, "maxPercentage", 40),
+                Map.of("level", 2, "minPercentage", 40, "maxPercentage", 60),
+                Map.of("level", 3, "minPercentage", 60, "maxPercentage", 100)
         );
     }
 
     public void setDirectLevels(List<Map<String, Object>> directLevels) {
-        // Ignored, computed from thresholds
+        if (directLevels != null && !directLevels.isEmpty()) {
+            try {
+                this.directLevelsJson = new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(directLevels);
+            } catch (Exception ignored) {}
+        }
     }
 
     @Transient
     public List<Map<String, Object>> getIndirectLevels() {
+        if (indirectLevelsJson != null && !indirectLevelsJson.isBlank()) {
+            try {
+                return new com.fasterxml.jackson.databind.ObjectMapper().readValue(
+                        indirectLevelsJson,
+                        new com.fasterxml.jackson.core.type.TypeReference<List<Map<String, Object>>>() {}
+                );
+            } catch (Exception ignored) {}
+        }
         return List.of(
-                Map.of("level", 1, "minPercentage", 0, "maxPercentage", 50),
-                Map.of("level", 2, "minPercentage", 50, "maxPercentage", 70),
-                Map.of("level", 3, "minPercentage", 70, "maxPercentage", 100)
+                Map.of("level", 1, "minPercentage", 0, "maxPercentage", 40),
+                Map.of("level", 2, "minPercentage", 40, "maxPercentage", 60),
+                Map.of("level", 3, "minPercentage", 60, "maxPercentage", 100)
         );
     }
 
     public void setIndirectLevels(List<Map<String, Object>> indirectLevels) {
-        // Ignored, computed from thresholds
+        if (indirectLevels != null && !indirectLevels.isEmpty()) {
+            try {
+                this.indirectLevelsJson = new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(indirectLevels);
+            } catch (Exception ignored) {}
+        }
     }
 }

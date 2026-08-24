@@ -31,11 +31,35 @@ public class ProgrammeBatchCourseController {
     @GetMapping
     public ResponseEntity<ApiResponse<List<ProgrammeBatchCourse>>> getAllProgrammeBatchCourses(
             @RequestParam(required = false) String programmeBatchId,
-            @RequestParam(required = false) String masterCourseId) {
-        List<ProgrammeBatchCourse> courses = academicService.getProgrammeBatchCoursesByBatch(programmeBatchId);
+            @RequestParam(required = false) String batchId,
+            @RequestParam(required = false) String masterCourseId,
+            @RequestParam(required = false) String coordinatorEmail,
+            @RequestParam(required = false) String courseCoordinatorEmail) {
+        String targetBatchId = (programmeBatchId != null && !programmeBatchId.isBlank()) ? programmeBatchId : batchId;
+        String effectiveEmail = (coordinatorEmail != null && !coordinatorEmail.isBlank()) ? coordinatorEmail : courseCoordinatorEmail;
+        List<ProgrammeBatchCourse> courses;
+        if (effectiveEmail != null && !effectiveEmail.isBlank()) {
+            courses = academicService.getProgrammeBatchCoursesByCoordinatorEmail(effectiveEmail, targetBatchId);
+        } else {
+            courses = academicService.getProgrammeBatchCoursesByBatch(targetBatchId);
+        }
         return ResponseEntity.ok(ApiResponse.<List<ProgrammeBatchCourse>>builder()
                 .success(true)
                 .data(courses)
+                .build());
+    }
+
+    @GetMapping("/coordinator")
+    public ResponseEntity<ApiResponse<List<ProgrammeBatchCourse>>> getCoursesByCoordinator(
+            @RequestParam(required = false) String coordinatorEmail,
+            @RequestParam(required = false) String courseCoordinatorEmail,
+            @RequestParam(required = false) String programmeBatchId,
+            @RequestParam(required = false) String batchId) {
+        String targetBatchId = (programmeBatchId != null && !programmeBatchId.isBlank()) ? programmeBatchId : batchId;
+        String effectiveEmail = (coordinatorEmail != null && !coordinatorEmail.isBlank()) ? coordinatorEmail : courseCoordinatorEmail;
+        return ResponseEntity.ok(ApiResponse.<List<ProgrammeBatchCourse>>builder()
+                .success(true)
+                .data(academicService.getProgrammeBatchCoursesByCoordinatorEmail(effectiveEmail, targetBatchId))
                 .build());
     }
 
@@ -89,7 +113,7 @@ public class ProgrammeBatchCourseController {
                 .build());
     }
 
-    @PostMapping("/{programmeBatchCourseId}/course-outcomes")
+    @RequestMapping(value = "/{programmeBatchCourseId}/course-outcomes", method = {RequestMethod.POST, RequestMethod.PUT})
     public ResponseEntity<ApiResponse<List<CourseOutcome>>> saveCourseOutcomes(
             @PathVariable String programmeBatchCourseId,
             @RequestBody List<CourseOutcome> outcomes) {
@@ -174,10 +198,17 @@ public class ProgrammeBatchCourseController {
                 .build());
     }
 
-    @PostMapping("/{programmeBatchCourseId}/atr")
+    @RequestMapping(value = "/{programmeBatchCourseId}/atr", method = {RequestMethod.POST, RequestMethod.PUT})
     public ResponseEntity<ApiResponse<CourseAtrReportDto>> saveCourseAtrReport(
             @PathVariable String programmeBatchCourseId,
             @RequestBody CourseAtrReportDto dto) {
+        if (dto.getCourseOffering() == null) {
+            dto.setCourseOffering(CourseAtrReportDto.CourseOfferingSummary.builder()
+                    .id(programmeBatchCourseId)
+                    .build());
+        } else if (dto.getCourseOffering().getId() == null || dto.getCourseOffering().getId().isBlank()) {
+            dto.getCourseOffering().setId(programmeBatchCourseId);
+        }
         return ResponseEntity.ok(ApiResponse.<CourseAtrReportDto>builder()
                 .success(true)
                 .message("Course ATR saved successfully")

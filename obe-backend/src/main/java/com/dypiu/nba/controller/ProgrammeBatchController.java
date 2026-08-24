@@ -29,13 +29,61 @@ public class ProgrammeBatchController {
     private final AttainmentReportService attainmentReportService;
     private final AtrService atrService;
     private final OutcomeService outcomeService;
+    private final com.dypiu.nba.service.BatchLifecycleService batchLifecycleService;
 
     @GetMapping
     public ResponseEntity<ApiResponse<List<ProgrammeBatch>>> getAllProgrammeBatches(
-            @RequestParam(required = false) String masterProgrammeId) {
-        List<ProgrammeBatch> batches = (masterProgrammeId != null && !masterProgrammeId.isBlank())
-                ? academicService.getBatchesByProgramme(masterProgrammeId)
-                : academicService.getAllBatches();
+            @RequestParam(required = false) String masterProgrammeId,
+            @RequestParam(required = false) String programmeId,
+            @RequestParam(required = false) String coordinatorEmail,
+            @RequestParam(required = false) String courseCoordinatorEmail,
+            @RequestParam(required = false) String hodEmail,
+            java.security.Principal principal) {
+        String effectiveProgId = (masterProgrammeId != null && !masterProgrammeId.isBlank()) ? masterProgrammeId : programmeId;
+
+        List<ProgrammeBatch> batches;
+        if (courseCoordinatorEmail != null && !courseCoordinatorEmail.isBlank()) {
+            batches = academicService.getBatchesByCourseCoordinatorEmail(courseCoordinatorEmail);
+        } else if (coordinatorEmail != null && !coordinatorEmail.isBlank()) {
+            batches = academicService.getBatchesByCoordinatorEmailAndProgramme(coordinatorEmail, effectiveProgId);
+        } else if (effectiveProgId != null && !effectiveProgId.isBlank()) {
+            batches = academicService.getBatchesByProgramme(effectiveProgId);
+        } else {
+            batches = academicService.getAllBatches();
+        }
+
+        return ResponseEntity.ok(ApiResponse.<List<ProgrammeBatch>>builder()
+                .success(true)
+                .data(batches)
+                .build());
+    }
+
+    @GetMapping("/coordinator")
+    public ResponseEntity<ApiResponse<List<ProgrammeBatch>>> getProgrammeBatchesByCoordinator(
+            @RequestParam(required = false) String coordinatorEmail,
+            @RequestParam(required = false) String masterProgrammeId,
+            @RequestParam(required = false) String programmeId,
+            java.security.Principal principal) {
+        String effectiveProgId = (masterProgrammeId != null && !masterProgrammeId.isBlank()) ? masterProgrammeId : programmeId;
+        String effectiveEmail = (coordinatorEmail != null && !coordinatorEmail.isBlank())
+                ? coordinatorEmail
+                : (principal != null ? principal.getName() : null);
+        List<ProgrammeBatch> batches = academicService.getBatchesByCoordinatorEmailAndProgramme(effectiveEmail, effectiveProgId);
+        return ResponseEntity.ok(ApiResponse.<List<ProgrammeBatch>>builder()
+                .success(true)
+                .data(batches)
+                .build());
+    }
+
+    @GetMapping("/course-coordinator")
+    public ResponseEntity<ApiResponse<List<ProgrammeBatch>>> getProgrammeBatchesByCourseCoordinator(
+            @RequestParam(required = false) String coordinatorEmail,
+            @RequestParam(required = false) String courseCoordinatorEmail,
+            java.security.Principal principal) {
+        String effectiveEmail = (courseCoordinatorEmail != null && !courseCoordinatorEmail.isBlank())
+                ? courseCoordinatorEmail
+                : ((coordinatorEmail != null && !coordinatorEmail.isBlank()) ? coordinatorEmail : (principal != null ? principal.getName() : null));
+        List<ProgrammeBatch> batches = academicService.getBatchesByCourseCoordinatorEmail(effectiveEmail);
         return ResponseEntity.ok(ApiResponse.<List<ProgrammeBatch>>builder()
                 .success(true)
                 .data(batches)
@@ -70,6 +118,40 @@ public class ProgrammeBatchController {
                 .success(true)
                 .message("ProgrammeBatch updated successfully")
                 .data(academicService.saveBatch(batch))
+                .build());
+    }
+
+    @PostMapping("/{programmeBatchId}/status")
+    public ResponseEntity<ApiResponse<ProgrammeBatch>> changeBatchStatus(
+            @PathVariable String programmeBatchId,
+            @RequestBody java.util.Map<String, String> payload) {
+        return ResponseEntity.ok(ApiResponse.<ProgrammeBatch>builder()
+                .success(true)
+                .message("Batch status updated successfully.")
+                .data(batchLifecycleService.changeBatchStatus(programmeBatchId, payload.get("status"), payload.get("reason")))
+                .build());
+    }
+
+    @PostMapping("/{programmeBatchId}/reopen")
+    public ResponseEntity<ApiResponse<ProgrammeBatch>> reopenBatch(
+            @PathVariable String programmeBatchId,
+            @RequestBody java.util.Map<String, String> payload) {
+        java.time.ZonedDateTime until = java.time.ZonedDateTime.parse(payload.get("editingWindowUntil"));
+        return ResponseEntity.ok(ApiResponse.<ProgrammeBatch>builder()
+                .success(true)
+                .message("Batch reopened successfully.")
+                .data(batchLifecycleService.reopenGraduatedBatch(programmeBatchId, until, payload.get("reason")))
+                .build());
+    }
+
+    @PostMapping("/{programmeBatchId}/close-reopening")
+    public ResponseEntity<ApiResponse<ProgrammeBatch>> closeReopening(
+            @PathVariable String programmeBatchId,
+            @RequestBody java.util.Map<String, String> payload) {
+        return ResponseEntity.ok(ApiResponse.<ProgrammeBatch>builder()
+                .success(true)
+                .message("Batch reopening window closed successfully.")
+                .data(batchLifecycleService.closeReopeningWindow(programmeBatchId, payload.get("reason")))
                 .build());
     }
 
@@ -232,6 +314,15 @@ public class ProgrammeBatchController {
     public ResponseEntity<ApiResponse<ProgrammeAtrReportDto>> saveProgrammeBatchAtr(
             @PathVariable String programmeBatchId,
             @RequestBody ProgrammeAtrReportDto dto) {
+        ProgrammeBatch batch = academicService.getBatchById(programmeBatchId);
+        if (dto.getBatch() == null) {
+            dto.setBatch(ProgrammeAtrReportDto.BatchSummary.builder().id(programmeBatchId).name(batch != null ? batch.getName() : "").build());
+        } else if (dto.getBatch().getId() == null || dto.getBatch().getId().isBlank()) {
+            dto.getBatch().setId(programmeBatchId);
+        }
+        if (dto.getProgramme() == null && batch != null) {
+            dto.setProgramme(ProgrammeAtrReportDto.ProgrammeSummary.builder().id(batch.getMasterProgrammeId()).build());
+        }
         return ResponseEntity.ok(ApiResponse.<ProgrammeAtrReportDto>builder()
                 .success(true)
                 .message("Programme Batch ATR saved successfully")

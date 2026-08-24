@@ -64,11 +64,20 @@ public class AtrService {
     private void enforceDepartmentScope(String departmentId) {
         CurrentUserScope scope = getScope();
         if (scope == null || scope.isAdmin() || scope.isIqac()) return;
-        if (scope.isHod() || scope.isProgrammeCoordinator()) {
+        if (scope.isHod()) {
             String requiredDeptId = scope.getRequiredDepartmentId();
             if (departmentId != null && !departmentId.equals(requiredDeptId)) {
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Resource is outside your assigned department scope.");
             }
+        }
+        if (scope.isProgrammeCoordinator()) {
+            if (scope.hasDepartmentScope()) {
+                String requiredDeptId = scope.getDepartmentId();
+                if (departmentId != null && !departmentId.equals(requiredDeptId)) {
+                    throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Resource is outside your assigned department scope.");
+                }
+            }
+            return;
         }
         if (scope.isDirector()) {
             if (departmentId != null) {
@@ -86,8 +95,14 @@ public class AtrService {
         if (programmeId == null || programmeId.isBlank()) return;
 
         if (scope.isProgrammeCoordinator()) {
-            String requiredProgId = scope.getRequiredProgrammeId();
-            if (!programmeId.equals(requiredProgId)) {
+            String requiredProgId = scope.getProgrammeId();
+            boolean matchesDirectProg = (requiredProgId != null && programmeId.equals(requiredProgId));
+            boolean matchesBatchProg = false;
+            if (!matchesDirectProg && scope.getEmail() != null && !scope.getEmail().isBlank()) {
+                List<ProgrammeBatch> batches = programmeBatchRepository.findByCoordinatorEmailIgnoreCase(scope.getEmail().trim());
+                matchesBatchProg = batches.stream().anyMatch(b -> programmeId.equals(b.getMasterProgrammeId()));
+            }
+            if (!matchesDirectProg && !matchesBatchProg) {
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Resource is outside your assigned programme scope.");
             }
         }

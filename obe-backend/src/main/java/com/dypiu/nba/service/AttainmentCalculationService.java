@@ -1019,7 +1019,7 @@ public class AttainmentCalculationService {
             double scoreVal = (count1 * 1.0 + count2 * 2.0 + count3 * 3.0) / divisor;
             BigDecimal indirectScore = BigDecimal.valueOf(scoreVal).setScale(2, RoundingMode.HALF_UP);
 
-            // Dynamic Level Band evaluation:
+            // Dynamic Level Band evaluation (compare overall percentage directly to configured bands -> 1, 2, or 3):
             int level = evaluateLevelBand(overallPct, indirectBands);
 
             level1Counts.put(co, count1);
@@ -1083,127 +1083,7 @@ public class AttainmentCalculationService {
                      Workbook workbook = WorkbookFactory.create(is)) {
                     FormulaEvaluator evaluator = workbook.getCreationHelper().createFormulaEvaluator();
                     Sheet sheet = findSurveySheet(workbook);
-
-                    // Find CO header row (closest to student response rows)
-                    int coHeaderRowNum = -1;
-                    Map<Integer, String> coColMap = new LinkedHashMap<>();
-                    for (Row row : sheet) {
-                        Map<Integer, String> candidateCols = new LinkedHashMap<>();
-                        for (Cell cell : row) {
-                            String text = getStringCellValue(cell, evaluator);
-                            if (text != null && text.matches("(?i)^CO\\s*\\d+$")) {
-                                candidateCols.put(cell.getColumnIndex(), text.toUpperCase().replaceAll("\\s+", ""));
-                            }
-                        }
-                        if (candidateCols.size() >= coColMap.size() && !candidateCols.isEmpty()) {
-                            coColMap = candidateCols;
-                            coHeaderRowNum = row.getRowNum();
-                        }
-                    }
-
-                    if (coColMap.isEmpty()) {
-                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "No Course Outcome (CO) headers found in Survey sheet.");
-                    }
-
-                    // Check if any column header explicitly mentioned PRN or Name
-                    int prnColIdx = -1;
-                    int nameColIdx = -1;
-                    if (coHeaderRowNum >= 0) {
-                        Row hRow = sheet.getRow(coHeaderRowNum);
-                        if (hRow != null) {
-                            for (Cell cell : hRow) {
-                                String hText = getStringCellValue(cell, evaluator);
-                                if (hText != null) {
-                                    String clean = hText.toLowerCase().replaceAll("[^a-z]", "");
-                                    if (clean.contains("prn") || clean.contains("rollno") || clean.contains("studentid")) {
-                                        prnColIdx = cell.getColumnIndex();
-                                    } else if (clean.contains("name") || clean.contains("studentname")) {
-                                        nameColIdx = cell.getColumnIndex();
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // Parse student response rows below CO header
-                    for (int r = coHeaderRowNum + 1; r <= sheet.getLastRowNum(); r++) {
-                        Row row = sheet.getRow(r);
-                        if (row == null) continue;
-
-                        Map<String, BigDecimal> coRatings = new LinkedHashMap<>();
-                        Map<String, String> coFeedbacks = new LinkedHashMap<>();
-                        boolean hasAnyRating = false;
-
-                        for (Map.Entry<Integer, String> e : coColMap.entrySet()) {
-                            int colIdx = e.getKey();
-                            String coCode = e.getValue();
-                            Cell cell = row.getCell(colIdx);
-
-                            Double numVal = getNumericCellValue(cell, evaluator);
-                            String strVal = getStringCellValue(cell, evaluator);
-
-                            if (numVal != null && numVal >= 1 && numVal <= 3) {
-                                int valInt = (int) Math.round(numVal);
-                                coRatings.put(coCode, BigDecimal.valueOf(valInt).setScale(2, RoundingMode.HALF_UP));
-                                String label = valInt == 3 ? "Substantial" : (valInt == 2 ? "Moderate" : "Slight");
-                                coFeedbacks.put(coCode, label);
-                                hasAnyRating = true;
-                            } else if (strVal != null && !strVal.isBlank()) {
-                                String trimmed = strVal.trim();
-                                if ("substantial".equalsIgnoreCase(trimmed) || "3".equals(trimmed) || "3.0".equals(trimmed) || "high".equalsIgnoreCase(trimmed) || "3 - substantial".equalsIgnoreCase(trimmed)) {
-                                    coRatings.put(coCode, new BigDecimal("3.00"));
-                                    coFeedbacks.put(coCode, "Substantial");
-                                    hasAnyRating = true;
-                                } else if ("moderate".equalsIgnoreCase(trimmed) || "2".equals(trimmed) || "2.0".equals(trimmed) || "medium".equalsIgnoreCase(trimmed) || "2 - moderate".equalsIgnoreCase(trimmed)) {
-                                    coRatings.put(coCode, new BigDecimal("2.00"));
-                                    coFeedbacks.put(coCode, "Moderate");
-                                    hasAnyRating = true;
-                                } else if ("slight".equalsIgnoreCase(trimmed) || "1".equals(trimmed) || "1.0".equals(trimmed) || "low".equalsIgnoreCase(trimmed) || "1 - slight".equalsIgnoreCase(trimmed)) {
-                                    coRatings.put(coCode, new BigDecimal("1.00"));
-                                    coFeedbacks.put(coCode, "Slight");
-                                    hasAnyRating = true;
-                                } else if ("-".equals(trimmed) || "--".equals(trimmed)) {
-                                    // Empty rating
-                                } else {
-                                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                                            "Invalid survey response '" + strVal + "' for " + coCode + ". Valid values are 'Slight', 'Moderate', 'Substantial' or 1, 2, 3.");
-                                }
-                            }
-                        }
-
-                        if (!hasAnyRating) continue; // Skip empty rows
-
-                        String prn = null;
-                        if (prnColIdx != -1) {
-                            Cell pCell = row.getCell(prnColIdx);
-                            String rawPrn = getStringCellValue(pCell, evaluator);
-                            if (rawPrn != null && !rawPrn.isBlank()) {
-                                prn = rawPrn.trim();
-                            }
-                        }
-
-                        String sName = null;
-                        if (nameColIdx != -1) {
-                            Cell nCell = row.getCell(nameColIdx);
-                            String rawName = getStringCellValue(nCell, evaluator);
-                            if (rawName != null && !rawName.isBlank()) {
-                                sName = rawName.trim();
-                            }
-                        }
-
-                        if (prn == null || prn.isBlank()) {
-                            prn = "SRV-" + (surveyResponses.size() + 1);
-                        }
-
-                        int srNo = surveyResponses.size() + 1;
-                        surveyResponses.add(SurveyResponseRowDto.builder()
-                                .srNo(srNo)
-                                .prn(prn)
-                                .studentName(sName != null && !sName.isBlank() ? sName : prn)
-                                .coRatings(coRatings)
-                                .coFeedbacks(coFeedbacks)
-                                .build());
-                    }
+                    surveyResponses = parseSurveySheet(sheet, evaluator);
                 }
 
                 if (surveyResponses.isEmpty()) {
@@ -1268,12 +1148,163 @@ public class AttainmentCalculationService {
         return calculateSurveyAttainment(offeringId, payload);
     }
 
+    public List<SurveyResponseRowDto> parseSurveyFile(Path filePath) throws Exception {
+        try (InputStream is = Files.newInputStream(filePath);
+             Workbook workbook = WorkbookFactory.create(is)) {
+            FormulaEvaluator evaluator = workbook.getCreationHelper().createFormulaEvaluator();
+            Sheet sheet = findSurveySheet(workbook);
+            return parseSurveySheet(sheet, evaluator);
+        }
+    }
+
+    public List<SurveyResponseRowDto> parseSurveySheet(Sheet sheet, FormulaEvaluator evaluator) {
+        List<SurveyResponseRowDto> responses = new ArrayList<>();
+        int coHeaderRowNum = -1;
+        Map<Integer, String> coColMap = new LinkedHashMap<>();
+        for (Row row : sheet) {
+            Map<Integer, String> candidateCols = new LinkedHashMap<>();
+            for (Cell cell : row) {
+                String text = getStringCellValue(cell, evaluator);
+                if (text != null && text.matches("(?i)^CO\\s*\\d+$")) {
+                    candidateCols.put(cell.getColumnIndex(), text.toUpperCase().replaceAll("\\s+", ""));
+                }
+            }
+            if (candidateCols.size() >= coColMap.size() && !candidateCols.isEmpty()) {
+                coColMap = candidateCols;
+                coHeaderRowNum = row.getRowNum();
+            }
+        }
+
+        if (coColMap.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "No Course Outcome (CO) headers found in Survey sheet.");
+        }
+
+        int prnColIdx = -1;
+        int nameColIdx = -1;
+        if (coHeaderRowNum >= 0) {
+            Row hRow = sheet.getRow(coHeaderRowNum);
+            if (hRow != null) {
+                for (Cell cell : hRow) {
+                    String hText = getStringCellValue(cell, evaluator);
+                    if (hText != null) {
+                        String clean = hText.toLowerCase().replaceAll("[^a-z]", "");
+                        if (clean.contains("prn") || clean.contains("rollno") || clean.contains("studentid")) {
+                            prnColIdx = cell.getColumnIndex();
+                        } else if (clean.contains("name") || clean.contains("studentname")) {
+                            nameColIdx = cell.getColumnIndex();
+                        }
+                    }
+                }
+            }
+        }
+
+        for (int r = coHeaderRowNum + 1; r <= sheet.getLastRowNum(); r++) {
+            Row row = sheet.getRow(r);
+            if (row == null) continue;
+
+            Map<String, BigDecimal> coRatings = new LinkedHashMap<>();
+            Map<String, String> coFeedbacks = new LinkedHashMap<>();
+            boolean hasAnyRating = false;
+
+            for (Map.Entry<Integer, String> e : coColMap.entrySet()) {
+                int colIdx = e.getKey();
+                String coCode = e.getValue();
+                Cell cell = row.getCell(colIdx);
+
+                Double numVal = getNumericCellValue(cell, evaluator);
+                String strVal = getStringCellValue(cell, evaluator);
+
+                if (numVal != null && numVal >= 1 && numVal <= 3) {
+                    int valInt = (int) Math.round(numVal);
+                    coRatings.put(coCode, BigDecimal.valueOf(valInt).setScale(2, RoundingMode.HALF_UP));
+                    String label = valInt == 3 ? "Substantial" : (valInt == 2 ? "Moderate" : "Slight");
+                    coFeedbacks.put(coCode, label);
+                    hasAnyRating = true;
+                } else if (strVal != null && !strVal.isBlank()) {
+                    String trimmed = strVal.trim();
+                    if ("substantial".equalsIgnoreCase(trimmed) || "3".equals(trimmed) || "3.0".equals(trimmed) || "high".equalsIgnoreCase(trimmed) || "3 - substantial".equalsIgnoreCase(trimmed)) {
+                        coRatings.put(coCode, new BigDecimal("3.00"));
+                        coFeedbacks.put(coCode, "Substantial");
+                        hasAnyRating = true;
+                    } else if ("moderate".equalsIgnoreCase(trimmed) || "2".equals(trimmed) || "2.0".equals(trimmed) || "medium".equalsIgnoreCase(trimmed) || "2 - moderate".equalsIgnoreCase(trimmed)) {
+                        coRatings.put(coCode, new BigDecimal("2.00"));
+                        coFeedbacks.put(coCode, "Moderate");
+                        hasAnyRating = true;
+                    } else if ("slight".equalsIgnoreCase(trimmed) || "1".equals(trimmed) || "1.0".equals(trimmed) || "low".equalsIgnoreCase(trimmed) || "1 - slight".equalsIgnoreCase(trimmed)) {
+                        coRatings.put(coCode, new BigDecimal("1.00"));
+                        coFeedbacks.put(coCode, "Slight");
+                        hasAnyRating = true;
+                    } else if ("-".equals(trimmed) || "--".equals(trimmed)) {
+                        // Empty rating
+                    } else {
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                                "Invalid survey response '" + strVal + "' for " + coCode + ". Valid values are 'Slight', 'Moderate', 'Substantial' or 1, 2, 3.");
+                    }
+                }
+            }
+
+            if (!hasAnyRating) continue;
+
+            String prn = null;
+            if (prnColIdx != -1) {
+                Cell pCell = row.getCell(prnColIdx);
+                String rawPrn = getStringCellValue(pCell, evaluator);
+                if (rawPrn != null && !rawPrn.isBlank()) {
+                    prn = rawPrn.trim();
+                }
+            }
+
+            String sName = null;
+            if (nameColIdx != -1) {
+                Cell nCell = row.getCell(nameColIdx);
+                String rawName = getStringCellValue(nCell, evaluator);
+                if (rawName != null && !rawName.isBlank()) {
+                    sName = rawName.trim();
+                }
+            }
+
+            if (prn == null || prn.isBlank()) {
+                prn = "SRV-" + (responses.size() + 1);
+            }
+
+            int srNo = responses.size() + 1;
+            responses.add(SurveyResponseRowDto.builder()
+                    .srNo(srNo)
+                    .prn(prn)
+                    .studentName(sName != null && !sName.isBlank() ? sName : prn)
+                    .coRatings(coRatings)
+                    .coFeedbacks(coFeedbacks)
+                    .build());
+        }
+        return responses;
+    }
+
     @Transactional(readOnly = true)
     public SurveyAttainmentResultDto getSurveyAttainment(String courseOfferingOrCourseId) {
         System.out.println("[AttainmentCalculationService] getSurveyAttainment called | courseOfferingOrCourseId: " + courseOfferingOrCourseId);
         String offeringId = resolveOfferingId(courseOfferingOrCourseId);
         if (surveyAttainmentStore.containsKey(offeringId)) {
             return surveyAttainmentStore.get(offeringId);
+        }
+
+        Optional<UploadedDocument> docOpt = uploadedDocumentRepository
+                .findFirstByProgrammeBatchCourseIdAndDocumentTypeOrderByUploadedAtDesc(offeringId, DocumentType.SURVEY);
+        if (docOpt.isPresent()) {
+            String savedPath = docOpt.get().getSavedPath();
+            if (savedPath != null && Files.exists(Paths.get(savedPath))) {
+                try {
+                    List<SurveyResponseRowDto> surveyResponses = parseSurveyFile(Paths.get(savedPath));
+                    if (!surveyResponses.isEmpty()) {
+                        SurveyMarksPayloadDto payload = SurveyMarksPayloadDto.builder()
+                                .courseId(offeringId)
+                                .surveyResponses(surveyResponses)
+                                .build();
+                        return calculateSurveyAttainment(offeringId, payload);
+                    }
+                } catch (Exception e) {
+                    log.warn("Failed to reload survey from saved file: {}", e.getMessage());
+                }
+            }
         }
 
         return SurveyAttainmentResultDto.builder()
@@ -1475,6 +1506,23 @@ public class AttainmentCalculationService {
         }
         return workbook.getSheetAt(0);
     }
+    private String normalizeOutcomeCode(String text) {
+        if (text == null || text.isBlank()) return null;
+        String raw = text.trim().toUpperCase().replaceAll("\\s+", "");
+        if (raw.matches("^(PO|PSO)\\d+$")) {
+            return raw;
+        }
+        String clean = raw.replaceAll("[^A-Z0-9]", "");
+        java.util.regex.Matcher mPo = java.util.regex.Pattern.compile("^(PO\\d+)").matcher(clean);
+        if (mPo.find()) {
+            return mPo.group(1);
+        }
+        java.util.regex.Matcher mPso = java.util.regex.Pattern.compile("^(PSO\\d+)").matcher(clean);
+        if (mPso.find()) {
+            return mPso.group(1);
+        }
+        return null;
+    }
 
     @Transactional
     public ProgrammeSurveyResultDto processAndSaveProgrammeSurveyFile(String programmeId, String batchId, MultipartFile file, String uploadedBy) {
@@ -1484,8 +1532,20 @@ public class AttainmentCalculationService {
         }
         String key = programmeId + "::" + batchId;
 
-        // Load authoritative configured POs and PSOs for the programme
+        // Load authoritative configured POs and PSOs for the programme/batch
         List<ProgrammeOutcome> pos = programmeOutcomeRepository.findByProgrammeBatchIdOrderByCodeAsc(batchId);
+        if (pos == null || pos.isEmpty()) {
+            if (programmeId != null && !programmeId.isBlank()) {
+                pos = programmeOutcomeRepository.findByProgrammeBatchIdOrderByCodeAsc(programmeId);
+            }
+            if (pos == null || pos.isEmpty()) {
+                List<ProgrammeBatch> otherBatches = programmeBatchRepository.findByMasterProgrammeId(programmeId);
+                for (ProgrammeBatch ob : otherBatches) {
+                    pos = programmeOutcomeRepository.findByProgrammeBatchIdOrderByCodeAsc(ob.getId());
+                    if (pos != null && !pos.isEmpty()) break;
+                }
+            }
+        }
         if (pos == null || pos.isEmpty()) {
             List<ProgrammeOutcome> defaultPos = new ArrayList<>();
             for (int i = 1; i <= 12; i++) {
@@ -1500,6 +1560,18 @@ public class AttainmentCalculationService {
         }
         List<ProgrammeSpecificOutcome> psos = programmeSpecificOutcomeRepository.findByProgrammeBatchIdOrderByCodeAsc(batchId);
         if (psos == null || psos.isEmpty()) {
+            if (programmeId != null && !programmeId.isBlank()) {
+                psos = programmeSpecificOutcomeRepository.findByProgrammeBatchIdOrderByCodeAsc(programmeId);
+            }
+            if (psos == null || psos.isEmpty()) {
+                List<ProgrammeBatch> otherBatches = programmeBatchRepository.findByMasterProgrammeId(programmeId);
+                for (ProgrammeBatch ob : otherBatches) {
+                    psos = programmeSpecificOutcomeRepository.findByProgrammeBatchIdOrderByCodeAsc(ob.getId());
+                    if (psos != null && !psos.isEmpty()) break;
+                }
+            }
+        }
+        if (psos == null || psos.isEmpty()) {
             List<ProgrammeSpecificOutcome> defaultPsos = new ArrayList<>();
             for (int i = 1; i <= 3; i++) {
                 defaultPsos.add(ProgrammeSpecificOutcome.builder()
@@ -1513,10 +1585,12 @@ public class AttainmentCalculationService {
         }
 
         Set<String> configuredPOCodes = pos.stream()
-                .map(p -> p.getCode().toUpperCase().replaceAll("\\s+", ""))
+                .map(p -> normalizeOutcomeCode(p.getCode()))
+                .filter(Objects::nonNull)
                 .collect(Collectors.toCollection(LinkedHashSet::new));
         Set<String> configuredPSOCodes = psos.stream()
-                .map(p -> p.getCode().toUpperCase().replaceAll("\\s+", ""))
+                .map(p -> normalizeOutcomeCode(p.getCode()))
+                .filter(Objects::nonNull)
                 .collect(Collectors.toCollection(LinkedHashSet::new));
 
         List<ProgrammeSurveyResultDto.PoIndirectItem> poItems = new ArrayList<>();
@@ -1552,7 +1626,8 @@ public class AttainmentCalculationService {
                         for (Cell cell : row) {
                             String text = getStringCellValue(cell, evaluator);
                             if (text == null || text.isBlank()) continue;
-                            String clean = text.trim().toUpperCase().replaceAll("\\s+", "");
+                            String clean = normalizeOutcomeCode(text);
+                            if (clean == null) continue;
 
                             if (clean.matches("^PO\\d+$")) {
                                 if (!rowSeen.add(clean)) rowDups.add(clean);
@@ -1562,8 +1637,6 @@ public class AttainmentCalculationService {
                                 if (!rowSeen.add(clean)) rowDups.add(clean);
                                 if (!configuredPSOCodes.contains(clean)) rowUnk.add(clean);
                                 rowPsoCols.put(cell.getColumnIndex(), clean);
-                            } else if (clean.matches("^(PO|PSO).*") && !clean.contains("AVERAGE") && !clean.contains("ATTAINMENT") && !clean.contains("DIRECT") && !clean.contains("INDIRECT") && !clean.contains("TARGET") && !clean.contains("MAPPING") && !clean.contains("FRAMEWORK")) {
-                                rowUnk.add(clean);
                             }
                         }
 

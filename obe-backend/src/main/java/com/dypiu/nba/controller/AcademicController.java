@@ -452,7 +452,21 @@ public class AcademicController {
                 .build());
     }
 
-    @GetMapping("/programmes/{id}")
+    @GetMapping({"/programmes/coordinator", "/master-programmes/coordinator"})
+    public ResponseEntity<ApiResponse<List<MasterProgramme>>> getProgrammesForCoordinator(
+            @RequestParam(required = false) String coordinatorEmail,
+            java.security.Principal principal) {
+        String effectiveEmail = (coordinatorEmail != null && !coordinatorEmail.isBlank())
+                ? coordinatorEmail
+                : (principal != null ? principal.getName() : null);
+        List<MasterProgramme> list = academicService.getProgrammesByCoordinatorEmail(effectiveEmail);
+        return ResponseEntity.ok(ApiResponse.<List<MasterProgramme>>builder()
+                .success(true)
+                .data(list)
+                .build());
+    }
+
+    @GetMapping({"/programmes/{id}", "/master-programmes/{id}"})
     public ResponseEntity<ApiResponse<MasterProgramme>> getProgrammeById(@PathVariable String id) {
         return ResponseEntity.ok(ApiResponse.<MasterProgramme>builder()
                 .success(true)
@@ -518,15 +532,45 @@ public class AcademicController {
     }
 
     // --- Batches ---
-    @GetMapping("/batches")
+    @GetMapping({"/batches", "/programme-batches"})
     public ResponseEntity<ApiResponse<List<ProgrammeBatch>>> getBatches(
+            @RequestParam(required = false) String masterProgrammeId,
             @RequestParam(required = false) String programmeId,
+            @RequestParam(required = false) String coordinatorEmail,
+            @RequestParam(required = false) String courseCoordinatorEmail,
+            @RequestParam(required = false) String hodEmail,
             @RequestParam(required = false) String userEmail,
             @RequestParam(required = false) String role,
             java.security.Principal principal) {
-        String email = (userEmail != null && !userEmail.isBlank()) ? userEmail : (principal != null ? principal.getName() : null);
-        List<ProgrammeBatch> batches = academicService.getBatchesScoped(programmeId, email, role);
+        String effectiveProgId = (masterProgrammeId != null && !masterProgrammeId.isBlank()) ? masterProgrammeId : programmeId;
+
+        List<ProgrammeBatch> batches;
+        if (courseCoordinatorEmail != null && !courseCoordinatorEmail.isBlank()) {
+            batches = academicService.getBatchesByCourseCoordinatorEmail(courseCoordinatorEmail);
+        } else if (coordinatorEmail != null && !coordinatorEmail.isBlank()) {
+            batches = academicService.getBatchesByCoordinatorEmailAndProgramme(coordinatorEmail, effectiveProgId);
+        } else if (effectiveProgId != null && !effectiveProgId.isBlank()) {
+            batches = academicService.getBatchesByProgramme(effectiveProgId);
+        } else {
+            batches = academicService.getAllBatches();
+        }
+
         return ResponseEntity.ok(ApiResponse.<List<ProgrammeBatch>>builder().success(true).data(batches).build());
+    }
+
+    @GetMapping({"/batches/course-coordinator", "/programme-batches/course-coordinator"})
+    public ResponseEntity<ApiResponse<List<ProgrammeBatch>>> getBatchesByCourseCoordinator(
+            @RequestParam(required = false) String coordinatorEmail,
+            @RequestParam(required = false) String courseCoordinatorEmail,
+            java.security.Principal principal) {
+        String effectiveEmail = (courseCoordinatorEmail != null && !courseCoordinatorEmail.isBlank())
+                ? courseCoordinatorEmail
+                : ((coordinatorEmail != null && !coordinatorEmail.isBlank()) ? coordinatorEmail : (principal != null ? principal.getName() : null));
+        List<ProgrammeBatch> batches = academicService.getBatchesByCourseCoordinatorEmail(effectiveEmail);
+        return ResponseEntity.ok(ApiResponse.<List<ProgrammeBatch>>builder()
+                .success(true)
+                .data(batches)
+                .build());
     }
 
     @GetMapping("/batches/{id}")
@@ -606,17 +650,21 @@ public class AcademicController {
         return ResponseEntity.ok(ApiResponse.<Void>builder().success(true).message("ProgrammeBatch deleted").build());
     }
 
-    @GetMapping("/courses")
+    @GetMapping({"/master-courses", "/courses"})
     public ResponseEntity<ApiResponse<List<MasterCourse>>> getCourses(
+            @RequestParam(required = false) String masterProgrammeId,
             @RequestParam(required = false) String programmeId,
+            @RequestParam(required = false) String programmeBatchId,
             @RequestParam(required = false) String batchId) {
-        List<MasterCourse> courses = programmeId != null 
-            ? academicService.getCoursesByProgramme(programmeId, batchId) 
+        String effectiveProgId = (masterProgrammeId != null && !masterProgrammeId.isBlank()) ? masterProgrammeId : programmeId;
+        String effectiveBatchId = (programmeBatchId != null && !programmeBatchId.isBlank()) ? programmeBatchId : batchId;
+        List<MasterCourse> courses = (effectiveProgId != null && !effectiveProgId.isBlank())
+            ? academicService.getCoursesByProgramme(effectiveProgId, effectiveBatchId) 
             : academicService.getAllCourses();
         return ResponseEntity.ok(ApiResponse.<List<MasterCourse>>builder().success(true).data(courses).build());
     }
 
-    @GetMapping("/courses/{id}")
+    @GetMapping({"/master-courses/{id}", "/courses/{id}"})
     public ResponseEntity<ApiResponse<MasterCourse>> getCourseById(@PathVariable String id) {
         return ResponseEntity.ok(ApiResponse.<MasterCourse>builder()
                 .success(true)
@@ -624,7 +672,7 @@ public class AcademicController {
                 .build());
     }
 
-    @PostMapping("/courses")
+    @PostMapping({"/master-courses", "/courses"})
     public ResponseEntity<ApiResponse<MasterCourse>> saveCourse(@RequestBody MasterCourse course) {
         return ResponseEntity.ok(ApiResponse.<MasterCourse>builder()
                 .success(true)
@@ -633,7 +681,7 @@ public class AcademicController {
                 .build());
     }
 
-    @PutMapping("/courses/{id}")
+    @PutMapping({"/master-courses/{id}", "/courses/{id}"})
     public ResponseEntity<ApiResponse<MasterCourse>> updateCourse(
             @PathVariable String id,
             @RequestBody MasterCourse course) {
@@ -645,7 +693,7 @@ public class AcademicController {
                 .build());
     }
 
-    @DeleteMapping("/courses/{id}")
+    @DeleteMapping({"/master-courses/{id}", "/courses/{id}"})
     public ResponseEntity<ApiResponse<Void>> deleteCourse(@PathVariable String id) {
         academicService.deleteCourse(id);
         return ResponseEntity.ok(ApiResponse.<Void>builder().success(true).message("MasterCourse deleted").build());
@@ -655,11 +703,20 @@ public class AcademicController {
     @GetMapping("/course-offerings")
     public ResponseEntity<ApiResponse<List<com.dypiu.nba.entity.ProgrammeBatchCourse>>> getProgrammeBatchCourses(
             @RequestParam(required = false) String programmeBatchId,
-            @RequestParam(required = false) String batchId) {
+            @RequestParam(required = false) String batchId,
+            @RequestParam(required = false) String coordinatorEmail,
+            @RequestParam(required = false) String courseCoordinatorEmail) {
         String targetBatchId = (programmeBatchId != null && !programmeBatchId.isBlank()) ? programmeBatchId : batchId;
+        String effectiveEmail = (coordinatorEmail != null && !coordinatorEmail.isBlank()) ? coordinatorEmail : courseCoordinatorEmail;
+        List<com.dypiu.nba.entity.ProgrammeBatchCourse> courses;
+        if (effectiveEmail != null && !effectiveEmail.isBlank()) {
+            courses = academicService.getProgrammeBatchCoursesByCoordinatorEmail(effectiveEmail, targetBatchId);
+        } else {
+            courses = academicService.getProgrammeBatchCoursesByBatch(targetBatchId);
+        }
         return ResponseEntity.ok(ApiResponse.<List<com.dypiu.nba.entity.ProgrammeBatchCourse>>builder()
                 .success(true)
-                .data(academicService.getProgrammeBatchCoursesByBatch(targetBatchId))
+                .data(courses)
                 .build());
     }
 

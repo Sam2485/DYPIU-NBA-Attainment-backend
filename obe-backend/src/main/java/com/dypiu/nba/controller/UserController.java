@@ -59,7 +59,16 @@ public class UserController {
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: User belongs to a different school.");
             }
         }
-        if (scope.isHod() || scope.isProgrammeCoordinator()) {
+        if (scope.isProgrammeCoordinator()) {
+            if (scope.hasDepartmentScope() && targetUser.getDepartmentId() != null && !targetUser.getDepartmentId().equals(scope.getDepartmentId())) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: User belongs to a different department.");
+            }
+            if (scope.hasSchoolScope() && targetUser.getSchoolId() != null && !targetUser.getSchoolId().equals(scope.getSchoolId())) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: User belongs to a different school.");
+            }
+            return;
+        }
+        if (scope.isHod()) {
             String deptId = scope.getRequiredDepartmentId();
             if (targetUser.getDepartmentId() != null && !targetUser.getDepartmentId().equals(deptId)) {
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: User belongs to a different department.");
