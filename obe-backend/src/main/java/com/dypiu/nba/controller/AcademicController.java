@@ -244,40 +244,77 @@ public class AcademicController {
                 .build());
     }
 
-    @GetMapping("/coordinator/setup-progress")
+    @GetMapping({"/coordinator/setup-progress", "/programme-coordinator/setup-progress", "/programmes/{programmeId}/setup-progress", "/master-programmes/{masterProgrammeId}/setup-progress"})
     public ResponseEntity<ApiResponse<ProgrammeCoordinatorSetupProgressDto>> getProgrammeCoordinatorSetupProgress(
+            @PathVariable(required = false) String programmeId,
+            @PathVariable(required = false) String masterProgrammeId,
             @RequestParam(required = false) String coordinatorEmail,
-            @RequestParam(required = false) String programmeId,
+            @RequestParam(required = false) String masterProgrammeIdParam,
+            @RequestParam(required = false) String programmeIdParam,
             @RequestParam(required = false) String batchId) {
+        String effectiveProgId = masterProgrammeId != null && !masterProgrammeId.isBlank() ? masterProgrammeId :
+                (programmeId != null && !programmeId.isBlank() ? programmeId :
+                        (masterProgrammeIdParam != null && !masterProgrammeIdParam.isBlank() ? masterProgrammeIdParam : programmeIdParam));
         return ResponseEntity.ok(ApiResponse.<ProgrammeCoordinatorSetupProgressDto>builder()
                 .success(true)
-                .data(academicService.getProgrammeCoordinatorSetupProgress(coordinatorEmail, programmeId, batchId))
+                .data(academicService.getProgrammeCoordinatorSetupProgress(coordinatorEmail, effectiveProgId, batchId))
                 .build());
     }
 
-    @RequestMapping(value = "/coordinator/setup-progress", method = {RequestMethod.POST, RequestMethod.PUT})
+    @RequestMapping(value = {"/coordinator/setup-progress", "/programme-coordinator/setup-progress", "/programmes/{programmeId}/setup-progress", "/master-programmes/{masterProgrammeId}/setup-progress"}, method = {RequestMethod.POST, RequestMethod.PUT})
     public ResponseEntity<ApiResponse<ProgrammeCoordinatorSetupProgressDto>> updateProgrammeCoordinatorSetupProgress(
+            @PathVariable(required = false) String programmeId,
+            @PathVariable(required = false) String masterProgrammeId,
             @RequestParam(required = false) String coordinatorEmail,
-            @RequestParam(required = false) String programmeId,
+            @RequestParam(required = false) String masterProgrammeIdParam,
+            @RequestParam(required = false) String programmeIdParam,
             @RequestParam(required = false) String batchId,
-            @RequestParam(required = false, defaultValue = "0") Integer currentStep,
+            @RequestParam(required = false) Integer currentStep,
             @RequestBody(required = false) Map<String, Object> body) {
+        String effectiveProgId = masterProgrammeId != null && !masterProgrammeId.isBlank() ? masterProgrammeId :
+                (programmeId != null && !programmeId.isBlank() ? programmeId :
+                        (masterProgrammeIdParam != null && !masterProgrammeIdParam.isBlank() ? masterProgrammeIdParam :
+                                (programmeIdParam != null && !programmeIdParam.isBlank() ? programmeIdParam :
+                                        (body != null && body.containsKey("masterProgrammeId") ? String.valueOf(body.get("masterProgrammeId")) :
+                                                (body != null && body.containsKey("programmeId") ? String.valueOf(body.get("programmeId")) : null)))));
+
+        String effectiveBatchId = batchId != null && !batchId.isBlank() ? batchId :
+                (body != null && body.containsKey("batchId") ? String.valueOf(body.get("batchId")) :
+                        (body != null && body.containsKey("programmeBatchId") ? String.valueOf(body.get("programmeBatchId")) : null));
+
+        String effectiveEmail = coordinatorEmail != null && !coordinatorEmail.isBlank() ? coordinatorEmail :
+                (body != null && body.containsKey("coordinatorEmail") ? String.valueOf(body.get("coordinatorEmail")) : null);
+
+        Integer stepToUse = currentStep;
+        if (stepToUse == null && body != null && body.containsKey("currentStep")) {
+            try {
+                stepToUse = Integer.parseInt(String.valueOf(body.get("currentStep")));
+            } catch (Exception ignored) {}
+        }
+        if (stepToUse == null) stepToUse = 0;
+
         return ResponseEntity.ok(ApiResponse.<ProgrammeCoordinatorSetupProgressDto>builder()
                 .success(true)
                 .message("MasterProgramme Coordinator setup progress updated successfully")
-                .data(academicService.updateProgrammeCoordinatorSetupProgress(coordinatorEmail, programmeId, batchId, currentStep, body))
+                .data(academicService.updateProgrammeCoordinatorSetupProgress(effectiveEmail, effectiveProgId, effectiveBatchId, stepToUse, body))
                 .build());
     }
 
-    @PostMapping("/coordinator/setup-progress/complete")
+    @RequestMapping(value = {"/coordinator/setup-progress/complete", "/programme-coordinator/setup-progress/complete", "/programmes/{programmeId}/setup-progress/complete", "/master-programmes/{masterProgrammeId}/setup-progress/complete"}, method = {RequestMethod.POST, RequestMethod.PUT})
     public ResponseEntity<ApiResponse<ProgrammeCoordinatorSetupProgressDto>> completeProgrammeCoordinatorSetup(
+            @PathVariable(required = false) String programmeId,
+            @PathVariable(required = false) String masterProgrammeId,
             @RequestParam(required = false) String coordinatorEmail,
-            @RequestParam(required = false) String programmeId,
+            @RequestParam(required = false) String masterProgrammeIdParam,
+            @RequestParam(required = false) String programmeIdParam,
             @RequestParam(required = false) String batchId) {
+        String effectiveProgId = masterProgrammeId != null && !masterProgrammeId.isBlank() ? masterProgrammeId :
+                (programmeId != null && !programmeId.isBlank() ? programmeId :
+                        (masterProgrammeIdParam != null && !masterProgrammeIdParam.isBlank() ? masterProgrammeIdParam : programmeIdParam));
         return ResponseEntity.ok(ApiResponse.<ProgrammeCoordinatorSetupProgressDto>builder()
                 .success(true)
                 .message("MasterProgramme Coordinator setup marked as completed successfully")
-                .data(academicService.completeProgrammeCoordinatorSetup(coordinatorEmail, programmeId, batchId))
+                .data(academicService.completeProgrammeCoordinatorSetup(coordinatorEmail, effectiveProgId, batchId))
                 .build());
     }
 
