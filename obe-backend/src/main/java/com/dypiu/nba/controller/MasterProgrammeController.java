@@ -36,6 +36,20 @@ public class MasterProgrammeController {
                 .build());
     }
 
+    @GetMapping("/coordinator")
+    public ResponseEntity<ApiResponse<List<MasterProgramme>>> getMasterProgrammesForCoordinator(
+            @RequestParam(required = false) String coordinatorEmail,
+            java.security.Principal principal) {
+        String effectiveEmail = (coordinatorEmail != null && !coordinatorEmail.isBlank())
+                ? coordinatorEmail
+                : (principal != null ? principal.getName() : null);
+        List<MasterProgramme> programmes = academicService.getProgrammesByCoordinatorEmail(effectiveEmail);
+        return ResponseEntity.ok(ApiResponse.<List<MasterProgramme>>builder()
+                .success(true)
+                .data(programmes)
+                .build());
+    }
+
     @GetMapping("/{masterProgrammeId}")
     public ResponseEntity<ApiResponse<MasterProgramme>> getMasterProgrammeById(
             @PathVariable String masterProgrammeId) {

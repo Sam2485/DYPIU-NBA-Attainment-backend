@@ -230,28 +230,53 @@ public class DashboardController {
     public ResponseEntity<ApiResponse<Map<String, Object>>> getProgrammeCoordinatorDashboard(
             String programmeId,
             Principal principal) {
-        return getProgrammeCoordinatorDashboard(null, programmeId, principal);
+        return getProgrammeCoordinatorDashboard(null, programmeId, null, principal);
     }
 
     @GetMapping("/programme-coordinator")
     public ResponseEntity<ApiResponse<Map<String, Object>>> getProgrammeCoordinatorDashboard(
             @RequestParam(required = false) String masterProgrammeId,
             @RequestParam(required = false) String programmeId,
+            @RequestParam(required = false) String coordinatorEmail,
             Principal principal) {
         String effectiveProgId = (masterProgrammeId != null && !masterProgrammeId.isBlank()) ? masterProgrammeId : programmeId;
         CurrentUserScope scope = currentUserScopeService.getCurrentUserScope(principal);
+        String effectiveEmail = (coordinatorEmail != null && !coordinatorEmail.isBlank())
+                ? coordinatorEmail.trim().toLowerCase()
+                : (scope != null && scope.getEmail() != null ? scope.getEmail().trim().toLowerCase() : null);
+
         String targetProgId = null;
 
         if (scope.isProgrammeCoordinator()) {
             if (effectiveProgId != null && !effectiveProgId.isBlank()) {
-                if (!effectiveProgId.trim().equals(scope.getRequiredProgrammeId())) {
+                boolean matchesDirect = scope.getProgrammeId() != null && effectiveProgId.trim().equals(scope.getProgrammeId().trim());
+                boolean matchesBatch = false;
+                if (!matchesDirect && effectiveEmail != null && !effectiveEmail.isBlank()) {
+                    List<ProgrammeBatch> batches = programmeBatchRepository.findByCoordinatorEmailIgnoreCase(effectiveEmail);
+                    matchesBatch = batches.stream().anyMatch(b -> effectiveProgId.trim().equals(b.getMasterProgrammeId()));
+                }
+                if (!matchesDirect && !matchesBatch && (scope.isAdmin() || scope.isIqac())) {
+                    // allow
+                } else if (!matchesDirect && !matchesBatch) {
                     throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: MasterProgramme is outside your assigned scope.");
                 }
+                targetProgId = effectiveProgId.trim();
+            } else if (effectiveEmail != null && !effectiveEmail.isBlank()) {
+                List<ProgrammeBatch> batches = programmeBatchRepository.findByCoordinatorEmailIgnoreCase(effectiveEmail);
+                if (batches != null && !batches.isEmpty()) {
+                    targetProgId = batches.get(0).getMasterProgrammeId();
+                }
+            } else if (scope.getProgrammeId() != null && !scope.getProgrammeId().isBlank()) {
+                targetProgId = scope.getProgrammeId().trim();
             }
-            targetProgId = scope.getRequiredProgrammeId();
         } else if (scope.isAdmin() || scope.isIqac()) {
             if (effectiveProgId != null && !effectiveProgId.isBlank()) {
                 targetProgId = effectiveProgId.trim();
+            } else if (effectiveEmail != null && !effectiveEmail.isBlank()) {
+                List<ProgrammeBatch> batches = programmeBatchRepository.findByCoordinatorEmailIgnoreCase(effectiveEmail);
+                if (batches != null && !batches.isEmpty()) {
+                    targetProgId = batches.get(0).getMasterProgrammeId();
+                }
             } else if (scope.getProgrammeId() != null) {
                 targetProgId = scope.getProgrammeId();
             }
@@ -270,6 +295,15 @@ public class DashboardController {
         }
 
         if (targetProgId == null || targetProgId.isBlank()) {
+            if (effectiveEmail != null && !effectiveEmail.isBlank()) {
+                List<ProgrammeBatch> batches = programmeBatchRepository.findByCoordinatorEmailIgnoreCase(effectiveEmail);
+                if (batches != null && !batches.isEmpty()) {
+                    targetProgId = batches.get(0).getMasterProgrammeId();
+                }
+            }
+        }
+
+        if (targetProgId == null || targetProgId.isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "MasterProgramme scope cannot be determined for MasterProgramme Coordinator dashboard.");
         }
 
@@ -278,7 +312,7 @@ public class DashboardController {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "MasterProgramme not found: " + finalProgId));
 
         if (scope.isProgrammeCoordinator()) {
-            if (scope.hasDepartmentScope() && prog.getDepartmentId() != null && !prog.getDepartmentId().equals(scope.getRequiredDepartmentId())) {
+            if (scope.hasDepartmentScope() && prog.getDepartmentId() != null && !prog.getDepartmentId().equals(scope.getDepartmentId())) {
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: MasterProgramme does not belong to your assigned department.");
             }
             if (scope.hasSchoolScope() && prog.getDepartmentId() != null) {
