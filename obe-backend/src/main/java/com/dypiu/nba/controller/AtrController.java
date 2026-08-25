@@ -59,6 +59,14 @@ public class AtrController {
                 .build());
     }
 
+    @GetMapping({"/programme/previous-year/{batchId}", "/programmes/previous-year/{batchId}"})
+    public ResponseEntity<ApiResponse<ProgrammeAtrReportDto>> getPreviousYearProgrammeAtrReport(@PathVariable String batchId) {
+        return ResponseEntity.ok(ApiResponse.<ProgrammeAtrReportDto>builder()
+                .success(true)
+                .data(atrService.getPreviousYearProgrammeAtrReport(batchId))
+                .build());
+    }
+
     @RequestMapping(value = {"/programme/{programmeId}", "/programmes/{programmeId}"}, method = {RequestMethod.POST, RequestMethod.PUT})
     public ResponseEntity<ApiResponse<ProgrammeAtr>> saveProgrammeAtr(
             @PathVariable String programmeId,

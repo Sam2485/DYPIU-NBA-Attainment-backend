@@ -305,19 +305,49 @@ public class AtrService {
         System.out.println("[AtrService] getPreviousBatchProgrammeAtr called | batchId: " + batchId);
         if (batchId == null || batchId.isBlank()) return Optional.empty();
         enforceBatchScope(batchId);
+        
         ProgrammeBatch currentBatch = programmeBatchRepository.findById(batchId).orElse(null);
-        if (currentBatch == null) return Optional.empty();
-        List<ProgrammeBatch> batches = programmeBatchRepository.findByMasterProgrammeIdOrderByStartYearDesc(currentBatch.getMasterProgrammeId());
-        ProgrammeBatch previous = null;
-        for (ProgrammeBatch b : batches) {
-            if (b.getStartYear() < currentBatch.getStartYear()) {
-                if (previous == null || b.getStartYear() > previous.getStartYear()) {
-                    previous = b;
-                }
-            }
+        if (currentBatch == null || currentBatch.getStartYear() == null || currentBatch.getEndYear() == null) {
+            return Optional.empty();
         }
-        if (previous == null) return Optional.empty();
-        return programmeAtrRepository.findByProgrammeBatchId(previous.getId());
+        
+        int prevStartYear = currentBatch.getStartYear() - 1;
+        int prevEndYear = currentBatch.getEndYear() - 1;
+        
+        List<ProgrammeBatch> batches = programmeBatchRepository.findByMasterProgrammeId(currentBatch.getMasterProgrammeId());
+        ProgrammeBatch previousBatch = batches.stream()
+            .filter(b -> b.getStartYear() != null && b.getEndYear() != null 
+                    && b.getStartYear() == prevStartYear 
+                    && b.getEndYear() == prevEndYear)
+            .findFirst()
+            .orElse(null);
+            
+        if (previousBatch == null) return Optional.empty();
+        
+        return programmeAtrRepository.findByProgrammeBatchId(previousBatch.getId());
+    }
+
+    @Transactional(readOnly = true)
+    public ProgrammeAtrReportDto getPreviousYearProgrammeAtrReport(String batchId) {
+        System.out.println("[AtrService] getPreviousYearProgrammeAtrReport called | batchId: " + batchId);
+        if (batchId == null || batchId.isBlank()) return null;
+        enforceBatchScope(batchId);
+        ProgrammeBatch currentBatch = programmeBatchRepository.findById(batchId).orElse(null);
+        if (currentBatch == null || currentBatch.getStartYear() == null || currentBatch.getEndYear() == null) return null;
+        
+        int targetStartYear = currentBatch.getStartYear() - 1;
+        int targetEndYear = currentBatch.getEndYear() - 1;
+        
+        List<ProgrammeBatch> batches = programmeBatchRepository.findByMasterProgrammeIdOrderByStartYearDesc(currentBatch.getMasterProgrammeId());
+        ProgrammeBatch targetBatch = batches.stream()
+            .filter(b -> b.getStartYear() != null && b.getEndYear() != null 
+                    && b.getStartYear() == targetStartYear 
+                    && b.getEndYear() == targetEndYear)
+            .findFirst()
+            .orElse(null);
+            
+        if (targetBatch == null) return null;
+        return getProgrammeAtrReport(currentBatch.getMasterProgrammeId(), targetBatch.getId());
     }
 
     @Transactional
