@@ -10,6 +10,7 @@ import com.dypiu.nba.service.AtrService;
 import com.dypiu.nba.service.AttainmentCalculationService;
 import com.dypiu.nba.service.AttainmentReportService;
 import com.dypiu.nba.service.OutcomeService;
+import com.dypiu.nba.security.RequestScopeAuthorizer;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -30,16 +31,20 @@ public class ProgrammeBatchController {
     private final AtrService atrService;
     private final OutcomeService outcomeService;
     private final com.dypiu.nba.service.BatchLifecycleService batchLifecycleService;
+    private final RequestScopeAuthorizer requestScopeAuthorizer;
 
     @GetMapping
     public ResponseEntity<ApiResponse<List<ProgrammeBatch>>> getAllProgrammeBatches(
             @RequestParam(required = false) String masterProgrammeId,
             @RequestParam(required = false) String programmeId,
+            @RequestParam(required = false) String departmentId,
             @RequestParam(required = false) String coordinatorEmail,
             @RequestParam(required = false) String courseCoordinatorEmail,
             @RequestParam(required = false) String hodEmail,
             java.security.Principal principal) {
         String effectiveProgId = (masterProgrammeId != null && !masterProgrammeId.isBlank()) ? masterProgrammeId : programmeId;
+        requestScopeAuthorizer.assertRequestedDepartment(departmentId);
+        requestScopeAuthorizer.assertRequestedProgramme(effectiveProgId);
 
         List<ProgrammeBatch> batches;
         if (courseCoordinatorEmail != null && !courseCoordinatorEmail.isBlank()) {

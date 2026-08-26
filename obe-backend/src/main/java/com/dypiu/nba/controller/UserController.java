@@ -278,6 +278,25 @@ public class UserController {
                 .build());
     }
 
+    @DeleteMapping("/{id}")
+    public ResponseEntity<ApiResponse<Void>> deleteUser(@PathVariable Long id) {
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with ID: " + id));
+
+        enforceUserScope(user);
+
+        userRepository.delete(user);
+
+        if (auditLogService != null) {
+            auditLogService.recordSuccess(com.dypiu.nba.audit.AuditAction.DELETE, com.dypiu.nba.audit.ResourceType.USER, String.valueOf(user.getId()), null, "DELETED", "Deleted User " + user.getName(), java.util.Map.of("username", user.getUsername(), "role", user.getRole() != null ? user.getRole().name() : ""));
+        }
+
+        return ResponseEntity.ok(ApiResponse.<Void>builder()
+                .success(true)
+                .message("User deleted successfully.")
+                .build());
+    }
+
     private record ResolvedScope(String schoolId, String departmentId, String programmeId) {}
 
     private ResolvedScope validateAndResolveScope(Map<String, Object> body, UserRole role) {

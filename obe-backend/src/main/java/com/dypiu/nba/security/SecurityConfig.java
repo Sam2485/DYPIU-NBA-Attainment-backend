@@ -54,10 +54,13 @@ public class SecurityConfig {
             )
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/auth/**", "/api/v1/auth/**", "/attainment/**", "/academic/**", "/outcomes/**", "/mapping/**", "/atr/**", "/approval/**").permitAll()
+                // Authentication is mandatory for every business API.  Client-side route
+                // guards are UX only; authorization is derived from the verified JWT here.
+                .requestMatchers("/auth/**", "/api/v1/auth/**").permitAll()
                 .requestMatchers(HttpMethod.GET, "/health", "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                .anyRequest().permitAll()
+                .requestMatchers("/users/**", "/admin/**").hasRole("ADMIN")
+                .anyRequest().authenticated()
             );
 
         http.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);

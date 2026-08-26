@@ -15,6 +15,7 @@ import com.dypiu.nba.entity.*;
 import com.dypiu.nba.service.AcademicService;
 import com.dypiu.nba.service.MappingService;
 import com.dypiu.nba.service.BatchLifecycleService;
+import com.dypiu.nba.security.RequestScopeAuthorizer;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -33,6 +34,7 @@ public class AcademicController {
     private final MappingService mappingService;
     private final BatchLifecycleService batchLifecycleService;
     private final com.dypiu.nba.service.OutcomeService outcomeService;
+    private final RequestScopeAuthorizer requestScopeAuthorizer;
 
 
     // --- Users by Role ---
@@ -426,6 +428,7 @@ public class AcademicController {
     // --- Departments ---
     @GetMapping("/departments")
     public ResponseEntity<ApiResponse<List<Department>>> getDepartments(@RequestParam(required = false) String schoolId) {
+        requestScopeAuthorizer.assertRequestedSchool(schoolId);
         List<Department> list = (schoolId != null && !schoolId.isBlank())
                 ? academicService.getDepartmentsBySchool(schoolId)
                 : academicService.getAllDepartments();
@@ -476,6 +479,8 @@ public class AcademicController {
             @RequestParam(required = false) String schoolId,
             @RequestParam(required = false) String departmentId,
             @RequestParam(required = false) String coordinatorEmail) {
+        requestScopeAuthorizer.assertRequestedSchool(schoolId);
+        requestScopeAuthorizer.assertRequestedDepartment(departmentId);
         List<MasterProgramme> list = (coordinatorEmail != null && !coordinatorEmail.isBlank())
                 ? academicService.getProgrammesByCoordinatorEmail(coordinatorEmail)
                 : (departmentId != null && !departmentId.isBlank())
@@ -573,6 +578,7 @@ public class AcademicController {
     public ResponseEntity<ApiResponse<List<ProgrammeBatch>>> getBatches(
             @RequestParam(required = false) String masterProgrammeId,
             @RequestParam(required = false) String programmeId,
+            @RequestParam(required = false) String departmentId,
             @RequestParam(required = false) String coordinatorEmail,
             @RequestParam(required = false) String courseCoordinatorEmail,
             @RequestParam(required = false) String hodEmail,
@@ -580,6 +586,8 @@ public class AcademicController {
             @RequestParam(required = false) String role,
             java.security.Principal principal) {
         String effectiveProgId = (masterProgrammeId != null && !masterProgrammeId.isBlank()) ? masterProgrammeId : programmeId;
+        requestScopeAuthorizer.assertRequestedDepartment(departmentId);
+        requestScopeAuthorizer.assertRequestedProgramme(effectiveProgId);
 
         List<ProgrammeBatch> batches;
         if (courseCoordinatorEmail != null && !courseCoordinatorEmail.isBlank()) {

@@ -63,10 +63,38 @@ public class OutcomeService {
     private final Map<String, Map<String, Object>> coursePsoKeywordsMap = new java.util.concurrent.ConcurrentHashMap<>();
 
     private CurrentUserScope getScope() {
-        try {
-            return currentUserScopeService.getCurrentUserScope();
-        } catch (Exception e) {
-            return null;
+        // Business APIs are authenticated in SecurityConfig.  Do not turn a
+        // missing/invalid identity into an unrestricted (null) scope.
+        return currentUserScopeService.getCurrentUserScope();
+    }
+
+    /**
+     * Editing course-level evidence is reserved for the coordinator assigned
+     * to the exact offering.  IDs in the body are intentionally ignored.
+     */
+    private void enforceCourseCoordinatorMutation(String courseIdOrOfferingId) {
+        CurrentUserScope scope = getScope();
+        if (scope.isAdmin() || scope.isIqac()) return;
+        String offeringId = resolveOfferingId(courseIdOrOfferingId);
+        ProgrammeBatchCourse offering = programmeBatchCourseRepository.findById(offeringId)
+                .orElseThrow(() -> new ResourceNotFoundException("Course offering not found: " + offeringId));
+        if (offering.getCourseCoordinatorId() == null
+                || !Objects.equals(offering.getCourseCoordinatorId(), scope.getUserId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "Access denied: only the coordinator assigned to this course offering may modify it.");
+        }
+    }
+
+    /** Programme target changes require the coordinator assigned to that exact batch. */
+    private void enforceProgrammeCoordinatorMutation(String programmeOrBatchId) {
+        CurrentUserScope scope = getScope();
+        if (scope.isAdmin() || scope.isIqac()) return;
+        String batchId = resolveBatchId(programmeOrBatchId);
+        ProgrammeBatch batch = programmeBatchRepository.findById(batchId)
+                .orElseThrow(() -> new ResourceNotFoundException("Programme batch not found: " + batchId));
+        if (batch.getCoordinatorId() == null || !Objects.equals(batch.getCoordinatorId(), scope.getUserId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "Access denied: only the coordinator assigned to this programme batch may modify its targets.");
         }
     }
 
@@ -577,6 +605,7 @@ public class OutcomeService {
         System.out.println("[OutcomeService] saveCOs called | courseIdOrOfferingId: " + courseIdOrOfferingId + " | count: " + (cos != null ? cos.size() : 0));
         if (courseIdOrOfferingId != null && !courseIdOrOfferingId.isBlank()) {
             enforceCourseOrOfferingScope(courseIdOrOfferingId);
+            enforceCourseCoordinatorMutation(courseIdOrOfferingId);
             enforceOfferingEditability(courseIdOrOfferingId);
         }
         String targetOfferingId = resolveOfferingId(courseIdOrOfferingId);
@@ -681,6 +710,7 @@ public class OutcomeService {
     public ProgrammeTargetDto saveProgrammeTargets(String programmeOrBatchId, ProgrammeTargetDto dto) {
         System.out.println("[OutcomeService] saveProgrammeTargets called | programmeOrBatchId: " + programmeOrBatchId);
         enforceBatchOrProgrammeScope(programmeOrBatchId);
+        enforceProgrammeCoordinatorMutation(programmeOrBatchId);
         if (approvalService != null && approvalService.isPoPsoTargetsApproved(programmeOrBatchId)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Cannot modify approved Programme PO/PSO targets. A revision must be requested first.");
         }
@@ -877,6 +907,7 @@ public class OutcomeService {
         System.out.println("[OutcomeService] saveCourseMappings called | courseIdOrOfferingId: " + courseIdOrOfferingId);
         if (courseIdOrOfferingId != null && !courseIdOrOfferingId.isBlank()) {
             enforceCourseOrOfferingScope(courseIdOrOfferingId);
+            enforceCourseCoordinatorMutation(courseIdOrOfferingId);
             enforceOfferingEditability(courseIdOrOfferingId);
         }
         String targetOfferingId = resolveOfferingId(courseIdOrOfferingId);
