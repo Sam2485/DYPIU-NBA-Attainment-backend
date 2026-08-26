@@ -216,7 +216,7 @@ public class ProgrammeCoordinatorScopeSecurityTest {
                 .role(UserRole.PROGRAMME_COORDINATOR)
                 .schoolId(schoolA.getId())
                 .departmentId(deptA1.getId())
-                .programmeId(progA1.getId())
+                .masterProgrammeId(progA1.getId())
                 .isActive(true)
                 .build());
 
@@ -228,7 +228,7 @@ public class ProgrammeCoordinatorScopeSecurityTest {
                 .role(UserRole.PROGRAMME_COORDINATOR)
                 .schoolId(schoolB.getId())
                 .departmentId(deptB1.getId())
-                .programmeId(progB1.getId())
+                .masterProgrammeId(progB1.getId())
                 .isActive(true)
                 .build());
 
@@ -267,7 +267,7 @@ public class ProgrammeCoordinatorScopeSecurityTest {
     void testCase1_PCAccessesOwnDashboard() {
         authenticateUser(pcA1);
         ResponseEntity<ApiResponse<Map<String, Object>>> response =
-                dashboardController.getProgrammeCoordinatorDashboard(progA1.getId(), null);
+                dashboardController.getProgrammeCoordinatorDashboard(progA1.getId(), null, null);
         assertNotNull(response.getBody());
         assertTrue(response.getBody().isSuccess());
         Map<String, Object> data = response.getBody().getData();
@@ -281,11 +281,11 @@ public class ProgrammeCoordinatorScopeSecurityTest {
         authenticateUser(pcA1);
         // Attempting to access cross-programme in same dept
         assertThrows(ResponseStatusException.class, () ->
-                dashboardController.getProgrammeCoordinatorDashboard(progA2.getId(), null)
+                dashboardController.getProgrammeCoordinatorDashboard(progA2.getId(), null, null)
         );
         // Attempting to access cross-school programme
         assertThrows(ResponseStatusException.class, () ->
-                dashboardController.getProgrammeCoordinatorDashboard(progB1.getId(), null)
+                dashboardController.getProgrammeCoordinatorDashboard(progB1.getId(), null, null)
         );
     }
 
@@ -295,11 +295,11 @@ public class ProgrammeCoordinatorScopeSecurityTest {
         authenticateUser(pcA1);
         ProgrammeCoordinatorSummaryDto summary = academicService.getProgrammeCoordinatorSummary(null, null);
         assertNotNull(summary);
-        assertEquals(progA1.getId(), summary.getProgrammeId());
+        assertEquals(progA1.getId(), summary.getMasterProgrammeId());
 
         ProgrammeCoordinatorSetupProgressDto progress = academicService.getProgrammeCoordinatorSetupProgress(null, null);
         assertNotNull(progress);
-        assertEquals(progA1.getId(), progress.getProgrammeId());
+        assertEquals(progA1.getId(), progress.getMasterProgrammeId());
     }
 
     @Test
@@ -309,7 +309,7 @@ public class ProgrammeCoordinatorScopeSecurityTest {
         ProgrammeCoordinatorSetupProgressDto updated =
                 academicService.updateProgrammeCoordinatorSetupProgress(pcA1.getEmail(), progA1.getId(), 2);
         assertNotNull(updated);
-        assertEquals(progA1.getId(), updated.getProgrammeId());
+        assertEquals(progA1.getId(), updated.getMasterProgrammeId());
         assertEquals(2, updated.getCurrentStep());
     }
 
@@ -421,7 +421,7 @@ public class ProgrammeCoordinatorScopeSecurityTest {
                 .build();
         ProgrammeBatch saved = academicService.saveBatch(newBatch);
         assertNotNull(saved);
-        assertEquals(progA1.getId(), saved.getProgrammeId());
+        assertEquals(progA1.getId(), saved.getMasterProgrammeId());
     }
 
     @Test
@@ -484,7 +484,7 @@ public class ProgrammeCoordinatorScopeSecurityTest {
                 .build();
         MasterCourse saved = academicService.saveCourse(newCourse);
         assertNotNull(saved);
-        assertEquals(progA1.getId(), saved.getProgrammeId());
+        assertEquals(progA1.getId(), saved.getMasterProgrammeId());
     }
 
     @Test
@@ -528,8 +528,8 @@ public class ProgrammeCoordinatorScopeSecurityTest {
 
         // MasterProgramme Targets
         ProgrammeTargetDto targetDto = ProgrammeTargetDto.builder()
-                .programmeId(progA1.getId())
-                .batchId(batchA1.getId())
+                .masterProgrammeId(progA1.getId())
+                .programmeBatchId(batchA1.getId())
                 .poTargets(Map.of("PO1", new BigDecimal("2.50")))
                 .psoTargets(Map.of("PSO1", new BigDecimal("2.60")))
                 .build();
@@ -571,8 +571,8 @@ public class ProgrammeCoordinatorScopeSecurityTest {
                 outcomeService.getProgrammeTargets(progB1.getId())
         );
         ProgrammeTargetDto targetDto = ProgrammeTargetDto.builder()
-                .programmeId(progB1.getId())
-                .batchId(batchB1.getId())
+                .masterProgrammeId(progB1.getId())
+                .programmeBatchId(batchB1.getId())
                 .poTargets(Map.of("PO1", new BigDecimal("2.50")))
                 .build();
         assertThrows(ResponseStatusException.class, () ->
@@ -586,11 +586,11 @@ public class ProgrammeCoordinatorScopeSecurityTest {
         authenticateUser(pcA1);
         List<Map<String, Object>> allocations = new ArrayList<>();
         Map<String, Object> allocItem = new HashMap<>();
-        allocItem.put("courseId", courseA1.getId());
+        allocItem.put("masterCourseId", courseA1.getId());
         allocItem.put("facultyId", pcA1.getId());
         allocItem.put("academicYear", "2025-26");
         allocItem.put("semester", "SEM_3");
-        allocItem.put("batchId", batchA1.getId());
+        allocItem.put("programmeBatchId", batchA1.getId());
         allocations.add(allocItem);
 
         Map<String, Object> res = academicService.allocateCourses(progA1.getId(), null, allocations);
@@ -606,9 +606,9 @@ public class ProgrammeCoordinatorScopeSecurityTest {
         // Other programme
         List<Map<String, Object>> allocB = new ArrayList<>();
         Map<String, Object> itemB = new HashMap<>();
-        itemB.put("courseId", courseB1.getId());
+        itemB.put("masterCourseId", courseB1.getId());
         itemB.put("facultyId", pcA1.getId());
-        itemB.put("batchId", batchB1.getId());
+        itemB.put("programmeBatchId", batchB1.getId());
         allocB.add(itemB);
 
         assertThrows(ResponseStatusException.class, () ->
@@ -618,9 +618,9 @@ public class ProgrammeCoordinatorScopeSecurityTest {
         // Assigned programme, but cross-programme course (courseB1 inside progA1 call)
         List<Map<String, Object>> allocCross = new ArrayList<>();
         Map<String, Object> itemCross = new HashMap<>();
-        itemCross.put("courseId", courseB1.getId());
+        itemCross.put("masterCourseId", courseB1.getId());
         itemCross.put("facultyId", pcA1.getId());
-        itemCross.put("batchId", batchA1.getId());
+        itemCross.put("programmeBatchId", batchA1.getId());
         allocCross.add(itemCross);
 
         assertThrows(ResponseStatusException.class, () ->

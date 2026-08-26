@@ -17,7 +17,7 @@ public class BatchContextDto {
     public static class BatchSummary {
         private String id;
         private String name;
-        private String programmeId;
+        private String masterProgrammeId;
         private String programmeName;
         private String status;
     }

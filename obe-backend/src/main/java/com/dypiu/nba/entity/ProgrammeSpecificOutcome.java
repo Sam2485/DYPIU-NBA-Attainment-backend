@@ -58,11 +58,11 @@ public class ProgrammeSpecificOutcome {
     private List<PsoCompetency> competencies;
 
     // Helper compatibility methods
-    public String getProgrammeId() {
+    public String getMasterProgrammeId() {
         return programmeBatchId;
     }
 
-    public void setProgrammeId(String programmeId) {
-        this.programmeBatchId = programmeId;
+    public void setMasterProgrammeId(String masterProgrammeId) {
+        this.programmeBatchId = masterProgrammeId;
     }
 }

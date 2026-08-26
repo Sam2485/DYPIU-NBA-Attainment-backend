@@ -206,7 +206,7 @@ public class ApprovalWorkflowSecurityTest {
                 .role(UserRole.PROGRAMME_COORDINATOR)
                 .schoolId(schoolA.getId())
                 .departmentId(deptA.getId())
-                .programmeId(progA.getId())
+                .masterProgrammeId(progA.getId())
                 .isActive(true)
                 .build());
 
@@ -218,7 +218,7 @@ public class ApprovalWorkflowSecurityTest {
                 .role(UserRole.PROGRAMME_COORDINATOR)
                 .schoolId(schoolB.getId())
                 .departmentId(deptB.getId())
-                .programmeId(progB.getId())
+                .masterProgrammeId(progB.getId())
                 .isActive(true)
                 .build());
 
@@ -230,7 +230,7 @@ public class ApprovalWorkflowSecurityTest {
                 .role(UserRole.FACULTY)
                 .schoolId(schoolA.getId())
                 .departmentId(deptA.getId())
-                .programmeId(progA.getId())
+                .masterProgrammeId(progA.getId())
                 .isActive(true)
                 .build());
     }

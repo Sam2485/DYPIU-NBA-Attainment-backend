@@ -54,10 +54,10 @@ public class AttainmentReportService {
     // =========================================================================
 
     @Transactional
-    public CourseAttainmentReportDto getOrCreateCourseAttainmentReport(String courseOfferingId) {
-        System.out.println("[AttainmentReportService] getOrCreateCourseAttainmentReport called | courseOfferingId: " + courseOfferingId);
-        ProgrammeBatchCourse offering = programmeBatchCourseRepository.findById(courseOfferingId)
-                .orElseThrow(() -> new ResourceNotFoundException("Course Offering not found: " + courseOfferingId));
+    public CourseAttainmentReportDto getOrCreateCourseAttainmentReport(String programmeBatchCourseId) {
+        System.out.println("[AttainmentReportService] getOrCreateCourseAttainmentReport called | programmeBatchCourseId: " + programmeBatchCourseId);
+        ProgrammeBatchCourse offering = programmeBatchCourseRepository.findById(programmeBatchCourseId)
+                .orElseThrow(() -> new ResourceNotFoundException("Course Offering not found: " + programmeBatchCourseId));
 
         enforceOfferingScope(offering);
 
@@ -73,10 +73,10 @@ public class AttainmentReportService {
     }
 
     @Transactional
-    public CourseAttainmentReportDto finalizeCourseReport(String courseOfferingId, String actorName) {
-        System.out.println("[AttainmentReportService] finalizeCourseReport called | courseOfferingId: " + courseOfferingId);
-        ProgrammeBatchCourse offering = programmeBatchCourseRepository.findById(courseOfferingId)
-                .orElseThrow(() -> new ResourceNotFoundException("Course Offering not found: " + courseOfferingId));
+    public CourseAttainmentReportDto finalizeCourseReport(String programmeBatchCourseId, String actorName) {
+        System.out.println("[AttainmentReportService] finalizeCourseReport called | programmeBatchCourseId: " + programmeBatchCourseId);
+        ProgrammeBatchCourse offering = programmeBatchCourseRepository.findById(programmeBatchCourseId)
+                .orElseThrow(() -> new ResourceNotFoundException("Course Offering not found: " + programmeBatchCourseId));
 
         enforceOfferingScope(offering);
         batchLifecycleService.enforceBatchEditability(offering.getProgrammeBatchId());
@@ -280,12 +280,12 @@ public class AttainmentReportService {
     // =========================================================================
 
     @Transactional
-    public ProgrammeBatchAttainmentReportDto getOrCreateProgrammeAttainmentReport(String programmeId, String batchId) {
-        System.out.println("[AttainmentReportService] getOrCreateProgrammeAttainmentReport called | programmeId: " + programmeId + " | batchId: " + batchId);
-        ProgrammeBatch batch = programmeBatchRepository.findById(batchId)
-                .orElseThrow(() -> new ResourceNotFoundException("Programme Batch not found: " + batchId));
-        MasterProgramme prog = masterProgrammeRepository.findById(programmeId)
-                .orElseThrow(() -> new ResourceNotFoundException("Master Programme not found: " + programmeId));
+    public ProgrammeBatchAttainmentReportDto getOrCreateProgrammeAttainmentReport(String masterProgrammeId, String programmeBatchId) {
+        System.out.println("[AttainmentReportService] getOrCreateProgrammeAttainmentReport called | masterProgrammeId: " + masterProgrammeId + " | programmeBatchId: " + programmeBatchId);
+        ProgrammeBatch batch = programmeBatchRepository.findById(programmeBatchId)
+                .orElseThrow(() -> new ResourceNotFoundException("Programme Batch not found: " + programmeBatchId));
+        MasterProgramme prog = masterProgrammeRepository.findById(masterProgrammeId)
+                .orElseThrow(() -> new ResourceNotFoundException("Master Programme not found: " + masterProgrammeId));
 
         enforceProgrammeBatchScope(batch);
 
@@ -301,12 +301,12 @@ public class AttainmentReportService {
     }
 
     @Transactional
-    public ProgrammeBatchAttainmentReportDto finalizeProgrammeReport(String programmeId, String batchId, String actorName) {
-        System.out.println("[AttainmentReportService] finalizeProgrammeReport called | programmeId: " + programmeId + " | batchId: " + batchId);
-        ProgrammeBatch batch = programmeBatchRepository.findById(batchId)
-                .orElseThrow(() -> new ResourceNotFoundException("Programme Batch not found: " + batchId));
-        MasterProgramme prog = masterProgrammeRepository.findById(programmeId)
-                .orElseThrow(() -> new ResourceNotFoundException("Master Programme not found: " + programmeId));
+    public ProgrammeBatchAttainmentReportDto finalizeProgrammeReport(String masterProgrammeId, String programmeBatchId, String actorName) {
+        System.out.println("[AttainmentReportService] finalizeProgrammeReport called | masterProgrammeId: " + masterProgrammeId + " | programmeBatchId: " + programmeBatchId);
+        ProgrammeBatch batch = programmeBatchRepository.findById(programmeBatchId)
+                .orElseThrow(() -> new ResourceNotFoundException("Programme Batch not found: " + programmeBatchId));
+        MasterProgramme prog = masterProgrammeRepository.findById(masterProgrammeId)
+                .orElseThrow(() -> new ResourceNotFoundException("Master Programme not found: " + masterProgrammeId));
 
         enforceProgrammeBatchScope(batch);
         batchLifecycleService.enforceBatchEditability(batch.getId());
@@ -614,7 +614,7 @@ public class AttainmentReportService {
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Batch outside your department.");
             }
         }
-        if (scope.isProgrammeCoordinator() && !batch.getMasterProgrammeId().equals(scope.getProgrammeId())) {
+        if (scope.isProgrammeCoordinator() && !batch.getMasterProgrammeId().equals(scope.getMasterProgrammeId())) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Batch outside your assigned programme.");
         }
     }
@@ -644,7 +644,7 @@ public class AttainmentReportService {
         if (prog.getDepartmentId() != null && scope.isHod() && !prog.getDepartmentId().equals(scope.getDepartmentId())) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Programme outside your department.");
         }
-        if (scope.isProgrammeCoordinator() && !masterProgrammeId.equals(scope.getProgrammeId())) {
+        if (scope.isProgrammeCoordinator() && !masterProgrammeId.equals(scope.getMasterProgrammeId())) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Programme outside your assigned programme.");
         }
     }

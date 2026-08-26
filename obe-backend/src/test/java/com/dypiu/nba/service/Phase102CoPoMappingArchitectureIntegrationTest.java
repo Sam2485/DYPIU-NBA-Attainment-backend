@@ -220,7 +220,7 @@ public class Phase102CoPoMappingArchitectureIntegrationTest {
 
         // Map 2024 offering COs: CO1 -> PO1:3, PO2:2, PSO1:3; CO2 -> PO1:2, PO2:3, PSO1:1
         CourseMappingMatrixDto dto2024 = CourseMappingMatrixDto.builder()
-                .courseId(offering2024.getId())
+                .masterCourseId(offering2024.getId())
                 .poMappings(List.of(
                         CoPoMapping.builder().courseOutcomeId(co2024_1.getId()).poCode("PO1").mappingLevel(3).build(),
                         CoPoMapping.builder().courseOutcomeId(co2024_1.getId()).poCode("PO2").mappingLevel(2).build(),
@@ -239,7 +239,7 @@ public class Phase102CoPoMappingArchitectureIntegrationTest {
 
         // Map 2028 offering CO1: CO1 -> PO1:1, PO2:1, PSO1:2
         CourseMappingMatrixDto dto2028 = CourseMappingMatrixDto.builder()
-                .courseId(offering2028.getId())
+                .masterCourseId(offering2028.getId())
                 .poMappings(List.of(
                         CoPoMapping.builder().courseOutcomeId(co2028_1.getId()).poCode("PO1").mappingLevel(1).build(),
                         CoPoMapping.builder().courseOutcomeId(co2028_1.getId()).poCode("PO2").mappingLevel(1).build()
@@ -285,7 +285,7 @@ public class Phase102CoPoMappingArchitectureIntegrationTest {
 
         // Save mappings for 2024 offering
         CourseMappingMatrixDto dto = CourseMappingMatrixDto.builder()
-                .courseId(offering2024.getId())
+                .masterCourseId(offering2024.getId())
                 .poMappings(List.of(
                         CoPoMapping.builder().courseOutcomeId(co2024_1.getId()).poCode("PO1").mappingLevel(3).build(),
                         CoPoMapping.builder().courseOutcomeId(co2024_2.getId()).poCode("PO1").mappingLevel(3).build()

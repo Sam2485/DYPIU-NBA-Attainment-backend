@@ -10,8 +10,8 @@ import java.util.Map;
 @NoArgsConstructor
 @AllArgsConstructor
 public class ProgrammeAttainmentDatasetDto {
-    private String programmeId;
-    private String batchId;
+    private String masterProgrammeId;
+    private String programmeBatchId;
     private TableData averageMapping;
     private TableData averageDirectAttainment;
     private Map<String, BigDecimal> averageIndirectAttainment;

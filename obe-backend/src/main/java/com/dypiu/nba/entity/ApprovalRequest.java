@@ -73,35 +73,35 @@ public class ApprovalRequest {
     private ZonedDateTime updatedAt;
 
     // Helper compatibility methods
-    public String getProgrammeId() {
+    public String getMasterProgrammeId() {
         return masterProgrammeId;
     }
 
-    public void setProgrammeId(String programmeId) {
-        this.masterProgrammeId = programmeId;
+    public void setMasterProgrammeId(String masterProgrammeId) {
+        this.masterProgrammeId = masterProgrammeId;
     }
 
-    public String getBatchId() {
+    public String getProgrammeBatchId() {
         return programmeBatchId;
     }
 
-    public void setBatchId(String batchId) {
-        this.programmeBatchId = batchId;
+    public void setProgrammeBatchId(String programmeBatchId) {
+        this.programmeBatchId = programmeBatchId;
     }
 
-    public String getCourseId() {
+    public String getMasterCourseId() {
         return masterCourseId;
     }
 
-    public void setCourseId(String courseId) {
-        this.masterCourseId = courseId;
+    public void setMasterCourseId(String masterCourseId) {
+        this.masterCourseId = masterCourseId;
     }
 
-    public String getCourseOfferingId() {
+    public String getProgrammeBatchCourseId() {
         return programmeBatchCourseId;
     }
 
-    public void setCourseOfferingId(String offeringId) {
+    public void setProgrammeBatchCourseId(String offeringId) {
         this.programmeBatchCourseId = offeringId;
     }
 }

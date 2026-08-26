@@ -40,7 +40,7 @@ public class User {
      * IQAC      → schoolId may be null because IQAC is institution-wide
      * DIRECTOR  → schoolId
      * HOD       → departmentId
-     * PC        → programmeId
+     * PC        → masterProgrammeId
      * FACULTY   → depends on assignment
      */
     @Column(name = "school_id")
@@ -49,8 +49,8 @@ public class User {
     @Column(name = "department_id")
     private String departmentId;
 
-    @Column(name = "programme_id")
-    private String programmeId;
+    @Column(name = "master_programme_id")
+    private String masterProgrammeId;
 
     @Builder.Default
     @Column(name = "is_active", nullable = false)

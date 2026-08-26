@@ -7,6 +7,7 @@ import com.dypiu.nba.repository.SchoolRepository;
 import com.dypiu.nba.repository.UserRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -21,10 +22,12 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 import com.dypiu.nba.entity.MasterProgramme;
+import com.dypiu.nba.entity.Department;
 import com.dypiu.nba.repository.DepartmentRepository;
 import com.dypiu.nba.repository.MasterProgrammeRepository;
 
 @ExtendWith(MockitoExtension.class)
+@WithMockUser(roles = "ADMIN")
 public class SchoolDirectorMappingTest {
 
     @Mock
@@ -157,7 +160,10 @@ public class SchoolDirectorMappingTest {
                 .role(UserRole.FACULTY)
                 .build();
 
-        when(masterProgrammeRepository.findById("prog-1a1b6c2e")).thenReturn(Optional.of(inputProg));
+        
+        Department mockDept = Department.builder().id("dept-cs").schoolId("school-1").build();
+        when(departmentRepository.findById("dept-cs")).thenReturn(Optional.of(mockDept));
+        when(masterProgrammeRepository.findByIdAndDeletedAtIsNull("prog-1a1b6c2e")).thenReturn(Optional.of(inputProg));
         when(userRepository.findByEmail("pc@gmail.com")).thenReturn(Optional.of(pcUser));
         when(masterProgrammeRepository.save(any(MasterProgramme.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -169,6 +175,6 @@ public class SchoolDirectorMappingTest {
         assertEquals("pc@gmail.com", saved.getCoordinatorEmail());
         verify(userRepository).save(pcUser);
         assertEquals(UserRole.PROGRAMME_COORDINATOR, pcUser.getRole());
-        assertEquals("prog-1a1b6c2e", pcUser.getProgrammeId());
+        assertEquals("prog-1a1b6c2e", pcUser.getMasterProgrammeId());
     }
 }

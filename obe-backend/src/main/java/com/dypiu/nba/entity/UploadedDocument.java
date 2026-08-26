@@ -49,19 +49,19 @@ public class UploadedDocument {
     private ZonedDateTime uploadedAt;
 
     // Helper compatibility methods
-    public String getBatchId() {
+    public String getProgrammeBatchId() {
         return programmeBatchId;
     }
 
-    public void setBatchId(String batchId) {
-        this.programmeBatchId = batchId;
+    public void setProgrammeBatchId(String programmeBatchId) {
+        this.programmeBatchId = programmeBatchId;
     }
 
-    public String getCourseOfferingId() {
+    public String getProgrammeBatchCourseId() {
         return programmeBatchCourseId;
     }
 
-    public void setCourseOfferingId(String offeringId) {
+    public void setProgrammeBatchCourseId(String offeringId) {
         this.programmeBatchCourseId = offeringId;
     }
 }

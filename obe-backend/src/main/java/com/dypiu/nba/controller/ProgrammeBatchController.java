@@ -36,13 +36,12 @@ public class ProgrammeBatchController {
     @GetMapping
     public ResponseEntity<ApiResponse<List<ProgrammeBatch>>> getAllProgrammeBatches(
             @RequestParam(required = false) String masterProgrammeId,
-            @RequestParam(required = false) String programmeId,
             @RequestParam(required = false) String departmentId,
             @RequestParam(required = false) String coordinatorEmail,
             @RequestParam(required = false) String courseCoordinatorEmail,
             @RequestParam(required = false) String hodEmail,
             java.security.Principal principal) {
-        String effectiveProgId = (masterProgrammeId != null && !masterProgrammeId.isBlank()) ? masterProgrammeId : programmeId;
+        String effectiveProgId = (masterProgrammeId != null && !masterProgrammeId.isBlank()) ? masterProgrammeId : masterProgrammeId;
         requestScopeAuthorizer.assertRequestedDepartment(departmentId);
         requestScopeAuthorizer.assertRequestedProgramme(effectiveProgId);
 
@@ -67,9 +66,8 @@ public class ProgrammeBatchController {
     public ResponseEntity<ApiResponse<List<ProgrammeBatch>>> getProgrammeBatchesByCoordinator(
             @RequestParam(required = false) String coordinatorEmail,
             @RequestParam(required = false) String masterProgrammeId,
-            @RequestParam(required = false) String programmeId,
             java.security.Principal principal) {
-        String effectiveProgId = (masterProgrammeId != null && !masterProgrammeId.isBlank()) ? masterProgrammeId : programmeId;
+        String effectiveProgId = (masterProgrammeId != null && !masterProgrammeId.isBlank()) ? masterProgrammeId : masterProgrammeId;
         String effectiveEmail = (coordinatorEmail != null && !coordinatorEmail.isBlank())
                 ? coordinatorEmail
                 : (principal != null ? principal.getName() : null);
@@ -192,7 +190,7 @@ public class ProgrammeBatchController {
     public ResponseEntity<ApiResponse<Student>> addStudentToBatch(
             @PathVariable String programmeBatchId,
             @RequestBody Student student) {
-        student.setBatchId(programmeBatchId);
+        student.setProgrammeBatchId(programmeBatchId);
         return ResponseEntity.ok(ApiResponse.<Student>builder()
                 .success(true)
                 .message("Student added to ProgrammeBatch successfully")

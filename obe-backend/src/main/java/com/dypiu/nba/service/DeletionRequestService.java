@@ -74,9 +74,9 @@ public class DeletionRequestService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "A pending deletion request already exists for this " + dto.getResourceType());
         }
 
-        String batchId = null;
+        String programmeBatchId = null;
         String batchCourseId = null;
-        String programmeId = null;
+        String masterProgrammeId = null;
         String departmentId = null;
         String schoolId = null;
 
@@ -94,14 +94,14 @@ public class DeletionRequestService {
             }
 
             batchCourseId = offering.getId();
-            batchId = offering.getProgrammeBatchId();
+            programmeBatchId = offering.getProgrammeBatchId();
 
-            if (batchId != null) {
-                ProgrammeBatch batch = programmeBatchRepository.findById(batchId).orElse(null);
+            if (programmeBatchId != null) {
+                ProgrammeBatch batch = programmeBatchRepository.findById(programmeBatchId).orElse(null);
                 if (batch != null) {
-                    programmeId = batch.getMasterProgrammeId();
-                    if (programmeId != null) {
-                        MasterProgramme prog = masterProgrammeRepository.findById(programmeId).orElse(null);
+                    masterProgrammeId = batch.getMasterProgrammeId();
+                    if (masterProgrammeId != null) {
+                        MasterProgramme prog = masterProgrammeRepository.findById(masterProgrammeId).orElse(null);
                         if (prog != null) {
                             departmentId = prog.getDepartmentId();
                             if (departmentId != null) {
@@ -116,7 +116,7 @@ public class DeletionRequestService {
             }
 
             // Enforce PC scope
-            if (programmeId != null && !programmeId.equalsIgnoreCase(scope.getRequiredProgrammeId())) {
+            if (masterProgrammeId != null && !masterProgrammeId.equalsIgnoreCase(scope.getRequiredMasterProgrammeId())) {
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: ProgrammeBatchCourse belongs to a different programme outside your scope.");
             }
 
@@ -133,10 +133,10 @@ public class DeletionRequestService {
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "ProgrammeBatch is already deleted.");
             }
 
-            batchId = batch.getId();
-            programmeId = batch.getMasterProgrammeId();
-            if (programmeId != null) {
-                MasterProgramme prog = masterProgrammeRepository.findById(programmeId).orElse(null);
+            programmeBatchId = batch.getId();
+            masterProgrammeId = batch.getMasterProgrammeId();
+            if (masterProgrammeId != null) {
+                MasterProgramme prog = masterProgrammeRepository.findById(masterProgrammeId).orElse(null);
                 if (prog != null) {
                     departmentId = prog.getDepartmentId();
                     if (departmentId != null) {
@@ -160,9 +160,9 @@ public class DeletionRequestService {
         DeletionRequest req = DeletionRequest.builder()
                 .resourceType(dto.getResourceType())
                 .resourceId(dto.getResourceId())
-                .programmeBatchId(batchId)
+                .programmeBatchId(programmeBatchId)
                 .programmeBatchCourseId(batchCourseId)
-                .masterProgrammeId(programmeId)
+                .masterProgrammeId(masterProgrammeId)
                 .departmentId(departmentId)
                 .schoolId(schoolId)
                 .status(DeletionRequestStatus.PENDING)

@@ -45,15 +45,15 @@ public class RequestScopeAuthorizer {
         }
     }
 
-    public void assertRequestedProgramme(String programmeId) {
-        if (blank(programmeId)) return;
+    public void assertRequestedProgramme(String masterProgrammeId) {
+        if (blank(masterProgrammeId)) return;
         CurrentUserScope scope = currentUserScopeService.getCurrentUserScope();
         if (global(scope)) return;
-        MasterProgramme programme = masterProgrammeRepository.findByIdAndDeletedAtIsNull(programmeId)
-                .orElseThrow(() -> new ResourceNotFoundException("Programme not found: " + programmeId));
+        MasterProgramme programme = masterProgrammeRepository.findByIdAndDeletedAtIsNull(masterProgrammeId)
+                .orElseThrow(() -> new ResourceNotFoundException("Programme not found: " + masterProgrammeId));
         assertRequestedDepartment(programme.getDepartmentId());
-        if (scope.isProgrammeCoordinator() && !scope.getRequiredProgrammeId().equals(programmeId)) {
-            forbidden("programme", programmeId);
+        if (scope.isProgrammeCoordinator() && !scope.getRequiredMasterProgrammeId().equals(masterProgrammeId)) {
+            forbidden("programme", masterProgrammeId);
         }
     }
 

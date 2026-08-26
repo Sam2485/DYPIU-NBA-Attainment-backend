@@ -93,12 +93,12 @@ public class ProgrammeBatch {
     private Integer currentSemester = 1;
 
     // Helper getter/setter for compatibility during phased migration
-    public String getProgrammeId() {
+    public String getMasterProgrammeId() {
         return masterProgrammeId;
     }
 
-    public void setProgrammeId(String programmeId) {
-        this.masterProgrammeId = programmeId;
+    public void setMasterProgrammeId(String masterProgrammeId) {
+        this.masterProgrammeId = masterProgrammeId;
     }
 
     public String getCoordinator() {

@@ -45,24 +45,24 @@ public class ReportController {
 
     // --- MasterCourse ATR Endpoints ---
 
-    @GetMapping("/course-atr/{courseOfferingId}")
+    @GetMapping("/course-atr/{programmeBatchCourseId}")
     public ResponseEntity<ApiResponse<CourseAtrReportDto>> getCourseAtrReport(
-            @PathVariable String courseOfferingId,
+            @PathVariable String programmeBatchCourseId,
             Principal principal) {
         User user = reportAccessService.getAuthenticatedUser(principal);
-        reportAccessService.validateCourseAtrAccess(user, courseOfferingId);
+        reportAccessService.validateCourseAtrAccess(user, programmeBatchCourseId);
 
         return ResponseEntity.ok(ApiResponse.<CourseAtrReportDto>builder()
                 .success(true)
-                .data(atrService.getCourseAtrReport(courseOfferingId))
+                .data(atrService.getCourseAtrReport(programmeBatchCourseId))
                 .build());
     }
 
-    @GetMapping("/course-atr/{courseOfferingId}/export-data")
+    @GetMapping("/course-atr/{programmeBatchCourseId}/export-data")
     public ResponseEntity<ApiResponse<CourseAtrReportDto>> getCourseAtrExportData(
-            @PathVariable String courseOfferingId,
+            @PathVariable String programmeBatchCourseId,
             Principal principal) {
-        return getCourseAtrReport(courseOfferingId, principal);
+        return getCourseAtrReport(programmeBatchCourseId, principal);
     }
 
     @PostMapping("/course-atr")
@@ -81,34 +81,34 @@ public class ReportController {
                 .build());
     }
 
-    @PostMapping("/course-atr/{courseOfferingId}/submit")
+    @PostMapping("/course-atr/{programmeBatchCourseId}/submit")
     public ResponseEntity<ApiResponse<CourseAtr>> submitCourseAtr(
-            @PathVariable String courseOfferingId,
+            @PathVariable String programmeBatchCourseId,
             Principal principal) {
         User user = reportAccessService.getAuthenticatedUser(principal);
-        reportAccessService.validateCourseAtrAccess(user, courseOfferingId);
+        reportAccessService.validateCourseAtrAccess(user, programmeBatchCourseId);
 
         String submitter = user != null ? user.getName() : "MasterCourse Coordinator";
         return ResponseEntity.ok(ApiResponse.<CourseAtr>builder()
                 .success(true)
                 .message("MasterCourse ATR submitted for verification")
-                .data(atrService.submitCourseAtr(courseOfferingId, submitter))
+                .data(atrService.submitCourseAtr(programmeBatchCourseId, submitter))
                 .build());
     }
 
     @GetMapping("/course-atrs")
     public ResponseEntity<ApiResponse<List<CourseAtrReportDto>>> listCourseAtrs(
-            @RequestParam(required = false) String batchId,
-            @RequestParam(required = false) String programmeId,
-            @RequestParam(required = false) String courseId,
+            @RequestParam(required = false) String programmeBatchId,
+            @RequestParam(required = false) String masterProgrammeId,
+            @RequestParam(required = false) String masterCourseId,
             Principal principal) {
         User user = reportAccessService.getAuthenticatedUser(principal);
 
         List<ProgrammeBatchCourse> offerings;
-        if (batchId != null && !batchId.isBlank()) {
-            offerings = programmeBatchCourseRepository.findByProgrammeBatchId(batchId);
-        } else if (courseId != null && !courseId.isBlank()) {
-            offerings = programmeBatchCourseRepository.findByMasterCourseId(courseId);
+        if (programmeBatchId != null && !programmeBatchId.isBlank()) {
+            offerings = programmeBatchCourseRepository.findByProgrammeBatchId(programmeBatchId);
+        } else if (masterCourseId != null && !masterCourseId.isBlank()) {
+            offerings = programmeBatchCourseRepository.findByMasterCourseId(masterCourseId);
         } else {
             offerings = programmeBatchCourseRepository.findAll();
         }
@@ -133,26 +133,26 @@ public class ReportController {
 
     // --- MasterProgramme ATR Endpoints ---
 
-    @GetMapping("/programme-atr/{programmeId}/batch/{batchId}")
+    @GetMapping("/programme-atr/{masterProgrammeId}/batch/{programmeBatchId}")
     public ResponseEntity<ApiResponse<ProgrammeAtrReportDto>> getProgrammeAtrReport(
-            @PathVariable String programmeId,
-            @PathVariable String batchId,
+            @PathVariable String masterProgrammeId,
+            @PathVariable String programmeBatchId,
             Principal principal) {
         User user = reportAccessService.getAuthenticatedUser(principal);
-        reportAccessService.validateProgrammeAtrAccess(user, programmeId, batchId);
+        reportAccessService.validateProgrammeAtrAccess(user, masterProgrammeId, programmeBatchId);
 
         return ResponseEntity.ok(ApiResponse.<ProgrammeAtrReportDto>builder()
                 .success(true)
-                .data(atrService.getProgrammeAtrReport(programmeId, batchId))
+                .data(atrService.getProgrammeAtrReport(masterProgrammeId, programmeBatchId))
                 .build());
     }
 
-    @GetMapping("/programme-atr/{programmeId}/batch/{batchId}/export-data")
+    @GetMapping("/programme-atr/{masterProgrammeId}/batch/{programmeBatchId}/export-data")
     public ResponseEntity<ApiResponse<ProgrammeAtrReportDto>> getProgrammeAtrExportData(
-            @PathVariable String programmeId,
-            @PathVariable String batchId,
+            @PathVariable String masterProgrammeId,
+            @PathVariable String programmeBatchId,
             Principal principal) {
-        return getProgrammeAtrReport(programmeId, batchId, principal);
+        return getProgrammeAtrReport(masterProgrammeId, programmeBatchId, principal);
     }
 
     @PostMapping("/programme-atr")
@@ -171,26 +171,26 @@ public class ReportController {
                 .build());
     }
 
-    @PostMapping("/programme-atr/{programmeId}/batch/{batchId}/submit")
+    @PostMapping("/programme-atr/{masterProgrammeId}/batch/{programmeBatchId}/submit")
     public ResponseEntity<ApiResponse<ProgrammeAtr>> submitProgrammeAtr(
-            @PathVariable String programmeId,
-            @PathVariable String batchId,
+            @PathVariable String masterProgrammeId,
+            @PathVariable String programmeBatchId,
             Principal principal) {
         User user = reportAccessService.getAuthenticatedUser(principal);
-        reportAccessService.validateProgrammeAtrAccess(user, programmeId, batchId);
+        reportAccessService.validateProgrammeAtrAccess(user, masterProgrammeId, programmeBatchId);
 
         String submitter = user != null ? user.getName() : "MasterProgramme Coordinator";
         return ResponseEntity.ok(ApiResponse.<ProgrammeAtr>builder()
                 .success(true)
                 .message("MasterProgramme ATR submitted for verification")
-                .data(atrService.submitProgrammeAtr(programmeId, batchId, submitter))
+                .data(atrService.submitProgrammeAtr(masterProgrammeId, programmeBatchId, submitter))
                 .build());
     }
 
     @GetMapping("/programme-atrs")
     public ResponseEntity<ApiResponse<List<ProgrammeAtrReportDto>>> listProgrammeAtrs(
-            @RequestParam(required = false) String programmeId,
-            @RequestParam(required = false) String batchId,
+            @RequestParam(required = false) String masterProgrammeId,
+            @RequestParam(required = false) String programmeBatchId,
             Principal principal) {
         User user = reportAccessService.getAuthenticatedUser(principal);
         if (user != null && user.getRole() == UserRole.FACULTY) {
@@ -198,10 +198,10 @@ public class ReportController {
         }
 
         List<ProgrammeBatch> batches;
-        if (batchId != null && !batchId.isBlank()) {
-            batches = programmeBatchRepository.findById(batchId).map(List::of).orElse(Collections.emptyList());
-        } else if (programmeId != null && !programmeId.isBlank()) {
-            batches = programmeBatchRepository.findByMasterProgrammeId(programmeId);
+        if (programmeBatchId != null && !programmeBatchId.isBlank()) {
+            batches = programmeBatchRepository.findById(programmeBatchId).map(List::of).orElse(Collections.emptyList());
+        } else if (masterProgrammeId != null && !masterProgrammeId.isBlank()) {
+            batches = programmeBatchRepository.findByMasterProgrammeId(masterProgrammeId);
         } else {
             batches = programmeBatchRepository.findAll();
         }
@@ -209,13 +209,13 @@ public class ReportController {
         List<ProgrammeAtrReportDto> reports = batches.stream()
                 .filter(b -> {
                     try {
-                        reportAccessService.validateProgrammeAtrAccess(user, b.getProgrammeId(), b.getId());
+                        reportAccessService.validateProgrammeAtrAccess(user, b.getMasterProgrammeId(), b.getId());
                         return true;
                     } catch (Exception e) {
                         return false;
                     }
                 })
-                .map(b -> atrService.getProgrammeAtrReport(b.getProgrammeId(), b.getId()))
+                .map(b -> atrService.getProgrammeAtrReport(b.getMasterProgrammeId(), b.getId()))
                 .collect(Collectors.toList());
 
         return ResponseEntity.ok(ApiResponse.<List<ProgrammeAtrReportDto>>builder()
@@ -226,30 +226,30 @@ public class ReportController {
 
     // --- Historical & ProgrammeBatch Summary Endpoints ---
 
-    @GetMapping("/programmes/{programmeId}/batch-comparison")
+    @GetMapping("/master-programmes/{masterProgrammeId}/batch-comparison")
     public ResponseEntity<ApiResponse<BatchComparisonDto>> getProgrammeBatchComparison(
-            @PathVariable String programmeId,
-            @RequestParam(required = false) List<String> batchIds,
+            @PathVariable String masterProgrammeId,
+            @RequestParam(required = false) List<String> programmeBatchIds,
             Principal principal) {
         User user = reportAccessService.getAuthenticatedUser(principal);
-        reportAccessService.validateProgrammeAccess(user, programmeId);
+        reportAccessService.validateProgrammeAccess(user, masterProgrammeId);
 
         return ResponseEntity.ok(ApiResponse.<BatchComparisonDto>builder()
                 .success(true)
-                .data(atrService.getProgrammeBatchComparison(programmeId, batchIds))
+                .data(atrService.getProgrammeBatchComparison(masterProgrammeId, programmeBatchIds))
                 .build());
     }
 
-    @GetMapping("/batch/{batchId}/summary")
+    @GetMapping("/batch/{programmeBatchId}/summary")
     public ResponseEntity<ApiResponse<BatchContextDto>> getBatchSummary(
-            @PathVariable String batchId,
+            @PathVariable String programmeBatchId,
             Principal principal) {
         User user = reportAccessService.getAuthenticatedUser(principal);
-        reportAccessService.validateBatchAccess(user, batchId);
+        reportAccessService.validateBatchAccess(user, programmeBatchId);
 
         return ResponseEntity.ok(ApiResponse.<BatchContextDto>builder()
                 .success(true)
-                .data(academicService.getBatchContext(batchId))
+                .data(academicService.getBatchContext(programmeBatchId))
                 .build());
     }
 
@@ -257,28 +257,28 @@ public class ReportController {
 
     @GetMapping("/attainment-main")
     public ResponseEntity<ApiResponse<ProgrammeAttainmentDatasetDto>> getAttainmentMainReport(
-            @RequestParam String programmeId,
-            @RequestParam String batchId,
+            @RequestParam String masterProgrammeId,
+            @RequestParam String programmeBatchId,
             Principal principal) {
         User user = reportAccessService.getAuthenticatedUser(principal);
-        reportAccessService.validateProgrammeAccess(user, programmeId);
-        reportAccessService.validateBatchAccess(user, batchId);
+        reportAccessService.validateProgrammeAccess(user, masterProgrammeId);
+        reportAccessService.validateBatchAccess(user, programmeBatchId);
 
         return ResponseEntity.ok(ApiResponse.<ProgrammeAttainmentDatasetDto>builder()
                 .success(true)
-                .data(attainmentCalculationService.getProgrammeAttainmentDataset(programmeId, batchId))
+                .data(attainmentCalculationService.getProgrammeAttainmentDataset(masterProgrammeId, programmeBatchId))
                 .build());
     }
 
-    @GetMapping("/attainment-main/course/{courseOfferingId}")
+    @GetMapping("/attainment-main/course/{programmeBatchCourseId}")
     public ResponseEntity<ApiResponse<Map<String, Object>>> getCourseAttainmentMainDetail(
-            @PathVariable String courseOfferingId,
+            @PathVariable String programmeBatchCourseId,
             Principal principal) {
         User user = reportAccessService.getAuthenticatedUser(principal);
-        reportAccessService.validateCourseOfferingAccess(user, courseOfferingId);
+        reportAccessService.validateCourseOfferingAccess(user, programmeBatchCourseId);
 
-        ProgrammeBatchCourse offering = programmeBatchCourseRepository.findById(courseOfferingId)
-                .orElseThrow(() -> new com.dypiu.nba.exception.ResourceNotFoundException("MasterCourse Offering not found: " + courseOfferingId));
+        ProgrammeBatchCourse offering = programmeBatchCourseRepository.findById(programmeBatchCourseId)
+                .orElseThrow(() -> new com.dypiu.nba.exception.ResourceNotFoundException("MasterCourse Offering not found: " + programmeBatchCourseId));
 
         return ResponseEntity.ok(ApiResponse.<Map<String, Object>>builder()
                 .success(true)
@@ -288,49 +288,49 @@ public class ReportController {
 
     // --- Phase 10: Persisted Course Attainment Report Endpoints ---
 
-    @GetMapping("/course-attainment/{courseOfferingId}")
+    @GetMapping("/course-attainment/{programmeBatchCourseId}")
     public ResponseEntity<ApiResponse<CourseAttainmentReportDto>> getCourseAttainmentReport(
-            @PathVariable String courseOfferingId) {
+            @PathVariable String programmeBatchCourseId) {
         return ResponseEntity.ok(ApiResponse.<CourseAttainmentReportDto>builder()
                 .success(true)
-                .data(attainmentReportService.getOrCreateCourseAttainmentReport(courseOfferingId))
+                .data(attainmentReportService.getOrCreateCourseAttainmentReport(programmeBatchCourseId))
                 .build());
     }
 
-    @PostMapping("/course-attainment/{courseOfferingId}/finalize")
+    @PostMapping("/course-attainment/{programmeBatchCourseId}/finalize")
     public ResponseEntity<ApiResponse<CourseAttainmentReportDto>> finalizeCourseAttainmentReport(
-            @PathVariable String courseOfferingId,
+            @PathVariable String programmeBatchCourseId,
             Principal principal) {
         String actorName = principal != null ? principal.getName() : "Course Coordinator";
         return ResponseEntity.ok(ApiResponse.<CourseAttainmentReportDto>builder()
                 .success(true)
                 .message("Course Attainment Report finalized successfully")
-                .data(attainmentReportService.finalizeCourseReport(courseOfferingId, actorName))
+                .data(attainmentReportService.finalizeCourseReport(programmeBatchCourseId, actorName))
                 .build());
     }
 
     // --- Phase 10: Persisted Programme Attainment Report Endpoints ---
 
-    @GetMapping("/programme-attainment/{programmeId}/batch/{batchId}")
+    @GetMapping("/programme-attainment/{masterProgrammeId}/batch/{programmeBatchId}")
     public ResponseEntity<ApiResponse<ProgrammeBatchAttainmentReportDto>> getProgrammeBatchAttainmentReport(
-            @PathVariable String programmeId,
-            @PathVariable String batchId) {
+            @PathVariable String masterProgrammeId,
+            @PathVariable String programmeBatchId) {
         return ResponseEntity.ok(ApiResponse.<ProgrammeBatchAttainmentReportDto>builder()
                 .success(true)
-                .data(attainmentReportService.getOrCreateProgrammeAttainmentReport(programmeId, batchId))
+                .data(attainmentReportService.getOrCreateProgrammeAttainmentReport(masterProgrammeId, programmeBatchId))
                 .build());
     }
 
-    @PostMapping("/programme-attainment/{programmeId}/batch/{batchId}/finalize")
+    @PostMapping("/programme-attainment/{masterProgrammeId}/batch/{programmeBatchId}/finalize")
     public ResponseEntity<ApiResponse<ProgrammeBatchAttainmentReportDto>> finalizeProgrammeBatchAttainmentReport(
-            @PathVariable String programmeId,
-            @PathVariable String batchId,
+            @PathVariable String masterProgrammeId,
+            @PathVariable String programmeBatchId,
             Principal principal) {
         String actorName = principal != null ? principal.getName() : "Programme Coordinator";
         return ResponseEntity.ok(ApiResponse.<ProgrammeBatchAttainmentReportDto>builder()
                 .success(true)
                 .message("Programme Attainment Report finalized successfully")
-                .data(attainmentReportService.finalizeProgrammeReport(programmeId, batchId, actorName))
+                .data(attainmentReportService.finalizeProgrammeReport(masterProgrammeId, programmeBatchId, actorName))
                 .build());
     }
 
@@ -357,21 +357,21 @@ public class ReportController {
     // --- Summary Endpoint ---
     @GetMapping("/summary")
     public ResponseEntity<ApiResponse<Map<String, Object>>> getReportsSummary(
-            @RequestParam(required = false) String programmeId,
-            @RequestParam(required = false) String courseId,
-            @RequestParam(required = false) String batchId,
+            @RequestParam(required = false) String masterProgrammeId,
+            @RequestParam(required = false) String masterCourseId,
+            @RequestParam(required = false) String programmeBatchId,
             Principal principal) {
-        String pId = (programmeId != null && !programmeId.isBlank()) ? programmeId.trim() : null;
-        String bId = (batchId != null && !batchId.isBlank()) ? batchId.trim() : null;
-        String cId = (courseId != null && !courseId.isBlank()) ? courseId.trim() : null;
+        String pId = (masterProgrammeId != null && !masterProgrammeId.isBlank()) ? masterProgrammeId.trim() : null;
+        String bId = (programmeBatchId != null && !programmeBatchId.isBlank()) ? programmeBatchId.trim() : null;
+        String cId = (masterCourseId != null && !masterCourseId.isBlank()) ? masterCourseId.trim() : null;
 
         Map<String, Object> courseAttainment = null;
         if (cId != null) {
             Map<String, Object> coAtt = attainmentCalculationService.calculateCourseCoAttainment(cId);
             com.dypiu.nba.dto.CourseMappingMatrixDto matrixDto = outcomeService.getCourseMappings(cId);
             courseAttainment = new LinkedHashMap<>();
-            courseAttainment.put("courseId", cId);
-            courseAttainment.put("batchId", bId);
+            courseAttainment.put("masterCourseId", cId);
+            courseAttainment.put("programmeBatchId", bId);
             courseAttainment.put("directAttainment", coAtt != null ? coAtt.get("directAttainment") : null);
             courseAttainment.put("indirectAttainment", coAtt != null ? coAtt.get("indirectAttainment") : null);
             courseAttainment.put("overallAttainment", coAtt != null ? coAtt.get("overallCoAttainment") : null);
@@ -383,8 +383,8 @@ public class ReportController {
         if (pId != null && bId != null) {
             com.dypiu.nba.dto.ProgrammeAttainmentResultDto progAtt = attainmentCalculationService.calculateProgrammeAttainment(pId, bId);
             programmeAttainment = new LinkedHashMap<>();
-            programmeAttainment.put("programmeId", pId);
-            programmeAttainment.put("batchId", bId);
+            programmeAttainment.put("masterProgrammeId", pId);
+            programmeAttainment.put("programmeBatchId", bId);
             programmeAttainment.put("poAttainment", progAtt != null ? progAtt.getPoAttainments() : Collections.emptyMap());
             programmeAttainment.put("psoAttainment", progAtt != null ? progAtt.getPsoAttainments() : Collections.emptyMap());
         }
@@ -402,23 +402,23 @@ public class ReportController {
     // --- Generic Reports Export ---
     @GetMapping(value = "/export/excel", produces = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
     public ResponseEntity<byte[]> exportReportsExcel(
-            @RequestParam(required = false) String programmeId,
-            @RequestParam(required = false) String courseId,
-            @RequestParam(required = false) String batchId,
+            @RequestParam(required = false) String masterProgrammeId,
+            @RequestParam(required = false) String masterCourseId,
+            @RequestParam(required = false) String programmeBatchId,
             @RequestParam(required = false) String reportType,
             Principal principal) {
-        if (courseId == null || courseId.isBlank()) {
+        if (masterCourseId == null || masterCourseId.isBlank()) {
             throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST, "MasterCourse ID is required for export.");
         }
         User user = reportAccessService.getAuthenticatedUser(principal);
-        if (programmeBatchCourseRepository.existsById(courseId)) {
-            reportAccessService.validateCourseOfferingAccess(user, courseId);
+        if (programmeBatchCourseRepository.existsById(masterCourseId)) {
+            reportAccessService.validateCourseOfferingAccess(user, masterCourseId);
         } else {
-            reportAccessService.validateCourseAccess(user, courseId);
+            reportAccessService.validateCourseAccess(user, masterCourseId);
         }
-        String targetCourseId = courseId.trim();
-        byte[] excelBytes = exportService.generateAttainmentExcel(targetCourseId, batchId);
-        String filename = "Attainment_Report_" + targetCourseId + ".xlsx";
+        String targetMasterCourseId = masterCourseId.trim();
+        byte[] excelBytes = exportService.generateAttainmentExcel(targetMasterCourseId, programmeBatchId);
+        String filename = "Attainment_Report_" + targetMasterCourseId + ".xlsx";
 
         return ResponseEntity.ok()
                 .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
@@ -428,23 +428,23 @@ public class ReportController {
 
     @GetMapping(value = "/export/pdf", produces = org.springframework.http.MediaType.APPLICATION_PDF_VALUE)
     public ResponseEntity<byte[]> exportReportsPdf(
-            @RequestParam(required = false) String programmeId,
-            @RequestParam(required = false) String courseId,
-            @RequestParam(required = false) String batchId,
+            @RequestParam(required = false) String masterProgrammeId,
+            @RequestParam(required = false) String masterCourseId,
+            @RequestParam(required = false) String programmeBatchId,
             @RequestParam(required = false) String reportType,
             Principal principal) {
-        if (courseId == null || courseId.isBlank()) {
+        if (masterCourseId == null || masterCourseId.isBlank()) {
             throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST, "MasterCourse ID is required for export.");
         }
         User user = reportAccessService.getAuthenticatedUser(principal);
-        if (programmeBatchCourseRepository.existsById(courseId)) {
-            reportAccessService.validateCourseOfferingAccess(user, courseId);
+        if (programmeBatchCourseRepository.existsById(masterCourseId)) {
+            reportAccessService.validateCourseOfferingAccess(user, masterCourseId);
         } else {
-            reportAccessService.validateCourseAccess(user, courseId);
+            reportAccessService.validateCourseAccess(user, masterCourseId);
         }
-        String targetCourseId = courseId.trim();
-        byte[] pdfBytes = exportService.generateAttainmentPdf(targetCourseId, batchId);
-        String filename = "Attainment_Report_" + targetCourseId + ".pdf";
+        String targetMasterCourseId = masterCourseId.trim();
+        byte[] pdfBytes = exportService.generateAttainmentPdf(targetMasterCourseId, programmeBatchId);
+        String filename = "Attainment_Report_" + targetMasterCourseId + ".pdf";
 
         return ResponseEntity.ok()
                 .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + filename + "\"")

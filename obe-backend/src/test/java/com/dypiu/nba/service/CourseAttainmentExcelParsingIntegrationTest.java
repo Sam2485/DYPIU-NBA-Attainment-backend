@@ -427,7 +427,7 @@ public class CourseAttainmentExcelParsingIntegrationTest {
     @DisplayName("6. Validation Rejection: Invalid Student Marks Exceeding Out Of")
     void testValidationRejectionInvalidStudentMarks() {
         ExaminationMarksPayloadDto payload = ExaminationMarksPayloadDto.builder()
-                .courseId(offeringA.getId())
+                .masterCourseId(offeringA.getId())
                 .thresholdPercentage(new BigDecimal("45.00"))
                 .coMaxMarks(Map.of("CO1", new BigDecimal("20.00")))
                 .studentMarks(List.of(
@@ -467,7 +467,7 @@ public class CourseAttainmentExcelParsingIntegrationTest {
             );
 
             assertNotNull(result, "Examination attainment result should not be null");
-            assertEquals(offeringA.getId(), result.getCourseId());
+            assertEquals(offeringA.getId(), result.getMasterCourseId());
             assertEquals(24, result.getTotalStudents(), "Should parse all 24 students");
 
             // Verify Out of marks parsed dynamically from sheet row 19: CO1=20, CO2=18, CO3=22, CO4=16, CO5=24
@@ -512,7 +512,7 @@ public class CourseAttainmentExcelParsingIntegrationTest {
             );
 
             assertNotNull(result, "Survey attainment result should not be null");
-            assertEquals(offeringA.getId(), result.getCourseId());
+            assertEquals(offeringA.getId(), result.getMasterCourseId());
             assertEquals(18, result.getTotalStudents(), "Should parse 18 student responses");
 
             // Verify indirect percentages & scores for CO1..CO5

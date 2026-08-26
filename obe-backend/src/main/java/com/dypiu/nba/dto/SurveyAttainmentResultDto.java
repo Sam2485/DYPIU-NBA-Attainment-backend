@@ -12,7 +12,7 @@ import java.util.Map;
 @AllArgsConstructor
 @Builder
 public class SurveyAttainmentResultDto {
-    private String courseId;
+    private String masterCourseId;
     private Integer totalStudents;
     private Map<String, Integer> level1Counts; // Count of Slight (1)
     private Map<String, Integer> level2Counts; // Count of Moderate (2)

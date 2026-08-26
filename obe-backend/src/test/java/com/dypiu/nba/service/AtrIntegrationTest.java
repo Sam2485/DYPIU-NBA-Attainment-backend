@@ -61,9 +61,9 @@ public class AtrIntegrationTest {
 
     private String schoolId;
     private String deptId;
-    private String programmeId;
-    private String batchId;
-    private String courseId;
+    private String masterProgrammeId;
+    private String programmeBatchId;
+    private String masterCourseId;
     private String offeringId;
 
     @BeforeEach
@@ -71,24 +71,24 @@ public class AtrIntegrationTest {
         String uid = UUID.randomUUID().toString().substring(0, 6);
         schoolId = "sch-" + uid;
         deptId = "dept-" + uid;
-        programmeId = "prog-" + uid;
-        batchId = "batch-" + uid;
-        courseId = "crs-" + uid;
+        masterProgrammeId = "prog-" + uid;
+        programmeBatchId = "batch-" + uid;
+        masterCourseId = "crs-" + uid;
         offeringId = "off-" + uid;
 
         schoolRepository.save(School.builder().id(schoolId).name("School of Tech " + uid).code("ST" + uid).build());
         departmentRepository.save(Department.builder().id(deptId).schoolId(schoolId).name("Dept " + uid).code("D" + uid).build());
-        masterProgrammeRepository.save(MasterProgramme.builder().id(programmeId).departmentId(deptId).name("B.Tech " + uid).code("BT" + uid).build());
-        programmeBatchRepository.save(ProgrammeBatch.builder().id(batchId).masterProgrammeId(programmeId).name("2022-2026").startYear(2022).endYear(2026).build());
+        masterProgrammeRepository.save(MasterProgramme.builder().id(masterProgrammeId).departmentId(deptId).name("B.Tech " + uid).code("BT" + uid).build());
+        programmeBatchRepository.save(ProgrammeBatch.builder().id(programmeBatchId).masterProgrammeId(masterProgrammeId).name("2022-2026").startYear(2022).endYear(2026).build());
 
-        masterCourseRepository.save(MasterCourse.builder().id(courseId).masterProgrammeId(programmeId)
+        masterCourseRepository.save(MasterCourse.builder().id(masterCourseId).masterProgrammeId(masterProgrammeId)
                 .code("CS" + uid)
                 .name("Database Systems")
                 .credits(4)
                 .courseType("THEORY")
                 .status("ACTIVE")
                 .build());
-        programmeBatchCourseRepository.save(ProgrammeBatchCourse.builder().id(offeringId).masterCourseId(courseId).programmeBatchId(batchId).semester(4).build());
+        programmeBatchCourseRepository.save(ProgrammeBatchCourse.builder().id(offeringId).masterCourseId(masterCourseId).programmeBatchId(programmeBatchId).semester(4).build());
 
         // Create 2 COs
         CourseOutcome co1 = courseOutcomeRepository.save(CourseOutcome.builder()
@@ -98,9 +98,9 @@ public class AtrIntegrationTest {
 
         // Create POs and PSOs
         programmeOutcomeRepository.save(ProgrammeOutcome.builder()
-                .id("po1-" + uid).programmeBatchId(programmeId).code("PO1").statement("Engineering Knowledge").build());
+                .id("po1-" + uid).programmeBatchId(masterProgrammeId).code("PO1").statement("Engineering Knowledge").build());
         programmeSpecificOutcomeRepository.save(ProgrammeSpecificOutcome.builder()
-                .id("pso1-" + uid).programmeBatchId(programmeId).code("PSO1").statement("Software Design").build());
+                .id("pso1-" + uid).programmeBatchId(masterProgrammeId).code("PSO1").statement("Software Design").build());
 
         // Create Mappings
         coPoMappingRepository.save(CoPoMapping.builder().id("m1-" + uid).courseOutcomeId(co1.getId()).poCode("PO1").mappingLevel(3).build());
@@ -194,18 +194,18 @@ public class AtrIntegrationTest {
 
     @Test
     void testGetProgrammeAtrReport_StructureAndOutcomes() {
-        ProgrammeAtrReportDto report = atrService.getProgrammeAtrReport(programmeId, batchId);
+        ProgrammeAtrReportDto report = atrService.getProgrammeAtrReport(masterProgrammeId, programmeBatchId);
         assertNotNull(report);
         assertEquals("PROGRAMME_ATR", report.getReportType());
-        assertEquals(programmeId, report.getProgramme().getId());
-        assertEquals(batchId, report.getBatch().getId());
+        assertEquals(masterProgrammeId, report.getProgramme().getId());
+        assertEquals(programmeBatchId, report.getBatch().getId());
         assertEquals("DRAFT", report.getStatus());
         assertNotNull(report.getPoOutcomes());
     }
 
     @Test
     void testSaveProgrammeAtrReport_Persistence() {
-        ProgrammeAtrReportDto report = atrService.getProgrammeAtrReport(programmeId, batchId);
+        ProgrammeAtrReportDto report = atrService.getProgrammeAtrReport(masterProgrammeId, programmeBatchId);
 
         if (!report.getPoOutcomes().isEmpty()) {
             report.getPoOutcomes().get(0).setActions(List.of("Curriculum Revision: Introduce cloud DBMS in 5th semester."));
@@ -216,13 +216,13 @@ public class AtrIntegrationTest {
         assertNotNull(saved);
 
         // Verify DB persistence
-        ProgrammeAtr dbAtr = programmeAtrRepository.findByProgrammeBatchId(batchId).orElse(null);
+        ProgrammeAtr dbAtr = programmeAtrRepository.findByProgrammeBatchId(programmeBatchId).orElse(null);
         assertNotNull(dbAtr);
         assertNotNull(dbAtr.getObservationsJson());
         assertTrue(dbAtr.getObservationsJson().contains("Introduce cloud DBMS"));
 
         // Verify that fetching report reloads the persisted actions and observation
-        ProgrammeAtrReportDto reloaded = atrService.getProgrammeAtrReport(programmeId, batchId);
+        ProgrammeAtrReportDto reloaded = atrService.getProgrammeAtrReport(masterProgrammeId, programmeBatchId);
         assertNotNull(reloaded);
         if (!reloaded.getPoOutcomes().isEmpty()) {
             assertEquals("Strong foundational performance with room for distributed computing.", reloaded.getPoOutcomes().get(0).getObservation());
@@ -232,20 +232,20 @@ public class AtrIntegrationTest {
 
     @Test
     void testSubmitProgrammeAtr_StatusTransition() {
-        ProgrammeAtr submitted = atrService.submitProgrammeAtr(programmeId, batchId, "Dr. MasterProgramme Coordinator");
+        ProgrammeAtr submitted = atrService.submitProgrammeAtr(masterProgrammeId, programmeBatchId, "Dr. MasterProgramme Coordinator");
         assertNotNull(submitted);
         assertEquals(ProgrammeAtrStatus.SUBMITTED_FOR_VERIFICATION, submitted.getStatus());
         assertEquals("Dr. MasterProgramme Coordinator", submitted.getSubmittedBy());
         assertNotNull(submitted.getSubmittedAt());
 
         // Verify persisted status in getProgrammeAtrReport
-        ProgrammeAtrReportDto report = atrService.getProgrammeAtrReport(programmeId, batchId);
+        ProgrammeAtrReportDto report = atrService.getProgrammeAtrReport(masterProgrammeId, programmeBatchId);
         assertEquals("SUBMITTED_FOR_VERIFICATION", report.getStatus());
     }
 
     @Test
     void testMasterProgrammeAtr_NotFound() {
-        assertThrows(ResourceNotFoundException.class, () -> atrService.getProgrammeAtrReport("invalid-prog", batchId));
-        assertThrows(ResourceNotFoundException.class, () -> atrService.getProgrammeAtrReport(programmeId, "invalid-batch"));
+        assertThrows(ResourceNotFoundException.class, () -> atrService.getProgrammeAtrReport("invalid-prog", programmeBatchId));
+        assertThrows(ResourceNotFoundException.class, () -> atrService.getProgrammeAtrReport(masterProgrammeId, "invalid-batch"));
     }
 }

@@ -79,11 +79,11 @@ public class CourseAtr {
     private ZonedDateTime updatedAt;
 
     // Helper compatibility methods
-    public String getCourseOfferingId() {
+    public String getProgrammeBatchCourseId() {
         return programmeBatchCourseId;
     }
 
-    public void setCourseOfferingId(String courseOfferingId) {
-        this.programmeBatchCourseId = courseOfferingId;
+    public void setProgrammeBatchCourseId(String programmeBatchCourseId) {
+        this.programmeBatchCourseId = programmeBatchCourseId;
     }
 }

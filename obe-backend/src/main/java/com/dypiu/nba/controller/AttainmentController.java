@@ -24,116 +24,116 @@ public class AttainmentController {
     private final com.dypiu.nba.service.ReportAccessService reportAccessService;
     private final com.dypiu.nba.repository.ProgrammeBatchCourseRepository programmeBatchCourseRepository;
 
-    @GetMapping({"/config/{courseId}", "/configs/{courseId}"})
+    @GetMapping({"/config/{masterCourseId}", "/configs/{masterCourseId}"})
     public ResponseEntity<ApiResponse<AttainmentConfiguration>> getConfig(
-            @PathVariable String courseId,
-            @RequestParam(required = false) String batchId,
+            @PathVariable String masterCourseId,
+            @RequestParam(required = false) String programmeBatchId,
             java.security.Principal principal) {
         com.dypiu.nba.entity.User user = reportAccessService.getAuthenticatedUser(principal);
-        if (programmeBatchCourseRepository.existsById(courseId)) {
-            reportAccessService.validateCourseOfferingAccess(user, courseId);
+        if (programmeBatchCourseRepository.existsById(masterCourseId)) {
+            reportAccessService.validateCourseOfferingAccess(user, masterCourseId);
         } else {
-            reportAccessService.validateCourseAccess(user, courseId);
+            reportAccessService.validateCourseAccess(user, masterCourseId);
         }
         return ResponseEntity.ok(ApiResponse.<AttainmentConfiguration>builder()
                 .success(true)
-                .data(calculationService.getAttainmentConfig(courseId))
+                .data(calculationService.getAttainmentConfig(masterCourseId))
                 .build());
     }
 
-    @RequestMapping(value = {"/config/{courseId}", "/configs/{courseId}"}, method = {RequestMethod.POST, RequestMethod.PUT})
+    @RequestMapping(value = {"/config/{masterCourseId}", "/configs/{masterCourseId}"}, method = {RequestMethod.POST, RequestMethod.PUT})
     public ResponseEntity<ApiResponse<AttainmentConfiguration>> saveConfig(
-            @PathVariable String courseId,
+            @PathVariable String masterCourseId,
             @RequestBody AttainmentConfiguration config,
-            @RequestParam(required = false) String batchId,
+            @RequestParam(required = false) String programmeBatchId,
             java.security.Principal principal) {
         com.dypiu.nba.entity.User user = reportAccessService.getAuthenticatedUser(principal);
-        if (programmeBatchCourseRepository.existsById(courseId)) {
-            reportAccessService.validateCourseOfferingAccess(user, courseId);
+        if (programmeBatchCourseRepository.existsById(masterCourseId)) {
+            reportAccessService.validateCourseOfferingAccess(user, masterCourseId);
         } else {
-            reportAccessService.validateCourseAccess(user, courseId);
+            reportAccessService.validateCourseAccess(user, masterCourseId);
         }
         return ResponseEntity.ok(ApiResponse.<AttainmentConfiguration>builder()
                 .success(true)
                 .message("Attainment configuration saved")
-                .data(calculationService.saveAttainmentConfig(courseId, config))
+                .data(calculationService.saveAttainmentConfig(masterCourseId, config))
                 .build());
     }
 
-    @GetMapping({"/course/{courseId}", "/courses/{courseId}", "/calculate/course/{courseId}"})
+    @GetMapping({"/course/{masterCourseId}", "/courses/{masterCourseId}", "/calculate/course/{masterCourseId}"})
     public ResponseEntity<ApiResponse<Map<String, Object>>> getCourseCoAttainment(
-            @PathVariable String courseId,
-            @RequestParam(required = false) String batchId,
+            @PathVariable String masterCourseId,
+            @RequestParam(required = false) String programmeBatchId,
             java.security.Principal principal) {
         com.dypiu.nba.entity.User user = reportAccessService.getAuthenticatedUser(principal);
-        if (programmeBatchCourseRepository.existsById(courseId)) {
-            reportAccessService.validateCourseOfferingAccess(user, courseId);
+        if (programmeBatchCourseRepository.existsById(masterCourseId)) {
+            reportAccessService.validateCourseOfferingAccess(user, masterCourseId);
         } else {
-            reportAccessService.validateCourseAccess(user, courseId);
+            reportAccessService.validateCourseAccess(user, masterCourseId);
         }
         return ResponseEntity.ok(ApiResponse.<Map<String, Object>>builder()
                 .success(true)
                 .message("CO Attainment calculated successfully")
-                .data(calculationService.calculateCourseCoAttainment(courseId))
+                .data(calculationService.calculateCourseCoAttainment(masterCourseId))
                 .build());
     }
 
-    @GetMapping({"/courses/{courseId}/direct", "/course/{courseId}/direct"})
+    @GetMapping({"/courses/{masterCourseId}/direct", "/course/{masterCourseId}/direct"})
     public ResponseEntity<ApiResponse<ExaminationAttainmentResultDto>> getDirectAttainment(
-            @PathVariable String courseId,
-            @RequestParam(required = false) String batchId,
+            @PathVariable String masterCourseId,
+            @RequestParam(required = false) String programmeBatchId,
             java.security.Principal principal) {
         com.dypiu.nba.entity.User user = reportAccessService.getAuthenticatedUser(principal);
-        if (programmeBatchCourseRepository.existsById(courseId)) {
-            reportAccessService.validateCourseOfferingAccess(user, courseId);
+        if (programmeBatchCourseRepository.existsById(masterCourseId)) {
+            reportAccessService.validateCourseOfferingAccess(user, masterCourseId);
         } else {
-            reportAccessService.validateCourseAccess(user, courseId);
+            reportAccessService.validateCourseAccess(user, masterCourseId);
         }
         return ResponseEntity.ok(ApiResponse.<ExaminationAttainmentResultDto>builder()
                 .success(true)
-                .data(calculationService.getExaminationAttainment(courseId))
+                .data(calculationService.getExaminationAttainment(masterCourseId))
                 .build());
     }
 
-    @GetMapping({"/courses/{courseId}/indirect", "/course/{courseId}/indirect"})
+    @GetMapping({"/courses/{masterCourseId}/indirect", "/course/{masterCourseId}/indirect"})
     public ResponseEntity<ApiResponse<SurveyAttainmentResultDto>> getIndirectAttainment(
-            @PathVariable String courseId,
-            @RequestParam(required = false) String batchId,
+            @PathVariable String masterCourseId,
+            @RequestParam(required = false) String programmeBatchId,
             java.security.Principal principal) {
         com.dypiu.nba.entity.User user = reportAccessService.getAuthenticatedUser(principal);
-        if (programmeBatchCourseRepository.existsById(courseId)) {
-            reportAccessService.validateCourseOfferingAccess(user, courseId);
+        if (programmeBatchCourseRepository.existsById(masterCourseId)) {
+            reportAccessService.validateCourseOfferingAccess(user, masterCourseId);
         } else {
-            reportAccessService.validateCourseAccess(user, courseId);
+            reportAccessService.validateCourseAccess(user, masterCourseId);
         }
         return ResponseEntity.ok(ApiResponse.<SurveyAttainmentResultDto>builder()
                 .success(true)
-                .data(calculationService.getSurveyAttainment(courseId))
+                .data(calculationService.getSurveyAttainment(masterCourseId))
                 .build());
     }
 
     @PostMapping({"/assessment/direct/upload", "/assessment/internal/upload"})
     public ResponseEntity<ApiResponse<ExaminationAttainmentResultDto>> uploadAssessmentDirect(
             @RequestParam("file") MultipartFile file,
-            @RequestParam(value = "courseId", required = false) String courseId,
-            @RequestParam(value = "courseOfferingId", required = false) String courseOfferingId,
-            @RequestParam(value = "batchId", required = false) String batchId,
+            @RequestParam(value = "masterCourseId", required = false) String masterCourseId,
+            @RequestParam(value = "programmeBatchCourseId", required = false) String programmeBatchCourseId,
+            @RequestParam(value = "programmeBatchId", required = false) String programmeBatchId,
             @RequestParam(value = "assessmentType", required = false) String assessmentType,
             @RequestParam(value = "toolType", required = false) String toolType,
             java.security.Principal principal) {
-        return uploadAssessmentDirect(file, courseId, courseOfferingId, batchId, null, assessmentType, toolType, principal);
+        return uploadAssessmentDirect(file, masterCourseId, programmeBatchCourseId, programmeBatchId, null, assessmentType, toolType, principal);
     }
 
     public ResponseEntity<ApiResponse<ExaminationAttainmentResultDto>> uploadAssessmentDirect(
             MultipartFile file,
-            String courseId,
-            String courseOfferingId,
-            String batchId,
+            String masterCourseId,
+            String programmeBatchCourseId,
+            String programmeBatchId,
             BigDecimal thresholdPercentage,
             String assessmentType,
             String toolType,
             java.security.Principal principal) {
-        String targetId = courseOfferingId != null && !courseOfferingId.isBlank() ? courseOfferingId : courseId;
+        String targetId = programmeBatchCourseId != null && !programmeBatchCourseId.isBlank() ? programmeBatchCourseId : masterCourseId;
         if (targetId == null || targetId.isBlank()) {
             throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST, "Course or Course Offering ID is required.");
         }
@@ -153,21 +153,21 @@ public class AttainmentController {
     @PostMapping("/assessment/indirect/upload")
     public ResponseEntity<ApiResponse<SurveyAttainmentResultDto>> uploadAssessmentIndirect(
             @RequestParam("file") MultipartFile file,
-            @RequestParam(value = "courseId", required = false) String courseId,
-            @RequestParam(value = "courseOfferingId", required = false) String courseOfferingId,
-            @RequestParam(value = "batchId", required = false) String batchId,
+            @RequestParam(value = "masterCourseId", required = false) String masterCourseId,
+            @RequestParam(value = "programmeBatchCourseId", required = false) String programmeBatchCourseId,
+            @RequestParam(value = "programmeBatchId", required = false) String programmeBatchId,
             java.security.Principal principal) {
-        return uploadAssessmentIndirect(file, courseId, courseOfferingId, batchId, null, principal);
+        return uploadAssessmentIndirect(file, masterCourseId, programmeBatchCourseId, programmeBatchId, null, principal);
     }
 
     public ResponseEntity<ApiResponse<SurveyAttainmentResultDto>> uploadAssessmentIndirect(
             MultipartFile file,
-            String courseId,
-            String courseOfferingId,
-            String batchId,
+            String masterCourseId,
+            String programmeBatchCourseId,
+            String programmeBatchId,
             BigDecimal thresholdPercentage,
             java.security.Principal principal) {
-        String targetId = courseOfferingId != null && !courseOfferingId.isBlank() ? courseOfferingId : courseId;
+        String targetId = programmeBatchCourseId != null && !programmeBatchCourseId.isBlank() ? programmeBatchCourseId : masterCourseId;
         if (targetId == null || targetId.isBlank()) {
             throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST, "Course or Course Offering ID is required.");
         }
@@ -184,42 +184,42 @@ public class AttainmentController {
                 .build());
     }
 
-    @GetMapping("/programme/{programmeId}/batch/{batchId}")
+    @GetMapping("/programme/{masterProgrammeId}/batch/{programmeBatchId}")
     public ResponseEntity<ApiResponse<ProgrammeAttainmentResultDto>> getProgrammeAttainment(
-            @PathVariable String programmeId,
-            @PathVariable String batchId,
+            @PathVariable String masterProgrammeId,
+            @PathVariable String programmeBatchId,
             java.security.Principal principal) {
         com.dypiu.nba.entity.User user = reportAccessService.getAuthenticatedUser(principal);
-        reportAccessService.validateProgrammeAtrAccess(user, programmeId, batchId);
+        reportAccessService.validateProgrammeAtrAccess(user, masterProgrammeId, programmeBatchId);
         return ResponseEntity.ok(ApiResponse.<ProgrammeAttainmentResultDto>builder()
                 .success(true)
                 .message("Programme attainment calculated successfully")
-                .data(calculationService.calculateProgrammeAttainment(programmeId, batchId))
+                .data(calculationService.calculateProgrammeAttainment(masterProgrammeId, programmeBatchId))
                 .build());
     }
 
-    @GetMapping("/programme/{programmeId}/batch/{batchId}/dataset")
+    @GetMapping("/programme/{masterProgrammeId}/batch/{programmeBatchId}/dataset")
     public ResponseEntity<ApiResponse<ProgrammeAttainmentDatasetDto>> getProgrammeAttainmentDataset(
-            @PathVariable String programmeId,
-            @PathVariable String batchId,
+            @PathVariable String masterProgrammeId,
+            @PathVariable String programmeBatchId,
             java.security.Principal principal) {
         com.dypiu.nba.entity.User user = reportAccessService.getAuthenticatedUser(principal);
-        reportAccessService.validateProgrammeAtrAccess(user, programmeId, batchId);
+        reportAccessService.validateProgrammeAtrAccess(user, masterProgrammeId, programmeBatchId);
         return ResponseEntity.ok(ApiResponse.<ProgrammeAttainmentDatasetDto>builder()
                 .success(true)
                 .message("Programme attainment dataset retrieved successfully")
-                .data(calculationService.getProgrammeAttainmentDataset(programmeId, batchId))
+                .data(calculationService.getProgrammeAttainmentDataset(masterProgrammeId, programmeBatchId))
                 .build());
     }
 
-    @GetMapping("/programme/{programmeId}/batch/{batchId}/average-mapping")
+    @GetMapping("/programme/{masterProgrammeId}/batch/{programmeBatchId}/average-mapping")
     public ResponseEntity<ApiResponse<Object>> getProgrammeAverageMapping(
-            @PathVariable String programmeId,
-            @PathVariable String batchId,
+            @PathVariable String masterProgrammeId,
+            @PathVariable String programmeBatchId,
             java.security.Principal principal) {
         com.dypiu.nba.entity.User user = reportAccessService.getAuthenticatedUser(principal);
-        reportAccessService.validateProgrammeAtrAccess(user, programmeId, batchId);
-        ProgrammeBatchAttainmentReportDto report = attainmentReportService.getOrCreateProgrammeAttainmentReport(programmeId, batchId);
+        reportAccessService.validateProgrammeAtrAccess(user, masterProgrammeId, programmeBatchId);
+        ProgrammeBatchAttainmentReportDto report = attainmentReportService.getOrCreateProgrammeAttainmentReport(masterProgrammeId, programmeBatchId);
         return ResponseEntity.ok(ApiResponse.builder()
                 .success(true)
                 .data(java.util.Map.of(
@@ -229,14 +229,14 @@ public class AttainmentController {
                 .build());
     }
 
-    @GetMapping("/programme/{programmeId}/batch/{batchId}/average-direct")
+    @GetMapping("/programme/{masterProgrammeId}/batch/{programmeBatchId}/average-direct")
     public ResponseEntity<ApiResponse<Object>> getProgrammeAverageDirect(
-            @PathVariable String programmeId,
-            @PathVariable String batchId,
+            @PathVariable String masterProgrammeId,
+            @PathVariable String programmeBatchId,
             java.security.Principal principal) {
         com.dypiu.nba.entity.User user = reportAccessService.getAuthenticatedUser(principal);
-        reportAccessService.validateProgrammeAtrAccess(user, programmeId, batchId);
-        ProgrammeBatchAttainmentReportDto report = attainmentReportService.getOrCreateProgrammeAttainmentReport(programmeId, batchId);
+        reportAccessService.validateProgrammeAtrAccess(user, masterProgrammeId, programmeBatchId);
+        ProgrammeBatchAttainmentReportDto report = attainmentReportService.getOrCreateProgrammeAttainmentReport(masterProgrammeId, programmeBatchId);
         return ResponseEntity.ok(ApiResponse.builder()
                 .success(true)
                 .data(java.util.Map.of(
@@ -246,14 +246,14 @@ public class AttainmentController {
                 .build());
     }
 
-    @GetMapping("/programme/{programmeId}/batch/{batchId}/average-indirect")
+    @GetMapping("/programme/{masterProgrammeId}/batch/{programmeBatchId}/average-indirect")
     public ResponseEntity<ApiResponse<Object>> getProgrammeAverageIndirect(
-            @PathVariable String programmeId,
-            @PathVariable String batchId,
+            @PathVariable String masterProgrammeId,
+            @PathVariable String programmeBatchId,
             java.security.Principal principal) {
         com.dypiu.nba.entity.User user = reportAccessService.getAuthenticatedUser(principal);
-        reportAccessService.validateProgrammeAtrAccess(user, programmeId, batchId);
-        ProgrammeBatchAttainmentReportDto report = attainmentReportService.getOrCreateProgrammeAttainmentReport(programmeId, batchId);
+        reportAccessService.validateProgrammeAtrAccess(user, masterProgrammeId, programmeBatchId);
+        ProgrammeBatchAttainmentReportDto report = attainmentReportService.getOrCreateProgrammeAttainmentReport(masterProgrammeId, programmeBatchId);
         return ResponseEntity.ok(ApiResponse.builder()
                 .success(true)
                 .data(java.util.Map.of(
@@ -263,14 +263,14 @@ public class AttainmentController {
                 .build());
     }
 
-    @GetMapping("/programme/{programmeId}/batch/{batchId}/overall")
+    @GetMapping("/programme/{masterProgrammeId}/batch/{programmeBatchId}/overall")
     public ResponseEntity<ApiResponse<Object>> getProgrammeOverall(
-            @PathVariable String programmeId,
-            @PathVariable String batchId,
+            @PathVariable String masterProgrammeId,
+            @PathVariable String programmeBatchId,
             java.security.Principal principal) {
         com.dypiu.nba.entity.User user = reportAccessService.getAuthenticatedUser(principal);
-        reportAccessService.validateProgrammeAtrAccess(user, programmeId, batchId);
-        ProgrammeBatchAttainmentReportDto report = attainmentReportService.getOrCreateProgrammeAttainmentReport(programmeId, batchId);
+        reportAccessService.validateProgrammeAtrAccess(user, masterProgrammeId, programmeBatchId);
+        ProgrammeBatchAttainmentReportDto report = attainmentReportService.getOrCreateProgrammeAttainmentReport(masterProgrammeId, programmeBatchId);
         return ResponseEntity.ok(ApiResponse.builder()
                 .success(true)
                 .data(java.util.Map.of(
@@ -280,136 +280,136 @@ public class AttainmentController {
                 .build());
     }
 
-    @PostMapping(value = "/programmes/{programmeId}/batches/{batchId}/programme-survey/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PostMapping(value = "/programmes/{masterProgrammeId}/batches/{programmeBatchId}/programme-survey/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ApiResponse<ProgrammeSurveyResultDto>> uploadProgrammeSurvey(
-            @PathVariable String programmeId,
-            @PathVariable String batchId,
+            @PathVariable String masterProgrammeId,
+            @PathVariable String programmeBatchId,
             @RequestParam("file") MultipartFile file,
             @RequestParam(value = "uploadedBy", required = false) String uploadedBy,
             java.security.Principal principal) {
         com.dypiu.nba.entity.User user = reportAccessService.getAuthenticatedUser(principal);
-        reportAccessService.validateProgrammeAtrAccess(user, programmeId, batchId);
+        reportAccessService.validateProgrammeAtrAccess(user, masterProgrammeId, programmeBatchId);
         String uploader = (uploadedBy != null && !uploadedBy.isBlank()) ? uploadedBy : (principal != null ? principal.getName() : "Programme Coordinator");
         return ResponseEntity.ok(ApiResponse.<ProgrammeSurveyResultDto>builder()
                 .success(true)
                 .message("Programme exit survey processed successfully")
-                .data(calculationService.processAndSaveProgrammeSurveyFile(programmeId, batchId, file, uploader))
+                .data(calculationService.processAndSaveProgrammeSurveyFile(masterProgrammeId, programmeBatchId, file, uploader))
                 .build());
     }
 
 
     // --- Examination Attainment Endpoints (Sheet 2: Examination) ---
 
-    @GetMapping({"/examination/{courseOfferingId}", "/course-offerings/{courseOfferingId}/examination"})
+    @GetMapping({"/examination/{programmeBatchCourseId}", "/course-offerings/{programmeBatchCourseId}/examination"})
     public ResponseEntity<ApiResponse<ExaminationAttainmentResultDto>> getExaminationAttainment(
-            @PathVariable String courseOfferingId,
+            @PathVariable String programmeBatchCourseId,
             java.security.Principal principal) {
         com.dypiu.nba.entity.User user = reportAccessService.getAuthenticatedUser(principal);
-        reportAccessService.validateCourseOfferingAccess(user, courseOfferingId);
+        reportAccessService.validateCourseOfferingAccess(user, programmeBatchCourseId);
         return ResponseEntity.ok(ApiResponse.<ExaminationAttainmentResultDto>builder()
                 .success(true)
                 .message("Examination attainment fetched successfully")
-                .data(calculationService.getExaminationAttainment(courseOfferingId))
+                .data(calculationService.getExaminationAttainment(programmeBatchCourseId))
                 .build());
     }
 
-    @PostMapping({"/examination/{courseOfferingId}", "/course-offerings/{courseOfferingId}/examination"})
+    @PostMapping({"/examination/{programmeBatchCourseId}", "/course-offerings/{programmeBatchCourseId}/examination"})
     public ResponseEntity<ApiResponse<ExaminationAttainmentResultDto>> saveAndCalculateExaminationAttainment(
-            @PathVariable String courseOfferingId,
+            @PathVariable String programmeBatchCourseId,
             @RequestBody ExaminationMarksPayloadDto payload,
             java.security.Principal principal) {
         com.dypiu.nba.entity.User user = reportAccessService.getAuthenticatedUser(principal);
-        reportAccessService.validateCourseOfferingAccess(user, courseOfferingId);
+        reportAccessService.validateCourseOfferingAccess(user, programmeBatchCourseId);
         return ResponseEntity.ok(ApiResponse.<ExaminationAttainmentResultDto>builder()
                 .success(true)
                 .message("Examination threshold, out-of marks, student marks saved and attainment calculated successfully")
-                .data(calculationService.calculateExaminationAttainment(courseOfferingId, payload))
+                .data(calculationService.calculateExaminationAttainment(programmeBatchCourseId, payload))
                 .build());
     }
 
-    @PostMapping(value = {"/examination/{courseOfferingId}/upload", "/course-offerings/{courseOfferingId}/examination/upload"}, consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PostMapping(value = {"/examination/{programmeBatchCourseId}/upload", "/course-offerings/{programmeBatchCourseId}/examination/upload"}, consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ApiResponse<ExaminationAttainmentResultDto>> uploadAndProcessExaminationSheet(
-            @PathVariable String courseOfferingId,
+            @PathVariable String programmeBatchCourseId,
             @RequestParam("file") MultipartFile file,
             @RequestParam(value = "thresholdPercentage", required = false) BigDecimal thresholdPercentage,
             @RequestParam(value = "uploadedBy", required = false) String uploadedBy,
             java.security.Principal principal) {
         com.dypiu.nba.entity.User user = reportAccessService.getAuthenticatedUser(principal);
-        reportAccessService.validateCourseOfferingAccess(user, courseOfferingId);
+        reportAccessService.validateCourseOfferingAccess(user, programmeBatchCourseId);
         String uploader = (uploadedBy != null && !uploadedBy.isBlank()) ? uploadedBy : (principal != null ? principal.getName() : "Course Coordinator");
         return ResponseEntity.ok(ApiResponse.<ExaminationAttainmentResultDto>builder()
                 .success(true)
                 .message("Examination sheet saved with audit metadata, parsed via POI, and attainment calculated successfully")
-                .data(calculationService.processAndSaveExaminationFile(courseOfferingId, file, thresholdPercentage, uploader))
+                .data(calculationService.processAndSaveExaminationFile(programmeBatchCourseId, file, thresholdPercentage, uploader))
                 .build());
     }
 
     // --- Course End Survey Attainment Endpoints (Sheet 3: Course End Survey) ---
 
-    @GetMapping({"/survey/{courseOfferingId}", "/course-offerings/{courseOfferingId}/survey"})
+    @GetMapping("/programme-batch-courses/{programmeBatchCourseId}/survey")
     public ResponseEntity<ApiResponse<SurveyAttainmentResultDto>> getSurveyAttainment(
-            @PathVariable String courseOfferingId,
+            @PathVariable String programmeBatchCourseId,
             java.security.Principal principal) {
         com.dypiu.nba.entity.User user = reportAccessService.getAuthenticatedUser(principal);
-        reportAccessService.validateCourseOfferingAccess(user, courseOfferingId);
+        reportAccessService.validateCourseOfferingAccess(user, programmeBatchCourseId);
         return ResponseEntity.ok(ApiResponse.<SurveyAttainmentResultDto>builder()
                 .success(true)
                 .message("Course End Survey attainment fetched successfully")
-                .data(calculationService.getSurveyAttainment(courseOfferingId))
+                .data(calculationService.getSurveyAttainment(programmeBatchCourseId))
                 .build());
     }
 
-    @PostMapping({"/survey/{courseOfferingId}", "/course-offerings/{courseOfferingId}/survey"})
+    @PostMapping("/programme-batch-courses/{programmeBatchCourseId}/survey")
     public ResponseEntity<ApiResponse<SurveyAttainmentResultDto>> saveAndCalculateSurveyAttainment(
-            @PathVariable String courseOfferingId,
+            @PathVariable String programmeBatchCourseId,
             @RequestBody SurveyMarksPayloadDto payload,
             java.security.Principal principal) {
         com.dypiu.nba.entity.User user = reportAccessService.getAuthenticatedUser(principal);
-        reportAccessService.validateCourseOfferingAccess(user, courseOfferingId);
+        reportAccessService.validateCourseOfferingAccess(user, programmeBatchCourseId);
         return ResponseEntity.ok(ApiResponse.<SurveyAttainmentResultDto>builder()
                 .success(true)
                 .message("Course End Survey responses saved and indirect attainment calculated successfully")
-                .data(calculationService.calculateSurveyAttainment(courseOfferingId, payload))
+                .data(calculationService.calculateSurveyAttainment(programmeBatchCourseId, payload))
                 .build());
     }
 
-    @PostMapping(value = {"/survey/{courseOfferingId}/upload", "/course-offerings/{courseOfferingId}/survey/upload"}, consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PostMapping(value = "/programme-batch-courses/{programmeBatchCourseId}/survey/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ApiResponse<SurveyAttainmentResultDto>> uploadAndProcessSurveySheet(
-            @PathVariable String courseOfferingId,
+            @PathVariable String programmeBatchCourseId,
             @RequestParam("file") MultipartFile file,
             @RequestParam(value = "thresholdPercentage", required = false) BigDecimal thresholdPercentage,
             @RequestParam(value = "uploadedBy", required = false) String uploadedBy,
             java.security.Principal principal) {
         com.dypiu.nba.entity.User user = reportAccessService.getAuthenticatedUser(principal);
-        reportAccessService.validateCourseOfferingAccess(user, courseOfferingId);
+        reportAccessService.validateCourseOfferingAccess(user, programmeBatchCourseId);
         String uploader = (uploadedBy != null && !uploadedBy.isBlank()) ? uploadedBy : (principal != null ? principal.getName() : "Course Coordinator");
         return ResponseEntity.ok(ApiResponse.<SurveyAttainmentResultDto>builder()
                 .success(true)
                 .message("Course End Survey sheet saved with audit metadata, parsed via POI, and indirect attainment calculated successfully")
-                .data(calculationService.processAndSaveSurveyFile(courseOfferingId, file, thresholdPercentage, uploader))
+                .data(calculationService.processAndSaveSurveyFile(programmeBatchCourseId, file, thresholdPercentage, uploader))
                 .build());
     }
 
-    @GetMapping("/documents/{courseOfferingOrCourseId}")
+    @GetMapping("/documents/{courseOfferingOrMasterCourseId}")
     public ResponseEntity<ApiResponse<java.util.List<com.dypiu.nba.entity.UploadedDocument>>> getUploadedDocuments(
-            @PathVariable String courseOfferingOrCourseId,
+            @PathVariable String courseOfferingOrMasterCourseId,
             java.security.Principal principal) {
-        String offeringId = calculationService.resolveOfferingId(courseOfferingOrCourseId);
+        String offeringId = calculationService.resolveOfferingId(courseOfferingOrMasterCourseId);
         com.dypiu.nba.entity.User user = reportAccessService.getAuthenticatedUser(principal);
         reportAccessService.validateCourseOfferingAccess(user, offeringId);
         return ResponseEntity.ok(ApiResponse.<java.util.List<com.dypiu.nba.entity.UploadedDocument>>builder()
                 .success(true)
                 .message("Uploaded audit documents retrieved successfully")
-                .data(calculationService.getUploadedDocumentsForCourse(courseOfferingOrCourseId))
+                .data(calculationService.getUploadedDocumentsForCourse(courseOfferingOrMasterCourseId))
                 .build());
     }
 
-    @GetMapping("/documents/{courseId}/download/{documentType}")
+    @GetMapping("/documents/{masterCourseId}/download/{documentType}")
     public ResponseEntity<org.springframework.core.io.Resource> downloadUploadedDocument(
-            @PathVariable String courseId,
+            @PathVariable String masterCourseId,
             @PathVariable String documentType,
             java.security.Principal principal) {
-        String offeringId = calculationService.resolveOfferingId(courseId);
+        String offeringId = calculationService.resolveOfferingId(masterCourseId);
         com.dypiu.nba.entity.User user = reportAccessService.getAuthenticatedUser(principal);
         reportAccessService.validateCourseOfferingAccess(user, offeringId);
 
@@ -445,19 +445,19 @@ public class AttainmentController {
     //  ATTAINMENT EXPORT ENDPOINTS (EXCEL & PDF)
     // =========================================================================
 
-    @GetMapping(value = "/export/excel/{courseId}", produces = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    @GetMapping(value = "/export/excel/{masterCourseId}", produces = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
     public ResponseEntity<byte[]> exportAttainmentExcel(
-            @PathVariable String courseId,
-            @RequestParam(value = "batchId", required = false) String batchId,
+            @PathVariable String masterCourseId,
+            @RequestParam(value = "programmeBatchId", required = false) String programmeBatchId,
             java.security.Principal principal) {
         com.dypiu.nba.entity.User user = reportAccessService.getAuthenticatedUser(principal);
-        if (programmeBatchCourseRepository.existsById(courseId)) {
-            reportAccessService.validateCourseOfferingAccess(user, courseId);
+        if (programmeBatchCourseRepository.existsById(masterCourseId)) {
+            reportAccessService.validateCourseOfferingAccess(user, masterCourseId);
         } else {
-            reportAccessService.validateCourseAccess(user, courseId);
+            reportAccessService.validateCourseAccess(user, masterCourseId);
         }
-        byte[] excelBytes = exportService.generateAttainmentExcel(courseId, batchId);
-        String filename = "Attainment_Sheet_" + courseId + ".xlsx";
+        byte[] excelBytes = exportService.generateAttainmentExcel(masterCourseId, programmeBatchId);
+        String filename = "Attainment_Sheet_" + masterCourseId + ".xlsx";
 
         return ResponseEntity.ok()
                 .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
@@ -465,19 +465,19 @@ public class AttainmentController {
                 .body(excelBytes);
     }
 
-    @GetMapping(value = "/export/pdf/{courseId}", produces = MediaType.APPLICATION_PDF_VALUE)
+    @GetMapping(value = "/export/pdf/{masterCourseId}", produces = MediaType.APPLICATION_PDF_VALUE)
     public ResponseEntity<byte[]> exportAttainmentPdf(
-            @PathVariable String courseId,
-            @RequestParam(value = "batchId", required = false) String batchId,
+            @PathVariable String masterCourseId,
+            @RequestParam(value = "programmeBatchId", required = false) String programmeBatchId,
             java.security.Principal principal) {
         com.dypiu.nba.entity.User user = reportAccessService.getAuthenticatedUser(principal);
-        if (programmeBatchCourseRepository.existsById(courseId)) {
-            reportAccessService.validateCourseOfferingAccess(user, courseId);
+        if (programmeBatchCourseRepository.existsById(masterCourseId)) {
+            reportAccessService.validateCourseOfferingAccess(user, masterCourseId);
         } else {
-            reportAccessService.validateCourseAccess(user, courseId);
+            reportAccessService.validateCourseAccess(user, masterCourseId);
         }
-        byte[] pdfBytes = exportService.generateAttainmentPdf(courseId, batchId);
-        String filename = "NBA_Attainment_Report_" + courseId + ".pdf";
+        byte[] pdfBytes = exportService.generateAttainmentPdf(masterCourseId, programmeBatchId);
+        String filename = "NBA_Attainment_Report_" + masterCourseId + ".pdf";
 
         return ResponseEntity.ok()
                 .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + filename + "\"")
@@ -485,19 +485,19 @@ public class AttainmentController {
                 .body(pdfBytes);
     }
 
-    @GetMapping(value = "/reports/{courseId}/excel", produces = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    @GetMapping(value = "/reports/{masterCourseId}/excel", produces = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
     public ResponseEntity<byte[]> exportAttainmentExcelAlias(
-            @PathVariable String courseId,
-            @RequestParam(value = "batchId", required = false) String batchId,
+            @PathVariable String masterCourseId,
+            @RequestParam(value = "programmeBatchId", required = false) String programmeBatchId,
             java.security.Principal principal) {
-        return exportAttainmentExcel(courseId, batchId, principal);
+        return exportAttainmentExcel(masterCourseId, programmeBatchId, principal);
     }
 
-    @GetMapping(value = "/reports/{courseId}/pdf", produces = MediaType.APPLICATION_PDF_VALUE)
+    @GetMapping(value = "/reports/{masterCourseId}/pdf", produces = MediaType.APPLICATION_PDF_VALUE)
     public ResponseEntity<byte[]> exportAttainmentPdfAlias(
-            @PathVariable String courseId,
-            @RequestParam(value = "batchId", required = false) String batchId,
+            @PathVariable String masterCourseId,
+            @RequestParam(value = "programmeBatchId", required = false) String programmeBatchId,
             java.security.Principal principal) {
-        return exportAttainmentPdf(courseId, batchId, principal);
+        return exportAttainmentPdf(masterCourseId, programmeBatchId, principal);
     }
 }

@@ -66,19 +66,19 @@ public class ProgrammeAtr {
     private ZonedDateTime updatedAt;
 
     // Helper compatibility methods
-    public String getBatchId() {
+    public String getProgrammeBatchId() {
         return programmeBatchId;
     }
 
-    public void setBatchId(String batchId) {
-        this.programmeBatchId = batchId;
+    public void setProgrammeBatchId(String programmeBatchId) {
+        this.programmeBatchId = programmeBatchId;
     }
 
-    public String getProgrammeId() {
+    public String getMasterProgrammeId() {
         return programmeBatchId;
     }
 
-    public void setProgrammeId(String programmeId) {
+    public void setMasterProgrammeId(String masterProgrammeId) {
         // preserved for compatibility
     }
 }

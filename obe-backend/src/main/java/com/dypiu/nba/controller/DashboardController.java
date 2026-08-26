@@ -173,18 +173,18 @@ public class DashboardController {
         List<ProgrammeBatch> activeBatches = progIds.isEmpty() ? Collections.emptyList() : programmeBatchRepository.findByMasterProgrammeIdIn(progIds).stream()
                 .filter(b -> "ACTIVE".equalsIgnoreCase(b.getStatus()))
                 .collect(Collectors.toList());
-        Set<String> batchIds = activeBatches.stream().map(ProgrammeBatch::getId).collect(Collectors.toSet());
-        List<ProgrammeBatchCourse> offerings = batchIds.isEmpty() ? Collections.emptyList() : programmeBatchCourseRepository.findByProgrammeBatchIdIn(batchIds);
+        Set<String> programmeBatchIds = activeBatches.stream().map(ProgrammeBatch::getId).collect(Collectors.toSet());
+        List<ProgrammeBatchCourse> offerings = programmeBatchIds.isEmpty() ? Collections.emptyList() : programmeBatchCourseRepository.findByProgrammeBatchIdIn(programmeBatchIds);
         List<MasterCourse> courses = progIds.isEmpty() ? Collections.emptyList() : masterCourseRepository.findByMasterProgrammeIdIn(new ArrayList<>(progIds));
 
         long allocationsPending = progIds.isEmpty() ? 0 : approvalRequestRepository.findAll().stream()
-                .filter(a -> a.getType() == ApprovalType.COURSE_ALLOCATION && progIds.contains(a.getProgrammeId()) && a.getStatus() == ApprovalStatus.PENDING)
+                .filter(a -> a.getType() == ApprovalType.COURSE_ALLOCATION && progIds.contains(a.getMasterProgrammeId()) && a.getStatus() == ApprovalStatus.PENDING)
                 .count();
         long targetsPending = progIds.isEmpty() ? 0 : approvalRequestRepository.findAll().stream()
-                .filter(a -> a.getType() == ApprovalType.PO_PSO_TARGETS && progIds.contains(a.getProgrammeId()) && a.getStatus() == ApprovalStatus.PENDING)
+                .filter(a -> a.getType() == ApprovalType.PO_PSO_TARGETS && progIds.contains(a.getMasterProgrammeId()) && a.getStatus() == ApprovalStatus.PENDING)
                 .count();
         long programmeAtrPending = progIds.isEmpty() ? 0 : programmeAtrRepository.findAll().stream()
-                .filter(p -> progIds.contains(p.getProgrammeId()) && p.getStatus() == ProgrammeAtrStatus.SUBMITTED_FOR_VERIFICATION)
+                .filter(p -> progIds.contains(p.getMasterProgrammeId()) && p.getStatus() == ProgrammeAtrStatus.SUBMITTED_FOR_VERIFICATION)
                 .count();
         long pendingApprovalsCount = allocationsPending + targetsPending + programmeAtrPending;
 
@@ -227,19 +227,14 @@ public class DashboardController {
         return ResponseEntity.ok(ApiResponse.<Map<String, Object>>builder().success(true).data(data).build());
     }
 
-    public ResponseEntity<ApiResponse<Map<String, Object>>> getProgrammeCoordinatorDashboard(
-            String programmeId,
-            Principal principal) {
-        return getProgrammeCoordinatorDashboard(null, programmeId, null, principal);
-    }
+    
 
     @GetMapping("/programme-coordinator")
     public ResponseEntity<ApiResponse<Map<String, Object>>> getProgrammeCoordinatorDashboard(
             @RequestParam(required = false) String masterProgrammeId,
-            @RequestParam(required = false) String programmeId,
             @RequestParam(required = false) String coordinatorEmail,
             Principal principal) {
-        String effectiveProgId = (masterProgrammeId != null && !masterProgrammeId.isBlank()) ? masterProgrammeId : programmeId;
+        String effectiveProgId = (masterProgrammeId != null && !masterProgrammeId.isBlank()) ? masterProgrammeId : masterProgrammeId;
         CurrentUserScope scope = currentUserScopeService.getCurrentUserScope(principal);
         String effectiveEmail = (coordinatorEmail != null && !coordinatorEmail.isBlank())
                 ? coordinatorEmail.trim().toLowerCase()
@@ -249,7 +244,7 @@ public class DashboardController {
 
         if (scope.isProgrammeCoordinator()) {
             if (effectiveProgId != null && !effectiveProgId.isBlank()) {
-                boolean matchesDirect = scope.getProgrammeId() != null && effectiveProgId.trim().equals(scope.getProgrammeId().trim());
+                boolean matchesDirect = scope.getMasterProgrammeId() != null && effectiveProgId.trim().equals(scope.getMasterProgrammeId().trim());
                 boolean matchesBatch = false;
                 if (!matchesDirect && effectiveEmail != null && !effectiveEmail.isBlank()) {
                     List<ProgrammeBatch> batches = programmeBatchRepository.findByCoordinatorEmailIgnoreCase(effectiveEmail);
@@ -266,8 +261,8 @@ public class DashboardController {
                 if (batches != null && !batches.isEmpty()) {
                     targetProgId = batches.get(0).getMasterProgrammeId();
                 }
-            } else if (scope.getProgrammeId() != null && !scope.getProgrammeId().isBlank()) {
-                targetProgId = scope.getProgrammeId().trim();
+            } else if (scope.getMasterProgrammeId() != null && !scope.getMasterProgrammeId().isBlank()) {
+                targetProgId = scope.getMasterProgrammeId().trim();
             }
         } else if (scope.isAdmin() || scope.isIqac()) {
             if (effectiveProgId != null && !effectiveProgId.isBlank()) {
@@ -277,8 +272,8 @@ public class DashboardController {
                 if (batches != null && !batches.isEmpty()) {
                     targetProgId = batches.get(0).getMasterProgrammeId();
                 }
-            } else if (scope.getProgrammeId() != null) {
-                targetProgId = scope.getProgrammeId();
+            } else if (scope.getMasterProgrammeId() != null) {
+                targetProgId = scope.getMasterProgrammeId();
             }
         } else if (scope.isHod()) {
             if (effectiveProgId != null && !effectiveProgId.isBlank()) {
@@ -288,8 +283,8 @@ public class DashboardController {
             if (effectiveProgId != null && !effectiveProgId.isBlank()) {
                 targetProgId = effectiveProgId.trim();
             }
-        } else if (scope.getProgrammeId() != null) {
-            targetProgId = scope.getProgrammeId();
+        } else if (scope.getMasterProgrammeId() != null) {
+            targetProgId = scope.getMasterProgrammeId();
         } else if (effectiveProgId != null && !effectiveProgId.isBlank()) {
             targetProgId = effectiveProgId.trim();
         }
@@ -335,8 +330,8 @@ public class DashboardController {
         }
 
         List<ProgrammeBatch> batches = programmeBatchRepository.findByMasterProgrammeId(finalProgId);
-        Set<String> batchIds = batches.stream().map(ProgrammeBatch::getId).collect(Collectors.toSet());
-        List<ProgrammeBatchCourse> offerings = batchIds.isEmpty() ? Collections.emptyList() : programmeBatchCourseRepository.findByProgrammeBatchIdIn(batchIds);
+        Set<String> programmeBatchIds = batches.stream().map(ProgrammeBatch::getId).collect(Collectors.toSet());
+        List<ProgrammeBatchCourse> offerings = programmeBatchIds.isEmpty() ? Collections.emptyList() : programmeBatchCourseRepository.findByProgrammeBatchIdIn(programmeBatchIds);
         List<MasterCourse> courses = masterCourseRepository.findByMasterProgrammeId(finalProgId);
 
         List<String> offeringIds = offerings.stream().map(ProgrammeBatchCourse::getId).collect(Collectors.toList());
@@ -388,24 +383,17 @@ public class DashboardController {
         return ResponseEntity.ok(ApiResponse.<Map<String, Object>>builder().success(true).data(data).build());
     }
 
-    public ResponseEntity<ApiResponse<Map<String, Object>>> getCourseCoordinatorDashboard(
-            String courseId,
-            String batchId,
-            Principal principal) {
-        return getCourseCoordinatorDashboard(null, null, courseId, null, batchId, principal);
-    }
+    
 
     @GetMapping({"/course-coordinator", "/faculty"})
     public ResponseEntity<ApiResponse<Map<String, Object>>> getCourseCoordinatorDashboard(
             @RequestParam(required = false) String programmeBatchCourseId,
             @RequestParam(required = false) String masterCourseId,
-            @RequestParam(required = false) String courseId,
             @RequestParam(required = false) String programmeBatchId,
-            @RequestParam(required = false) String batchId,
             Principal principal) {
-        String effectiveOfferingOrCourseId = (programmeBatchCourseId != null && !programmeBatchCourseId.isBlank())
+        String effectiveOfferingOrMasterCourseId = (programmeBatchCourseId != null && !programmeBatchCourseId.isBlank())
                 ? programmeBatchCourseId
-                : ((masterCourseId != null && !masterCourseId.isBlank()) ? masterCourseId : courseId);
+                : ((masterCourseId != null && !masterCourseId.isBlank()) ? masterCourseId : masterCourseId);
         User user = reportAccessService.getAuthenticatedUser(principal);
         CurrentUserScope scope = currentUserScopeService.getCurrentUserScope(principal);
 
@@ -415,21 +403,21 @@ public class DashboardController {
                 .collect(Collectors.toList());
 
         ProgrammeBatchCourse targetOffering = null;
-        if (effectiveOfferingOrCourseId != null && !effectiveOfferingOrCourseId.isBlank()) {
+        if (effectiveOfferingOrMasterCourseId != null && !effectiveOfferingOrMasterCourseId.isBlank()) {
             if (scope != null && scope.isFaculty()) {
                 boolean assignedToMasterCourse = assignedOfferings.stream().anyMatch(o -> 
-                        (o.getMasterCourseId() != null && o.getMasterCourseId().equalsIgnoreCase(effectiveOfferingOrCourseId.trim())) || 
-                        (o.getId() != null && o.getId().equalsIgnoreCase(effectiveOfferingOrCourseId.trim())));
+                        (o.getMasterCourseId() != null && o.getMasterCourseId().equalsIgnoreCase(effectiveOfferingOrMasterCourseId.trim())) || 
+                        (o.getId() != null && o.getId().equalsIgnoreCase(effectiveOfferingOrMasterCourseId.trim())));
                 if (!assignedToMasterCourse) {
                     throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: You are not assigned to this MasterCourse / MasterCourse Offering.");
                 }
             }
-            targetOffering = programmeBatchCourseRepository.findByMasterCourseId(effectiveOfferingOrCourseId.trim()).stream()
+            targetOffering = programmeBatchCourseRepository.findByMasterCourseId(effectiveOfferingOrMasterCourseId.trim()).stream()
                     .filter(o -> scope == null || !scope.isFaculty() || assignedOfferings.contains(o))
                     .findFirst()
                     .orElse(null);
             if (targetOffering == null) {
-                targetOffering = programmeBatchCourseRepository.findById(effectiveOfferingOrCourseId.trim()).orElse(null);
+                targetOffering = programmeBatchCourseRepository.findById(effectiveOfferingOrMasterCourseId.trim()).orElse(null);
             }
         }
         if (targetOffering == null && !assignedOfferings.isEmpty()) {
@@ -438,7 +426,7 @@ public class DashboardController {
 
         MasterCourse course = null;
         String offeringId = targetOffering != null ? targetOffering.getId() : null;
-        String targetCrsId = targetOffering != null ? targetOffering.getCourseId() : courseId;
+        String targetCrsId = targetOffering != null ? targetOffering.getMasterCourseId() : masterCourseId;
         if (targetCrsId != null && !targetCrsId.isBlank()) {
             course = masterCourseRepository.findById(targetCrsId).orElse(null);
         }
@@ -481,7 +469,7 @@ public class DashboardController {
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("masterCourseId", course != null ? course.getId() : targetCrsId);
         data.put("programmeBatchCourseId", offeringId);
-        data.put("programmeBatchId", targetOffering != null ? targetOffering.getProgrammeBatchId() : batchId);
+        data.put("programmeBatchId", targetOffering != null ? targetOffering.getProgrammeBatchId() : programmeBatchId);
         data.put("course", course);
         data.put("workflowProgress", workflowProgress);
         data.put("revisions", revisions);

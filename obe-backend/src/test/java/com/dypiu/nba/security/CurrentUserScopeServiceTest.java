@@ -70,7 +70,7 @@ public class CurrentUserScopeServiceTest {
                 .role(UserRole.DIRECTOR)
                 .schoolId("sch-soe-01")
                 .departmentId(null)
-                .programmeId(null)
+                .masterProgrammeId(null)
                 .isActive(true)
                 .build();
 
@@ -108,7 +108,7 @@ public class CurrentUserScopeServiceTest {
                 .role(UserRole.HOD)
                 .schoolId("sch-soe-01")
                 .departmentId("dept-cse-01")
-                .programmeId(null)
+                .masterProgrammeId(null)
                 .isActive(true)
                 .build();
 
@@ -129,7 +129,7 @@ public class CurrentUserScopeServiceTest {
     }
 
     @Test
-    @DisplayName("3. Successfully resolve MasterProgramme Coordinator scope with schoolId, departmentId, programmeId")
+    @DisplayName("3. Successfully resolve MasterProgramme Coordinator scope with schoolId, departmentId, masterProgrammeId")
     void testResolveProgrammeCoordinatorScope_Success() {
         String email = "pc1@gmail.com";
         setSecurityContextUser(email, "PROGRAMME_COORDINATOR");
@@ -142,7 +142,7 @@ public class CurrentUserScopeServiceTest {
                 .role(UserRole.PROGRAMME_COORDINATOR)
                 .schoolId("sch-soe-01")
                 .departmentId("dept-cse-01")
-                .programmeId("prog-btech-cse-01")
+                .masterProgrammeId("prog-btech-cse-01")
                 .isActive(true)
                 .build();
 
@@ -157,9 +157,9 @@ public class CurrentUserScopeServiceTest {
         assertTrue(scope.isProgrammeCoordinator());
         assertEquals("sch-soe-01", scope.getSchoolId());
         assertEquals("dept-cse-01", scope.getDepartmentId());
-        assertEquals("prog-btech-cse-01", scope.getProgrammeId());
+        assertEquals("prog-btech-cse-01", scope.getMasterProgrammeId());
         assertTrue(scope.hasProgrammeScope());
-        assertEquals("prog-btech-cse-01", scope.getRequiredProgrammeId());
+        assertEquals("prog-btech-cse-01", scope.getRequiredMasterProgrammeId());
     }
 
     @Test
@@ -176,7 +176,7 @@ public class CurrentUserScopeServiceTest {
                 .role(UserRole.ADMIN)
                 .schoolId(null)
                 .departmentId(null)
-                .programmeId(null)
+                .masterProgrammeId(null)
                 .isActive(true)
                 .build();
 
@@ -300,19 +300,19 @@ public class CurrentUserScopeServiceTest {
     }
 
     @Test
-    @DisplayName("10. Missing programmeId throws 403 Forbidden when getRequiredProgrammeId() is called")
-    void testGetRequiredProgrammeId_MissingProg_ThrowsForbidden() {
+    @DisplayName("10. Missing masterProgrammeId throws 403 Forbidden when getRequiredMasterProgrammeId() is called")
+    void testGetRequiredMasterProgrammeId_MissingProg_ThrowsForbidden() {
         CurrentUserScope scope = CurrentUserScope.builder()
                 .userId(1L)
                 .email("test@dypiu.ac.in")
                 .role(UserRole.PROGRAMME_COORDINATOR)
                 .schoolId("sch-1")
                 .departmentId("dept-1")
-                .programmeId(null)
+                .masterProgrammeId(null)
                 .build();
 
         assertFalse(scope.hasProgrammeScope());
-        ResponseStatusException ex = assertThrows(ResponseStatusException.class, scope::getRequiredProgrammeId);
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class, scope::getRequiredMasterProgrammeId);
         assertEquals(HttpStatus.FORBIDDEN, ex.getStatusCode());
     }
 

@@ -94,7 +94,7 @@ public class CurrentUserScopeService {
                 .role(user.getRole())
                 .schoolId(user.getSchoolId())
                 .departmentId(user.getDepartmentId())
-                .programmeId(user.getProgrammeId())
+                .masterProgrammeId(user.getMasterProgrammeId())
                 .build();
     }
 

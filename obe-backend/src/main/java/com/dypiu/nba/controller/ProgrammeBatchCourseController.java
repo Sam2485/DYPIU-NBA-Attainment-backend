@@ -31,17 +31,16 @@ public class ProgrammeBatchCourseController {
     @GetMapping
     public ResponseEntity<ApiResponse<List<ProgrammeBatchCourse>>> getAllProgrammeBatchCourses(
             @RequestParam(required = false) String programmeBatchId,
-            @RequestParam(required = false) String batchId,
             @RequestParam(required = false) String masterCourseId,
             @RequestParam(required = false) String coordinatorEmail,
             @RequestParam(required = false) String courseCoordinatorEmail) {
-        String targetBatchId = (programmeBatchId != null && !programmeBatchId.isBlank()) ? programmeBatchId : batchId;
+        String targetProgrammeBatchId = (programmeBatchId != null && !programmeBatchId.isBlank()) ? programmeBatchId : programmeBatchId;
         String effectiveEmail = (coordinatorEmail != null && !coordinatorEmail.isBlank()) ? coordinatorEmail : courseCoordinatorEmail;
         List<ProgrammeBatchCourse> courses;
         if (effectiveEmail != null && !effectiveEmail.isBlank()) {
-            courses = academicService.getProgrammeBatchCoursesByCoordinatorEmail(effectiveEmail, targetBatchId);
+            courses = academicService.getProgrammeBatchCoursesByCoordinatorEmail(effectiveEmail, targetProgrammeBatchId);
         } else {
-            courses = academicService.getProgrammeBatchCoursesByBatch(targetBatchId);
+            courses = academicService.getProgrammeBatchCoursesByBatch(targetProgrammeBatchId);
         }
         return ResponseEntity.ok(ApiResponse.<List<ProgrammeBatchCourse>>builder()
                 .success(true)
@@ -53,13 +52,12 @@ public class ProgrammeBatchCourseController {
     public ResponseEntity<ApiResponse<List<ProgrammeBatchCourse>>> getCoursesByCoordinator(
             @RequestParam(required = false) String coordinatorEmail,
             @RequestParam(required = false) String courseCoordinatorEmail,
-            @RequestParam(required = false) String programmeBatchId,
-            @RequestParam(required = false) String batchId) {
-        String targetBatchId = (programmeBatchId != null && !programmeBatchId.isBlank()) ? programmeBatchId : batchId;
+            @RequestParam(required = false) String programmeBatchId) {
+        String targetProgrammeBatchId = (programmeBatchId != null && !programmeBatchId.isBlank()) ? programmeBatchId : programmeBatchId;
         String effectiveEmail = (coordinatorEmail != null && !coordinatorEmail.isBlank()) ? coordinatorEmail : courseCoordinatorEmail;
         return ResponseEntity.ok(ApiResponse.<List<ProgrammeBatchCourse>>builder()
                 .success(true)
-                .data(academicService.getProgrammeBatchCoursesByCoordinatorEmail(effectiveEmail, targetBatchId))
+                .data(academicService.getProgrammeBatchCoursesByCoordinatorEmail(effectiveEmail, targetProgrammeBatchId))
                 .build());
     }
 
