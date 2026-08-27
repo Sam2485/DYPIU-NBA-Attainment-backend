@@ -62,7 +62,7 @@ public class MappingService {
             if (offering.getMasterCourseId() != null) {
                 MasterCourse c = masterCourseRepository.findById(offering.getMasterCourseId()).orElse(null);
                 if (c != null && c.getMasterProgrammeId() != null) {
-                    if (scope.isProgrammeCoordinator() && !c.getMasterProgrammeId().equals(scope.getRequiredProgrammeId())) {
+                    if (scope.isProgrammeCoordinator() && !c.getMasterProgrammeId().equals(scope.getRequiredMasterProgrammeId())) {
                         throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Course Outcome is outside your assigned programme scope.");
                     }
                     MasterProgramme p = masterProgrammeRepository.findById(c.getMasterProgrammeId()).orElse(null);
@@ -86,8 +86,8 @@ public class MappingService {
         CourseOutcome co = courseOutcomeRepository.findById(courseOutcomeId).orElse(null);
         if (co != null && co.getProgrammeBatchCourseId() != null) {
             ProgrammeBatchCourse offering = programmeBatchCourseRepository.findById(co.getProgrammeBatchCourseId()).orElse(null);
-            if (offering != null && offering.getBatchId() != null) {
-                batchLifecycleService.enforceBatchEditability(offering.getBatchId());
+            if (offering != null && offering.getProgrammeBatchId() != null) {
+                batchLifecycleService.enforceBatchEditability(offering.getProgrammeBatchId());
             }
         }
     }

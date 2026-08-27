@@ -182,7 +182,7 @@ public class ApprovedStateImmutabilityIntegrationTest {
                 .role(role)
                 .schoolId(schoolId)
                 .departmentId(deptId)
-                .programmeId(progId)
+                .masterProgrammeId(progId)
                 .isActive(true)
                 .build());
     }
@@ -249,7 +249,7 @@ public class ApprovedStateImmutabilityIntegrationTest {
 
         // 1. Initial save in DRAFT
         ResponseEntity<ApiResponse> draftRes = restTemplate.exchange(
-                "/outcomes/courses/" + batchCourse.getId() + "/cos", HttpMethod.POST, new HttpEntity<>(List.of(co1), authHeaders(pcToken)), ApiResponse.class
+                "/outcomes/master-courses/" + batchCourse.getId() + "/cos", HttpMethod.POST, new HttpEntity<>(List.of(co1), authHeaders(pcToken)), ApiResponse.class
         );
         assertEquals(HttpStatus.OK, draftRes.getStatusCode());
 
@@ -260,7 +260,7 @@ public class ApprovedStateImmutabilityIntegrationTest {
         // 3. Attempt mutation while APPROVED -> MUST BE REJECTED WITH 409 CONFLICT
         co1.setStatement("Modified statement without approval");
         ResponseEntity<ApiResponse> conflictRes = restTemplate.exchange(
-                "/outcomes/courses/" + batchCourse.getId() + "/cos", HttpMethod.POST, new HttpEntity<>(List.of(co1), authHeaders(pcToken)), ApiResponse.class
+                "/outcomes/master-courses/" + batchCourse.getId() + "/cos", HttpMethod.POST, new HttpEntity<>(List.of(co1), authHeaders(pcToken)), ApiResponse.class
         );
         assertEquals(HttpStatus.CONFLICT, conflictRes.getStatusCode());
 
@@ -270,7 +270,7 @@ public class ApprovedStateImmutabilityIntegrationTest {
 
         // 5. Modification allowed after revision request
         ResponseEntity<ApiResponse> modRes = restTemplate.exchange(
-                "/outcomes/courses/" + batchCourse.getId() + "/cos", HttpMethod.POST, new HttpEntity<>(List.of(co1), authHeaders(pcToken)), ApiResponse.class
+                "/outcomes/master-courses/" + batchCourse.getId() + "/cos", HttpMethod.POST, new HttpEntity<>(List.of(co1), authHeaders(pcToken)), ApiResponse.class
         );
         assertEquals(HttpStatus.OK, modRes.getStatusCode());
     }
@@ -278,15 +278,15 @@ public class ApprovedStateImmutabilityIntegrationTest {
     @Test
     void testProgrammeTargetsImmutabilityWhenApproved() {
         ProgrammeTargetDto targetDto = ProgrammeTargetDto.builder()
-                .programmeId(programme.getId())
-                .batchId(batch.getId())
+                .masterProgrammeId(programme.getId())
+                .programmeBatchId(batch.getId())
                 .poTargets(Map.of("PO1", new BigDecimal("2.60")))
                 .psoTargets(Map.of("PSO1", new BigDecimal("2.70")))
                 .build();
 
         // 1. Initial save in DRAFT
         ResponseEntity<ApiResponse> draftRes = restTemplate.exchange(
-                "/outcomes/programmes/" + programme.getId() + "/targets", HttpMethod.POST, new HttpEntity<>(targetDto, authHeaders(pcToken)), ApiResponse.class
+                "/outcomes/master-programmes/" + programme.getId() + "/targets", HttpMethod.POST, new HttpEntity<>(targetDto, authHeaders(pcToken)), ApiResponse.class
         );
         assertEquals(HttpStatus.OK, draftRes.getStatusCode());
 
@@ -297,7 +297,7 @@ public class ApprovedStateImmutabilityIntegrationTest {
         // 3. Attempt mutation while APPROVED -> MUST BE REJECTED WITH 409 CONFLICT
         targetDto.setPoTargets(Map.of("PO1", new BigDecimal("2.90")));
         ResponseEntity<ApiResponse> conflictRes = restTemplate.exchange(
-                "/outcomes/programmes/" + programme.getId() + "/targets", HttpMethod.POST, new HttpEntity<>(targetDto, authHeaders(pcToken)), ApiResponse.class
+                "/outcomes/master-programmes/" + programme.getId() + "/targets", HttpMethod.POST, new HttpEntity<>(targetDto, authHeaders(pcToken)), ApiResponse.class
         );
         assertEquals(HttpStatus.CONFLICT, conflictRes.getStatusCode());
 
@@ -307,7 +307,7 @@ public class ApprovedStateImmutabilityIntegrationTest {
 
         // 5. Modification allowed after revision request
         ResponseEntity<ApiResponse> modRes = restTemplate.exchange(
-                "/outcomes/programmes/" + programme.getId() + "/targets", HttpMethod.POST, new HttpEntity<>(targetDto, authHeaders(pcToken)), ApiResponse.class
+                "/outcomes/master-programmes/" + programme.getId() + "/targets", HttpMethod.POST, new HttpEntity<>(targetDto, authHeaders(pcToken)), ApiResponse.class
         );
         assertEquals(HttpStatus.OK, modRes.getStatusCode());
     }
@@ -327,7 +327,7 @@ public class ApprovedStateImmutabilityIntegrationTest {
 
         // 1. Initial save in DRAFT
         ResponseEntity<ApiResponse> draftRes = restTemplate.exchange(
-                "/atr/courses/" + batchCourse.getId(), HttpMethod.POST, new HttpEntity<>(List.of(atr), authHeaders(pcToken)), ApiResponse.class
+                "/atr/master-courses/" + batchCourse.getId(), HttpMethod.POST, new HttpEntity<>(List.of(atr), authHeaders(pcToken)), ApiResponse.class
         );
         assertEquals(HttpStatus.OK, draftRes.getStatusCode());
 
@@ -338,7 +338,7 @@ public class ApprovedStateImmutabilityIntegrationTest {
         // 3. Attempt mutation while APPROVED -> MUST BE REJECTED WITH 409 CONFLICT
         atr.setActionsJson("[\"Modified action\"]");
         ResponseEntity<ApiResponse> conflictRes = restTemplate.exchange(
-                "/atr/courses/" + batchCourse.getId(), HttpMethod.POST, new HttpEntity<>(List.of(atr), authHeaders(pcToken)), ApiResponse.class
+                "/atr/master-courses/" + batchCourse.getId(), HttpMethod.POST, new HttpEntity<>(List.of(atr), authHeaders(pcToken)), ApiResponse.class
         );
         assertEquals(HttpStatus.CONFLICT, conflictRes.getStatusCode());
 
@@ -348,7 +348,7 @@ public class ApprovedStateImmutabilityIntegrationTest {
 
         // 5. Modification allowed after revision request
         ResponseEntity<ApiResponse> modRes = restTemplate.exchange(
-                "/atr/courses/" + batchCourse.getId(), HttpMethod.POST, new HttpEntity<>(List.of(atr), authHeaders(pcToken)), ApiResponse.class
+                "/atr/master-courses/" + batchCourse.getId(), HttpMethod.POST, new HttpEntity<>(List.of(atr), authHeaders(pcToken)), ApiResponse.class
         );
         assertEquals(HttpStatus.OK, modRes.getStatusCode());
     }
@@ -356,14 +356,14 @@ public class ApprovedStateImmutabilityIntegrationTest {
     @Test
     void testCourseMappingMatrixImmutabilityWhenApproved() {
         CourseMappingMatrixDto matrixDto = CourseMappingMatrixDto.builder()
-                .programmeId(programme.getId())
-                .courseId(batchCourse.getId())
+                .masterProgrammeId(programme.getId())
+                .masterCourseId(batchCourse.getId())
                 .matrix(Map.of("CO1", Map.of("PO1", 3)))
                 .build();
 
         // 1. Initial save in DRAFT
         ResponseEntity<ApiResponse> draftRes = restTemplate.exchange(
-                "/outcomes/courses/" + batchCourse.getId() + "/mappings", HttpMethod.POST, new HttpEntity<>(matrixDto, authHeaders(pcToken)), ApiResponse.class
+                "/outcomes/master-courses/" + batchCourse.getId() + "/mappings", HttpMethod.POST, new HttpEntity<>(matrixDto, authHeaders(pcToken)), ApiResponse.class
         );
         assertEquals(HttpStatus.OK, draftRes.getStatusCode());
 
@@ -374,7 +374,7 @@ public class ApprovedStateImmutabilityIntegrationTest {
         // 3. Attempt mutation while APPROVED -> MUST BE REJECTED WITH 409 CONFLICT
         matrixDto.setMatrix(Map.of("CO1", Map.of("PO1", 2)));
         ResponseEntity<ApiResponse> conflictRes = restTemplate.exchange(
-                "/outcomes/courses/" + batchCourse.getId() + "/mappings", HttpMethod.POST, new HttpEntity<>(matrixDto, authHeaders(pcToken)), ApiResponse.class
+                "/outcomes/master-courses/" + batchCourse.getId() + "/mappings", HttpMethod.POST, new HttpEntity<>(matrixDto, authHeaders(pcToken)), ApiResponse.class
         );
         assertEquals(HttpStatus.CONFLICT, conflictRes.getStatusCode());
 
@@ -384,7 +384,7 @@ public class ApprovedStateImmutabilityIntegrationTest {
 
         // 5. Modification allowed after revision request
         ResponseEntity<ApiResponse> modRes = restTemplate.exchange(
-                "/outcomes/courses/" + batchCourse.getId() + "/mappings", HttpMethod.POST, new HttpEntity<>(matrixDto, authHeaders(pcToken)), ApiResponse.class
+                "/outcomes/master-courses/" + batchCourse.getId() + "/mappings", HttpMethod.POST, new HttpEntity<>(matrixDto, authHeaders(pcToken)), ApiResponse.class
         );
         assertEquals(HttpStatus.OK, modRes.getStatusCode());
     }
@@ -392,21 +392,21 @@ public class ApprovedStateImmutabilityIntegrationTest {
     @Test
     void testCourseAllocationImmutabilityWhenApproved() {
         Map<String, Object> alloc = Map.of(
-                "courseId", course.getId(),
+                "masterCourseId", course.getId(),
                 "coordinator", "Dr. Alan Turing",
                 "coordinatorEmail", "alan@dypiu.ac.in"
         );
 
         Map<String, Object> body = Map.of(
-                "programmeId", programme.getId(),
-                "batchId", batch.getId(),
+                "masterProgrammeId", programme.getId(),
+                "programmeBatchId", batch.getId(),
                 "allocations", List.of(alloc),
                 "submit", false
         );
 
         // 1. Initial save in DRAFT
         ResponseEntity<ApiResponse> draftRes = restTemplate.exchange(
-                "/academic/courses/allocate",
+                "/academic/master-courses/allocate",
                 HttpMethod.POST,
                 new HttpEntity<>(body, authHeaders(pcToken)),
                 ApiResponse.class
@@ -419,7 +419,7 @@ public class ApprovedStateImmutabilityIntegrationTest {
 
         // 3. Attempt mutation while APPROVED -> MUST BE REJECTED WITH 409 CONFLICT
         ResponseEntity<ApiResponse> conflictRes = restTemplate.exchange(
-                "/academic/courses/allocate",
+                "/academic/master-courses/allocate",
                 HttpMethod.POST,
                 new HttpEntity<>(body, authHeaders(pcToken)),
                 ApiResponse.class
@@ -432,7 +432,7 @@ public class ApprovedStateImmutabilityIntegrationTest {
 
         // 5. Modification allowed after revision request
         ResponseEntity<ApiResponse> modRes = restTemplate.exchange(
-                "/academic/courses/allocate",
+                "/academic/master-courses/allocate",
                 HttpMethod.POST,
                 new HttpEntity<>(body, authHeaders(pcToken)),
                 ApiResponse.class
@@ -449,7 +449,7 @@ public class ApprovedStateImmutabilityIntegrationTest {
 
         // 1. Initial save in DRAFT
         ResponseEntity<ApiResponse> draftRes = restTemplate.exchange(
-                "/atr/programme/" + programme.getId(),
+                "/atr/master-programmes/" + programme.getId(),
                 HttpMethod.POST,
                 new HttpEntity<>(atr, authHeaders(pcToken)),
                 ApiResponse.class
@@ -462,7 +462,7 @@ public class ApprovedStateImmutabilityIntegrationTest {
 
         // 3. Attempt mutation while APPROVED -> MUST BE REJECTED WITH 409 CONFLICT
         ResponseEntity<ApiResponse> conflictRes = restTemplate.exchange(
-                "/atr/programme/" + programme.getId(),
+                "/atr/master-programmes/" + programme.getId(),
                 HttpMethod.POST,
                 new HttpEntity<>(atr, authHeaders(pcToken)),
                 ApiResponse.class
@@ -475,7 +475,7 @@ public class ApprovedStateImmutabilityIntegrationTest {
 
         // 5. Modification allowed after revision request
         ResponseEntity<ApiResponse> modRes = restTemplate.exchange(
-                "/atr/programme/" + programme.getId(),
+                "/atr/master-programmes/" + programme.getId(),
                 HttpMethod.POST,
                 new HttpEntity<>(atr, authHeaders(pcToken)),
                 ApiResponse.class

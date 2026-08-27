@@ -89,26 +89,26 @@ public class AtrService {
         }
     }
 
-    private void enforceProgrammeScope(String programmeId) {
+    private void enforceProgrammeScope(String masterProgrammeId) {
         CurrentUserScope scope = getScope();
         if (scope == null || scope.isAdmin() || scope.isIqac()) return;
-        if (programmeId == null || programmeId.isBlank()) return;
+        if (masterProgrammeId == null || masterProgrammeId.isBlank()) return;
 
         if (scope.isProgrammeCoordinator()) {
-            String requiredProgId = scope.getProgrammeId();
-            boolean matchesDirectProg = (requiredProgId != null && programmeId.equals(requiredProgId));
+            String requiredProgId = scope.getMasterProgrammeId();
+            boolean matchesDirectProg = (requiredProgId != null && masterProgrammeId.equals(requiredProgId));
             boolean matchesBatchProg = false;
             if (!matchesDirectProg && scope.getEmail() != null && !scope.getEmail().isBlank()) {
                 List<ProgrammeBatch> batches = programmeBatchRepository.findByCoordinatorEmailIgnoreCase(scope.getEmail().trim());
-                matchesBatchProg = batches.stream().anyMatch(b -> programmeId.equals(b.getMasterProgrammeId()));
+                matchesBatchProg = batches.stream().anyMatch(b -> masterProgrammeId.equals(b.getMasterProgrammeId()));
             }
             if (!matchesDirectProg && !matchesBatchProg) {
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Resource is outside your assigned programme scope.");
             }
         }
 
-        MasterProgramme prog = masterProgrammeRepository.findById(programmeId)
-                .orElseThrow(() -> new ResourceNotFoundException("Programme not found: " + programmeId));
+        MasterProgramme prog = masterProgrammeRepository.findById(masterProgrammeId)
+                .orElseThrow(() -> new ResourceNotFoundException("Programme not found: " + masterProgrammeId));
         if (prog.getDepartmentId() != null) {
             enforceDepartmentScope(prog.getDepartmentId());
             Department dept = departmentRepository.findById(prog.getDepartmentId()).orElse(null);
@@ -118,15 +118,15 @@ public class AtrService {
         }
     }
 
-    private void enforceBatchScope(String batchId) {
+    private void enforceBatchScope(String programmeBatchId) {
         CurrentUserScope scope = getScope();
         if (scope == null || scope.isAdmin() || scope.isIqac()) return;
-        if (batchId == null || batchId.isBlank()) return;
-        ProgrammeBatch batch = programmeBatchRepository.findById(batchId)
-                .orElseThrow(() -> new ResourceNotFoundException("Batch not found: " + batchId));
+        if (programmeBatchId == null || programmeBatchId.isBlank()) return;
+        ProgrammeBatch batch = programmeBatchRepository.findById(programmeBatchId)
+                .orElseThrow(() -> new ResourceNotFoundException("Batch not found: " + programmeBatchId));
 
         if (scope.isFaculty()) {
-            List<ProgrammeBatchCourse> offerings = programmeBatchCourseRepository.findByProgrammeBatchId(batchId);
+            List<ProgrammeBatchCourse> offerings = programmeBatchCourseRepository.findByProgrammeBatchId(programmeBatchId);
             boolean hasAssigned = offerings.stream().anyMatch(o -> {
                 boolean isCoord = (o.getCourseCoordinatorId() != null && Objects.equals(o.getCourseCoordinatorId(), scope.getUserId()));
                 return isCoord || (o.getAssignedFaculty() != null && (o.getAssignedFaculty().contains(scope.getEmail()) || o.getAssignedFaculty().contains(scope.getName())));
@@ -140,15 +140,15 @@ public class AtrService {
         enforceProgrammeScope(batch.getMasterProgrammeId());
     }
 
-    private void enforceCourseScope(String courseId) {
+    private void enforceCourseScope(String masterCourseId) {
         CurrentUserScope scope = getScope();
         if (scope == null || scope.isAdmin() || scope.isIqac()) return;
-        if (courseId == null || courseId.isBlank()) return;
-        MasterCourse course = masterCourseRepository.findById(courseId)
-                .orElseThrow(() -> new ResourceNotFoundException("Course not found: " + courseId));
+        if (masterCourseId == null || masterCourseId.isBlank()) return;
+        MasterCourse course = masterCourseRepository.findById(masterCourseId)
+                .orElseThrow(() -> new ResourceNotFoundException("Course not found: " + masterCourseId));
 
         if (scope.isFaculty()) {
-            List<ProgrammeBatchCourse> offerings = programmeBatchCourseRepository.findByMasterCourseId(courseId);
+            List<ProgrammeBatchCourse> offerings = programmeBatchCourseRepository.findByMasterCourseId(masterCourseId);
             boolean hasAssigned = offerings.stream().anyMatch(o -> {
                 boolean isCoord = (o.getCourseCoordinatorId() != null && Objects.equals(o.getCourseCoordinatorId(), scope.getUserId()));
                 return isCoord || (o.getAssignedFaculty() != null && (o.getAssignedFaculty().contains(scope.getEmail()) || o.getAssignedFaculty().contains(scope.getName())));
@@ -195,38 +195,38 @@ public class AtrService {
         }
     }
 
-    private void enforceCourseOrOfferingScope(String courseOfferingOrCourseId) {
+    private void enforceCourseOrOfferingScope(String courseOfferingOrMasterCourseId) {
         CurrentUserScope scope = getScope();
         if (scope == null || scope.isAdmin() || scope.isIqac()) return;
-        if (courseOfferingOrCourseId == null || courseOfferingOrCourseId.isBlank()) return;
-        if (programmeBatchCourseRepository.existsById(courseOfferingOrCourseId)) {
-            enforceOfferingScope(courseOfferingOrCourseId);
-        } else if (masterCourseRepository.existsById(courseOfferingOrCourseId)) {
-            enforceCourseScope(courseOfferingOrCourseId);
+        if (courseOfferingOrMasterCourseId == null || courseOfferingOrMasterCourseId.isBlank()) return;
+        if (programmeBatchCourseRepository.existsById(courseOfferingOrMasterCourseId)) {
+            enforceOfferingScope(courseOfferingOrMasterCourseId);
+        } else if (masterCourseRepository.existsById(courseOfferingOrMasterCourseId)) {
+            enforceCourseScope(courseOfferingOrMasterCourseId);
         }
     }
 
     private void enforceOfferingEditability(String offeringId) {
         if (offeringId == null || offeringId.isBlank()) return;
         ProgrammeBatchCourse offering = programmeBatchCourseRepository.findById(offeringId).orElse(null);
-        if (offering != null && offering.getBatchId() != null) {
-            batchLifecycleService.enforceBatchEditability(offering.getBatchId());
+        if (offering != null && offering.getProgrammeBatchId() != null) {
+            batchLifecycleService.enforceBatchEditability(offering.getProgrammeBatchId());
         }
     }
 
     // --- Course ATR Support ---
 
     @Transactional(readOnly = true)
-    public List<CourseAtr> getCourseAtrs(String courseOfferingOrCourseId) {
-        System.out.println("[AtrService] getCourseAtrs called | courseOfferingOrCourseId: " + courseOfferingOrCourseId);
-        if (courseOfferingOrCourseId != null && !courseOfferingOrCourseId.isBlank()) {
-            enforceCourseOrOfferingScope(courseOfferingOrCourseId);
+    public List<CourseAtr> getCourseAtrs(String courseOfferingOrMasterCourseId) {
+        System.out.println("[AtrService] getCourseAtrs called | courseOfferingOrMasterCourseId: " + courseOfferingOrMasterCourseId);
+        if (courseOfferingOrMasterCourseId != null && !courseOfferingOrMasterCourseId.isBlank()) {
+            enforceCourseOrOfferingScope(courseOfferingOrMasterCourseId);
         }
-        List<CourseAtr> list = courseAtrRepository.findByProgrammeBatchCourseId(courseOfferingOrCourseId);
+        List<CourseAtr> list = courseAtrRepository.findByProgrammeBatchCourseId(courseOfferingOrMasterCourseId);
         if (!list.isEmpty()) return list;
 
-        // If courseId was passed, find corresponding course offerings
-        List<ProgrammeBatchCourse> offerings = programmeBatchCourseRepository.findByMasterCourseId(courseOfferingOrCourseId);
+        // If masterCourseId was passed, find corresponding course offerings
+        List<ProgrammeBatchCourse> offerings = programmeBatchCourseRepository.findByMasterCourseId(courseOfferingOrMasterCourseId);
         if (!offerings.isEmpty()) {
             return courseAtrRepository.findByProgrammeBatchCourseId(offerings.get(0).getId());
         }
@@ -234,9 +234,9 @@ public class AtrService {
     }
 
     @Transactional
-    public List<CourseAtr> saveCourseAtrs(String courseOfferingId, List<CourseAtr> atrs) {
-        System.out.println("[AtrService] saveCourseAtrs called | courseOfferingId: " + courseOfferingId + " | count: " + (atrs != null ? atrs.size() : 0));
-        String targetOfferingId = resolveOfferingId(courseOfferingId);
+    public List<CourseAtr> saveCourseAtrs(String programmeBatchCourseId, List<CourseAtr> atrs) {
+        System.out.println("[AtrService] saveCourseAtrs called | programmeBatchCourseId: " + programmeBatchCourseId + " | count: " + (atrs != null ? atrs.size() : 0));
+        String targetOfferingId = resolveOfferingId(programmeBatchCourseId);
         if (targetOfferingId != null && !targetOfferingId.isBlank()) {
             enforceCourseOrOfferingScope(targetOfferingId);
             enforceOfferingEditability(targetOfferingId);
@@ -288,25 +288,25 @@ public class AtrService {
     }
 
     @Transactional(readOnly = true)
-    public Optional<ProgrammeAtr> getProgrammeAtrByBatch(String programmeId, String batchId) {
-        System.out.println("[AtrService] getProgrammeAtrByBatch called | programmeId: " + programmeId + " | batchId: " + batchId);
-        if (programmeId != null && !programmeId.isBlank()) {
-            enforceProgrammeScope(programmeId);
+    public Optional<ProgrammeAtr> getProgrammeAtrByBatch(String masterProgrammeId, String programmeBatchId) {
+        System.out.println("[AtrService] getProgrammeAtrByBatch called | masterProgrammeId: " + masterProgrammeId + " | programmeBatchId: " + programmeBatchId);
+        if (masterProgrammeId != null && !masterProgrammeId.isBlank()) {
+            enforceProgrammeScope(masterProgrammeId);
         }
-        if (batchId != null && !batchId.isBlank()) {
-            enforceBatchScope(batchId);
-            return programmeAtrRepository.findByProgrammeBatchId(batchId);
+        if (programmeBatchId != null && !programmeBatchId.isBlank()) {
+            enforceBatchScope(programmeBatchId);
+            return programmeAtrRepository.findByProgrammeBatchId(programmeBatchId);
         }
         return Optional.empty();
     }
 
     @Transactional(readOnly = true)
-    public Optional<ProgrammeAtr> getPreviousBatchProgrammeAtr(String batchId) {
-        System.out.println("[AtrService] getPreviousBatchProgrammeAtr called | batchId: " + batchId);
-        if (batchId == null || batchId.isBlank()) return Optional.empty();
-        enforceBatchScope(batchId);
+    public Optional<ProgrammeAtr> getPreviousBatchProgrammeAtr(String programmeBatchId) {
+        System.out.println("[AtrService] getPreviousBatchProgrammeAtr called | programmeBatchId: " + programmeBatchId);
+        if (programmeBatchId == null || programmeBatchId.isBlank()) return Optional.empty();
+        enforceBatchScope(programmeBatchId);
         
-        ProgrammeBatch currentBatch = programmeBatchRepository.findById(batchId).orElse(null);
+        ProgrammeBatch currentBatch = programmeBatchRepository.findById(programmeBatchId).orElse(null);
         if (currentBatch == null || currentBatch.getStartYear() == null || currentBatch.getEndYear() == null) {
             return Optional.empty();
         }
@@ -328,11 +328,11 @@ public class AtrService {
     }
 
     @Transactional(readOnly = true)
-    public ProgrammeAtrReportDto getPreviousYearProgrammeAtrReport(String batchId) {
-        System.out.println("[AtrService] getPreviousYearProgrammeAtrReport called | batchId: " + batchId);
-        if (batchId == null || batchId.isBlank()) return null;
-        enforceBatchScope(batchId);
-        ProgrammeBatch currentBatch = programmeBatchRepository.findById(batchId).orElse(null);
+    public ProgrammeAtrReportDto getPreviousYearProgrammeAtrReport(String programmeBatchId) {
+        System.out.println("[AtrService] getPreviousYearProgrammeAtrReport called | programmeBatchId: " + programmeBatchId);
+        if (programmeBatchId == null || programmeBatchId.isBlank()) return null;
+        enforceBatchScope(programmeBatchId);
+        ProgrammeBatch currentBatch = programmeBatchRepository.findById(programmeBatchId).orElse(null);
         if (currentBatch == null || currentBatch.getStartYear() == null || currentBatch.getEndYear() == null) return null;
         
         int targetStartYear = currentBatch.getStartYear() - 1;
@@ -352,7 +352,7 @@ public class AtrService {
 
     @Transactional
     public ProgrammeAtr saveProgrammeAtr(ProgrammeAtr atr) {
-        System.out.println("[AtrService] saveProgrammeAtr called | id: " + (atr != null ? atr.getId() : "null") + " | batchId: " + (atr != null ? atr.getProgrammeBatchId() : "null"));
+        System.out.println("[AtrService] saveProgrammeAtr called | id: " + (atr != null ? atr.getId() : "null") + " | programmeBatchId: " + (atr != null ? atr.getProgrammeBatchId() : "null"));
         if (atr != null && atr.getProgrammeBatchId() != null) {
             enforceBatchScope(atr.getProgrammeBatchId());
             batchLifecycleService.enforceBatchEditability(atr.getProgrammeBatchId());
@@ -383,16 +383,16 @@ public class AtrService {
         return programmeAtrRepository.save(atr);
     }
 
-    public String resolveOfferingId(String offeringOrCourseId) {
-        if (offeringOrCourseId == null || offeringOrCourseId.isBlank()) return null;
-        if (programmeBatchCourseRepository.existsById(offeringOrCourseId)) {
-            return offeringOrCourseId;
+    public String resolveOfferingId(String offeringOrMasterCourseId) {
+        if (offeringOrMasterCourseId == null || offeringOrMasterCourseId.isBlank()) return null;
+        if (programmeBatchCourseRepository.existsById(offeringOrMasterCourseId)) {
+            return offeringOrMasterCourseId;
         }
-        List<ProgrammeBatchCourse> offerings = programmeBatchCourseRepository.findByMasterCourseId(offeringOrCourseId);
+        List<ProgrammeBatchCourse> offerings = programmeBatchCourseRepository.findByMasterCourseId(offeringOrMasterCourseId);
         if (!offerings.isEmpty()) {
             return offerings.get(0).getId();
         }
-        return offeringOrCourseId;
+        return offeringOrMasterCourseId;
     }
 
     // =========================================================================
@@ -400,14 +400,14 @@ public class AtrService {
     // =========================================================================
 
     @Transactional(readOnly = true)
-    public CourseAtrReportDto getCourseAtrReport(String courseOfferingId) {
-        System.out.println("[AtrService] getCourseAtrReport called | courseOfferingId: " + courseOfferingId);
-        String targetOfferingId = resolveOfferingId(courseOfferingId);
+    public CourseAtrReportDto getCourseAtrReport(String programmeBatchCourseId) {
+        System.out.println("[AtrService] getCourseAtrReport called | programmeBatchCourseId: " + programmeBatchCourseId);
+        String targetOfferingId = resolveOfferingId(programmeBatchCourseId);
         if (targetOfferingId != null && !targetOfferingId.isBlank()) {
             enforceOfferingScope(targetOfferingId);
         }
         ProgrammeBatchCourse offering = programmeBatchCourseRepository.findById(targetOfferingId)
-                .orElseThrow(() -> new ResourceNotFoundException("Course Offering not found: " + courseOfferingId));
+                .orElseThrow(() -> new ResourceNotFoundException("Course Offering not found: " + programmeBatchCourseId));
 
         return buildCourseAtrReport(offering);
     }
@@ -513,8 +513,8 @@ public class AtrService {
                 .courseAtrId(!existingAtrs.isEmpty() ? existingAtrs.get(0).getId() : "catr-" + offering.getId())
                 .courseOffering(CourseAtrReportDto.CourseOfferingSummary.builder()
                         .id(offering.getId())
-                        .courseId(offering.getMasterCourseId())
-                        .batchId(offering.getProgrammeBatchId())
+                        .masterCourseId(offering.getMasterCourseId())
+                        .programmeBatchId(offering.getProgrammeBatchId())
                         .semester(offering.getSemester())
                         .build())
                 .course(course != null ? CourseAtrReportDto.CourseSummary.builder().id(course.getId()).code(course.getCode()).name(course.getName()).build() : null)
@@ -526,7 +526,7 @@ public class AtrService {
 
     @Transactional
     public CourseAtrReportDto saveCourseAtrReport(CourseAtrReportDto dto) {
-        System.out.println("[AtrService] saveCourseAtrReport called | courseOfferingId: " + (dto != null && dto.getCourseOffering() != null ? dto.getCourseOffering().getId() : "null"));
+        System.out.println("[AtrService] saveCourseAtrReport called | programmeBatchCourseId: " + (dto != null && dto.getCourseOffering() != null ? dto.getCourseOffering().getId() : "null"));
         if (dto == null || dto.getCourseOffering() == null || dto.getCourseOffering().getId() == null) {
             throw new IllegalArgumentException("Invalid Course ATR payload: CourseOffering is required.");
         }
@@ -568,9 +568,9 @@ public class AtrService {
     }
 
     @Transactional
-    public CourseAtr submitCourseAtr(String courseOfferingId, String submittedBy) {
-        System.out.println("[AtrService] submitCourseAtr called | courseOfferingId: " + courseOfferingId + " | submittedBy: " + submittedBy);
-        String targetOfferingId = resolveOfferingId(courseOfferingId);
+    public CourseAtr submitCourseAtr(String programmeBatchCourseId, String submittedBy) {
+        System.out.println("[AtrService] submitCourseAtr called | programmeBatchCourseId: " + programmeBatchCourseId + " | submittedBy: " + submittedBy);
+        String targetOfferingId = resolveOfferingId(programmeBatchCourseId);
         if (targetOfferingId != null && !targetOfferingId.isBlank()) {
             enforceOfferingScope(targetOfferingId);
             enforceOfferingEditability(targetOfferingId);
@@ -595,20 +595,70 @@ public class AtrService {
     // =========================================================================
 
     @Transactional(readOnly = true)
-    public ProgrammeAtrReportDto getProgrammeAtrReport(String programmeId, String batchId) {
-        System.out.println("[AtrService] getProgrammeAtrReport called | programmeId: " + programmeId + " | batchId: " + batchId);
-        if (programmeId != null && !programmeId.isBlank()) {
-            enforceProgrammeScope(programmeId);
+    public ProgrammeAtrReportDto getProgrammeAtrReport(String masterProgrammeId, String programmeBatchId) {
+        System.out.println("[AtrService] getProgrammeAtrReport called | masterProgrammeId: " + masterProgrammeId + " | programmeBatchId: " + programmeBatchId);
+        
+        ProgrammeBatch batch = null;
+        if (programmeBatchId != null && !programmeBatchId.isBlank()) {
+            batch = programmeBatchRepository.findByIdAndDeletedAtIsNull(programmeBatchId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Programme Batch not found: " + programmeBatchId));
         }
-        if (batchId != null && !batchId.isBlank()) {
-            enforceBatchScope(batchId);
-        }
-        MasterProgramme prog = masterProgrammeRepository.findById(programmeId)
-                .orElseThrow(() -> new ResourceNotFoundException("Programme not found: " + programmeId));
-        ProgrammeBatch batch = programmeBatchRepository.findById(batchId)
-                .orElseThrow(() -> new ResourceNotFoundException("Batch not found: " + batchId));
 
-        Optional<ProgrammeAtr> existingAtr = programmeAtrRepository.findByProgrammeBatchId(batchId);
+        final String effectiveMasterProgrammeId = (masterProgrammeId != null && !masterProgrammeId.isBlank())
+                ? masterProgrammeId
+                : (batch != null ? batch.getMasterProgrammeId() : null);
+
+        MasterProgramme prog = masterProgrammeRepository.findByIdAndDeletedAtIsNull(effectiveMasterProgrammeId)
+                .orElseThrow(() -> new ResourceNotFoundException("Master Programme not found: " + effectiveMasterProgrammeId));
+
+        if (batch == null) {
+            List<ProgrammeBatch> batches = programmeBatchRepository.findByMasterProgrammeIdOrderByStartYearDesc(prog.getId());
+            if (!batches.isEmpty()) {
+                batch = batches.get(0);
+            } else {
+                throw new ResourceNotFoundException("No Programme Batches found for Master Programme: " + prog.getId());
+            }
+        }
+
+        enforceProgrammeScope(prog.getId());
+        enforceBatchScope(batch.getId());
+
+        List<ProgrammeOutcome> pos = programmeOutcomeRepository.findByProgrammeBatchIdOrderByCodeAsc(batch.getId());
+        if (pos.isEmpty()) {
+            pos = programmeOutcomeRepository.findByProgrammeBatchIdOrderByCodeAsc(prog.getId());
+        }
+        Map<String, String> poStatementMap = new HashMap<>();
+        Map<String, BigDecimal> poTargetMap = new HashMap<>();
+        for (ProgrammeOutcome po : pos) {
+            if (po.getCode() != null) {
+                if (po.getStatement() != null && !po.getStatement().isBlank()) {
+                    poStatementMap.put(po.getCode().toUpperCase(), po.getStatement());
+                }
+                if (po.getTarget() != null) {
+                    poTargetMap.put(po.getCode().toUpperCase(), po.getTarget());
+                }
+            }
+        }
+
+        List<ProgrammeSpecificOutcome> psos = programmeSpecificOutcomeRepository.findByProgrammeBatchIdOrderByCodeAsc(batch.getId());
+        if (psos.isEmpty()) {
+            psos = programmeSpecificOutcomeRepository.findByProgrammeBatchIdOrderByCodeAsc(prog.getId());
+        }
+        Map<String, String> psoStatementMap = new HashMap<>();
+        Map<String, BigDecimal> psoTargetMap = new HashMap<>();
+        for (ProgrammeSpecificOutcome pso : psos) {
+            if (pso.getCode() != null) {
+                if (pso.getStatement() != null && !pso.getStatement().isBlank()) {
+                    psoStatementMap.put(pso.getCode().toUpperCase(), pso.getStatement());
+                }
+                if (pso.getTarget() != null) {
+                    psoTargetMap.put(pso.getCode().toUpperCase(), pso.getTarget());
+                }
+            }
+        }
+
+        Optional<ProgrammeAtr> existingAtr = programmeAtrRepository.findByProgrammeBatchId(batch.getId());
+        boolean isLocked = existingAtr.isPresent() && isAtrLocked(existingAtr.get().getStatus());
 
         if (existingAtr.isPresent() && existingAtr.get().getObservationsJson() != null && !existingAtr.get().getObservationsJson().isBlank()) {
             try {
@@ -618,6 +668,10 @@ public class AtrService {
                     savedDto.setProgrammeAtrId(existingAtr.get().getId());
                     if (savedDto.getProgramme() == null) {
                         savedDto.setProgramme(ProgrammeAtrReportDto.ProgrammeSummary.builder().id(prog.getId()).code(prog.getCode()).name(prog.getName()).build());
+                    } else {
+                        savedDto.getProgramme().setId(prog.getId());
+                        savedDto.getProgramme().setCode(prog.getCode());
+                        savedDto.getProgramme().setName(prog.getName());
                     }
                     if (savedDto.getBatch() == null) {
                         savedDto.setBatch(ProgrammeAtrReportDto.BatchSummary.builder()
@@ -626,46 +680,187 @@ public class AtrService {
                                 .startYear(batch.getStartYear() != null ? String.valueOf(batch.getStartYear()) : "")
                                 .endYear(batch.getEndYear() != null ? String.valueOf(batch.getEndYear()) : "")
                                 .build());
+                    } else {
+                        savedDto.getBatch().setId(batch.getId());
+                        savedDto.getBatch().setName(batch.getName());
                     }
+
+                    // If submitted or approved, lock ATR and preserve exact historical snapshot
+                    if (isLocked) {
+                        return savedDto;
+                    }
+
+                    // In editable/draft/revision states: dynamically reflect live PO/PSO definitions, statements, and targets
+                    Map<String, ProgrammeAtrReportDto.OutcomeRow> existingPoRowMap = new HashMap<>();
+                    if (savedDto.getPoOutcomes() != null) {
+                        for (ProgrammeAtrReportDto.OutcomeRow r : savedDto.getPoOutcomes()) {
+                            if (r.getOutcomeCode() != null) existingPoRowMap.put(r.getOutcomeCode().toUpperCase(), r);
+                        }
+                    }
+
+                    List<ProgrammeAtrReportDto.OutcomeRow> updatedPoRows = new ArrayList<>();
+                    if (!pos.isEmpty()) {
+                        for (ProgrammeOutcome po : pos) {
+                            String codeKey = po.getCode() != null ? po.getCode().toUpperCase() : "";
+                            ProgrammeAtrReportDto.OutcomeRow existingRow = existingPoRowMap.get(codeKey);
+
+                            BigDecimal target = po.getTarget() != null ? po.getTarget() : (existingRow != null && existingRow.getTargetLevel() != null ? existingRow.getTargetLevel() : new BigDecimal("2.0"));
+                            BigDecimal attainment = existingRow != null && existingRow.getAttainmentLevel() != null ? existingRow.getAttainmentLevel() : new BigDecimal("0.0");
+                            BigDecimal pct = target.compareTo(BigDecimal.ZERO) > 0
+                                    ? attainment.divide(target, 4, RoundingMode.HALF_UP).multiply(new BigDecimal("100")).setScale(2, RoundingMode.HALF_UP)
+                                    : BigDecimal.ZERO;
+
+                            updatedPoRows.add(ProgrammeAtrReportDto.OutcomeRow.builder()
+                                    .outcomeCode(po.getCode())
+                                    .outcomeStatement(po.getStatement() != null ? po.getStatement() : "Programme Outcome " + po.getCode())
+                                    .targetLevel(target)
+                                    .attainmentLevel(attainment)
+                                    .achievementPercentage(pct)
+                                    .observation(existingRow != null && existingRow.getObservation() != null ? existingRow.getObservation() : "")
+                                    .actions(existingRow != null && existingRow.getActions() != null ? existingRow.getActions() : Collections.emptyList())
+                                    .build());
+                        }
+                    } else if (savedDto.getPoOutcomes() != null) {
+                        updatedPoRows = savedDto.getPoOutcomes();
+                    }
+                    savedDto.setPoOutcomes(updatedPoRows);
+
+                    Map<String, ProgrammeAtrReportDto.OutcomeRow> existingPsoRowMap = new HashMap<>();
+                    if (savedDto.getPsoOutcomes() != null) {
+                        for (ProgrammeAtrReportDto.OutcomeRow r : savedDto.getPsoOutcomes()) {
+                            if (r.getOutcomeCode() != null) existingPsoRowMap.put(r.getOutcomeCode().toUpperCase(), r);
+                        }
+                    }
+
+                    List<ProgrammeAtrReportDto.OutcomeRow> updatedPsoRows = new ArrayList<>();
+                    if (!psos.isEmpty()) {
+                        for (ProgrammeSpecificOutcome pso : psos) {
+                            String codeKey = pso.getCode() != null ? pso.getCode().toUpperCase() : "";
+                            ProgrammeAtrReportDto.OutcomeRow existingRow = existingPsoRowMap.get(codeKey);
+
+                            BigDecimal target = pso.getTarget() != null ? pso.getTarget() : (existingRow != null && existingRow.getTargetLevel() != null ? existingRow.getTargetLevel() : new BigDecimal("2.0"));
+                            BigDecimal attainment = existingRow != null && existingRow.getAttainmentLevel() != null ? existingRow.getAttainmentLevel() : new BigDecimal("0.0");
+                            BigDecimal pct = target.compareTo(BigDecimal.ZERO) > 0
+                                    ? attainment.divide(target, 4, RoundingMode.HALF_UP).multiply(new BigDecimal("100")).setScale(2, RoundingMode.HALF_UP)
+                                    : BigDecimal.ZERO;
+
+                            updatedPsoRows.add(ProgrammeAtrReportDto.OutcomeRow.builder()
+                                    .outcomeCode(pso.getCode())
+                                    .outcomeStatement(pso.getStatement() != null ? pso.getStatement() : "Programme Specific Outcome " + pso.getCode())
+                                    .targetLevel(target)
+                                    .attainmentLevel(attainment)
+                                    .achievementPercentage(pct)
+                                    .observation(existingRow != null && existingRow.getObservation() != null ? existingRow.getObservation() : "")
+                                    .actions(existingRow != null && existingRow.getActions() != null ? existingRow.getActions() : Collections.emptyList())
+                                    .build());
+                        }
+                    } else if (savedDto.getPsoOutcomes() != null) {
+                        updatedPsoRows = savedDto.getPsoOutcomes();
+                    }
+                    savedDto.setPsoOutcomes(updatedPsoRows);
+
                     return savedDto;
                 }
             } catch (Exception ignored) {}
         }
 
-        ProgrammeAttainmentResultDto attainment = attainmentCalculationService.calculateProgrammeAttainment(programmeId, batchId);
+        ProgrammeAttainmentResultDto attainment = null;
+        try {
+            attainment = attainmentCalculationService.calculateProgrammeAttainment(prog.getId(), batch.getId());
+        } catch (Exception ignored) {}
 
         List<ProgrammeAtrReportDto.OutcomeRow> poRows = new ArrayList<>();
-        if (attainment.getOverallAttainment() != null && attainment.getOverallAttainment().getPos() != null) {
+        if (attainment != null && attainment.getOverallAttainment() != null && attainment.getOverallAttainment().getPos() != null && !attainment.getOverallAttainment().getPos().isEmpty()) {
             for (ProgrammeAttainmentResultDto.OutcomeAttainmentItem it : attainment.getOverallAttainment().getPos()) {
+                String code = it.getOutcomeCode() != null ? it.getOutcomeCode() : (it.getPoCode() != null ? it.getPoCode() : "");
+                String statement = poStatementMap.getOrDefault(code.toUpperCase(), it.getOutcomeStatement() != null && !it.getOutcomeStatement().isBlank() ? it.getOutcomeStatement() : "Programme Outcome " + code);
+                BigDecimal target = it.getTarget() != null ? it.getTarget() : poTargetMap.getOrDefault(code.toUpperCase(), new BigDecimal("2.0"));
+
                 poRows.add(ProgrammeAtrReportDto.OutcomeRow.builder()
-                        .outcomeCode(it.getOutcomeCode())
-                        .outcomeStatement(it.getOutcomeStatement())
-                        .targetLevel(it.getTarget())
-                        .attainmentLevel(it.getOverallAttainment())
-                        .achievementPercentage(it.getAchievementPercentage())
-                        .observation(it.getObservation())
-                        .actions(it.getActions() != null ? it.getActions() : Collections.emptyList())
+                        .outcomeCode(code)
+                        .outcomeStatement(statement)
+                        .targetLevel(target)
+                        .attainmentLevel(it.getOverallAttainment() != null ? it.getOverallAttainment() : new BigDecimal("0.0"))
+                        .achievementPercentage(it.getAchievementPercentage() != null ? it.getAchievementPercentage() : new BigDecimal("0.0"))
+                        .observation("")
+                        .actions(Collections.emptyList())
                         .build());
+            }
+        } else {
+            if (pos.isEmpty()) {
+                for (int i = 1; i <= 12; i++) {
+                    poRows.add(ProgrammeAtrReportDto.OutcomeRow.builder()
+                            .outcomeCode("PO" + i)
+                            .outcomeStatement("Programme Outcome " + i)
+                            .targetLevel(new BigDecimal("2.0"))
+                            .attainmentLevel(new BigDecimal("0.0"))
+                            .achievementPercentage(new BigDecimal("0.0"))
+                            .observation("")
+                            .actions(Collections.emptyList())
+                            .build());
+                }
+            } else {
+                for (ProgrammeOutcome po : pos) {
+                    poRows.add(ProgrammeAtrReportDto.OutcomeRow.builder()
+                            .outcomeCode(po.getCode())
+                            .outcomeStatement(po.getStatement() != null ? po.getStatement() : "Programme Outcome " + po.getCode())
+                            .targetLevel(po.getTarget() != null ? po.getTarget() : new BigDecimal("2.0"))
+                            .attainmentLevel(new BigDecimal("0.0"))
+                            .achievementPercentage(new BigDecimal("0.0"))
+                            .observation("")
+                            .actions(Collections.emptyList())
+                            .build());
+                }
             }
         }
 
         List<ProgrammeAtrReportDto.OutcomeRow> psoRows = new ArrayList<>();
-        if (attainment.getOverallAttainment() != null && attainment.getOverallAttainment().getPsos() != null) {
+        if (attainment != null && attainment.getOverallAttainment() != null && attainment.getOverallAttainment().getPsos() != null && !attainment.getOverallAttainment().getPsos().isEmpty()) {
             for (ProgrammeAttainmentResultDto.OutcomeAttainmentItem it : attainment.getOverallAttainment().getPsos()) {
+                String code = it.getOutcomeCode() != null ? it.getOutcomeCode() : (it.getPsoCode() != null ? it.getPsoCode() : "");
+                String statement = psoStatementMap.getOrDefault(code.toUpperCase(), it.getOutcomeStatement() != null && !it.getOutcomeStatement().isBlank() ? it.getOutcomeStatement() : "Programme Specific Outcome " + code);
+                BigDecimal target = it.getTarget() != null ? it.getTarget() : psoTargetMap.getOrDefault(code.toUpperCase(), new BigDecimal("2.0"));
+
                 psoRows.add(ProgrammeAtrReportDto.OutcomeRow.builder()
-                        .outcomeCode(it.getOutcomeCode())
-                        .outcomeStatement(it.getOutcomeStatement())
-                        .targetLevel(it.getTarget())
-                        .attainmentLevel(it.getOverallAttainment())
-                        .achievementPercentage(it.getAchievementPercentage())
-                        .observation(it.getObservation())
-                        .actions(it.getActions() != null ? it.getActions() : Collections.emptyList())
+                        .outcomeCode(code)
+                        .outcomeStatement(statement)
+                        .targetLevel(target)
+                        .attainmentLevel(it.getOverallAttainment() != null ? it.getOverallAttainment() : new BigDecimal("0.0"))
+                        .achievementPercentage(it.getAchievementPercentage() != null ? it.getAchievementPercentage() : new BigDecimal("0.0"))
+                        .observation("")
+                        .actions(Collections.emptyList())
                         .build());
+            }
+        } else {
+            if (psos.isEmpty()) {
+                for (int i = 1; i <= 2; i++) {
+                    psoRows.add(ProgrammeAtrReportDto.OutcomeRow.builder()
+                            .outcomeCode("PSO" + i)
+                            .outcomeStatement("Programme Specific Outcome " + i)
+                            .targetLevel(new BigDecimal("2.0"))
+                            .attainmentLevel(new BigDecimal("0.0"))
+                            .achievementPercentage(new BigDecimal("0.0"))
+                            .observation("")
+                            .actions(Collections.emptyList())
+                            .build());
+                }
+            } else {
+                for (ProgrammeSpecificOutcome pso : psos) {
+                    psoRows.add(ProgrammeAtrReportDto.OutcomeRow.builder()
+                            .outcomeCode(pso.getCode())
+                            .outcomeStatement(pso.getStatement() != null ? pso.getStatement() : "Programme Specific Outcome " + pso.getCode())
+                            .targetLevel(pso.getTarget() != null ? pso.getTarget() : new BigDecimal("2.0"))
+                            .attainmentLevel(new BigDecimal("0.0"))
+                            .achievementPercentage(new BigDecimal("0.0"))
+                            .observation("")
+                            .actions(Collections.emptyList())
+                            .build());
+                }
             }
         }
 
         String status = existingAtr.map(a -> a.getStatus() != null ? a.getStatus().name() : "DRAFT").orElse("DRAFT");
-        String patrId = existingAtr.map(ProgrammeAtr::getId).orElse("patr-" + batchId);
+        String patrId = existingAtr.map(ProgrammeAtr::getId).orElse(null);
 
         return ProgrammeAtrReportDto.builder()
                 .reportType("PROGRAMME_ATR")
@@ -685,59 +880,111 @@ public class AtrService {
 
     @Transactional
     public ProgrammeAtrReportDto saveProgrammeAtrReport(ProgrammeAtrReportDto dto) {
-        System.out.println("[AtrService] saveProgrammeAtrReport called | programmeId: " + (dto != null && dto.getProgramme() != null ? dto.getProgramme().getId() : "null"));
-        if (dto == null || dto.getProgramme() == null || dto.getBatch() == null) {
-            throw new IllegalArgumentException("Invalid Programme ATR payload.");
+        System.out.println("[AtrService] saveProgrammeAtrReport called | masterProgrammeId: " + (dto != null && dto.getProgramme() != null ? dto.getProgramme().getId() : "null"));
+        if (dto == null || dto.getBatch() == null || dto.getBatch().getId() == null || dto.getBatch().getId().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Programme batch is required for Programme ATR.");
         }
-        String progId = dto.getProgramme().getId();
-        String batchId = dto.getBatch().getId();
+        String programmeBatchId = dto.getBatch().getId();
+        ProgrammeBatch batch = programmeBatchRepository.findByIdAndDeletedAtIsNull(programmeBatchId)
+                .orElseThrow(() -> new ResourceNotFoundException("Programme Batch not found: " + programmeBatchId));
+        
+        String progId = batch.getMasterProgrammeId();
         enforceProgrammeScope(progId);
-        enforceBatchScope(batchId);
-        batchLifecycleService.enforceBatchEditability(batchId);
-        if (approvalService != null && approvalService.isProgrammeAtrApproved(batchId)) {
+        enforceBatchScope(programmeBatchId);
+        batchLifecycleService.enforceBatchEditability(programmeBatchId);
+        if (approvalService != null && approvalService.isProgrammeAtrApproved(programmeBatchId)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Cannot modify approved Programme ATR. A revision must be requested first.");
         }
 
-        ProgrammeAtr atr = programmeAtrRepository.findByProgrammeBatchId(batchId)
+        if (dto.getProgramme() == null) {
+            dto.setProgramme(ProgrammeAtrReportDto.ProgrammeSummary.builder().id(progId).name(batch.getProgrammeName()).code(batch.getProgrammeCode()).build());
+        } else {
+            dto.getProgramme().setId(progId);
+        }
+        dto.getBatch().setId(programmeBatchId);
+        dto.getBatch().setName(batch.getName());
+
+        ProgrammeAtr atr = programmeAtrRepository.findByProgrammeBatchId(programmeBatchId)
                 .orElseGet(() -> ProgrammeAtr.builder()
                         .id("patr-" + UUID.randomUUID().toString().substring(0, 8))
-                        .programmeBatchId(batchId)
+                        .programmeBatchId(programmeBatchId)
                         .build());
+
+        if (atr.getStatus() != null && isAtrLocked(atr.getStatus())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Cannot modify Programme ATR in " + atr.getStatus() + " status. A revision must be requested first.");
+        }
+
+        if (dto.getStatus() != null && !dto.getStatus().isBlank()) {
+            try {
+                atr.setStatus(ProgrammeAtrStatus.valueOf(dto.getStatus()));
+            } catch (Exception ignored) {
+                atr.setStatus(ProgrammeAtrStatus.DRAFT);
+            }
+        } else if (atr.getStatus() == null) {
+            atr.setStatus(ProgrammeAtrStatus.DRAFT);
+        }
+
+        dto.setProgrammeAtrId(atr.getId());
+        dto.setStatus(atr.getStatus().name());
 
         try {
             atr.setObservationsJson(objectMapper.writeValueAsString(dto));
         } catch (Exception ignored) {}
 
-        if (dto.getStatus() != null) {
-            try {
-                atr.setStatus(ProgrammeAtrStatus.valueOf(dto.getStatus()));
-            } catch (Exception ignored) {}
-        }
         atr.setUpdatedAt(ZonedDateTime.now());
         programmeAtrRepository.save(atr);
 
-        return getProgrammeAtrReport(progId, batchId);
+        return getProgrammeAtrReport(progId, programmeBatchId);
     }
 
     @Transactional
-    public ProgrammeAtr submitProgrammeAtr(String programmeId, String batchId, String submittedBy) {
-        System.out.println("[AtrService] submitProgrammeAtr called | programmeId: " + programmeId + " | batchId: " + batchId + " | submittedBy: " + submittedBy);
-        if (programmeId != null && !programmeId.isBlank()) {
-            enforceProgrammeScope(programmeId);
-        }
-        if (batchId != null && !batchId.isBlank()) {
-            enforceBatchScope(batchId);
-            batchLifecycleService.enforceBatchEditability(batchId);
-        }
-        ProgrammeAtr atr = programmeAtrRepository.findByProgrammeBatchId(batchId)
-                .orElseGet(() -> ProgrammeAtr.builder()
-                        .id("patr-" + UUID.randomUUID().toString().substring(0, 8))
-                        .programmeBatchId(batchId)
-                        .build());
+    public ProgrammeAtr submitProgrammeAtr(String masterProgrammeId, String programmeBatchId, String submittedBy) {
+        System.out.println("[AtrService] submitProgrammeAtr called | masterProgrammeId: " + masterProgrammeId + " | programmeBatchId: " + programmeBatchId + " | submittedBy: " + submittedBy);
+        
+        ProgrammeBatch batch = programmeBatchRepository.findByIdAndDeletedAtIsNull(programmeBatchId)
+                .orElseThrow(() -> new ResourceNotFoundException("Programme Batch not found: " + programmeBatchId));
+        String progId = batch.getMasterProgrammeId();
+        
+        enforceProgrammeScope(progId);
+        enforceBatchScope(programmeBatchId);
+        batchLifecycleService.enforceBatchEditability(programmeBatchId);
+
+        ProgrammeAtr atr = programmeAtrRepository.findByProgrammeBatchId(programmeBatchId)
+                .orElseGet(() -> {
+                    ProgrammeAtrReportDto initialDto = getProgrammeAtrReport(progId, programmeBatchId);
+                    ProgrammeAtr created = ProgrammeAtr.builder()
+                            .id("patr-" + UUID.randomUUID().toString().substring(0, 8))
+                            .programmeBatchId(programmeBatchId)
+                            .status(ProgrammeAtrStatus.DRAFT)
+                            .build();
+                    try {
+                        created.setObservationsJson(objectMapper.writeValueAsString(initialDto));
+                    } catch (Exception ignored) {}
+                    return created;
+                });
+
+        CurrentUserScope scope = getScope();
+        String authoritativeSubmitter = (scope != null && scope.getEmail() != null)
+                ? scope.getEmail()
+                : (scope != null && scope.getUsername() != null ? scope.getUsername() : submittedBy);
 
         atr.setStatus(ProgrammeAtrStatus.SUBMITTED_FOR_VERIFICATION);
-        atr.setSubmittedBy(submittedBy);
+        atr.setSubmittedBy(authoritativeSubmitter);
         atr.setSubmittedAt(ZonedDateTime.now());
+        atr.setUpdatedAt(ZonedDateTime.now());
+
+        if (atr.getObservationsJson() != null && !atr.getObservationsJson().isBlank()) {
+            try {
+                ProgrammeAtrReportDto dto = objectMapper.readValue(atr.getObservationsJson(), ProgrammeAtrReportDto.class);
+                if (dto != null) {
+                    dto.setStatus(ProgrammeAtrStatus.SUBMITTED_FOR_VERIFICATION.name());
+                    dto.setProgrammeAtrId(atr.getId());
+                    atr.setObservationsJson(objectMapper.writeValueAsString(dto));
+                }
+            } catch (Exception ignored) {}
+        }
+
         return programmeAtrRepository.save(atr);
     }
 
@@ -746,25 +993,25 @@ public class AtrService {
     // =========================================================================
 
     @Transactional(readOnly = true)
-    public BatchComparisonDto getProgrammeBatchComparison(String programmeId, List<String> batchIds) {
-        System.out.println("[AtrService] getProgrammeBatchComparison called | programmeId: " + programmeId);
-        if (programmeId != null && !programmeId.isBlank()) {
-            enforceProgrammeScope(programmeId);
+    public BatchComparisonDto getProgrammeBatchComparison(String masterProgrammeId, List<String> programmeBatchIds) {
+        System.out.println("[AtrService] getProgrammeBatchComparison called | masterProgrammeId: " + masterProgrammeId);
+        if (masterProgrammeId != null && !masterProgrammeId.isBlank()) {
+            enforceProgrammeScope(masterProgrammeId);
         }
-        if (batchIds != null) {
-            for (String bId : batchIds) {
+        if (programmeBatchIds != null) {
+            for (String bId : programmeBatchIds) {
                 if (bId != null && !bId.isBlank()) {
                     enforceBatchScope(bId);
                 }
             }
         }
-        List<ProgrammeBatch> batches = (batchIds != null && !batchIds.isEmpty())
-                ? programmeBatchRepository.findAllById(batchIds)
-                : programmeBatchRepository.findByMasterProgrammeId(programmeId);
+        List<ProgrammeBatch> batches = (programmeBatchIds != null && !programmeBatchIds.isEmpty())
+                ? programmeBatchRepository.findAllById(programmeBatchIds)
+                : programmeBatchRepository.findByMasterProgrammeId(masterProgrammeId);
 
         List<BatchComparisonDto.BatchAttainmentItem> items = new ArrayList<>();
         for (ProgrammeBatch b : batches) {
-            ProgrammeAttainmentResultDto res = attainmentCalculationService.calculateProgrammeAttainment(programmeId, b.getId());
+            ProgrammeAttainmentResultDto res = attainmentCalculationService.calculateProgrammeAttainment(masterProgrammeId, b.getId());
             Optional<ProgrammeAtr> patr = programmeAtrRepository.findByProgrammeBatchId(b.getId());
 
             Map<String, BigDecimal> poMap = new LinkedHashMap<>();
@@ -780,7 +1027,7 @@ public class AtrService {
             }
 
             items.add(BatchComparisonDto.BatchAttainmentItem.builder()
-                    .batchId(b.getId())
+                    .programmeBatchId(b.getId())
                     .batchName(b.getName())
                     .programmeAtrStatus(patr.map(a -> a.getStatus().name()).orElse("DRAFT"))
                     .poAttainment(poMap)
@@ -789,7 +1036,7 @@ public class AtrService {
         }
 
         return BatchComparisonDto.builder()
-                .programmeId(programmeId)
+                .masterProgrammeId(masterProgrammeId)
                 .batches(items)
                 .build();
     }
@@ -827,6 +1074,15 @@ public class AtrService {
             }
         }
         return historicalReports;
+    }
+
+    private boolean isAtrLocked(ProgrammeAtrStatus status) {
+        if (status == null) return false;
+        return status == ProgrammeAtrStatus.SUBMITTED
+                || status == ProgrammeAtrStatus.SUBMITTED_FOR_VERIFICATION
+                || status == ProgrammeAtrStatus.PENDING_APPROVAL
+                || status == ProgrammeAtrStatus.VERIFIED
+                || status == ProgrammeAtrStatus.APPROVED;
     }
 
 }

@@ -1,5 +1,6 @@
 package com.dypiu.nba.dto;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.dypiu.nba.entity.SetupStepStatus;
 import lombok.*;
 
@@ -10,6 +11,7 @@ import java.util.List;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@JsonInclude(JsonInclude.Include.NON_EMPTY)
 public class ProgrammeCoordinatorSetupProgressDto {
     private String id;
     private String masterProgrammeId;
@@ -21,30 +23,30 @@ public class ProgrammeCoordinatorSetupProgressDto {
     private List<String> pendingSteps;
     private ZonedDateTime updatedAt;
 
-    public String getProgrammeId() {
+    public String getMasterProgrammeId() {
         return masterProgrammeId;
     }
 
-    public void setProgrammeId(String programmeId) {
-        this.masterProgrammeId = programmeId;
+    public void setMasterProgrammeId(String masterProgrammeId) {
+        this.masterProgrammeId = masterProgrammeId;
     }
 
-    public String getBatchId() {
+    public String getProgrammeBatchId() {
         return programmeBatchId;
     }
 
-    public void setBatchId(String batchId) {
-        this.programmeBatchId = batchId;
+    public void setProgrammeBatchId(String programmeBatchId) {
+        this.programmeBatchId = programmeBatchId;
     }
 
     public static class ProgrammeCoordinatorSetupProgressDtoBuilder {
-        public ProgrammeCoordinatorSetupProgressDtoBuilder programmeId(String programmeId) {
-            this.masterProgrammeId = programmeId;
+        public ProgrammeCoordinatorSetupProgressDtoBuilder masterProgrammeId(String masterProgrammeId) {
+            this.masterProgrammeId = masterProgrammeId;
             return this;
         }
 
-        public ProgrammeCoordinatorSetupProgressDtoBuilder batchId(String batchId) {
-            this.programmeBatchId = batchId;
+        public ProgrammeCoordinatorSetupProgressDtoBuilder programmeBatchId(String programmeBatchId) {
+            this.programmeBatchId = programmeBatchId;
             return this;
         }
     }

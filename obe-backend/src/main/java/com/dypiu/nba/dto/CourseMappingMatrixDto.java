@@ -16,8 +16,8 @@ import java.util.Map;
 @AllArgsConstructor
 @Builder
 public class CourseMappingMatrixDto {
-    private String courseId;
-    private String programmeId;
+    private String masterCourseId;
+    private String masterProgrammeId;
     private List<CourseOutcome> cos;
     private List<ProgrammeOutcome> pos;
     private List<ProgrammeSpecificOutcome> psos;

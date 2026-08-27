@@ -89,19 +89,19 @@ public class MasterCourse {
     }
 
     // Helper compatibility methods
-    public String getProgrammeId() {
+    public String getMasterProgrammeId() {
         return masterProgrammeId;
     }
 
-    public void setProgrammeId(String programmeId) {
-        this.masterProgrammeId = programmeId;
+    public void setMasterProgrammeId(String masterProgrammeId) {
+        this.masterProgrammeId = masterProgrammeId;
     }
 
-    public String getCourseOfferingId() {
+    public String getProgrammeBatchCourseId() {
         return programmeBatchCourseId;
     }
 
-    public void setCourseOfferingId(String offeringId) {
+    public void setProgrammeBatchCourseId(String offeringId) {
         this.programmeBatchCourseId = offeringId;
     }
 }

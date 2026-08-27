@@ -15,30 +15,30 @@ public class ProgrammeTargetDto {
     private Map<String, BigDecimal> poTargets;
     private Map<String, BigDecimal> psoTargets;
 
-    public String getProgrammeId() {
+    public String getMasterProgrammeId() {
         return masterProgrammeId;
     }
 
-    public void setProgrammeId(String programmeId) {
-        this.masterProgrammeId = programmeId;
+    public void setMasterProgrammeId(String masterProgrammeId) {
+        this.masterProgrammeId = masterProgrammeId;
     }
 
-    public String getBatchId() {
+    public String getProgrammeBatchId() {
         return programmeBatchId;
     }
 
-    public void setBatchId(String batchId) {
-        this.programmeBatchId = batchId;
+    public void setProgrammeBatchId(String programmeBatchId) {
+        this.programmeBatchId = programmeBatchId;
     }
 
     public static class ProgrammeTargetDtoBuilder {
-        public ProgrammeTargetDtoBuilder programmeId(String programmeId) {
-            this.masterProgrammeId = programmeId;
+        public ProgrammeTargetDtoBuilder masterProgrammeId(String masterProgrammeId) {
+            this.masterProgrammeId = masterProgrammeId;
             return this;
         }
 
-        public ProgrammeTargetDtoBuilder batchId(String batchId) {
-            this.programmeBatchId = batchId;
+        public ProgrammeTargetDtoBuilder programmeBatchId(String programmeBatchId) {
+            this.programmeBatchId = programmeBatchId;
             return this;
         }
     }

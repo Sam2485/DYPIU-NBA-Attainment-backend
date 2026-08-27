@@ -49,16 +49,16 @@ public class ReportAccessService {
     }
 
     @Transactional(readOnly = true)
-    public void validateProgrammeAccess(User user, String programmeId) {
-        System.out.println("[ReportAccessService] validateProgrammeAccess called | user: " + (user != null ? user.getEmail() : "null") + " | programmeId: " + programmeId);
-        if (user == null || programmeId == null) return;
+    public void validateProgrammeAccess(User user, String masterProgrammeId) {
+        System.out.println("[ReportAccessService] validateProgrammeAccess called | user: " + (user != null ? user.getEmail() : "null") + " | masterProgrammeId: " + masterProgrammeId);
+        if (user == null || masterProgrammeId == null) return;
         if (user.getRole() == UserRole.IQAC) return;
 
-        MasterProgramme prog = masterProgrammeRepository.findById(programmeId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Programme not found: " + programmeId));
+        MasterProgramme prog = masterProgrammeRepository.findById(masterProgrammeId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Programme not found: " + masterProgrammeId));
 
         if (user.getRole() == UserRole.PROGRAMME_COORDINATOR) {
-            if (user.getProgrammeId() != null && !user.getProgrammeId().equals(programmeId)) {
+            if (user.getMasterProgrammeId() != null && !user.getMasterProgrammeId().equals(masterProgrammeId)) {
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Programme is outside your assigned programme scope.");
             }
             return;
@@ -80,25 +80,25 @@ public class ReportAccessService {
     }
 
     @Transactional(readOnly = true)
-    public void validateBatchAccess(User user, String batchId) {
-        System.out.println("[ReportAccessService] validateBatchAccess called | user: " + (user != null ? user.getEmail() : "null") + " | batchId: " + batchId);
-        if (user == null || batchId == null) return;
+    public void validateBatchAccess(User user, String programmeBatchId) {
+        System.out.println("[ReportAccessService] validateBatchAccess called | user: " + (user != null ? user.getEmail() : "null") + " | programmeBatchId: " + programmeBatchId);
+        if (user == null || programmeBatchId == null) return;
         if (user.getRole() == UserRole.IQAC) return;
 
-        ProgrammeBatch batch = programmeBatchRepository.findById(batchId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Batch not found: " + batchId));
+        ProgrammeBatch batch = programmeBatchRepository.findById(programmeBatchId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Batch not found: " + programmeBatchId));
 
         validateProgrammeAccess(user, batch.getMasterProgrammeId());
     }
 
     @Transactional(readOnly = true)
-    public void validateCourseOfferingAccess(User user, String courseOfferingId) {
-        System.out.println("[ReportAccessService] validateCourseOfferingAccess called | user: " + (user != null ? user.getEmail() : "null") + " | courseOfferingId: " + courseOfferingId);
-        if (user == null || courseOfferingId == null) return;
+    public void validateCourseOfferingAccess(User user, String programmeBatchCourseId) {
+        System.out.println("[ReportAccessService] validateCourseOfferingAccess called | user: " + (user != null ? user.getEmail() : "null") + " | programmeBatchCourseId: " + programmeBatchCourseId);
+        if (user == null || programmeBatchCourseId == null) return;
         if (user.getRole() == UserRole.ADMIN || user.getRole() == UserRole.IQAC) return;
 
-        ProgrammeBatchCourse offering = programmeBatchCourseRepository.findById(courseOfferingId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Course Offering not found: " + courseOfferingId));
+        ProgrammeBatchCourse offering = programmeBatchCourseRepository.findById(programmeBatchCourseId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Course Offering not found: " + programmeBatchCourseId));
 
         if (user.getRole() == UserRole.FACULTY) {
             boolean isCoordinator = (offering.getCourseCoordinatorId() != null && Objects.equals(offering.getCourseCoordinatorId(), user.getId()));
@@ -112,16 +112,16 @@ public class ReportAccessService {
     }
 
     @Transactional(readOnly = true)
-    public void validateCourseCoordinatorAccess(User user, String courseOfferingId) {
-        System.out.println("[ReportAccessService] validateCourseCoordinatorAccess called | user: " + (user != null ? user.getEmail() : "null") + " | courseOfferingId: " + courseOfferingId);
-        if (user == null || courseOfferingId == null) return;
+    public void validateCourseCoordinatorAccess(User user, String programmeBatchCourseId) {
+        System.out.println("[ReportAccessService] validateCourseCoordinatorAccess called | user: " + (user != null ? user.getEmail() : "null") + " | programmeBatchCourseId: " + programmeBatchCourseId);
+        if (user == null || programmeBatchCourseId == null) return;
         if (user.getRole() == UserRole.ADMIN || user.getRole() == UserRole.IQAC || user.getRole() == UserRole.DIRECTOR || user.getRole() == UserRole.HOD || user.getRole() == UserRole.PROGRAMME_COORDINATOR) {
-            validateCourseOfferingAccess(user, courseOfferingId);
+            validateCourseOfferingAccess(user, programmeBatchCourseId);
             return;
         }
 
-        ProgrammeBatchCourse offering = programmeBatchCourseRepository.findById(courseOfferingId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Course Offering not found: " + courseOfferingId));
+        ProgrammeBatchCourse offering = programmeBatchCourseRepository.findById(programmeBatchCourseId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Course Offering not found: " + programmeBatchCourseId));
 
         boolean isCoordinator = (offering.getCourseCoordinatorId() != null && Objects.equals(offering.getCourseCoordinatorId(), user.getId()));
         if (!isCoordinator) {
@@ -130,16 +130,16 @@ public class ReportAccessService {
     }
 
     @Transactional(readOnly = true)
-    public void validateCourseAccess(User user, String courseId) {
-        System.out.println("[ReportAccessService] validateCourseAccess called | user: " + (user != null ? user.getEmail() : "null") + " | courseId: " + courseId);
-        if (user == null || courseId == null) return;
+    public void validateCourseAccess(User user, String masterCourseId) {
+        System.out.println("[ReportAccessService] validateCourseAccess called | user: " + (user != null ? user.getEmail() : "null") + " | masterCourseId: " + masterCourseId);
+        if (user == null || masterCourseId == null) return;
         if (user.getRole() == UserRole.ADMIN || user.getRole() == UserRole.IQAC) return;
 
-        MasterCourse course = masterCourseRepository.findById(courseId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Course not found: " + courseId));
+        MasterCourse course = masterCourseRepository.findById(masterCourseId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Course not found: " + masterCourseId));
 
         if (user.getRole() == UserRole.FACULTY) {
-            List<ProgrammeBatchCourse> offerings = programmeBatchCourseRepository.findByMasterCourseId(courseId);
+            List<ProgrammeBatchCourse> offerings = programmeBatchCourseRepository.findByMasterCourseId(masterCourseId);
             boolean hasAssignedOffering = offerings.stream().anyMatch(o -> 
                 (o.getCourseCoordinatorId() != null && Objects.equals(o.getCourseCoordinatorId(), user.getId()))
             );
@@ -153,23 +153,23 @@ public class ReportAccessService {
     }
 
     @Transactional(readOnly = true)
-    public void validateCourseAtrAccess(User user, String courseOfferingId) {
-        System.out.println("[ReportAccessService] validateCourseAtrAccess called | user: " + (user != null ? user.getEmail() : "null") + " | courseOfferingId: " + courseOfferingId);
-        validateCourseOfferingAccess(user, courseOfferingId);
+    public void validateCourseAtrAccess(User user, String programmeBatchCourseId) {
+        System.out.println("[ReportAccessService] validateCourseAtrAccess called | user: " + (user != null ? user.getEmail() : "null") + " | programmeBatchCourseId: " + programmeBatchCourseId);
+        validateCourseOfferingAccess(user, programmeBatchCourseId);
     }
 
     @Transactional(readOnly = true)
-    public void validateProgrammeAtrAccess(User user, String programmeId, String batchId) {
-        System.out.println("[ReportAccessService] validateProgrammeAtrAccess called | user: " + (user != null ? user.getEmail() : "null") + " | programmeId: " + programmeId + " | batchId: " + batchId);
+    public void validateProgrammeAtrAccess(User user, String masterProgrammeId, String programmeBatchId) {
+        System.out.println("[ReportAccessService] validateProgrammeAtrAccess called | user: " + (user != null ? user.getEmail() : "null") + " | masterProgrammeId: " + masterProgrammeId + " | programmeBatchId: " + programmeBatchId);
         if (user == null) return;
         if (user.getRole() == UserRole.FACULTY) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Course Coordinators / Faculty do not have permission to view or edit Programme ATRs.");
         }
-        if (programmeId != null) {
-            validateProgrammeAccess(user, programmeId);
+        if (masterProgrammeId != null) {
+            validateProgrammeAccess(user, masterProgrammeId);
         }
-        if (batchId != null) {
-            validateBatchAccess(user, batchId);
+        if (programmeBatchId != null) {
+            validateBatchAccess(user, programmeBatchId);
         }
     }
 
@@ -201,29 +201,29 @@ public class ReportAccessService {
             allowedProgrammes = masterProgrammeRepository.findAll().stream().filter(p -> deptIds.contains(p.getDepartmentId())).collect(Collectors.toList());
             Set<String> progIds = allowedProgrammes.stream().map(MasterProgramme::getId).collect(Collectors.toSet());
             allowedBatches = programmeBatchRepository.findAll().stream().filter(b -> progIds.contains(b.getMasterProgrammeId())).collect(Collectors.toList());
-            Set<String> batchIds = allowedBatches.stream().map(ProgrammeBatch::getId).collect(Collectors.toSet());
-            allowedOfferings = programmeBatchCourseRepository.findByProgrammeBatchIdIn(batchIds);
+            Set<String> programmeBatchIds = allowedBatches.stream().map(ProgrammeBatch::getId).collect(Collectors.toSet());
+            allowedOfferings = programmeBatchCourseRepository.findByProgrammeBatchIdIn(programmeBatchIds);
         } else if (user.getRole() == UserRole.HOD) {
             String deptId = user.getDepartmentId();
             allowedProgrammes = deptId != null ? masterProgrammeRepository.findByDepartmentId(deptId) : masterProgrammeRepository.findAll();
             Set<String> progIds = allowedProgrammes.stream().map(MasterProgramme::getId).collect(Collectors.toSet());
             allowedBatches = programmeBatchRepository.findAll().stream().filter(b -> progIds.contains(b.getMasterProgrammeId())).collect(Collectors.toList());
-            Set<String> batchIds = allowedBatches.stream().map(ProgrammeBatch::getId).collect(Collectors.toSet());
-            allowedOfferings = programmeBatchCourseRepository.findByProgrammeBatchIdIn(batchIds);
+            Set<String> programmeBatchIds = allowedBatches.stream().map(ProgrammeBatch::getId).collect(Collectors.toSet());
+            allowedOfferings = programmeBatchCourseRepository.findByProgrammeBatchIdIn(programmeBatchIds);
         } else if (user.getRole() == UserRole.PROGRAMME_COORDINATOR) {
-            String progId = user.getProgrammeId();
+            String progId = user.getMasterProgrammeId();
             allowedProgrammes = progId != null ? masterProgrammeRepository.findById(progId).map(List::of).orElse(Collections.emptyList()) : masterProgrammeRepository.findAll();
             Set<String> progIds = allowedProgrammes.stream().map(MasterProgramme::getId).collect(Collectors.toSet());
             allowedBatches = programmeBatchRepository.findAll().stream().filter(b -> progIds.contains(b.getMasterProgrammeId())).collect(Collectors.toList());
-            Set<String> batchIds = allowedBatches.stream().map(ProgrammeBatch::getId).collect(Collectors.toSet());
-            allowedOfferings = programmeBatchCourseRepository.findByProgrammeBatchIdIn(batchIds);
+            Set<String> programmeBatchIds = allowedBatches.stream().map(ProgrammeBatch::getId).collect(Collectors.toSet());
+            allowedOfferings = programmeBatchCourseRepository.findByProgrammeBatchIdIn(programmeBatchIds);
         } else if (user.getRole() == UserRole.FACULTY) {
             List<ProgrammeBatchCourse> offerings = programmeBatchCourseRepository.findAll().stream()
                     .filter(o -> o.getCourseCoordinatorId() != null && Objects.equals(o.getCourseCoordinatorId(), user.getId()))
                     .collect(Collectors.toList());
             allowedOfferings = offerings;
-            Set<String> batchIds = offerings.stream().map(ProgrammeBatchCourse::getProgrammeBatchId).collect(Collectors.toSet());
-            allowedBatches = programmeBatchRepository.findAll().stream().filter(b -> batchIds.contains(b.getId())).collect(Collectors.toList());
+            Set<String> programmeBatchIds = offerings.stream().map(ProgrammeBatchCourse::getProgrammeBatchId).collect(Collectors.toSet());
+            allowedBatches = programmeBatchRepository.findAll().stream().filter(b -> programmeBatchIds.contains(b.getId())).collect(Collectors.toList());
             Set<String> progIds = allowedBatches.stream().map(ProgrammeBatch::getMasterProgrammeId).collect(Collectors.toSet());
             allowedProgrammes = masterProgrammeRepository.findAll().stream().filter(p -> progIds.contains(p.getId())).collect(Collectors.toList());
         }
@@ -235,7 +235,7 @@ public class ReportAccessService {
                 .collect(Collectors.toList());
 
         List<ReportFiltersDto.BatchItem> batchItems = allowedBatches.stream()
-                .map(b -> ReportFiltersDto.BatchItem.builder().id(b.getId()).programmeId(b.getMasterProgrammeId()).name(b.getName()).build())
+                .map(b -> ReportFiltersDto.BatchItem.builder().id(b.getId()).masterProgrammeId(b.getMasterProgrammeId()).name(b.getName()).build())
                 .collect(Collectors.toList());
 
         List<ReportFiltersDto.OfferingItem> offeringItems = allowedOfferings.stream()
@@ -243,8 +243,8 @@ public class ReportAccessService {
                     MasterCourse c = courseMap.get(o.getMasterCourseId());
                     return ReportFiltersDto.OfferingItem.builder()
                             .id(o.getId())
-                            .courseId(o.getMasterCourseId())
-                            .batchId(o.getProgrammeBatchId())
+                            .masterCourseId(o.getMasterCourseId())
+                            .programmeBatchId(o.getProgrammeBatchId())
                             .courseCode(c != null ? c.getCode() : "N/A")
                             .courseName(c != null ? c.getName() : "N/A")
                             .semester(o.getSemester())

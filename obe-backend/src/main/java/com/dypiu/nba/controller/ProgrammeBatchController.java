@@ -10,6 +10,7 @@ import com.dypiu.nba.service.AtrService;
 import com.dypiu.nba.service.AttainmentCalculationService;
 import com.dypiu.nba.service.AttainmentReportService;
 import com.dypiu.nba.service.OutcomeService;
+import com.dypiu.nba.security.RequestScopeAuthorizer;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -30,27 +31,21 @@ public class ProgrammeBatchController {
     private final AtrService atrService;
     private final OutcomeService outcomeService;
     private final com.dypiu.nba.service.BatchLifecycleService batchLifecycleService;
+    private final RequestScopeAuthorizer requestScopeAuthorizer;
 
     @GetMapping
     public ResponseEntity<ApiResponse<List<ProgrammeBatch>>> getAllProgrammeBatches(
             @RequestParam(required = false) String masterProgrammeId,
-            @RequestParam(required = false) String programmeId,
+            @RequestParam(required = false) String departmentId,
             @RequestParam(required = false) String coordinatorEmail,
             @RequestParam(required = false) String courseCoordinatorEmail,
             @RequestParam(required = false) String hodEmail,
+            @RequestParam(required = false) String userEmail,
+            @RequestParam(required = false) String role,
+            @RequestParam(required = false) String status,
             java.security.Principal principal) {
-        String effectiveProgId = (masterProgrammeId != null && !masterProgrammeId.isBlank()) ? masterProgrammeId : programmeId;
-
-        List<ProgrammeBatch> batches;
-        if (courseCoordinatorEmail != null && !courseCoordinatorEmail.isBlank()) {
-            batches = academicService.getBatchesByCourseCoordinatorEmail(courseCoordinatorEmail);
-        } else if (coordinatorEmail != null && !coordinatorEmail.isBlank()) {
-            batches = academicService.getBatchesByCoordinatorEmailAndProgramme(coordinatorEmail, effectiveProgId);
-        } else if (effectiveProgId != null && !effectiveProgId.isBlank()) {
-            batches = academicService.getBatchesByProgramme(effectiveProgId);
-        } else {
-            batches = academicService.getAllBatches();
-        }
+        List<ProgrammeBatch> batches = academicService.getBatchesFiltered(
+                masterProgrammeId, departmentId, coordinatorEmail, courseCoordinatorEmail, hodEmail, userEmail, role, status);
 
         return ResponseEntity.ok(ApiResponse.<List<ProgrammeBatch>>builder()
                 .success(true)
@@ -62,13 +57,10 @@ public class ProgrammeBatchController {
     public ResponseEntity<ApiResponse<List<ProgrammeBatch>>> getProgrammeBatchesByCoordinator(
             @RequestParam(required = false) String coordinatorEmail,
             @RequestParam(required = false) String masterProgrammeId,
-            @RequestParam(required = false) String programmeId,
+            @RequestParam(required = false) String status,
             java.security.Principal principal) {
-        String effectiveProgId = (masterProgrammeId != null && !masterProgrammeId.isBlank()) ? masterProgrammeId : programmeId;
-        String effectiveEmail = (coordinatorEmail != null && !coordinatorEmail.isBlank())
-                ? coordinatorEmail
-                : (principal != null ? principal.getName() : null);
-        List<ProgrammeBatch> batches = academicService.getBatchesByCoordinatorEmailAndProgramme(effectiveEmail, effectiveProgId);
+        List<ProgrammeBatch> batches = academicService.getBatchesFiltered(
+                masterProgrammeId, null, coordinatorEmail, null, null, null, null, status);
         return ResponseEntity.ok(ApiResponse.<List<ProgrammeBatch>>builder()
                 .success(true)
                 .data(batches)
@@ -79,11 +71,13 @@ public class ProgrammeBatchController {
     public ResponseEntity<ApiResponse<List<ProgrammeBatch>>> getProgrammeBatchesByCourseCoordinator(
             @RequestParam(required = false) String coordinatorEmail,
             @RequestParam(required = false) String courseCoordinatorEmail,
+            @RequestParam(required = false) String status,
             java.security.Principal principal) {
         String effectiveEmail = (courseCoordinatorEmail != null && !courseCoordinatorEmail.isBlank())
                 ? courseCoordinatorEmail
                 : ((coordinatorEmail != null && !coordinatorEmail.isBlank()) ? coordinatorEmail : (principal != null ? principal.getName() : null));
-        List<ProgrammeBatch> batches = academicService.getBatchesByCourseCoordinatorEmail(effectiveEmail);
+        List<ProgrammeBatch> batches = academicService.getBatchesFiltered(
+                null, null, null, effectiveEmail, null, null, null, status);
         return ResponseEntity.ok(ApiResponse.<List<ProgrammeBatch>>builder()
                 .success(true)
                 .data(batches)
@@ -187,7 +181,7 @@ public class ProgrammeBatchController {
     public ResponseEntity<ApiResponse<Student>> addStudentToBatch(
             @PathVariable String programmeBatchId,
             @RequestBody Student student) {
-        student.setBatchId(programmeBatchId);
+        student.setProgrammeBatchId(programmeBatchId);
         return ResponseEntity.ok(ApiResponse.<Student>builder()
                 .success(true)
                 .message("Student added to ProgrammeBatch successfully")

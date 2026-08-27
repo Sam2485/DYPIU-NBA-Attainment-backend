@@ -185,7 +185,7 @@ public class DeletionWorkflowIntegrationTest {
                 .role(role)
                 .schoolId(schoolId)
                 .departmentId(deptId)
-                .programmeId(progId)
+                .masterProgrammeId(progId)
                 .isActive(true)
                 .build());
     }

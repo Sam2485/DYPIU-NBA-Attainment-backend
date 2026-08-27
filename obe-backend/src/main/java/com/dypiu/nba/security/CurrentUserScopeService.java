@@ -9,6 +9,8 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.context.request.RequestAttributes;
+import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.security.Principal;
@@ -18,25 +20,40 @@ import java.security.Principal;
  *
  * The scope is ALWAYS resolved directly from the authenticated User entity in the database.
  * Frontend query parameters (such as ?schoolId=...) are never trusted for scope resolution.
- * NO fallback to hardcoded IDs ("sch-1"), first school, first user, or arbitrary schools is permitted.
+ * Scope resolution is cached in HTTP request attributes to eliminate duplicate DB lookups.
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class CurrentUserScopeService {
 
+    private static final String REQUEST_SCOPE_ATTRIBUTE = "CACHED_CURRENT_USER_SCOPE";
+    private static final String REQUEST_USER_ATTRIBUTE = "CACHED_CURRENT_USER_ENTITY";
+
     private final UserRepository userRepository;
 
     /**
      * Resolves the CurrentUserScope from the active Spring SecurityContext.
+     * Caches the resolved scope for the lifetime of the HTTP request to prevent repeated DB roundtrips.
      *
      * @return Immutable CurrentUserScope containing verified user and scope metadata.
      * @throws ResponseStatusException HTTP 401 if unauthenticated or user record not found; HTTP 403 if deactivated.
      */
     @Transactional(readOnly = true, noRollbackFor = ResponseStatusException.class)
     public CurrentUserScope getCurrentUserScope() {
+        RequestAttributes attrs = RequestContextHolder.getRequestAttributes();
+        if (attrs != null) {
+            CurrentUserScope cached = (CurrentUserScope) attrs.getAttribute(REQUEST_SCOPE_ATTRIBUTE, RequestAttributes.SCOPE_REQUEST);
+            if (cached != null) {
+                return cached;
+            }
+        }
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        return resolveScopeFromAuthentication(authentication);
+        CurrentUserScope scope = resolveScopeFromAuthentication(authentication);
+        if (attrs != null && scope != null) {
+            attrs.setAttribute(REQUEST_SCOPE_ATTRIBUTE, scope, RequestAttributes.SCOPE_REQUEST);
+        }
+        return scope;
     }
 
     /**
@@ -48,7 +65,18 @@ public class CurrentUserScopeService {
     @Transactional(readOnly = true, noRollbackFor = ResponseStatusException.class)
     public CurrentUserScope getCurrentUserScope(Principal principal) {
         if (principal != null && principal.getName() != null && !principal.getName().isBlank()) {
-            return resolveScopeByIdentifier(principal.getName());
+            RequestAttributes attrs = RequestContextHolder.getRequestAttributes();
+            if (attrs != null) {
+                CurrentUserScope cached = (CurrentUserScope) attrs.getAttribute(REQUEST_SCOPE_ATTRIBUTE, RequestAttributes.SCOPE_REQUEST);
+                if (cached != null && (principal.getName().equalsIgnoreCase(cached.getUsername()) || principal.getName().equalsIgnoreCase(cached.getEmail()))) {
+                    return cached;
+                }
+            }
+            CurrentUserScope scope = resolveScopeByIdentifier(principal.getName());
+            if (attrs != null && scope != null) {
+                attrs.setAttribute(REQUEST_SCOPE_ATTRIBUTE, scope, RequestAttributes.SCOPE_REQUEST);
+            }
+            return scope;
         }
         return getCurrentUserScope();
     }
@@ -66,14 +94,26 @@ public class CurrentUserScopeService {
 
     /**
      * Retrieves the active User entity for the current authenticated principal.
+     * Caches the resolved entity for the lifetime of the HTTP request.
      *
      * @return Managed User entity.
      * @throws ResponseStatusException HTTP 401 if unauthenticated or user not found.
      */
     @Transactional(readOnly = true, noRollbackFor = ResponseStatusException.class)
     public User getCurrentUser() {
+        RequestAttributes attrs = RequestContextHolder.getRequestAttributes();
+        if (attrs != null) {
+            User cached = (User) attrs.getAttribute(REQUEST_USER_ATTRIBUTE, RequestAttributes.SCOPE_REQUEST);
+            if (cached != null) {
+                return cached;
+            }
+        }
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        return resolveUserFromAuthentication(authentication);
+        User user = resolveUserFromAuthentication(authentication);
+        if (attrs != null && user != null) {
+            attrs.setAttribute(REQUEST_USER_ATTRIBUTE, user, RequestAttributes.SCOPE_REQUEST);
+        }
+        return user;
     }
 
     /**
@@ -94,7 +134,7 @@ public class CurrentUserScopeService {
                 .role(user.getRole())
                 .schoolId(user.getSchoolId())
                 .departmentId(user.getDepartmentId())
-                .programmeId(user.getProgrammeId())
+                .masterProgrammeId(user.getMasterProgrammeId())
                 .build();
     }
 

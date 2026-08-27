@@ -50,23 +50,23 @@ public class ProgrammeCoordinatorSetupProgress {
     private ZonedDateTime updatedAt;
 
     @Transient
-    private String programmeId;
+    private String masterProgrammeId;
 
-    public String getBatchId() {
+    public String getProgrammeBatchId() {
         return programmeBatchId;
     }
 
-    public void setBatchId(String batchId) {
-        this.programmeBatchId = batchId;
+    public void setProgrammeBatchId(String programmeBatchId) {
+        this.programmeBatchId = programmeBatchId;
     }
 
-    public String getProgrammeId() {
-        return programmeId != null ? programmeId : programmeBatchId;
+    public String getMasterProgrammeId() {
+        return masterProgrammeId != null ? masterProgrammeId : programmeBatchId;
     }
 
-    public void setProgrammeId(String programmeId) {
+    public void setMasterProgrammeId(String masterProgrammeId) {
         if (this.programmeBatchId == null) {
-            this.programmeBatchId = programmeId;
+            this.programmeBatchId = masterProgrammeId;
         }
     }
 }

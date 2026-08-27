@@ -50,21 +50,21 @@ public class CourseCoordinatorSetupProgress {
     private ZonedDateTime updatedAt;
 
     @Transient
-    private String courseId;
+    private String masterCourseId;
 
-    public String getCourseId() {
-        return courseId != null ? courseId : programmeBatchCourseId;
+    public String getMasterCourseId() {
+        return masterCourseId != null ? masterCourseId : programmeBatchCourseId;
     }
 
-    public void setCourseId(String courseId) {
-        this.courseId = courseId;
+    public void setMasterCourseId(String masterCourseId) {
+        this.masterCourseId = masterCourseId;
     }
 
-    public String getCourseOfferingId() {
+    public String getProgrammeBatchCourseId() {
         return programmeBatchCourseId;
     }
 
-    public void setCourseOfferingId(String courseOfferingId) {
-        this.programmeBatchCourseId = courseOfferingId;
+    public void setProgrammeBatchCourseId(String programmeBatchCourseId) {
+        this.programmeBatchCourseId = programmeBatchCourseId;
     }
 }

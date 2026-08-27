@@ -17,107 +17,107 @@ public class OutcomeController {
 
     private final OutcomeService outcomeService;
 
-    @GetMapping("/programmes/{programmeId}/pos")
-    public ResponseEntity<ApiResponse<List<ProgrammeOutcome>>> getPOs(@PathVariable String programmeId) {
+    @GetMapping("/master-programmes/{masterProgrammeId}/pos")
+    public ResponseEntity<ApiResponse<List<ProgrammeOutcome>>> getPOs(@PathVariable String masterProgrammeId) {
         return ResponseEntity.ok(ApiResponse.<List<ProgrammeOutcome>>builder()
                 .success(true)
-                .data(outcomeService.getPOsByProgramme(programmeId))
+                .data(outcomeService.getPOsByProgramme(masterProgrammeId))
                 .build());
     }
 
-    @PostMapping("/programmes/{programmeId}/pos")
-    public ResponseEntity<ApiResponse<List<ProgrammeOutcome>>> savePOs(@PathVariable String programmeId, @RequestBody List<ProgrammeOutcome> pos) {
+    @PostMapping("/master-programmes/{masterProgrammeId}/pos")
+    public ResponseEntity<ApiResponse<List<ProgrammeOutcome>>> savePOs(@PathVariable String masterProgrammeId, @RequestBody List<ProgrammeOutcome> pos) {
         return ResponseEntity.ok(ApiResponse.<List<ProgrammeOutcome>>builder()
                 .success(true)
                 .message("POs saved successfully")
-                .data(outcomeService.savePOs(programmeId, pos))
+                .data(outcomeService.savePOs(masterProgrammeId, pos))
                 .build());
     }
 
-    @GetMapping("/programmes/{programmeId}/psos")
-    public ResponseEntity<ApiResponse<List<ProgrammeSpecificOutcome>>> getPSOs(@PathVariable String programmeId) {
+    @GetMapping("/master-programmes/{masterProgrammeId}/psos")
+    public ResponseEntity<ApiResponse<List<ProgrammeSpecificOutcome>>> getPSOs(@PathVariable String masterProgrammeId) {
         return ResponseEntity.ok(ApiResponse.<List<ProgrammeSpecificOutcome>>builder()
                 .success(true)
-                .data(outcomeService.getPSOsByProgramme(programmeId))
+                .data(outcomeService.getPSOsByProgramme(masterProgrammeId))
                 .build());
     }
 
-    @PostMapping("/programmes/{programmeId}/psos")
-    public ResponseEntity<ApiResponse<List<ProgrammeSpecificOutcome>>> savePSOs(@PathVariable String programmeId, @RequestBody List<ProgrammeSpecificOutcome> psos) {
+    @PostMapping("/master-programmes/{masterProgrammeId}/psos")
+    public ResponseEntity<ApiResponse<List<ProgrammeSpecificOutcome>>> savePSOs(@PathVariable String masterProgrammeId, @RequestBody List<ProgrammeSpecificOutcome> psos) {
         return ResponseEntity.ok(ApiResponse.<List<ProgrammeSpecificOutcome>>builder()
                 .success(true)
                 .message("PSOs saved successfully")
-                .data(outcomeService.savePSOs(programmeId, psos))
+                .data(outcomeService.savePSOs(masterProgrammeId, psos))
                 .build());
     }
 
-    @GetMapping("/programmes/{programmeId}/peos")
-    public ResponseEntity<ApiResponse<List<PeoOutcome>>> getPEOs(@PathVariable String programmeId) {
+    @GetMapping("/master-programmes/{masterProgrammeId}/peos")
+    public ResponseEntity<ApiResponse<List<PeoOutcome>>> getPEOs(@PathVariable String masterProgrammeId) {
         return ResponseEntity.ok(ApiResponse.<List<PeoOutcome>>builder()
                 .success(true)
-                .data(outcomeService.getPEOsByProgramme(programmeId))
+                .data(outcomeService.getPEOsByProgramme(masterProgrammeId))
                 .build());
     }
 
-    @PostMapping("/programmes/{programmeId}/peos")
-    public ResponseEntity<ApiResponse<List<PeoOutcome>>> savePEOs(@PathVariable String programmeId, @RequestBody List<PeoOutcome> peos) {
+    @PostMapping("/master-programmes/{masterProgrammeId}/peos")
+    public ResponseEntity<ApiResponse<List<PeoOutcome>>> savePEOs(@PathVariable String masterProgrammeId, @RequestBody List<PeoOutcome> peos) {
         return ResponseEntity.ok(ApiResponse.<List<PeoOutcome>>builder()
                 .success(true)
                 .message("PEOs saved successfully")
-                .data(outcomeService.savePEOs(programmeId, peos))
+                .data(outcomeService.savePEOs(masterProgrammeId, peos))
                 .build());
     }
 
-    @GetMapping("/courses/{courseId}/cos")
-    public ResponseEntity<ApiResponse<List<CourseOutcome>>> getCOs(@PathVariable String courseId) {
+    @GetMapping("/master-courses/{masterCourseId}/cos")
+    public ResponseEntity<ApiResponse<List<CourseOutcome>>> getCOs(@PathVariable String masterCourseId) {
         return ResponseEntity.ok(ApiResponse.<List<CourseOutcome>>builder()
                 .success(true)
-                .data(outcomeService.getCOsByCourse(courseId))
+                .data(outcomeService.getCOsByCourse(masterCourseId))
                 .build());
     }
 
-    @PostMapping("/courses/{courseId}/cos")
-    public ResponseEntity<ApiResponse<List<CourseOutcome>>> saveCOs(@PathVariable String courseId, @RequestBody List<CourseOutcome> cos) {
+    @PostMapping("/master-courses/{masterCourseId}/cos")
+    public ResponseEntity<ApiResponse<List<CourseOutcome>>> saveCOs(@PathVariable String masterCourseId, @RequestBody List<CourseOutcome> cos) {
         return ResponseEntity.ok(ApiResponse.<List<CourseOutcome>>builder()
                 .success(true)
                 .message("COs saved successfully")
-                .data(outcomeService.saveCOs(courseId, cos))
+                .data(outcomeService.saveCOs(masterCourseId, cos))
                 .build());
     }
 
     // --- Target Benchmark Levels ---
-    @GetMapping("/programmes/{programmeId}/targets")
-    public ResponseEntity<ApiResponse<ProgrammeTargetDto>> getProgrammeTargets(@PathVariable String programmeId) {
+    @GetMapping("/master-programmes/{masterProgrammeId}/targets")
+    public ResponseEntity<ApiResponse<ProgrammeTargetDto>> getProgrammeTargets(@PathVariable String masterProgrammeId) {
         return ResponseEntity.ok(ApiResponse.<ProgrammeTargetDto>builder()
                 .success(true)
-                .data(outcomeService.getProgrammeTargets(programmeId))
+                .data(outcomeService.getProgrammeTargets(masterProgrammeId))
                 .build());
     }
 
-    @PostMapping("/programmes/{programmeId}/targets")
-    public ResponseEntity<ApiResponse<ProgrammeTargetDto>> saveProgrammeTargets(@PathVariable String programmeId, @RequestBody ProgrammeTargetDto targets) {
+    @PostMapping("/master-programmes/{masterProgrammeId}/targets")
+    public ResponseEntity<ApiResponse<ProgrammeTargetDto>> saveProgrammeTargets(@PathVariable String masterProgrammeId, @RequestBody ProgrammeTargetDto targets) {
         return ResponseEntity.ok(ApiResponse.<ProgrammeTargetDto>builder()
                 .success(true)
                 .message("Programme targets saved successfully")
-                .data(outcomeService.saveProgrammeTargets(programmeId, targets))
+                .data(outcomeService.saveProgrammeTargets(masterProgrammeId, targets))
                 .build());
     }
 
     // --- CO to PO/PSO Mapping Matrix ---
-    @GetMapping("/courses/{courseId}/mappings")
-    public ResponseEntity<ApiResponse<com.dypiu.nba.dto.CourseMappingMatrixDto>> getCourseMappings(@PathVariable String courseId) {
+    @GetMapping("/master-courses/{masterCourseId}/mappings")
+    public ResponseEntity<ApiResponse<com.dypiu.nba.dto.CourseMappingMatrixDto>> getCourseMappings(@PathVariable String masterCourseId) {
         return ResponseEntity.ok(ApiResponse.<com.dypiu.nba.dto.CourseMappingMatrixDto>builder()
                 .success(true)
-                .data(outcomeService.getCourseMappings(courseId))
+                .data(outcomeService.getCourseMappings(masterCourseId))
                 .build());
     }
 
-    @PostMapping("/courses/{courseId}/mappings")
-    public ResponseEntity<ApiResponse<com.dypiu.nba.dto.CourseMappingMatrixDto>> saveCourseMappings(@PathVariable String courseId, @RequestBody com.dypiu.nba.dto.CourseMappingMatrixDto dto) {
+    @PostMapping("/master-courses/{masterCourseId}/mappings")
+    public ResponseEntity<ApiResponse<com.dypiu.nba.dto.CourseMappingMatrixDto>> saveCourseMappings(@PathVariable String masterCourseId, @RequestBody com.dypiu.nba.dto.CourseMappingMatrixDto dto) {
         return ResponseEntity.ok(ApiResponse.<com.dypiu.nba.dto.CourseMappingMatrixDto>builder()
                 .success(true)
                 .message("Course mappings saved successfully")
-                .data(outcomeService.saveCourseMappings(courseId, dto))
+                .data(outcomeService.saveCourseMappings(masterCourseId, dto))
                 .build());
     }
 }

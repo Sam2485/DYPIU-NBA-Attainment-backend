@@ -11,13 +11,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 @Entity
 @Table(
-        name = "master_programmes",
-        uniqueConstraints = {
-                @UniqueConstraint(
-                        name = "uk_department_programme_code",
-                        columnNames = {"department_id", "code"}
-                )
-        }
+        name = "master_programmes"
 )
 @Getter
 @Setter
@@ -34,7 +28,7 @@ public class MasterProgramme {
     @Column(name = "department_id", nullable = false)
     private String departmentId;
 
-    @Column(nullable = false, length = 20, unique = true)
+    @Column(nullable = false, length = 20)
     private String code;
 
     @Column(nullable = false, length = 255)
@@ -57,13 +51,19 @@ public class MasterProgramme {
     @Column(name = "updated_at", insertable = false, updatable = false)
     private ZonedDateTime updatedAt;
 
+    @Column(name = "deleted_at")
+    private ZonedDateTime deletedAt;
+
+    @Column(name = "deleted_by", length = 255)
+    private String deletedBy;
+
     @Transient
     private String coordinator;
 
     @Transient
     private String coordinatorEmail;
 
-    public MasterProgramme(String id, String departmentId, String code, String name, Integer durationYears, String status, String departmentName, ZonedDateTime createdAt, ZonedDateTime updatedAt, String coordinator, String coordinatorEmail) {
+    public MasterProgramme(String id, String departmentId, String code, String name, Integer durationYears, String status, String departmentName, ZonedDateTime createdAt, ZonedDateTime updatedAt, ZonedDateTime deletedAt, String deletedBy, String coordinator, String coordinatorEmail) {
         this.id = id;
         this.departmentId = departmentId;
         this.code = code;
@@ -73,6 +73,8 @@ public class MasterProgramme {
         this.departmentName = departmentName;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
+        this.deletedAt = deletedAt;
+        this.deletedBy = deletedBy;
         this.coordinator = coordinator;
         this.coordinatorEmail = coordinatorEmail;
         if (id != null && coordinator != null && !coordinator.isBlank()) {

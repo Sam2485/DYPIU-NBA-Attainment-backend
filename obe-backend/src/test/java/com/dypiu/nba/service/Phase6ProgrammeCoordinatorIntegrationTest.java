@@ -7,6 +7,7 @@ import com.dypiu.nba.repository.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
@@ -20,6 +21,7 @@ import static org.junit.jupiter.api.Assertions.*;
 @SpringBootTest
 @ActiveProfiles("test")
 @Transactional
+@WithMockUser(roles = "ADMIN")
 public class Phase6ProgrammeCoordinatorIntegrationTest {
 
     @Autowired
@@ -30,6 +32,8 @@ public class Phase6ProgrammeCoordinatorIntegrationTest {
 
     @Autowired
     private SchoolRepository schoolRepository;
+    @Autowired
+    private com.dypiu.nba.repository.UserRepository userRepository;
 
     @Autowired
     private DepartmentRepository departmentRepository;
@@ -60,12 +64,22 @@ public class Phase6ProgrammeCoordinatorIntegrationTest {
 
     private String progId1;
     private String progId2;
-    private String batchId1;
-    private String batchId2;
+    private String programmeBatchId1;
+    private String programmeBatchId2;
     private final String coordinatorEmail = "pc.test@dypiu.ac.in";
 
     @BeforeEach
     void setUp() {
+        if (userRepository.findByUsername("user").isEmpty()) {
+            userRepository.save(com.dypiu.nba.entity.User.builder()
+                .username("user")
+                .email("user@dypiu.ac.in")
+                .name("Test User")
+                .role(com.dypiu.nba.entity.UserRole.ADMIN)
+                .passwordHash("dummy")
+                .build());
+        }
+
         School school = schoolRepository.save(School.builder()
                 .id("sch-pc-test-" + UUID.randomUUID().toString().substring(0, 6))
                 .name("School of Computing PC Test")
@@ -109,7 +123,7 @@ public class Phase6ProgrammeCoordinatorIntegrationTest {
                 .endYear(2026)
                 .status("ACTIVE")
                 .build());
-        batchId1 = b1.getId();
+        programmeBatchId1 = b1.getId();
 
         ProgrammeBatch b2 = programmeBatchRepository.save(ProgrammeBatch.builder()
                 .id("batch-pct-2-" + UUID.randomUUID().toString().substring(0, 6))
@@ -119,45 +133,45 @@ public class Phase6ProgrammeCoordinatorIntegrationTest {
                 .endYear(2027)
                 .status("ACTIVE")
                 .build());
-        batchId2 = b2.getId();
+        programmeBatchId2 = b2.getId();
     }
 
     @Test
     @DisplayName("TEST A: Initial Workflow State & ProgrammeBatch Isolation")
     void testInitialWorkflowAndBatchIsolation() {
-        ProgrammeCoordinatorSetupProgressDto progressB1 = academicService.getProgrammeCoordinatorSetupProgress(coordinatorEmail, progId1, batchId1);
+        ProgrammeCoordinatorSetupProgressDto progressB1 = academicService.getProgrammeCoordinatorSetupProgress(coordinatorEmail, progId1, programmeBatchId1);
         assertNotNull(progressB1);
-        assertEquals(progId1, progressB1.getProgrammeId());
-        assertEquals(batchId1, progressB1.getBatchId());
-        assertEquals(0, progressB1.getCurrentStep());
+        assertEquals(progId1, progressB1.getMasterProgrammeId());
+        assertEquals(programmeBatchId1, progressB1.getProgrammeBatchId());
+        assertEquals(1, progressB1.getCurrentStep());
         assertTrue(progressB1.getCompletedSteps().isEmpty());
 
-        // Update progress on ProgrammeBatch 1 (Step 0 complete)
-        academicService.updateProgrammeCoordinatorSetupProgress(coordinatorEmail, progId1, batchId1, 1, Map.of("completedSteps", List.of("0")));
+        // Update progress on ProgrammeBatch 1 (Step courses complete)
+        academicService.updateProgrammeCoordinatorSetupProgress(coordinatorEmail, progId1, programmeBatchId1, 1, Map.of("completedSteps", List.of("courses")));
 
         // Verify ProgrammeBatch 1 progress updated
-        ProgrammeCoordinatorSetupProgressDto updatedB1 = academicService.getProgrammeCoordinatorSetupProgress(coordinatorEmail, progId1, batchId1);
-        assertTrue(updatedB1.getCompletedSteps().contains("0"));
+        ProgrammeCoordinatorSetupProgressDto updatedB1 = academicService.getProgrammeCoordinatorSetupProgress(coordinatorEmail, progId1, programmeBatchId1);
+        assertTrue(updatedB1.getCompletedSteps().contains("courses"));
 
         // Verify ProgrammeBatch 2 progress remains unaffected (ProgrammeBatch Isolation)
-        ProgrammeCoordinatorSetupProgressDto progressB2 = academicService.getProgrammeCoordinatorSetupProgress(coordinatorEmail, progId1, batchId2);
-        assertFalse(progressB2.getCompletedSteps().contains("0"), "ProgrammeBatch 2 must not inherit ProgrammeBatch 1 completed steps");
+        ProgrammeCoordinatorSetupProgressDto progressB2 = academicService.getProgrammeCoordinatorSetupProgress(coordinatorEmail, progId1, programmeBatchId2);
+        assertFalse(progressB2.getCompletedSteps().contains("courses"), "ProgrammeBatch 2 must not inherit ProgrammeBatch 1 completed steps");
     }
 
     @Test
-    @DisplayName("TEST B: Non-Sequential Step Completion (Step 0 -> Step 2)")
+    @DisplayName("TEST B: Non-Sequential Step Completion (courses -> indirect_attainment)")
     void testNonSequentialStepCompletion() {
-        // Complete Step 0
-        academicService.updateProgrammeCoordinatorSetupProgress(coordinatorEmail, progId1, batchId1, 1, Map.of("completedSteps", List.of("0")));
+        // Complete Step courses
+        academicService.updateProgrammeCoordinatorSetupProgress(coordinatorEmail, progId1, programmeBatchId1, 1, Map.of("completedSteps", List.of("courses")));
 
-        // Jump directly to Step 2 (MasterProgramme ATR) and complete it without completing Step 1 (Targets)
-        academicService.updateProgrammeCoordinatorSetupProgress(coordinatorEmail, progId1, batchId1, 3, Map.of("completedSteps", List.of("0", "2")));
+        // Jump directly to Step indirect_attainment and complete it without completing po_pso_target
+        academicService.updateProgrammeCoordinatorSetupProgress(coordinatorEmail, progId1, programmeBatchId1, 3, Map.of("completedSteps", List.of("courses", "indirect_attainment")));
 
-        ProgrammeCoordinatorSetupProgressDto progress = academicService.getProgrammeCoordinatorSetupProgress(coordinatorEmail, progId1, batchId1);
-        assertTrue(progress.getCompletedSteps().contains("0"), "Step 0 must be completed");
-        assertFalse(progress.getCompletedSteps().contains("1"), "Step 1 must remain pending");
-        assertTrue(progress.getCompletedSteps().contains("2"), "Step 2 must be completed");
-        assertTrue(progress.getPendingSteps().contains("1"), "Pending steps must explicitly contain Step 1");
+        ProgrammeCoordinatorSetupProgressDto progress = academicService.getProgrammeCoordinatorSetupProgress(coordinatorEmail, progId1, programmeBatchId1);
+        assertTrue(progress.getCompletedSteps().contains("courses"), "Step courses must be completed");
+        assertFalse(progress.getCompletedSteps().contains("po_pso_target"), "Step po_pso_target must remain pending");
+        assertTrue(progress.getCompletedSteps().contains("indirect_attainment"), "Step indirect_attainment must be completed");
+        assertTrue(progress.getPendingSteps().contains("po_pso_target"), "Pending steps must explicitly contain Step po_pso_target");
     }
 
     @Test
@@ -177,7 +191,7 @@ public class Phase6ProgrammeCoordinatorIntegrationTest {
 
         // 1. Save allocations as Draft (submit = false)
         List<Map<String, Object>> allocations = List.of(Map.of(
-                "courseId", c1.getId(),
+                "masterCourseId", c1.getId(),
                 "coordinator", "Prof. Alice",
                 "coordinatorEmail", "alice@dypiu.ac.in"
         ));
@@ -203,17 +217,17 @@ public class Phase6ProgrammeCoordinatorIntegrationTest {
     @DisplayName("TEST D: Step 2 PO/PSO Dynamic Dimension & Target Benchmarks Persistence")
     void testStep2TargetBenchmarksPersistence() {
         // Create 3 POs and 2 PSOs dynamically
-        ProgrammeOutcome savedPo1 = programmeOutcomeRepository.save(ProgrammeOutcome.builder().id("po-1-" + UUID.randomUUID().toString().substring(0, 4)).programmeBatchId(batchId1).code("PO1").statement("PO1 Stmt").build());
-        programmeOutcomeRepository.save(ProgrammeOutcome.builder().id("po-2-" + UUID.randomUUID().toString().substring(0, 4)).programmeBatchId(batchId1).code("PO2").statement("PO2 Stmt").build());
-        programmeOutcomeRepository.save(ProgrammeOutcome.builder().id("po-3-" + UUID.randomUUID().toString().substring(0, 4)).programmeBatchId(batchId1).code("PO3").statement("PO3 Stmt").build());
-        ProgrammeSpecificOutcome savedPso1 = programmeSpecificOutcomeRepository.save(ProgrammeSpecificOutcome.builder().id("pso-1-" + UUID.randomUUID().toString().substring(0, 4)).programmeBatchId(batchId1).code("PSO1").statement("PSO1 Stmt").build());
-        programmeSpecificOutcomeRepository.save(ProgrammeSpecificOutcome.builder().id("pso-2-" + UUID.randomUUID().toString().substring(0, 4)).programmeBatchId(batchId1).code("PSO2").statement("PSO2 Stmt").build());
+        ProgrammeOutcome savedPo1 = programmeOutcomeRepository.save(ProgrammeOutcome.builder().id("po-1-" + UUID.randomUUID().toString().substring(0, 4)).programmeBatchId(programmeBatchId1).code("PO1").statement("PO1 Stmt").build());
+        programmeOutcomeRepository.save(ProgrammeOutcome.builder().id("po-2-" + UUID.randomUUID().toString().substring(0, 4)).programmeBatchId(programmeBatchId1).code("PO2").statement("PO2 Stmt").build());
+        programmeOutcomeRepository.save(ProgrammeOutcome.builder().id("po-3-" + UUID.randomUUID().toString().substring(0, 4)).programmeBatchId(programmeBatchId1).code("PO3").statement("PO3 Stmt").build());
+        ProgrammeSpecificOutcome savedPso1 = programmeSpecificOutcomeRepository.save(ProgrammeSpecificOutcome.builder().id("pso-1-" + UUID.randomUUID().toString().substring(0, 4)).programmeBatchId(programmeBatchId1).code("PSO1").statement("PSO1 Stmt").build());
+        programmeSpecificOutcomeRepository.save(ProgrammeSpecificOutcome.builder().id("pso-2-" + UUID.randomUUID().toString().substring(0, 4)).programmeBatchId(programmeBatchId1).code("PSO2").statement("PSO2 Stmt").build());
 
         // Add competencies
         poCompetencyRepository.save(PoCompetency.builder().id("pocomp-1").poId(savedPo1.getId()).code("PO1.1").statement("Competency 1.1").build());
         psoCompetencyRepository.save(PsoCompetency.builder().id("psocomp-1").psoId(savedPso1.getId()).code("PSO1.1").statement("PSO Competency 1.1").build());
 
-        Map<String, Object> outcomes = academicService.getConsolidatedOutcomes(progId1, batchId1);
+        Map<String, Object> outcomes = academicService.getConsolidatedOutcomes(progId1, programmeBatchId1);
         @SuppressWarnings("unchecked")
         List<ProgrammeOutcome> pos = (List<ProgrammeOutcome>) outcomes.get("pos");
         @SuppressWarnings("unchecked")
@@ -234,8 +248,8 @@ public class Phase6ProgrammeCoordinatorIntegrationTest {
         Map<String, BigDecimal> poTargets = Map.of("PO1", new BigDecimal("2.20"), "PO2", new BigDecimal("2.60"), "PO3", new BigDecimal("2.80"));
         Map<String, BigDecimal> psoTargets = Map.of("PSO1", new BigDecimal("2.40"), "PSO2", new BigDecimal("2.70"));
         outcomeService.saveProgrammeTargets(progId1, ProgrammeTargetDto.builder()
-                .programmeId(progId1)
-                .batchId(batchId1)
+                .masterProgrammeId(progId1)
+                .programmeBatchId(programmeBatchId1)
                 .poTargets(poTargets)
                 .psoTargets(psoTargets)
                 .build());
@@ -252,8 +266,8 @@ public class Phase6ProgrammeCoordinatorIntegrationTest {
     @DisplayName("TEST E: Save Consolidated Outcomes with Competencies via Payload")
     void testSaveConsolidatedOutcomesWithCompetencies() {
         Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("programmeId", progId1);
-        payload.put("batchId", batchId1);
+        payload.put("masterProgrammeId", progId1);
+        payload.put("programmeBatchId", programmeBatchId1);
 
         Map<String, Object> po1 = new LinkedHashMap<>();
         po1.put("code", "PO1");
@@ -283,7 +297,7 @@ public class Phase6ProgrammeCoordinatorIntegrationTest {
         Map<String, Object> result = academicService.saveConsolidatedOutcomes(payload);
         assertNotNull(result);
 
-        Map<String, Object> savedData = academicService.getConsolidatedOutcomes(progId1, batchId1);
+        Map<String, Object> savedData = academicService.getConsolidatedOutcomes(progId1, programmeBatchId1);
         @SuppressWarnings("unchecked")
         List<ProgrammeOutcome> pos = (List<ProgrammeOutcome>) savedData.get("pos");
         @SuppressWarnings("unchecked")
@@ -311,10 +325,10 @@ public class Phase6ProgrammeCoordinatorIntegrationTest {
     @Test
     @DisplayName("TEST F: Complete Workflow Transition")
     void testCompleteWorkflowTransition() {
-        ProgrammeCoordinatorSetupProgressDto completed = academicService.completeProgrammeCoordinatorSetup(coordinatorEmail, progId1, batchId1);
+        ProgrammeCoordinatorSetupProgressDto completed = academicService.completeProgrammeCoordinatorSetup(coordinatorEmail, progId1, programmeBatchId1);
         assertNotNull(completed);
         assertEquals(SetupStepStatus.COMPLETED, completed.getOverallStatus());
-        assertTrue(completed.getCompletedSteps().containsAll(List.of("0", "1", "2", "3")));
+        assertTrue(completed.getCompletedSteps().containsAll(List.of("courses", "po_pso_target", "indirect_attainment", "programme_atr", "review")));
         assertTrue(completed.getPendingSteps().isEmpty());
     }
 }

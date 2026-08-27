@@ -17,30 +17,30 @@ public class CourseCoordinatorSetupProgressDto {
     private List<String> pendingSteps;
     private ZonedDateTime updatedAt;
 
-    public String getCourseId() {
+    public String getMasterCourseId() {
         return programmeBatchCourseId;
     }
 
-    public void setCourseId(String courseId) {
-        this.programmeBatchCourseId = courseId;
+    public void setMasterCourseId(String masterCourseId) {
+        this.programmeBatchCourseId = masterCourseId;
     }
 
-    public String getCourseOfferingId() {
+    public String getProgrammeBatchCourseId() {
         return programmeBatchCourseId;
     }
 
-    public void setCourseOfferingId(String courseOfferingId) {
-        this.programmeBatchCourseId = courseOfferingId;
+    public void setProgrammeBatchCourseId(String programmeBatchCourseId) {
+        this.programmeBatchCourseId = programmeBatchCourseId;
     }
 
     public static class CourseCoordinatorSetupProgressDtoBuilder {
-        public CourseCoordinatorSetupProgressDtoBuilder courseId(String courseId) {
-            this.programmeBatchCourseId = courseId;
+        public CourseCoordinatorSetupProgressDtoBuilder masterCourseId(String masterCourseId) {
+            this.programmeBatchCourseId = masterCourseId;
             return this;
         }
 
-        public CourseCoordinatorSetupProgressDtoBuilder courseOfferingId(String courseOfferingId) {
-            this.programmeBatchCourseId = courseOfferingId;
+        public CourseCoordinatorSetupProgressDtoBuilder programmeBatchCourseId(String programmeBatchCourseId) {
+            this.programmeBatchCourseId = programmeBatchCourseId;
             return this;
         }
     }

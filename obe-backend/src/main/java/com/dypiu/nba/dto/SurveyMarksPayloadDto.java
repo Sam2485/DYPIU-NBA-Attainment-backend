@@ -10,6 +10,6 @@ import java.util.List;
 @AllArgsConstructor
 @Builder
 public class SurveyMarksPayloadDto {
-    private String courseId;
+    private String masterCourseId;
     private List<SurveyResponseRowDto> surveyResponses;
 }

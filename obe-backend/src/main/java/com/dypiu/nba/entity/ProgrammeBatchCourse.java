@@ -90,20 +90,20 @@ public class ProgrammeBatchCourse {
     }
 
     // Helper compatibility methods
-    public String getCourseId() {
+    public String getMasterCourseId() {
         return masterCourseId;
     }
 
-    public void setCourseId(String courseId) {
-        this.masterCourseId = courseId;
+    public void setMasterCourseId(String masterCourseId) {
+        this.masterCourseId = masterCourseId;
     }
 
-    public String getBatchId() {
+    public String getProgrammeBatchId() {
         return programmeBatchId;
     }
 
-    public void setBatchId(String batchId) {
-        this.programmeBatchId = batchId;
+    public void setProgrammeBatchId(String programmeBatchId) {
+        this.programmeBatchId = programmeBatchId;
     }
 
     public String getEffectiveCourseCode(MasterCourse masterCourse) {

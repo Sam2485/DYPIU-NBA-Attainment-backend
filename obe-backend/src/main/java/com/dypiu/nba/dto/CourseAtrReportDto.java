@@ -20,8 +20,8 @@ public class CourseAtrReportDto {
     @Data @Builder @NoArgsConstructor @AllArgsConstructor
     public static class CourseOfferingSummary {
         private String id;
-        private String courseId;
-        private String batchId;
+        private String masterCourseId;
+        private String programmeBatchId;
         private Integer semester;
     }
 

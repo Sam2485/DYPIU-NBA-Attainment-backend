@@ -13,8 +13,8 @@ import java.util.List;
 public class ProgrammeCoordinatorSummaryDto {
     private String coordinatorEmail;
     private String coordinatorName;
-    private String programmeId;
     private String masterProgrammeId;
+
     private String programmeName;
     private String programmeCode;
     private String departmentId;

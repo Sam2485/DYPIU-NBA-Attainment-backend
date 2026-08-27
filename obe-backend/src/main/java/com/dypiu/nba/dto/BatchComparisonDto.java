@@ -10,12 +10,12 @@ import java.util.Map;
 @NoArgsConstructor
 @AllArgsConstructor
 public class BatchComparisonDto {
-    private String programmeId;
+    private String masterProgrammeId;
     private List<BatchAttainmentItem> batches;
 
     @Data @Builder @NoArgsConstructor @AllArgsConstructor
     public static class BatchAttainmentItem {
-        private String batchId;
+        private String programmeBatchId;
         private String batchName;
         private String programmeAtrStatus;
         private Map<String, BigDecimal> poAttainment;

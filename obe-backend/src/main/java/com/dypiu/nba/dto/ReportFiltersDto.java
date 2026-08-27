@@ -23,15 +23,15 @@ public class ReportFiltersDto {
     @Data @Builder @NoArgsConstructor @AllArgsConstructor
     public static class BatchItem {
         private String id;
-        private String programmeId;
+        private String masterProgrammeId;
         private String name;
     }
 
     @Data @Builder @NoArgsConstructor @AllArgsConstructor
     public static class OfferingItem {
         private String id;
-        private String courseId;
-        private String batchId;
+        private String masterCourseId;
+        private String programmeBatchId;
         private String courseCode;
         private String courseName;
         private Integer semester;

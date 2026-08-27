@@ -48,10 +48,10 @@ public class BatchLifecycleService {
     }
 
     @Transactional(readOnly = true)
-    public void enforceBatchEditability(String batchId) {
-        if (batchId == null || batchId.isBlank()) return;
-        ProgrammeBatch batch = programmeBatchRepository.findById(batchId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Batch not found: " + batchId));
+    public void enforceBatchEditability(String programmeBatchId) {
+        if (programmeBatchId == null || programmeBatchId.isBlank()) return;
+        ProgrammeBatch batch = programmeBatchRepository.findById(programmeBatchId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Batch not found: " + programmeBatchId));
 
         if ("INACTIVE".equalsIgnoreCase(batch.getStatus())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Cannot modify data for an INACTIVE batch.");
@@ -65,9 +65,9 @@ public class BatchLifecycleService {
     }
 
     @Transactional(readOnly = true)
-    public boolean isBatchEditable(String batchId) {
-        if (batchId == null || batchId.isBlank()) return true;
-        ProgrammeBatch batch = programmeBatchRepository.findById(batchId).orElse(null);
+    public boolean isBatchEditable(String programmeBatchId) {
+        if (programmeBatchId == null || programmeBatchId.isBlank()) return true;
+        ProgrammeBatch batch = programmeBatchRepository.findById(programmeBatchId).orElse(null);
         if (batch == null) return true;
 
         if ("INACTIVE".equalsIgnoreCase(batch.getStatus())) return false;
@@ -78,9 +78,9 @@ public class BatchLifecycleService {
     }
 
     @Transactional
-    public ProgrammeBatch reopenGraduatedBatch(String batchId, ZonedDateTime editingUntil, String reason) {
-        ProgrammeBatch batch = programmeBatchRepository.findById(batchId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Batch not found: " + batchId));
+    public ProgrammeBatch reopenGraduatedBatch(String programmeBatchId, ZonedDateTime editingUntil, String reason) {
+        ProgrammeBatch batch = programmeBatchRepository.findById(programmeBatchId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Batch not found: " + programmeBatchId));
         
         if (!"GRADUATED".equalsIgnoreCase(batch.getStatus())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Only GRADUATED batches can be reopened.");
@@ -107,7 +107,7 @@ public class BatchLifecycleService {
         auditLogService.recordSuccess(
                 com.dypiu.nba.audit.AuditAction.UPDATE,
                 com.dypiu.nba.audit.ResourceType.PROGRAMME_BATCH,
-                batchId,
+                programmeBatchId,
                 "GRADUATED",
                 "REOPENED_UNTIL_" + editingUntil.toString(),
                 reason != null ? reason : "Historical data entry window opened",
@@ -118,9 +118,9 @@ public class BatchLifecycleService {
     }
 
     @Transactional
-    public ProgrammeBatch closeReopeningWindow(String batchId, String reason) {
-        ProgrammeBatch batch = programmeBatchRepository.findById(batchId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Batch not found: " + batchId));
+    public ProgrammeBatch closeReopeningWindow(String programmeBatchId, String reason) {
+        ProgrammeBatch batch = programmeBatchRepository.findById(programmeBatchId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Batch not found: " + programmeBatchId));
 
         CurrentUserScope scope;
         try {
@@ -145,7 +145,7 @@ public class BatchLifecycleService {
         auditLogService.recordSuccess(
                 com.dypiu.nba.audit.AuditAction.UPDATE,
                 com.dypiu.nba.audit.ResourceType.PROGRAMME_BATCH,
-                batchId,
+                programmeBatchId,
                 prevState,
                 "GRADUATED",
                 reason != null ? reason : "Historical data entry window closed manually",
@@ -156,9 +156,9 @@ public class BatchLifecycleService {
     }
 
     @Transactional
-    public ProgrammeBatch changeBatchStatus(String batchId, String newStatus, String reason) {
-        ProgrammeBatch batch = programmeBatchRepository.findById(batchId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Batch not found: " + batchId));
+    public ProgrammeBatch changeBatchStatus(String programmeBatchId, String newStatus, String reason) {
+        ProgrammeBatch batch = programmeBatchRepository.findById(programmeBatchId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Batch not found: " + programmeBatchId));
 
         if (!"ACTIVE".equalsIgnoreCase(newStatus) && !"INACTIVE".equalsIgnoreCase(newStatus) && !"GRADUATED".equalsIgnoreCase(newStatus)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid batch status.");
@@ -191,7 +191,7 @@ public class BatchLifecycleService {
         auditLogService.recordSuccess(
                 com.dypiu.nba.audit.AuditAction.UPDATE,
                 com.dypiu.nba.audit.ResourceType.PROGRAMME_BATCH,
-                batchId,
+                programmeBatchId,
                 oldStatus,
                 newStatus.toUpperCase(),
                 reason != null ? reason : "Batch status changed",

@@ -254,7 +254,7 @@ public class CourseCoordinatorScopeSecurityTest {
                 .role(UserRole.FACULTY)
                 .schoolId(schoolA.getId())
                 .departmentId(deptA1.getId())
-                .programmeId(progA1.getId())
+                .masterProgrammeId(progA1.getId())
                 .isActive(true)
                 .build());
 
@@ -266,7 +266,7 @@ public class CourseCoordinatorScopeSecurityTest {
                 .role(UserRole.FACULTY)
                 .schoolId(schoolA.getId())
                 .departmentId(deptA1.getId())
-                .programmeId(progA1.getId())
+                .masterProgrammeId(progA1.getId())
                 .isActive(true)
                 .build());
 
@@ -278,7 +278,7 @@ public class CourseCoordinatorScopeSecurityTest {
                 .role(UserRole.FACULTY)
                 .schoolId(schoolB.getId())
                 .departmentId(deptB1.getId())
-                .programmeId(progB1.getId())
+                .masterProgrammeId(progB1.getId())
                 .isActive(true)
                 .build());
 
@@ -290,7 +290,7 @@ public class CourseCoordinatorScopeSecurityTest {
                 .role(UserRole.FACULTY)
                 .schoolId(schoolA.getId())
                 .departmentId(deptA1.getId())
-                .programmeId(progA1.getId())
+                .masterProgrammeId(progA1.getId())
                 .isActive(true)
                 .build());
 
@@ -341,7 +341,7 @@ public class CourseCoordinatorScopeSecurityTest {
                 .role(UserRole.PROGRAMME_COORDINATOR)
                 .schoolId(schoolA.getId())
                 .departmentId(deptA1.getId())
-                .programmeId(progA1.getId())
+                .masterProgrammeId(progA1.getId())
                 .isActive(true)
                 .build());
 
@@ -353,7 +353,7 @@ public class CourseCoordinatorScopeSecurityTest {
                 .role(UserRole.FACULTY)
                 .schoolId(schoolA.getId())
                 .departmentId(deptA2.getId())
-                .programmeId(progA2.getId())
+                .masterProgrammeId(progA2.getId())
                 .isActive(true)
                 .build());
 
@@ -564,7 +564,7 @@ public class CourseCoordinatorScopeSecurityTest {
         authenticateUser(ccUserA1);
         Principal principal = createPrincipal(ccUserA1);
         ResponseStatusException ex = assertThrows(ResponseStatusException.class,
-                () -> dashboardController.getCourseCoordinatorDashboard(courseA2.getId(), null, principal));
+                () -> dashboardController.getCourseCoordinatorDashboard(courseA2.getId(), null, null, principal));
         assertEquals(403, ex.getStatusCode().value());
     }
 
@@ -741,7 +741,7 @@ public class CourseCoordinatorScopeSecurityTest {
     void testScenario31_CourseCoordinatorSetupProgressWithBody() {
         authenticateUser(ccUserA1);
         Map<String, Object> body = Map.of(
-                "courseId", offeringA1.getId(),
+                "masterCourseId", offeringA1.getId(),
                 "stepNumber", 2,
                 "completedSteps", List.of("1")
         );
@@ -752,6 +752,6 @@ public class CourseCoordinatorScopeSecurityTest {
         assertNotNull(dto);
         assertEquals(2, dto.getCurrentStep());
         assertTrue(dto.getCompletedSteps().contains("1"));
-        assertEquals(offeringA1.getId(), dto.getCourseId());
+        assertEquals(offeringA1.getId(), dto.getMasterCourseId());
     }
 }

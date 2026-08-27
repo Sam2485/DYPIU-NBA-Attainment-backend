@@ -8,6 +8,7 @@ import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.mock.web.MockMultipartFile;
@@ -22,6 +23,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 @SpringBootTest
 @Transactional
+@WithMockUser(roles = "ADMIN")
 public class Phase5RuntimeFalsificationTest {
 
     @Autowired
@@ -35,6 +37,8 @@ public class Phase5RuntimeFalsificationTest {
 
     @Autowired
     private SchoolRepository schoolRepository;
+    @Autowired
+    private com.dypiu.nba.repository.UserRepository userRepository;
 
     @Autowired
     private DepartmentRepository departmentRepository;
@@ -92,6 +96,16 @@ public class Phase5RuntimeFalsificationTest {
 
     @BeforeEach
     void setUp() {
+        if (userRepository.findByUsername("user").isEmpty()) {
+            userRepository.save(com.dypiu.nba.entity.User.builder()
+                .username("user")
+                .email("user@dypiu.ac.in")
+                .name("Test User")
+                .role(com.dypiu.nba.entity.UserRole.ADMIN)
+                .passwordHash("dummy")
+                .build());
+        }
+
         String suffix = UUID.randomUUID().toString().substring(0, 6);
 
         school = schoolRepository.save(School.builder()

@@ -12,7 +12,7 @@ import java.util.Map;
 @AllArgsConstructor
 @Builder
 public class ExaminationAttainmentResultDto {
-    private String courseId;
+    private String masterCourseId;
     private BigDecimal thresholdPercentage; // e.g. 45.00
     private Integer totalStudents; // e.g. 24
     private Map<String, BigDecimal> coMaxMarks; // e.g. {"CO1": 20, "CO2": 18, ...}

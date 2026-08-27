@@ -51,14 +51,14 @@ public class AttainmentReportExportService {
      * Generates a fully populated Excel spreadsheet matching the DYPIU NBA Attainment Template.
      */
     @Transactional(readOnly = true)
-    public byte[] generateAttainmentExcel(String courseId, String batchId) {
-        System.out.println("[AttainmentReportExportService] generateAttainmentExcel called | courseId: " + courseId + " | batchId: " + batchId);
-        log.info("[AttainmentReportExportService] Generating Attainment Excel for courseId: {}, batchId: {}", courseId, batchId);
+    public byte[] generateAttainmentExcel(String masterCourseId, String programmeBatchId) {
+        System.out.println("[AttainmentReportExportService] generateAttainmentExcel called | masterCourseId: " + masterCourseId + " | programmeBatchId: " + programmeBatchId);
+        log.info("[AttainmentReportExportService] Generating Attainment Excel for masterCourseId: {}, programmeBatchId: {}", masterCourseId, programmeBatchId);
 
-        MasterCourse course = masterCourseRepository.findById(courseId).orElse(null);
+        MasterCourse course = masterCourseRepository.findById(masterCourseId).orElse(null);
         if (course == null) {
             course = MasterCourse.builder()
-                    .id(courseId)
+                    .id(masterCourseId)
                     .code("COURSE-310")
                     .name("Computer Networks and Security")
                     .build();
@@ -76,8 +76,8 @@ public class AttainmentReportExportService {
                 : null;
 
         ProgrammeBatch batch = null;
-        if (batchId != null && !batchId.isBlank()) {
-            batch = programmeBatchRepository.findById(batchId).orElse(null);
+        if (programmeBatchId != null && !programmeBatchId.isBlank()) {
+            batch = programmeBatchRepository.findById(programmeBatchId).orElse(null);
         }
         if (batch == null && course.getMasterProgrammeId() != null) {
             List<ProgrammeBatch> pBatches = programmeBatchRepository.findByMasterProgrammeId(course.getMasterProgrammeId());
@@ -85,13 +85,13 @@ public class AttainmentReportExportService {
         }
 
         // Resolve Course Offering
-        List<ProgrammeBatchCourse> offerings = programmeBatchCourseRepository.findByMasterCourseId(courseId);
-        String offeringId = !offerings.isEmpty() ? offerings.get(0).getId() : courseId;
+        List<ProgrammeBatchCourse> offerings = programmeBatchCourseRepository.findByMasterCourseId(masterCourseId);
+        String offeringId = !offerings.isEmpty() ? offerings.get(0).getId() : masterCourseId;
 
         // Fetch CO calculations and mappings
-        Map<String, Object> coCalcData = calculationService.calculateCourseCoAttainment(courseId);
-        CourseMappingMatrixDto mappingsDto = outcomeService.getCourseMappings(courseId);
-        List<CourseOutcome> cos = outcomeService.getCOsByCourse(courseId);
+        Map<String, Object> coCalcData = calculationService.calculateCourseCoAttainment(masterCourseId);
+        CourseMappingMatrixDto mappingsDto = outcomeService.getCourseMappings(masterCourseId);
+        List<CourseOutcome> cos = outcomeService.getCOsByCourse(masterCourseId);
         List<ProgrammeOutcome> pos = (programme != null) ? outcomeService.getPOsByProgramme(programme.getId()) : Collections.emptyList();
         List<ProgrammeSpecificOutcome> psos = (programme != null) ? outcomeService.getPSOsByProgramme(programme.getId()) : Collections.emptyList();
         List<StudentCoMark> studentMarks = studentCoMarkRepository.findByProgrammeBatchCourseId(offeringId);
@@ -432,14 +432,14 @@ public class AttainmentReportExportService {
      * Generates a comprehensive, NBA-compliant PDF Attainment Report.
      */
     @Transactional(readOnly = true)
-    public byte[] generateAttainmentPdf(String courseId, String batchId) {
-        System.out.println("[AttainmentReportExportService] generateAttainmentPdf called | courseId: " + courseId + " | batchId: " + batchId);
-        log.info("[AttainmentReportExportService] Generating Attainment PDF for courseId: {}, batchId: {}", courseId, batchId);
+    public byte[] generateAttainmentPdf(String masterCourseId, String programmeBatchId) {
+        System.out.println("[AttainmentReportExportService] generateAttainmentPdf called | masterCourseId: " + masterCourseId + " | programmeBatchId: " + programmeBatchId);
+        log.info("[AttainmentReportExportService] Generating Attainment PDF for masterCourseId: {}, programmeBatchId: {}", masterCourseId, programmeBatchId);
 
-        MasterCourse course = masterCourseRepository.findById(courseId).orElse(null);
+        MasterCourse course = masterCourseRepository.findById(masterCourseId).orElse(null);
         if (course == null) {
             course = MasterCourse.builder()
-                    .id(courseId)
+                    .id(masterCourseId)
                     .code("COURSE-310")
                     .name("Computer Networks and Security")
                     .build();
@@ -457,20 +457,20 @@ public class AttainmentReportExportService {
                 : null;
 
         ProgrammeBatch batch = null;
-        if (batchId != null && !batchId.isBlank()) {
-            batch = programmeBatchRepository.findById(batchId).orElse(null);
+        if (programmeBatchId != null && !programmeBatchId.isBlank()) {
+            batch = programmeBatchRepository.findById(programmeBatchId).orElse(null);
         }
         if (batch == null && course.getMasterProgrammeId() != null) {
             List<ProgrammeBatch> pBatches = programmeBatchRepository.findByMasterProgrammeId(course.getMasterProgrammeId());
             if (!pBatches.isEmpty()) batch = pBatches.get(0);
         }
 
-        List<ProgrammeBatchCourse> pdfOfferings = programmeBatchCourseRepository.findByMasterCourseId(courseId);
-        String pdfOfferingId = !pdfOfferings.isEmpty() ? pdfOfferings.get(0).getId() : courseId;
+        List<ProgrammeBatchCourse> pdfOfferings = programmeBatchCourseRepository.findByMasterCourseId(masterCourseId);
+        String pdfOfferingId = !pdfOfferings.isEmpty() ? pdfOfferings.get(0).getId() : masterCourseId;
 
-        Map<String, Object> coCalcData = calculationService.calculateCourseCoAttainment(courseId);
-        CourseMappingMatrixDto mappingsDto = outcomeService.getCourseMappings(courseId);
-        List<CourseOutcome> cos = outcomeService.getCOsByCourse(courseId);
+        Map<String, Object> coCalcData = calculationService.calculateCourseCoAttainment(masterCourseId);
+        CourseMappingMatrixDto mappingsDto = outcomeService.getCourseMappings(masterCourseId);
+        List<CourseOutcome> cos = outcomeService.getCOsByCourse(masterCourseId);
         List<ProgrammeOutcome> pos = (programme != null) ? outcomeService.getPOsByProgramme(programme.getId()) : Collections.emptyList();
         List<ProgrammeSpecificOutcome> psos = (programme != null) ? outcomeService.getPSOsByProgramme(programme.getId()) : Collections.emptyList();
         List<StudentCoMark> studentMarks = studentCoMarkRepository.findByProgrammeBatchCourseId(pdfOfferingId);

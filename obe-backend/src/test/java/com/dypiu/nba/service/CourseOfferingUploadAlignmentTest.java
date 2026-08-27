@@ -257,7 +257,7 @@ public class CourseOfferingUploadAlignmentTest {
         when(programmeBatchCourseRepository.existsById("offering-cs301-2024")).thenReturn(true);
 
         SurveyMarksPayloadDto payload2025 = SurveyMarksPayloadDto.builder()
-                .courseId("offering-cs301-2025")
+                .masterCourseId("offering-cs301-2025")
                 .surveyResponses(List.of(
                         SurveyResponseRowDto.builder()
                                 .srNo(1)
@@ -268,7 +268,7 @@ public class CourseOfferingUploadAlignmentTest {
                 .build();
 
         SurveyMarksPayloadDto payload2024 = SurveyMarksPayloadDto.builder()
-                .courseId("offering-cs301-2024")
+                .masterCourseId("offering-cs301-2024")
                 .surveyResponses(List.of(
                         SurveyResponseRowDto.builder()
                                 .srNo(1)

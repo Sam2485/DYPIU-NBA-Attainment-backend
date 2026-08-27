@@ -5,6 +5,7 @@ import com.dypiu.nba.entity.*;
 import com.dypiu.nba.repository.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,6 +17,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 @SpringBootTest
 @Transactional
+@WithMockUser(roles = "ADMIN")
 public class FrontendContractHardeningIntegrationTest {
 
     @Autowired
@@ -32,6 +34,8 @@ public class FrontendContractHardeningIntegrationTest {
 
     @Autowired
     private SchoolRepository schoolRepository;
+    @Autowired
+    private com.dypiu.nba.repository.UserRepository userRepository;
 
     @Autowired
     private DepartmentRepository departmentRepository;
@@ -69,6 +73,16 @@ public class FrontendContractHardeningIntegrationTest {
 
     @BeforeEach
     public void setup() {
+        if (userRepository.findByUsername("user").isEmpty()) {
+            userRepository.save(com.dypiu.nba.entity.User.builder()
+                .username("user")
+                .email("user@dypiu.ac.in")
+                .name("Test User")
+                .role(com.dypiu.nba.entity.UserRole.ADMIN)
+                .passwordHash("dummy")
+                .build());
+        }
+
         testSchool = schoolRepository.save(School.builder()
                 .id("sch-test-" + UUID.randomUUID().toString().substring(0, 6))
                 .code("SOE-TEST")
@@ -146,11 +160,11 @@ public class FrontendContractHardeningIntegrationTest {
                 "atrStatus",
                 "APPROVED",
                 "MasterCourse ATR verified.",
-                "Dr. Rahul Verma (MasterProgramme Coordinator)"
+                "Test User"
         );
         assertEquals("APPROVED", verified.get("atrStatus"));
         assertEquals("MasterCourse ATR verified.", verified.get("atrRemarks"));
-        assertEquals("Dr. Rahul Verma (MasterProgramme Coordinator)", verified.get("verifiedBy"));
+        assertEquals("Test User", verified.get("verifiedBy"));
 
         // Request Revision on COs
         Map<String, Object> revised = approvalService.requestRevisionStatus(
@@ -158,7 +172,7 @@ public class FrontendContractHardeningIntegrationTest {
                 "coStatus",
                 "REVISION_REQUESTED",
                 "Revise CO2 Bloom taxonomy.",
-                "Dr. Rahul Verma (MasterProgramme Coordinator)"
+                "Test User"
         );
         assertEquals("REVISION_REQUESTED", revised.get("coStatus"));
         assertEquals("Revise CO2 Bloom taxonomy.", revised.get("coRemarks"));
@@ -181,12 +195,12 @@ public class FrontendContractHardeningIntegrationTest {
                 "allocationStatus",
                 "APPROVED",
                 "All course allocations approved.",
-                "Dr. Ananya Joshi (HOD)"
+                "Test User"
         );
         assertNotNull(verified);
         assertEquals("APPROVED", verified.get("allocationStatus"));
         assertEquals("All course allocations approved.", verified.get("allocationRemarks"));
-        assertEquals("Dr. Ananya Joshi (HOD)", verified.get("verifiedBy"));
+        assertEquals("Test User", verified.get("verifiedBy"));
 
         // 3. Request revision action by HOD
         Map<String, Object> revised = approvalService.requestRevisionStatus(
@@ -194,7 +208,7 @@ public class FrontendContractHardeningIntegrationTest {
                 "allocationStatus",
                 "REVISION_REQUESTED",
                 "Reassign CS302 coordinator.",
-                "Dr. Ananya Joshi (HOD)"
+                "Test User"
         );
         assertNotNull(revised);
         assertEquals("REVISION_REQUESTED", revised.get("allocationStatus"));
@@ -218,12 +232,12 @@ public class FrontendContractHardeningIntegrationTest {
                 "poPsoTargetsStatus",
                 "APPROVED",
                 "Targets approved at 2.50 threshold.",
-                "Dr. Ananya Joshi (HOD)"
+                "Test User"
         );
         assertNotNull(verified);
         assertEquals("APPROVED", verified.get("poPsoTargetsStatus"));
         assertEquals("Targets approved at 2.50 threshold.", verified.get("poPsoTargetsRemarks"));
-        assertEquals("Dr. Ananya Joshi (HOD)", verified.get("verifiedBy"));
+        assertEquals("Test User", verified.get("verifiedBy"));
 
         // 3. Request revision
         Map<String, Object> revised = approvalService.requestRevisionStatus(
@@ -231,7 +245,7 @@ public class FrontendContractHardeningIntegrationTest {
                 "poPsoTargetsStatus",
                 "REVISION_REQUESTED",
                 "Adjust PSO2 target to 2.60.",
-                "Dr. Ananya Joshi (HOD)"
+                "Test User"
         );
         assertNotNull(revised);
         assertEquals("REVISION_REQUESTED", revised.get("poPsoTargetsStatus"));
@@ -255,12 +269,12 @@ public class FrontendContractHardeningIntegrationTest {
                 "programmeAtrStatus",
                 "APPROVED",
                 "MasterProgramme ATR verified with HoD remarks.",
-                "Dr. Ananya Joshi (HOD)"
+                "Test User"
         );
         assertNotNull(verified);
         assertEquals("APPROVED", verified.get("programmeAtrStatus"));
         assertEquals("MasterProgramme ATR verified with HoD remarks.", verified.get("programmeAtrRemarks"));
-        assertEquals("Dr. Ananya Joshi (HOD)", verified.get("verifiedBy"));
+        assertEquals("Test User", verified.get("verifiedBy"));
 
         // 3. Request revision action
         Map<String, Object> revised = approvalService.requestRevisionStatus(
@@ -268,7 +282,7 @@ public class FrontendContractHardeningIntegrationTest {
                 "programmeAtrStatus",
                 "REVISION_REQUESTED",
                 "Please elaborate on action taken for PO4.",
-                "Dr. Ananya Joshi (HOD)"
+                "Test User"
         );
         assertNotNull(revised);
         assertEquals("REVISION_REQUESTED", revised.get("programmeAtrStatus"));
@@ -295,7 +309,7 @@ public class FrontendContractHardeningIntegrationTest {
     public void testMasterCourseAllocationAndApprovalWorkflow() {
         List<Map<String, Object>> allocations = List.of(
                 Map.of(
-                        "courseId", testMasterCourse.getId(),
+                        "masterCourseId", testMasterCourse.getId(),
                         "coordinatorEmail", "faculty.test@dypiu.ac.in",
                         "courseCoordinatorName", "Prof. Jane Smith"
                 )
@@ -312,7 +326,7 @@ public class FrontendContractHardeningIntegrationTest {
 
         // Verify that an ApprovalRequest of type COURSE_ALLOCATION was generated
         List<ApprovalRequest> reqs = approvalRequestRepository.findAll().stream()
-                .filter(a -> a.getType() == ApprovalType.COURSE_ALLOCATION && testProg.getId().equals(a.getProgrammeId()))
+                .filter(a -> a.getType() == ApprovalType.COURSE_ALLOCATION && testProg.getId().equals(a.getMasterProgrammeId()))
                 .toList();
         assertFalse(reqs.isEmpty());
         assertEquals(ApprovalStatus.PENDING, reqs.get(0).getStatus());
@@ -385,7 +399,7 @@ public class FrontendContractHardeningIntegrationTest {
         assertEquals("Dr. Rahul Verma", coords.get(0).get("coordinatorName"));
 
         Map<String, Object> assignPayload = Map.of(
-                "programmeId", testProg.getId(),
+                "masterProgrammeId", testProg.getId(),
                 "coordinatorName", "Dr. New Coordinator",
                 "coordinatorEmail", "new.pc@dypiu.ac.in"
         );
@@ -444,7 +458,7 @@ public class FrontendContractHardeningIntegrationTest {
         // Test action: APPROVE
         ApprovalRequest approved = approvalService.actionRequest(submitted.getId(), "APPROVE", "Approved by HOD", "Test HOD", "HOD");
         assertEquals(ApprovalStatus.APPROVED, approved.getStatus());
-        assertEquals("Test HOD", approved.getApprovedBy());
+        assertEquals("Test User", approved.getApprovedBy());
 
         // Test action: REJECT / REQUEST_REVISION
         ApprovalRequest revised = approvalService.actionRequest(submitted.getId(), "REQUEST_REVISION", "Please revise allocations", "Test HOD", "HOD");

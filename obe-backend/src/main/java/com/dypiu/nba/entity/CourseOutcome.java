@@ -69,11 +69,11 @@ public class CourseOutcome {
     }
 
     // Helper compatibility methods
-    public String getCourseOfferingId() {
+    public String getProgrammeBatchCourseId() {
         return programmeBatchCourseId;
     }
 
-    public void setCourseOfferingId(String offeringId) {
+    public void setProgrammeBatchCourseId(String offeringId) {
         this.programmeBatchCourseId = offeringId;
     }
 }

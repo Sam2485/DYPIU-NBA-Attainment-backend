@@ -133,7 +133,7 @@ public class UserController {
         CurrentUserScope currentScope = getScope();
         String finalSchoolId = scope.schoolId;
         String finalDeptId = scope.departmentId;
-        String finalProgId = scope.programmeId;
+        String finalProgId = scope.masterProgrammeId;
 
         if (currentScope != null && currentScope.isDirector()) {
             finalSchoolId = currentScope.getRequiredSchoolId();
@@ -150,7 +150,7 @@ public class UserController {
                 .role(role)
                 .schoolId(finalSchoolId)
                 .departmentId(finalDeptId)
-                .programmeId(finalProgId)
+                .masterProgrammeId(finalProgId)
                 .isActive(true)
                 .build();
 
@@ -223,9 +223,9 @@ public class UserController {
         String finalDeptId = scope.departmentId != null
                 ? scope.departmentId
                 : (body.containsKey("departmentId") && body.get("departmentId") == null ? null : user.getDepartmentId());
-        String finalProgId = scope.programmeId != null
-                ? scope.programmeId
-                : (body.containsKey("programmeId") && body.get("programmeId") == null ? null : user.getProgrammeId());
+        String finalProgId = scope.masterProgrammeId != null
+                ? scope.masterProgrammeId
+                : (body.containsKey("masterProgrammeId") && body.get("masterProgrammeId") == null ? null : user.getMasterProgrammeId());
 
         if (currentScope != null && currentScope.isDirector()) {
             finalSchoolId = currentScope.getRequiredSchoolId();
@@ -239,7 +239,7 @@ public class UserController {
         user.setUsername(username);
         user.setSchoolId(finalSchoolId);
         user.setDepartmentId(finalDeptId);
-        user.setProgrammeId(finalProgId);
+        user.setMasterProgrammeId(finalProgId);
 
         User saved = userRepository.save(user);
         if (auditLogService != null) {
@@ -278,7 +278,26 @@ public class UserController {
                 .build());
     }
 
-    private record ResolvedScope(String schoolId, String departmentId, String programmeId) {}
+    @DeleteMapping("/{id}")
+    public ResponseEntity<ApiResponse<Void>> deleteUser(@PathVariable Long id) {
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with ID: " + id));
+
+        enforceUserScope(user);
+
+        userRepository.delete(user);
+
+        if (auditLogService != null) {
+            auditLogService.recordSuccess(com.dypiu.nba.audit.AuditAction.DELETE, com.dypiu.nba.audit.ResourceType.USER, String.valueOf(user.getId()), null, "DELETED", "Deleted User " + user.getName(), java.util.Map.of("username", user.getUsername(), "role", user.getRole() != null ? user.getRole().name() : ""));
+        }
+
+        return ResponseEntity.ok(ApiResponse.<Void>builder()
+                .success(true)
+                .message("User deleted successfully.")
+                .build());
+    }
+
+    private record ResolvedScope(String schoolId, String departmentId, String masterProgrammeId) {}
 
     private ResolvedScope validateAndResolveScope(Map<String, Object> body, UserRole role) {
         String rawSchoolId = (body.get("schoolId") != null && !body.get("schoolId").toString().isBlank())
@@ -287,13 +306,13 @@ public class UserController {
         String rawDeptId = (body.get("departmentId") != null && !body.get("departmentId").toString().isBlank())
                 ? body.get("departmentId").toString().trim()
                 : null;
-        String rawProgId = (body.get("programmeId") != null && !body.get("programmeId").toString().isBlank())
-                ? body.get("programmeId").toString().trim()
+        String rawProgId = (body.get("masterProgrammeId") != null && !body.get("masterProgrammeId").toString().isBlank())
+                ? body.get("masterProgrammeId").toString().trim()
                 : null;
 
         String schoolId = rawSchoolId;
         String departmentId = rawDeptId;
-        String programmeId = rawProgId;
+        String masterProgrammeId = rawProgId;
 
         // 1. Validate School if provided
         if (schoolId != null) {
@@ -342,7 +361,7 @@ public class UserController {
                             .findFirst()
                             .orElseThrow(() -> new BadRequestException("Invalid Programme: MasterProgramme with ID '" + rawProgId + "' does not exist.")));
 
-            programmeId = prog.getId();
+            masterProgrammeId = prog.getId();
 
             // Check Department-MasterProgramme relationship integrity
             if (prog.getDepartmentId() != null) {
@@ -362,7 +381,7 @@ public class UserController {
             }
         }
 
-        return new ResolvedScope(schoolId, departmentId, programmeId);
+        return new ResolvedScope(schoolId, departmentId, masterProgrammeId);
     }
 
     private UserDto toDto(User user) {
@@ -374,10 +393,10 @@ public class UserController {
         }
 
         String progName = null;
-        if (user.getProgrammeId() != null) {
-            progName = masterProgrammeRepository.findById(user.getProgrammeId())
+        if (user.getMasterProgrammeId() != null) {
+            progName = masterProgrammeRepository.findById(user.getMasterProgrammeId())
                     .map(MasterProgramme::getName)
-                    .orElse(user.getProgrammeId());
+                    .orElse(user.getMasterProgrammeId());
         }
 
         return UserDto.builder()
@@ -388,7 +407,7 @@ public class UserController {
                 .role(user.getRole() != null ? user.getRole().name() : "FACULTY")
                 .schoolId(user.getSchoolId())
                 .departmentId(user.getDepartmentId())
-                .masterProgrammeId(user.getProgrammeId())
+                .masterProgrammeId(user.getMasterProgrammeId())
                 .department(deptName)
                 .programme(progName)
                 .build();

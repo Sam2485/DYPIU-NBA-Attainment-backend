@@ -20,7 +20,7 @@ import java.util.Objects;
  * - IQAC: Institution-wide quality assurance (schoolId may be optional/null)
  * - DIRECTOR: Scoped to schoolId
  * - HOD: Scoped to schoolId + departmentId
- * - PROGRAMME_COORDINATOR: Scoped to schoolId + departmentId + programmeId
+ * - PROGRAMME_COORDINATOR: Scoped to schoolId + departmentId + masterProgrammeId
  * - FACULTY: Scoped to assigned courses / offerings within schoolId + departmentId
  */
 @Getter
@@ -38,7 +38,7 @@ public final class CurrentUserScope implements Serializable {
     private final UserRole role;
     private final String schoolId;
     private final String departmentId;
-    private final String programmeId;
+    private final String masterProgrammeId;
 
     public boolean hasSchoolScope() {
         return schoolId != null && !schoolId.isBlank();
@@ -49,7 +49,7 @@ public final class CurrentUserScope implements Serializable {
     }
 
     public boolean hasProgrammeScope() {
-        return programmeId != null && !programmeId.isBlank();
+        return masterProgrammeId != null && !masterProgrammeId.isBlank();
     }
 
     public boolean isAdmin() {
@@ -103,16 +103,16 @@ public final class CurrentUserScope implements Serializable {
     }
 
     /**
-     * Retrieves the mandatory programmeId for the authenticated user.
-     * Throws a 403 Forbidden ResponseStatusException if programmeId is missing or empty.
+     * Retrieves the mandatory masterProgrammeId for the authenticated user.
+     * Throws a 403 Forbidden ResponseStatusException if masterProgrammeId is missing or empty.
      * Never falls back to a default or arbitrary programme.
      */
-    public String getRequiredProgrammeId() {
+    public String getRequiredMasterProgrammeId() {
         if (!hasProgrammeScope()) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN,
                     "Access denied: Authenticated user '" + (email != null ? email : username) + "' has no assigned programme scope.");
         }
-        return programmeId;
+        return masterProgrammeId;
     }
 
     @Override
@@ -126,11 +126,11 @@ public final class CurrentUserScope implements Serializable {
                 role == that.role &&
                 Objects.equals(schoolId, that.schoolId) &&
                 Objects.equals(departmentId, that.departmentId) &&
-                Objects.equals(programmeId, that.programmeId);
+                Objects.equals(masterProgrammeId, that.masterProgrammeId);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(userId, username, email, role, schoolId, departmentId, programmeId);
+        return Objects.hash(userId, username, email, role, schoolId, departmentId, masterProgrammeId);
     }
 }
