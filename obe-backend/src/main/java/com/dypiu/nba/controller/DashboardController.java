@@ -41,6 +41,7 @@ public class DashboardController {
     private final StudentCoMarkRepository studentCoMarkRepository;
     private final UploadedDocumentRepository uploadedDocumentRepository;
     private final ProgrammeAtrRepository programmeAtrRepository;
+    private final com.dypiu.nba.security.RequestScopeAuthorizer requestScopeAuthorizer;
 
     @GetMapping("/director")
     public ResponseEntity<ApiResponse<Map<String, Object>>> getDirectorDashboard(
@@ -53,6 +54,8 @@ public class DashboardController {
         if (scope.isDirector()) {
             targetSchoolId = scope.getRequiredSchoolId();
         } else if (scope.isAdmin() || scope.isIqac()) {
+            requestScopeAuthorizer.assertRequestedDirectorEmail(directorEmail);
+            requestScopeAuthorizer.assertRequestedSchool(schoolId);
             if (schoolId != null && !schoolId.isBlank()) {
                 targetSchoolId = schoolId.trim();
             } else if (directorEmail != null && !directorEmail.isBlank()) {
@@ -130,13 +133,15 @@ public class DashboardController {
             @RequestParam(required = false) String hodEmail,
             Principal principal) {
         CurrentUserScope scope = currentUserScopeService.getCurrentUserScope(principal);
-        String targetDeptId = null;
         String targetSchoolId = null;
+        String targetDeptId = null;
 
         if (scope.isHod()) {
             targetSchoolId = scope.getRequiredSchoolId();
             targetDeptId = scope.getRequiredDepartmentId();
         } else if (scope.isAdmin() || scope.isIqac()) {
+            requestScopeAuthorizer.assertRequestedHodEmail(hodEmail);
+            requestScopeAuthorizer.assertRequestedDepartment(departmentId);
             if (departmentId != null && !departmentId.isBlank()) {
                 targetDeptId = departmentId.trim();
             } else if (hodEmail != null && !hodEmail.isBlank()) {
@@ -234,6 +239,8 @@ public class DashboardController {
             @RequestParam(required = false) String masterProgrammeId,
             @RequestParam(required = false) String coordinatorEmail,
             Principal principal) {
+        requestScopeAuthorizer.assertRequestedCoordinatorEmail(coordinatorEmail);
+        requestScopeAuthorizer.assertRequestedProgramme(masterProgrammeId);
         String effectiveProgId = (masterProgrammeId != null && !masterProgrammeId.isBlank()) ? masterProgrammeId : masterProgrammeId;
         CurrentUserScope scope = currentUserScopeService.getCurrentUserScope(principal);
         String effectiveEmail = (coordinatorEmail != null && !coordinatorEmail.isBlank())

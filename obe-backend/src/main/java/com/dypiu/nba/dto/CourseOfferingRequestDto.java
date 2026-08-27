@@ -18,5 +18,8 @@ public class CourseOfferingRequestDto {
     private String academicYear;
     private Long courseCoordinatorId;
     private String courseCoordinatorName;
+    private String courseCoordinatorEmail;
+    private String coordinatorEmail;
+    private String coordinator;
     private Object assignedFaculty;
 }

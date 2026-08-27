@@ -1,5 +1,6 @@
 package com.dypiu.nba.dto;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.dypiu.nba.entity.SetupStepStatus;
 import lombok.*;
 
@@ -10,6 +11,7 @@ import java.util.List;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@JsonInclude(JsonInclude.Include.NON_EMPTY)
 public class ProgrammeCoordinatorSetupProgressDto {
     private String id;
     private String masterProgrammeId;

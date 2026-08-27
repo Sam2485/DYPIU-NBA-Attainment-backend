@@ -34,6 +34,7 @@ public class AcademicController {
     private final MappingService mappingService;
     private final BatchLifecycleService batchLifecycleService;
     private final com.dypiu.nba.service.OutcomeService outcomeService;
+    private final com.dypiu.nba.service.AtrService atrService;
     private final RequestScopeAuthorizer requestScopeAuthorizer;
 
 
@@ -44,6 +45,38 @@ public class AcademicController {
         return ResponseEntity.ok(ApiResponse.<List<UserDto>>builder()
                 .success(true)
                 .data(academicService.getUsersByRole(role))
+                .build());
+    }
+
+    @GetMapping({"/faculty", "/course-coordinators"})
+    public ResponseEntity<ApiResponse<List<UserDto>>> getFaculty() {
+        return ResponseEntity.ok(ApiResponse.<List<UserDto>>builder()
+                .success(true)
+                .data(academicService.getUsersByRole("FACULTY"))
+                .build());
+    }
+
+    @GetMapping("/programme-coordinators")
+    public ResponseEntity<ApiResponse<List<UserDto>>> getProgrammeCoordinators() {
+        return ResponseEntity.ok(ApiResponse.<List<UserDto>>builder()
+                .success(true)
+                .data(academicService.getUsersByRole("PROGRAMME_COORDINATOR"))
+                .build());
+    }
+
+    @GetMapping("/hods")
+    public ResponseEntity<ApiResponse<List<UserDto>>> getHods() {
+        return ResponseEntity.ok(ApiResponse.<List<UserDto>>builder()
+                .success(true)
+                .data(academicService.getUsersByRole("HOD"))
+                .build());
+    }
+
+    @GetMapping("/directors")
+    public ResponseEntity<ApiResponse<List<UserDto>>> getDirectors() {
+        return ResponseEntity.ok(ApiResponse.<List<UserDto>>builder()
+                .success(true)
+                .data(academicService.getUsersByRole("DIRECTOR"))
                 .build());
     }
 
@@ -246,14 +279,14 @@ public class AcademicController {
                 .build());
     }
 
-    @GetMapping("/master-programmes/{masterProgrammeId}/setup-progress")
+    @GetMapping({"/master-programmes/{masterProgrammeId}/setup-progress", "/coordinator/setup-progress", "/programme-coordinator/setup-progress"})
     public ResponseEntity<ApiResponse<ProgrammeCoordinatorSetupProgressDto>> getProgrammeCoordinatorSetupProgress(
             @PathVariable(required = false) String masterProgrammeId,
-            @RequestParam(required = false) String coordinatorEmail, @RequestParam(required = false) String masterProgrammeIdParam,
+            @RequestParam(required = false) String coordinatorEmail,
+            @RequestParam(name = "masterProgrammeId", required = false) String masterProgrammeIdParam,
             @RequestParam(required = false) String programmeBatchId) {
         String effectiveProgId = masterProgrammeId != null && !masterProgrammeId.isBlank() ? masterProgrammeId :
-                (masterProgrammeId != null && !masterProgrammeId.isBlank() ? masterProgrammeId :
-                        (masterProgrammeIdParam != null && !masterProgrammeIdParam.isBlank() ? masterProgrammeIdParam : masterProgrammeIdParam));
+                (masterProgrammeIdParam != null && !masterProgrammeIdParam.isBlank() ? masterProgrammeIdParam : null);
         return ResponseEntity.ok(ApiResponse.<ProgrammeCoordinatorSetupProgressDto>builder()
                 .success(true)
                 .data(academicService.getProgrammeCoordinatorSetupProgress(coordinatorEmail, effectiveProgId, programmeBatchId))
@@ -263,20 +296,17 @@ public class AcademicController {
     @RequestMapping(value = {"/coordinator/setup-progress", "/programme-coordinator/setup-progress", "/programmes/{masterProgrammeId}/setup-progress", "/master-programmes/{masterProgrammeId}/setup-progress"}, method = {RequestMethod.POST, RequestMethod.PUT})
     public ResponseEntity<ApiResponse<ProgrammeCoordinatorSetupProgressDto>> updateProgrammeCoordinatorSetupProgress(
             @PathVariable(required = false) String masterProgrammeId,
-            @RequestParam(required = false) String coordinatorEmail, @RequestParam(required = false) String masterProgrammeIdParam,
+            @RequestParam(required = false) String coordinatorEmail,
+            @RequestParam(name = "masterProgrammeId", required = false) String masterProgrammeIdParam,
             @RequestParam(required = false) String programmeBatchId,
             @RequestParam(required = false) Integer currentStep,
             @RequestBody(required = false) Map<String, Object> body) {
         String effectiveProgId = masterProgrammeId != null && !masterProgrammeId.isBlank() ? masterProgrammeId :
-                (masterProgrammeId != null && !masterProgrammeId.isBlank() ? masterProgrammeId :
-                        (masterProgrammeIdParam != null && !masterProgrammeIdParam.isBlank() ? masterProgrammeIdParam :
-                                (masterProgrammeIdParam != null && !masterProgrammeIdParam.isBlank() ? masterProgrammeIdParam :
-                                        (body != null && body.containsKey("masterProgrammeId") ? String.valueOf(body.get("masterProgrammeId")) :
-                                                (body != null && body.containsKey("masterProgrammeId") ? String.valueOf(body.get("masterProgrammeId")) : null)))));
+                (masterProgrammeIdParam != null && !masterProgrammeIdParam.isBlank() ? masterProgrammeIdParam :
+                        (body != null && body.containsKey("masterProgrammeId") ? String.valueOf(body.get("masterProgrammeId")) : null));
 
         String effectiveProgrammeBatchId = programmeBatchId != null && !programmeBatchId.isBlank() ? programmeBatchId :
-                (body != null && body.containsKey("programmeBatchId") ? String.valueOf(body.get("programmeBatchId")) :
-                        (body != null && body.containsKey("programmeBatchId") ? String.valueOf(body.get("programmeBatchId")) : null));
+                (body != null && body.containsKey("programmeBatchId") ? String.valueOf(body.get("programmeBatchId")) : null);
 
         String effectiveEmail = coordinatorEmail != null && !coordinatorEmail.isBlank() ? coordinatorEmail :
                 (body != null && body.containsKey("coordinatorEmail") ? String.valueOf(body.get("coordinatorEmail")) : null);
@@ -299,11 +329,11 @@ public class AcademicController {
     @RequestMapping(value = {"/coordinator/setup-progress/complete", "/programme-coordinator/setup-progress/complete", "/programmes/{masterProgrammeId}/setup-progress/complete", "/master-programmes/{masterProgrammeId}/setup-progress/complete"}, method = {RequestMethod.POST, RequestMethod.PUT})
     public ResponseEntity<ApiResponse<ProgrammeCoordinatorSetupProgressDto>> completeProgrammeCoordinatorSetup(
             @PathVariable(required = false) String masterProgrammeId,
-            @RequestParam(required = false) String coordinatorEmail, @RequestParam(required = false) String masterProgrammeIdParam,
+            @RequestParam(required = false) String coordinatorEmail,
+            @RequestParam(name = "masterProgrammeId", required = false) String masterProgrammeIdParam,
             @RequestParam(required = false) String programmeBatchId) {
         String effectiveProgId = masterProgrammeId != null && !masterProgrammeId.isBlank() ? masterProgrammeId :
-                (masterProgrammeId != null && !masterProgrammeId.isBlank() ? masterProgrammeId :
-                        (masterProgrammeIdParam != null && !masterProgrammeIdParam.isBlank() ? masterProgrammeIdParam : masterProgrammeIdParam));
+                (masterProgrammeIdParam != null && !masterProgrammeIdParam.isBlank() ? masterProgrammeIdParam : null);
         return ResponseEntity.ok(ApiResponse.<ProgrammeCoordinatorSetupProgressDto>builder()
                 .success(true)
                 .message("MasterProgramme Coordinator setup marked as completed successfully")
@@ -571,22 +601,10 @@ public class AcademicController {
             @RequestParam(required = false) String hodEmail,
             @RequestParam(required = false) String userEmail,
             @RequestParam(required = false) String role,
+            @RequestParam(required = false) String status,
             java.security.Principal principal) {
-        String effectiveProgId = (masterProgrammeId != null && !masterProgrammeId.isBlank()) ? masterProgrammeId : masterProgrammeId;
-        requestScopeAuthorizer.assertRequestedDepartment(departmentId);
-        requestScopeAuthorizer.assertRequestedProgramme(effectiveProgId);
-
-        List<ProgrammeBatch> batches;
-        if (courseCoordinatorEmail != null && !courseCoordinatorEmail.isBlank()) {
-            batches = academicService.getBatchesByCourseCoordinatorEmail(courseCoordinatorEmail);
-        } else if (coordinatorEmail != null && !coordinatorEmail.isBlank()) {
-            batches = academicService.getBatchesByCoordinatorEmailAndProgramme(coordinatorEmail, effectiveProgId);
-        } else if (effectiveProgId != null && !effectiveProgId.isBlank()) {
-            batches = academicService.getBatchesByProgramme(effectiveProgId);
-        } else {
-            batches = academicService.getAllBatches();
-        }
-
+        List<ProgrammeBatch> batches = academicService.getBatchesFiltered(
+                masterProgrammeId, departmentId, coordinatorEmail, courseCoordinatorEmail, hodEmail, userEmail, role, status);
         return ResponseEntity.ok(ApiResponse.<List<ProgrammeBatch>>builder().success(true).data(batches).build());
     }
 
@@ -594,11 +612,13 @@ public class AcademicController {
     public ResponseEntity<ApiResponse<List<ProgrammeBatch>>> getBatchesByCourseCoordinator(
             @RequestParam(required = false) String coordinatorEmail,
             @RequestParam(required = false) String courseCoordinatorEmail,
+            @RequestParam(required = false) String status,
             java.security.Principal principal) {
         String effectiveEmail = (courseCoordinatorEmail != null && !courseCoordinatorEmail.isBlank())
                 ? courseCoordinatorEmail
                 : ((coordinatorEmail != null && !coordinatorEmail.isBlank()) ? coordinatorEmail : (principal != null ? principal.getName() : null));
-        List<ProgrammeBatch> batches = academicService.getBatchesByCourseCoordinatorEmail(effectiveEmail);
+        List<ProgrammeBatch> batches = academicService.getBatchesFiltered(
+                null, null, null, effectiveEmail, null, null, null, status);
         return ResponseEntity.ok(ApiResponse.<List<ProgrammeBatch>>builder()
                 .success(true)
                 .data(batches)
@@ -680,6 +700,52 @@ public class AcademicController {
     public ResponseEntity<ApiResponse<Void>> deleteBatch(@PathVariable String id) {
         academicService.deleteBatch(id);
         return ResponseEntity.ok(ApiResponse.<Void>builder().success(true).message("ProgrammeBatch deleted").build());
+    }
+
+    // --- Programme-Batch ATR ---
+    @GetMapping("/programme-batches/{programmeBatchId}/atr")
+    public ResponseEntity<ApiResponse<com.dypiu.nba.dto.ProgrammeAtrReportDto>> getProgrammeBatchAtr(
+            @PathVariable String programmeBatchId) {
+        ProgrammeBatch batch = academicService.getBatchById(programmeBatchId);
+        return ResponseEntity.ok(ApiResponse.<com.dypiu.nba.dto.ProgrammeAtrReportDto>builder()
+                .success(true)
+                .data(atrService.getProgrammeAtrReport(batch.getMasterProgrammeId(), programmeBatchId))
+                .build());
+    }
+
+    @PostMapping("/programme-batches/{programmeBatchId}/atr")
+    public ResponseEntity<ApiResponse<com.dypiu.nba.dto.ProgrammeAtrReportDto>> saveProgrammeBatchAtr(
+            @PathVariable String programmeBatchId,
+            @RequestBody com.dypiu.nba.dto.ProgrammeAtrReportDto dto) {
+        ProgrammeBatch batch = academicService.getBatchById(programmeBatchId);
+        if (dto.getBatch() == null) {
+            dto.setBatch(com.dypiu.nba.dto.ProgrammeAtrReportDto.BatchSummary.builder().id(programmeBatchId).name(batch != null ? batch.getName() : "").build());
+        } else {
+            dto.getBatch().setId(programmeBatchId);
+        }
+        if (dto.getProgramme() == null && batch != null) {
+            dto.setProgramme(com.dypiu.nba.dto.ProgrammeAtrReportDto.ProgrammeSummary.builder().id(batch.getMasterProgrammeId()).build());
+        } else if (batch != null) {
+            dto.getProgramme().setId(batch.getMasterProgrammeId());
+        }
+        return ResponseEntity.ok(ApiResponse.<com.dypiu.nba.dto.ProgrammeAtrReportDto>builder()
+                .success(true)
+                .message("Programme Batch ATR saved successfully")
+                .data(atrService.saveProgrammeAtrReport(dto))
+                .build());
+    }
+
+    @PostMapping("/programme-batches/{programmeBatchId}/atr/submit")
+    public ResponseEntity<ApiResponse<com.dypiu.nba.entity.ProgrammeAtr>> submitProgrammeBatchAtr(
+            @PathVariable String programmeBatchId,
+            java.security.Principal principal) {
+        ProgrammeBatch batch = academicService.getBatchById(programmeBatchId);
+        String submitter = principal != null ? principal.getName() : "Programme Coordinator";
+        return ResponseEntity.ok(ApiResponse.<com.dypiu.nba.entity.ProgrammeAtr>builder()
+                .success(true)
+                .message("Programme Batch ATR submitted for verification")
+                .data(atrService.submitProgrammeAtr(batch.getMasterProgrammeId(), programmeBatchId, submitter))
+                .build());
     }
 
     @GetMapping("/master-courses")

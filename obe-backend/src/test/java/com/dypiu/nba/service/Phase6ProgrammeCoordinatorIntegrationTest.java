@@ -143,35 +143,35 @@ public class Phase6ProgrammeCoordinatorIntegrationTest {
         assertNotNull(progressB1);
         assertEquals(progId1, progressB1.getMasterProgrammeId());
         assertEquals(programmeBatchId1, progressB1.getProgrammeBatchId());
-        assertEquals(0, progressB1.getCurrentStep());
+        assertEquals(1, progressB1.getCurrentStep());
         assertTrue(progressB1.getCompletedSteps().isEmpty());
 
-        // Update progress on ProgrammeBatch 1 (Step 0 complete)
-        academicService.updateProgrammeCoordinatorSetupProgress(coordinatorEmail, progId1, programmeBatchId1, 1, Map.of("completedSteps", List.of("0")));
+        // Update progress on ProgrammeBatch 1 (Step courses complete)
+        academicService.updateProgrammeCoordinatorSetupProgress(coordinatorEmail, progId1, programmeBatchId1, 1, Map.of("completedSteps", List.of("courses")));
 
         // Verify ProgrammeBatch 1 progress updated
         ProgrammeCoordinatorSetupProgressDto updatedB1 = academicService.getProgrammeCoordinatorSetupProgress(coordinatorEmail, progId1, programmeBatchId1);
-        assertTrue(updatedB1.getCompletedSteps().contains("0"));
+        assertTrue(updatedB1.getCompletedSteps().contains("courses"));
 
         // Verify ProgrammeBatch 2 progress remains unaffected (ProgrammeBatch Isolation)
         ProgrammeCoordinatorSetupProgressDto progressB2 = academicService.getProgrammeCoordinatorSetupProgress(coordinatorEmail, progId1, programmeBatchId2);
-        assertFalse(progressB2.getCompletedSteps().contains("0"), "ProgrammeBatch 2 must not inherit ProgrammeBatch 1 completed steps");
+        assertFalse(progressB2.getCompletedSteps().contains("courses"), "ProgrammeBatch 2 must not inherit ProgrammeBatch 1 completed steps");
     }
 
     @Test
-    @DisplayName("TEST B: Non-Sequential Step Completion (Step 0 -> Step 2)")
+    @DisplayName("TEST B: Non-Sequential Step Completion (courses -> indirect_attainment)")
     void testNonSequentialStepCompletion() {
-        // Complete Step 0
-        academicService.updateProgrammeCoordinatorSetupProgress(coordinatorEmail, progId1, programmeBatchId1, 1, Map.of("completedSteps", List.of("0")));
+        // Complete Step courses
+        academicService.updateProgrammeCoordinatorSetupProgress(coordinatorEmail, progId1, programmeBatchId1, 1, Map.of("completedSteps", List.of("courses")));
 
-        // Jump directly to Step 2 (MasterProgramme ATR) and complete it without completing Step 1 (Targets)
-        academicService.updateProgrammeCoordinatorSetupProgress(coordinatorEmail, progId1, programmeBatchId1, 3, Map.of("completedSteps", List.of("0", "2")));
+        // Jump directly to Step indirect_attainment and complete it without completing po_pso_target
+        academicService.updateProgrammeCoordinatorSetupProgress(coordinatorEmail, progId1, programmeBatchId1, 3, Map.of("completedSteps", List.of("courses", "indirect_attainment")));
 
         ProgrammeCoordinatorSetupProgressDto progress = academicService.getProgrammeCoordinatorSetupProgress(coordinatorEmail, progId1, programmeBatchId1);
-        assertTrue(progress.getCompletedSteps().contains("0"), "Step 0 must be completed");
-        assertFalse(progress.getCompletedSteps().contains("1"), "Step 1 must remain pending");
-        assertTrue(progress.getCompletedSteps().contains("2"), "Step 2 must be completed");
-        assertTrue(progress.getPendingSteps().contains("1"), "Pending steps must explicitly contain Step 1");
+        assertTrue(progress.getCompletedSteps().contains("courses"), "Step courses must be completed");
+        assertFalse(progress.getCompletedSteps().contains("po_pso_target"), "Step po_pso_target must remain pending");
+        assertTrue(progress.getCompletedSteps().contains("indirect_attainment"), "Step indirect_attainment must be completed");
+        assertTrue(progress.getPendingSteps().contains("po_pso_target"), "Pending steps must explicitly contain Step po_pso_target");
     }
 
     @Test
@@ -328,7 +328,7 @@ public class Phase6ProgrammeCoordinatorIntegrationTest {
         ProgrammeCoordinatorSetupProgressDto completed = academicService.completeProgrammeCoordinatorSetup(coordinatorEmail, progId1, programmeBatchId1);
         assertNotNull(completed);
         assertEquals(SetupStepStatus.COMPLETED, completed.getOverallStatus());
-        assertTrue(completed.getCompletedSteps().containsAll(List.of("0", "1", "2", "3")));
+        assertTrue(completed.getCompletedSteps().containsAll(List.of("courses", "po_pso_target", "indirect_attainment", "programme_atr", "review")));
         assertTrue(completed.getPendingSteps().isEmpty());
     }
 }

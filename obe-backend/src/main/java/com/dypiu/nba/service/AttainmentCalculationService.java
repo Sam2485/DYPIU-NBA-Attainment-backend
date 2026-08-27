@@ -1846,18 +1846,24 @@ public class AttainmentCalculationService {
         List<ProgrammeBatchCourse> offerings = programmeBatchCourseRepository.findByProgrammeBatchId(programmeBatchId);
         List<ProgrammeOutcome> pos = programmeOutcomeRepository.findByProgrammeBatchIdOrderByCodeAsc(programmeBatchId);
         if (pos == null || pos.isEmpty()) {
+            pos = programmeOutcomeRepository.findByProgrammeBatchIdOrderByCodeAsc(masterProgrammeId);
+        }
+        if (pos == null || pos.isEmpty()) {
             List<ProgrammeOutcome> defaultPos = new ArrayList<>();
             for (int i = 1; i <= 12; i++) {
                 defaultPos.add(ProgrammeOutcome.builder()
                         .id("po-def-" + i)
                         .programmeBatchId(programmeBatchId)
                         .code("PO" + i)
-                        .statement("Program Outcome " + i)
+                        .statement("Engineering Knowledge and Competency PO" + i)
                         .build());
             }
             pos = defaultPos;
         }
         List<ProgrammeSpecificOutcome> psos = programmeSpecificOutcomeRepository.findByProgrammeBatchIdOrderByCodeAsc(programmeBatchId);
+        if (psos == null || psos.isEmpty()) {
+            psos = programmeSpecificOutcomeRepository.findByProgrammeBatchIdOrderByCodeAsc(masterProgrammeId);
+        }
         if (psos == null || psos.isEmpty()) {
             List<ProgrammeSpecificOutcome> defaultPsos = new ArrayList<>();
             for (int i = 1; i <= 3; i++) {
@@ -1865,21 +1871,33 @@ public class AttainmentCalculationService {
                         .id("pso-def-" + i)
                         .programmeBatchId(programmeBatchId)
                         .code("PSO" + i)
-                        .statement("Program Specific Outcome " + i)
+                        .statement("Programme Specific Competency PSO" + i)
                         .build());
             }
             psos = defaultPsos;
         }
 
+        Map<String, String> poStatementMap = new HashMap<>();
         Map<String, BigDecimal> targetMap = new HashMap<>();
         for (ProgrammeOutcome po : pos) {
-            if (po.getCode() != null && po.getTarget() != null) {
-                targetMap.put(po.getCode().toUpperCase(), po.getTarget());
+            if (po.getCode() != null) {
+                if (po.getStatement() != null && !po.getStatement().isBlank()) {
+                    poStatementMap.put(po.getCode().toUpperCase(), po.getStatement());
+                }
+                if (po.getTarget() != null) {
+                    targetMap.put(po.getCode().toUpperCase(), po.getTarget());
+                }
             }
         }
+        Map<String, String> psoStatementMap = new HashMap<>();
         for (ProgrammeSpecificOutcome pso : psos) {
-            if (pso.getCode() != null && pso.getTarget() != null) {
-                targetMap.put(pso.getCode().toUpperCase(), pso.getTarget());
+            if (pso.getCode() != null) {
+                if (pso.getStatement() != null && !pso.getStatement().isBlank()) {
+                    psoStatementMap.put(pso.getCode().toUpperCase(), pso.getStatement());
+                }
+                if (pso.getTarget() != null) {
+                    targetMap.put(pso.getCode().toUpperCase(), pso.getTarget());
+                }
             }
         }
 
@@ -2065,10 +2083,12 @@ public class AttainmentCalculationService {
 
             List<String> actions = Collections.emptyList();
 
+            String statement = poStatementMap.getOrDefault(code.toUpperCase(), "Programme Outcome " + code);
+
             poOverallList.add(ProgrammeAttainmentResultDto.OutcomeAttainmentItem.builder()
                     .poCode(code)
                     .outcomeCode(code)
-                    .outcomeStatement(code + " - Professional Engineering Competency")
+                    .outcomeStatement(statement)
                     .directAttainment(direct)
                     .indirectAttainment(indirect)
                     .overallAttainment(overall)
@@ -2097,11 +2117,12 @@ public class AttainmentCalculationService {
             String obs = String.format("%s%% Target %s", pct, achieved ? "Achieved" : "Not Achieved");
 
             List<String> actions = Collections.emptyList();
+            String statement = psoStatementMap.getOrDefault(code.toUpperCase(), "Programme Specific Outcome " + code);
 
             psoOverallList.add(ProgrammeAttainmentResultDto.OutcomeAttainmentItem.builder()
                     .psoCode(code)
                     .outcomeCode(code)
-                    .outcomeStatement(code + " - Programme Specific Domain Competency")
+                    .outcomeStatement(statement)
                     .directAttainment(direct)
                     .indirectAttainment(indirect)
                     .overallAttainment(overall)
