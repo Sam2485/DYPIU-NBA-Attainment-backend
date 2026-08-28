@@ -51,6 +51,7 @@ public class AttainmentCalculationService {
     private final CoPsoMappingRepository coPsoMappingRepository;
     private final com.dypiu.nba.security.CurrentUserScopeService currentUserScopeService;
     private final ApprovalService approvalService;
+    private final ApprovalRequestRepository approvalRequestRepository;
     private final AuditLogService auditLogService;
     private final MappingService mappingService;
     private final BatchLifecycleService batchLifecycleService;
@@ -264,7 +265,7 @@ public class AttainmentCalculationService {
         System.out.println("[AttainmentCalculationService] getAttainmentConfig called | courseOfferingOrMasterCourseId: " + courseOfferingOrMasterCourseId);
         enforceOfferingOrCourseScope(courseOfferingOrMasterCourseId);
         String offeringId = resolveOfferingId(courseOfferingOrMasterCourseId);
-        return configRepository.findByProgrammeBatchCourseId(offeringId)
+        AttainmentConfiguration cfg = configRepository.findByProgrammeBatchCourseId(offeringId)
                 .orElseGet(() -> AttainmentConfiguration.builder()
                         .id("cfg-" + offeringId)
                         .programmeBatchCourseId(offeringId)
@@ -274,6 +275,16 @@ public class AttainmentCalculationService {
                         .indirectThreshold(new BigDecimal("60.00"))
                         .status(AttainmentConfigStatus.DRAFT)
                         .build());
+        if (approvalRequestRepository != null) {
+            approvalRequestRepository.findByProgrammeBatchCourseId(offeringId).stream()
+                    .filter(a -> a.getType() == ApprovalType.ATTAINMENT_CONFIGURATION || a.getType() == ApprovalType.ATTAINMENT_SETTINGS)
+                    .max(Comparator.comparing(ApprovalRequest::getUpdatedAt, Comparator.nullsFirst(Comparator.naturalOrder())))
+                    .ifPresent(req -> {
+                        cfg.setRevisionReason(req.getRemarks());
+                        cfg.setReviewedBy(req.getApprovedBy());
+                    });
+        }
+        return cfg;
     }
 
     @Transactional

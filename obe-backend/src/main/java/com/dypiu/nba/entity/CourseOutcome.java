@@ -68,6 +68,28 @@ public class CourseOutcome {
         }
     }
 
+    @Transient
+    private String revisionReason;
+
+    @Transient
+    private String reviewedBy;
+
+    public String getRevisionReason() {
+        return revisionReason;
+    }
+
+    public void setRevisionReason(String revisionReason) {
+        this.revisionReason = revisionReason;
+    }
+
+    public String getReviewedBy() {
+        return reviewedBy;
+    }
+
+    public void setReviewedBy(String reviewedBy) {
+        this.reviewedBy = reviewedBy;
+    }
+
     // Helper compatibility methods
     public String getProgrammeBatchCourseId() {
         return programmeBatchCourseId;
