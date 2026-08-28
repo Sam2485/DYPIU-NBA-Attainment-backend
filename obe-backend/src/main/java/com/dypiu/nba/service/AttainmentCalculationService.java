@@ -1142,8 +1142,6 @@ public class AttainmentCalculationService {
 
             // Indirect score out of 3.00
             double scoreVal = (count1 * 1.0 + count2 * 2.0 + count3 * 3.0) / divisor;
-            BigDecimal indirectScore = BigDecimal.valueOf(scoreVal).setScale(2, RoundingMode.HALF_UP);
-
             // Dynamic Level Band evaluation (compare overall percentage directly to configured bands -> 1, 2, or 3):
             int level = evaluateLevelBand(overallPct, indirectBands);
 
@@ -1154,10 +1152,10 @@ public class AttainmentCalculationService {
             level2Percentages.put(co, pct2);
             level3Percentages.put(co, pct3);
             overallIndirectPercentages.put(co, overallPct);
-            indirectAttainmentScores.put(co, indirectScore);
+            indirectAttainmentScores.put(co, BigDecimal.valueOf(level));
             coAttainmentLevels.put(co, level);
 
-            sumScores += indirectScore.doubleValue();
+            sumScores += level;
             coCount++;
         }
 
@@ -1525,7 +1523,7 @@ public class AttainmentCalculationService {
                 : BigDecimal.ZERO;
 
         double avgDirect = coResults.stream().mapToDouble(c -> ((Number) c.get("directLevel")).doubleValue()).average().orElse(0.0);
-        double avgIndirect = coResults.stream().mapToDouble(c -> ((BigDecimal) c.get("indirectScore")).doubleValue()).average().orElse(0.0);
+        double avgIndirect = coResults.stream().mapToDouble(c -> ((Number) c.get("indirectLevel")).doubleValue()).average().orElse(0.0);
 
         BigDecimal directAttainment = BigDecimal.valueOf(avgDirect).setScale(2, RoundingMode.HALF_UP);
         BigDecimal indirectAttainment = BigDecimal.valueOf(avgIndirect).setScale(2, RoundingMode.HALF_UP);
