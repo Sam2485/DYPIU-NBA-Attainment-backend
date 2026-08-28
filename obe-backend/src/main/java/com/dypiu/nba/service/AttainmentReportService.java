@@ -113,20 +113,35 @@ public class AttainmentReportService {
         Map<String, Object> calcResult = calculationService.calculateCourseCoAttainment(offering.getId());
         CourseMappingMatrixDto matrixDto = outcomeService.getCourseMappings(offering.getId());
 
-        // --- Table 1: CO -> PO/PSO Articulation Matrix ---
+        List<ProgrammeOutcome> allBatchPOs = outcomeService.getPOsByProgramme(offering.getProgrammeBatchId());
+        List<ProgrammeSpecificOutcome> allBatchPSOs = outcomeService.getPSOsByProgramme(offering.getProgrammeBatchId());
+
+        // --- Table 1: CO -> PO/PSO Articulation Matrix (contains all batch POs/PSOs) ---
         List<CourseAttainmentReportDto.Table1Row> table1 = new ArrayList<>();
         if (matrixDto != null && matrixDto.getMatrix() != null) {
             for (Map.Entry<String, Map<String, Integer>> entry : matrixDto.getMatrix().entrySet()) {
                 String coCode = entry.getKey();
+                Map<String, Integer> rowMappings = entry.getValue() != null ? entry.getValue() : Collections.emptyMap();
                 Map<String, Integer> poMap = new LinkedHashMap<>();
                 Map<String, Integer> psoMap = new LinkedHashMap<>();
-                for (Map.Entry<String, Integer> m : entry.getValue().entrySet()) {
-                    if (m.getKey().toUpperCase().startsWith("PSO")) {
-                        psoMap.put(m.getKey(), m.getValue());
-                    } else {
-                        poMap.put(m.getKey(), m.getValue());
+
+                if (!allBatchPOs.isEmpty() || !allBatchPSOs.isEmpty()) {
+                    for (ProgrammeOutcome po : allBatchPOs) {
+                        poMap.put(po.getCode(), rowMappings.get(po.getCode()));
+                    }
+                    for (ProgrammeSpecificOutcome pso : allBatchPSOs) {
+                        psoMap.put(pso.getCode(), rowMappings.get(pso.getCode()));
+                    }
+                } else {
+                    for (Map.Entry<String, Integer> m : rowMappings.entrySet()) {
+                        if (m.getKey().toUpperCase().startsWith("PSO")) {
+                            psoMap.put(m.getKey(), m.getValue());
+                        } else {
+                            poMap.put(m.getKey(), m.getValue());
+                        }
                     }
                 }
+
                 table1.add(CourseAttainmentReportDto.Table1Row.builder()
                         .coCode(coCode)
                         .poMappings(poMap)
@@ -135,7 +150,7 @@ public class AttainmentReportService {
             }
         }
 
-        // --- Table 2: Course PO/PSO Direct Attainment Contribution ---
+        // --- Table 2: Course PO/PSO Direct Attainment Contribution (contains all batch POs/PSOs) ---
         List<CourseAttainmentReportDto.Table2PoRow> table2PO = new ArrayList<>();
         List<CourseAttainmentReportDto.Table2PsoRow> table2PSO = new ArrayList<>();
         @SuppressWarnings("unchecked")
@@ -147,19 +162,40 @@ public class AttainmentReportService {
         @SuppressWarnings("unchecked")
         Map<String, BigDecimal> psoAvg = (Map<String, BigDecimal>) calcResult.getOrDefault("psoAverages", Collections.emptyMap());
 
-        for (Map.Entry<String, BigDecimal> e : poAtt.entrySet()) {
-            table2PO.add(CourseAttainmentReportDto.Table2PoRow.builder()
-                    .poCode(e.getKey())
-                    .averageMapping(poAvg.getOrDefault(e.getKey(), BigDecimal.ZERO))
-                    .directContribution(e.getValue())
-                    .build());
+        if (!allBatchPOs.isEmpty()) {
+            for (ProgrammeOutcome po : allBatchPOs) {
+                table2PO.add(CourseAttainmentReportDto.Table2PoRow.builder()
+                        .poCode(po.getCode())
+                        .averageMapping(poAvg.get(po.getCode()))
+                        .directContribution(poAtt.get(po.getCode()))
+                        .build());
+            }
+        } else {
+            for (Map.Entry<String, BigDecimal> e : poAtt.entrySet()) {
+                table2PO.add(CourseAttainmentReportDto.Table2PoRow.builder()
+                        .poCode(e.getKey())
+                        .averageMapping(poAvg.getOrDefault(e.getKey(), BigDecimal.ZERO))
+                        .directContribution(e.getValue())
+                        .build());
+            }
         }
-        for (Map.Entry<String, BigDecimal> e : psoAtt.entrySet()) {
-            table2PSO.add(CourseAttainmentReportDto.Table2PsoRow.builder()
-                    .psoCode(e.getKey())
-                    .averageMapping(psoAvg.getOrDefault(e.getKey(), BigDecimal.ZERO))
-                    .directContribution(e.getValue())
-                    .build());
+
+        if (!allBatchPSOs.isEmpty()) {
+            for (ProgrammeSpecificOutcome pso : allBatchPSOs) {
+                table2PSO.add(CourseAttainmentReportDto.Table2PsoRow.builder()
+                        .psoCode(pso.getCode())
+                        .averageMapping(psoAvg.get(pso.getCode()))
+                        .directContribution(psoAtt.get(pso.getCode()))
+                        .build());
+            }
+        } else {
+            for (Map.Entry<String, BigDecimal> e : psoAtt.entrySet()) {
+                table2PSO.add(CourseAttainmentReportDto.Table2PsoRow.builder()
+                        .psoCode(e.getKey())
+                        .averageMapping(psoAvg.getOrDefault(e.getKey(), BigDecimal.ZERO))
+                        .directContribution(e.getValue())
+                        .build());
+            }
         }
 
         // --- Table 3: CO Direct + Indirect + Final CO Attainment ---

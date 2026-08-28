@@ -433,18 +433,16 @@ public class AtrService {
         Map<String, CourseAtr> atrMap = existingAtrs.stream().collect(Collectors.toMap(CourseAtr::getCoCode, a -> a, (a, b) -> a));
 
         Map<String, BigDecimal> attainmentScoreMap = new HashMap<>();
-        if (existingAtrs.isEmpty()) {
-            try {
-                Map<String, Object> calcResult = attainmentCalculationService.calculateCourseCoAttainment(offering.getId());
-                @SuppressWarnings("unchecked")
-                List<Map<String, Object>> coAttainments = (List<Map<String, Object>>) calcResult.getOrDefault("coAttainments", Collections.emptyList());
-                for (Map<String, Object> m : coAttainments) {
-                    String code = (String) m.get("coCode");
-                    BigDecimal combined = (BigDecimal) m.get("combinedAttainment");
-                    if (code != null && combined != null) attainmentScoreMap.put(code, combined);
-                }
-            } catch (Exception ignored) {}
-        }
+        try {
+            Map<String, Object> calcResult = attainmentCalculationService.calculateCourseCoAttainment(offering.getId());
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> coAttainments = (List<Map<String, Object>>) calcResult.getOrDefault("coAttainments", Collections.emptyList());
+            for (Map<String, Object> m : coAttainments) {
+                String code = (String) m.get("coCode");
+                BigDecimal combined = (BigDecimal) m.get("combinedAttainment");
+                if (code != null && combined != null) attainmentScoreMap.put(code, combined);
+            }
+        } catch (Exception ignored) {}
 
         List<CourseAtrReportDto.OutcomeRow> rows = new ArrayList<>();
         String atrStatus = existingAtrs.isEmpty() ? "DRAFT" : existingAtrs.get(0).getStatus().name();
