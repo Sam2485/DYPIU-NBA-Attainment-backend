@@ -1,5 +1,6 @@
 package com.dypiu.nba.service;
 
+import com.dypiu.nba.dto.*;
 import com.dypiu.nba.entity.*;
 import com.dypiu.nba.exception.BadRequestException;
 import com.dypiu.nba.exception.ResourceNotFoundException;
@@ -14,6 +15,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.time.ZonedDateTime;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -116,10 +118,20 @@ public class ApprovalService {
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Approval request belongs to a different department.");
             }
         } else if (scope.isProgrammeCoordinator()) {
-            String requiredProgId = scope.getRequiredMasterProgrammeId();
-            String progId = req.getMasterProgrammeId() != null ? req.getMasterProgrammeId() : req.getMasterProgrammeId();
-            if (progId != null && !progId.equalsIgnoreCase(requiredProgId)) {
-                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Approval request belongs to a different programme.");
+            String bId = req.getProgrammeBatchId();
+            if ((bId == null || bId.isBlank()) && req.getProgrammeBatchCourseId() != null) {
+                ProgrammeBatchCourse pbc = programmeBatchCourseRepository.findById(req.getProgrammeBatchCourseId()).orElse(null);
+                if (pbc != null) {
+                    bId = pbc.getProgrammeBatchId();
+                }
+            }
+            final String resolvedBatchId = bId;
+            if (resolvedBatchId != null && !resolvedBatchId.isBlank()) {
+                ProgrammeBatch batch = programmeBatchRepository.findByIdAndDeletedAtIsNull(resolvedBatchId)
+                        .orElseThrow(() -> new ResourceNotFoundException("Programme batch not found for approval request: " + resolvedBatchId));
+                enforceProgrammeBatchScope(batch);
+            } else {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Approval request is not associated with any Programme Batch.");
             }
         } else if (scope.isFaculty()) {
             String batchCourseId = req.getProgrammeBatchCourseId() != null ? req.getProgrammeBatchCourseId() : req.getProgrammeBatchCourseId();
@@ -165,7 +177,9 @@ public class ApprovalService {
         } else if (scope.isProgrammeCoordinator()) {
             if (type != ApprovalType.CO_DEFINITION
                     && type != ApprovalType.CO_TARGETS
+                    && type != ApprovalType.COURSE_OUTCOMES_TARGETS
                     && type != ApprovalType.ATTAINMENT_CONFIGURATION
+                    && type != ApprovalType.ATTAINMENT_SETTINGS
                     && type != ApprovalType.COURSE_ATR
                     && type != ApprovalType.COURSE_OFFERING
                     && type != ApprovalType.OTHER) {
@@ -225,10 +239,28 @@ public class ApprovalService {
                 String reqDept = scope.getRequiredDepartmentId();
                 list = list.stream().filter(a -> reqSchool.equalsIgnoreCase(a.getSchoolId()) && reqDept.equalsIgnoreCase(a.getDepartmentId())).toList();
             } else if (scope.isProgrammeCoordinator()) {
-                String reqProg = scope.getRequiredMasterProgrammeId();
+                List<ProgrammeBatch> myBatches = new ArrayList<>();
+                if (scope.getUserId() != null) {
+                    myBatches.addAll(programmeBatchRepository.findByCoordinatorIdAndDeletedAtIsNull(scope.getUserId()));
+                }
+                if (scope.getEmail() != null && !scope.getEmail().isBlank()) {
+                    List<ProgrammeBatch> byEmail = programmeBatchRepository.findByCoordinatorEmailIgnoreCaseAndDeletedAtIsNull(scope.getEmail().trim());
+                    for (ProgrammeBatch b : byEmail) {
+                        if (myBatches.stream().noneMatch(mb -> mb.getId().equals(b.getId()))) {
+                            myBatches.add(b);
+                        }
+                    }
+                }
+                Set<String> myBatchIds = myBatches.stream().map(ProgrammeBatch::getId).collect(Collectors.toSet());
                 list = list.stream().filter(a -> {
-                    String pId = a.getMasterProgrammeId() != null ? a.getMasterProgrammeId() : a.getMasterProgrammeId();
-                    return reqProg.equalsIgnoreCase(pId);
+                    if (a.getProgrammeBatchId() != null && myBatchIds.contains(a.getProgrammeBatchId())) {
+                        return true;
+                    }
+                    if (a.getProgrammeBatchCourseId() != null) {
+                        ProgrammeBatchCourse pbc = programmeBatchCourseRepository.findById(a.getProgrammeBatchCourseId()).orElse(null);
+                        return pbc != null && pbc.getProgrammeBatchId() != null && myBatchIds.contains(pbc.getProgrammeBatchId());
+                    }
+                    return false;
                 }).toList();
             } else if (scope.isFaculty()) {
                 list = list.stream().filter(a -> {
@@ -499,11 +531,365 @@ public class ApprovalService {
                     .filter(a -> a.getStatus() == ApprovalStatus.PENDING)
                     .toList();
         } else if (scope != null && scope.isProgrammeCoordinator()) {
-            return getHodApprovals(scope.getRequiredMasterProgrammeId()).stream()
+            return getApprovals("PROGRAMME_COORDINATOR", "PENDING", null, null, null).stream()
                     .filter(a -> a.getStatus() == ApprovalStatus.PENDING)
                     .toList();
         }
         return approvalRequestRepository.findByStatus(ApprovalStatus.PENDING);
+    }
+
+    public boolean isProgrammeCoordinatorAssignedToBatch(ProgrammeBatch batch, CurrentUserScope scope) {
+        if (batch == null || scope == null) return false;
+        if (scope.getUserId() != null && batch.getCoordinatorId() != null && Objects.equals(batch.getCoordinatorId(), scope.getUserId())) {
+            return true;
+        }
+        if (scope.getEmail() != null && !scope.getEmail().isBlank() && batch.getCoordinatorEmail() != null && !batch.getCoordinatorEmail().isBlank()) {
+            return batch.getCoordinatorEmail().trim().equalsIgnoreCase(scope.getEmail().trim());
+        }
+        return false;
+    }
+
+    public void enforceProgrammeBatchScope(ProgrammeBatch batch) {
+        if (batch == null) return;
+        CurrentUserScope scope = getScope();
+        if (scope == null || scope.isAdmin() || scope.isIqac()) return;
+
+        if (scope.isProgrammeCoordinator()) {
+            if (!isProgrammeCoordinatorAssignedToBatch(batch, scope)) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: You are not the assigned Programme Coordinator for this Programme Batch.");
+            }
+        } else if (scope.isHod()) {
+            String reqDept = scope.getRequiredDepartmentId();
+            MasterProgramme p = masterProgrammeRepository.findById(batch.getMasterProgrammeId()).orElse(null);
+            if (p != null && reqDept != null && !reqDept.equalsIgnoreCase(p.getDepartmentId())) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Programme Batch belongs to a different department.");
+            }
+        } else if (scope.isDirector()) {
+            String reqSchool = scope.getRequiredSchoolId();
+            MasterProgramme p = masterProgrammeRepository.findById(batch.getMasterProgrammeId()).orElse(null);
+            if (p != null && p.getDepartmentId() != null) {
+                Department d = departmentRepository.findById(p.getDepartmentId()).orElse(null);
+                if (d != null && reqSchool != null && !reqSchool.equalsIgnoreCase(d.getSchoolId())) {
+                    throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Programme Batch belongs to a different school.");
+                }
+            }
+        }
+    }
+
+    public String normalizeCanonicalApprovalType(ApprovalType type) {
+        if (type == null) return "OTHER";
+        return switch (type) {
+            case ATTAINMENT_SETTINGS, ATTAINMENT_CONFIGURATION -> "ATTAINMENT_SETTINGS";
+            case COURSE_OUTCOMES_TARGETS, CO_DEFINITION, CO_TARGETS -> "COURSE_OUTCOMES_TARGETS";
+            case COURSE_ATR -> "COURSE_ATR";
+            default -> type.name();
+        };
+    }
+
+    public String normalizeCanonicalApprovalStatus(ApprovalStatus status) {
+        if (status == null) return "PENDING";
+        return switch (status) {
+            case APPROVED, VERIFIED -> "APPROVED";
+            case REVISION_REQUESTED, NEEDS_REVISION, REJECTED -> "REVISION_REQUESTED";
+            default -> "PENDING";
+        };
+    }
+
+    private void syncDomainEntityFromApproval(ApprovalRequest req, ApprovalStatus status, String verifierName, String remarks) {
+        if (req == null) return;
+        String batchCourseId = req.getProgrammeBatchCourseId();
+        if (batchCourseId != null && !batchCourseId.isBlank()) {
+            if (req.getType() == ApprovalType.ATTAINMENT_CONFIGURATION || req.getType() == ApprovalType.ATTAINMENT_SETTINGS) {
+                configRepository.findByProgrammeBatchCourseId(batchCourseId).ifPresent(cfg -> {
+                    if (status == ApprovalStatus.APPROVED) {
+                        cfg.setStatus(AttainmentConfigStatus.APPROVED);
+                    } else if (status == ApprovalStatus.REVISION_REQUESTED || status == ApprovalStatus.REJECTED || status == ApprovalStatus.NEEDS_REVISION) {
+                        cfg.setStatus(AttainmentConfigStatus.REVISION_REQUESTED);
+                    }
+                    configRepository.save(cfg);
+                });
+            } else if (req.getType() == ApprovalType.COURSE_ATR) {
+                List<CourseAtr> atrs = courseAtrRepository.findByProgrammeBatchCourseId(batchCourseId);
+                for (CourseAtr a : atrs) {
+                    if (status == ApprovalStatus.APPROVED) {
+                        a.setStatus(CourseAtrStatus.APPROVED);
+                    } else if (status == ApprovalStatus.REVISION_REQUESTED || status == ApprovalStatus.REJECTED || status == ApprovalStatus.NEEDS_REVISION) {
+                        a.setStatus(CourseAtrStatus.REVISION_REQUESTED);
+                    }
+                    a.setVerifiedBy(verifierName);
+                    a.setVerificationComments(remarks);
+                    courseAtrRepository.save(a);
+                }
+            }
+        }
+    }
+
+    private Map<String, Object> buildUserIdentityMap(Long userId, String name, String email) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        if (userId != null) map.put("userId", userId);
+        if (name != null && !name.isBlank()) map.put("name", name);
+        if (email != null && !email.isBlank()) map.put("email", email);
+        return map.isEmpty() ? null : map;
+    }
+
+    @Transactional(readOnly = true)
+    public ProgrammeBatchApprovalInboxDto getPendingApprovalsByProgrammeBatch(String programmeBatchId) {
+        System.out.println("[ApprovalService] getPendingApprovalsByProgrammeBatch called | programmeBatchId: " + programmeBatchId);
+        if (programmeBatchId == null || programmeBatchId.isBlank()) {
+            throw new BadRequestException("programmeBatchId is required.");
+        }
+
+        ProgrammeBatch batch = programmeBatchRepository.findById(programmeBatchId)
+                .orElseThrow(() -> new ResourceNotFoundException("Programme batch not found: " + programmeBatchId));
+
+        enforceProgrammeBatchScope(batch);
+
+        List<ProgrammeBatchCourse> batchCourses = programmeBatchCourseRepository.findByProgrammeBatchId(programmeBatchId);
+        List<CourseApprovalCardDto> courseCards = new ArrayList<>();
+        int totalPendingItems = 0;
+
+        for (ProgrammeBatchCourse pbc : batchCourses) {
+            List<ApprovalRequest> requests = approvalRequestRepository.findByProgrammeBatchCourseId(pbc.getId()).stream()
+                    .filter(a -> a.getType() == ApprovalType.ATTAINMENT_SETTINGS
+                            || a.getType() == ApprovalType.ATTAINMENT_CONFIGURATION
+                            || a.getType() == ApprovalType.COURSE_OUTCOMES_TARGETS
+                            || a.getType() == ApprovalType.CO_DEFINITION
+                            || a.getType() == ApprovalType.CO_TARGETS
+                            || a.getType() == ApprovalType.COURSE_ATR)
+                    .filter(a -> {
+                        String canonStatus = normalizeCanonicalApprovalStatus(a.getStatus());
+                        return "PENDING".equalsIgnoreCase(canonStatus);
+                    })
+                    .toList();
+
+            if (!requests.isEmpty()) {
+                totalPendingItems += requests.size();
+                List<ApprovalItemDto> items = requests.stream().map(req -> ApprovalItemDto.builder()
+                        .approvalRequestId(req.getId())
+                        .type(normalizeCanonicalApprovalType(req.getType()))
+                        .status("PENDING")
+                        .build()).toList();
+
+                MasterCourse mc = pbc.getMasterCourseId() != null ? masterCourseRepository.findById(pbc.getMasterCourseId()).orElse(null) : null;
+                String code = pbc.getCourseCodeOverride() != null && !pbc.getCourseCodeOverride().isBlank()
+                        ? pbc.getCourseCodeOverride()
+                        : (mc != null ? mc.getCode() : "");
+                String name = pbc.getCourseNameOverride() != null && !pbc.getCourseNameOverride().isBlank()
+                        ? pbc.getCourseNameOverride()
+                        : (mc != null ? mc.getName() : "");
+
+                ApprovalRequest latestReq = requests.stream().max(Comparator.comparing(ApprovalRequest::getSubmittedAt, Comparator.nullsFirst(Comparator.naturalOrder()))).orElse(requests.get(0));
+                String submitterName = latestReq.getSubmittedBy() != null ? latestReq.getSubmittedBy() : (pbc.getCourseCoordinatorName() != null ? pbc.getCourseCoordinatorName() : "Course Coordinator");
+                String submitterEmail = pbc.getAssignedFaculty();
+                Long submitterId = pbc.getCourseCoordinatorId();
+
+                Map<String, Object> submittedByMap = buildUserIdentityMap(submitterId, submitterName, submitterEmail);
+
+                courseCards.add(CourseApprovalCardDto.builder()
+                        .programmeBatchCourseId(pbc.getId())
+                        .masterCourseId(pbc.getMasterCourseId())
+                        .courseCode(code)
+                        .courseName(name)
+                        .semester(pbc.getSemester())
+                        .pendingApprovalCount(items.size())
+                        .approvalItems(items)
+                        .submittedBy(submittedByMap)
+                        .latestSubmittedAt(latestReq.getSubmittedAt())
+                        .build());
+            }
+        }
+
+        return ProgrammeBatchApprovalInboxDto.builder()
+                .programmeBatchId(batch.getId())
+                .programmeBatchName(batch.getName())
+                .totalPendingItems(totalPendingItems)
+                .totalProgrammeBatchCourses(courseCards.size())
+                .courses(courseCards)
+                .build();
+    }
+
+    @Transactional(readOnly = true)
+    public ProgrammeBatchApprovalInboxDto getReviewedApprovalsByProgrammeBatch(String programmeBatchId) {
+        System.out.println("[ApprovalService] getReviewedApprovalsByProgrammeBatch called | programmeBatchId: " + programmeBatchId);
+        if (programmeBatchId == null || programmeBatchId.isBlank()) {
+            throw new BadRequestException("programmeBatchId is required.");
+        }
+
+        ProgrammeBatch batch = programmeBatchRepository.findById(programmeBatchId)
+                .orElseThrow(() -> new ResourceNotFoundException("Programme batch not found: " + programmeBatchId));
+
+        enforceProgrammeBatchScope(batch);
+
+        List<ProgrammeBatchCourse> batchCourses = programmeBatchCourseRepository.findByProgrammeBatchId(programmeBatchId);
+        List<CourseApprovalCardDto> courseCards = new ArrayList<>();
+        int totalReviewedItems = 0;
+
+        for (ProgrammeBatchCourse pbc : batchCourses) {
+            List<ApprovalRequest> requests = approvalRequestRepository.findByProgrammeBatchCourseId(pbc.getId()).stream()
+                    .filter(a -> a.getType() == ApprovalType.ATTAINMENT_SETTINGS
+                            || a.getType() == ApprovalType.ATTAINMENT_CONFIGURATION
+                            || a.getType() == ApprovalType.COURSE_OUTCOMES_TARGETS
+                            || a.getType() == ApprovalType.CO_DEFINITION
+                            || a.getType() == ApprovalType.CO_TARGETS
+                            || a.getType() == ApprovalType.COURSE_ATR)
+                    .filter(a -> {
+                        String canonStatus = normalizeCanonicalApprovalStatus(a.getStatus());
+                        return "APPROVED".equalsIgnoreCase(canonStatus) || "REVISION_REQUESTED".equalsIgnoreCase(canonStatus);
+                    })
+                    .toList();
+
+            if (!requests.isEmpty()) {
+                totalReviewedItems += requests.size();
+                List<ApprovalItemDto> items = requests.stream().map(req -> {
+                    String canonStatus = normalizeCanonicalApprovalStatus(req.getStatus());
+                    Map<String, Object> reviewerMap = buildUserIdentityMap(null, req.getApprovedBy(), null);
+                    return ApprovalItemDto.builder()
+                            .approvalRequestId(req.getId())
+                            .type(normalizeCanonicalApprovalType(req.getType()))
+                            .status(canonStatus)
+                            .reviewedAt(req.getApprovedAt() != null ? req.getApprovedAt() : req.getUpdatedAt())
+                            .reviewedBy(reviewerMap)
+                            .revisionReason("REVISION_REQUESTED".equalsIgnoreCase(canonStatus) ? req.getRemarks() : null)
+                            .build();
+                }).toList();
+
+                MasterCourse mc = pbc.getMasterCourseId() != null ? masterCourseRepository.findById(pbc.getMasterCourseId()).orElse(null) : null;
+                String code = pbc.getCourseCodeOverride() != null && !pbc.getCourseCodeOverride().isBlank()
+                        ? pbc.getCourseCodeOverride()
+                        : (mc != null ? mc.getCode() : "");
+                String name = pbc.getCourseNameOverride() != null && !pbc.getCourseNameOverride().isBlank()
+                        ? pbc.getCourseNameOverride()
+                        : (mc != null ? mc.getName() : "");
+
+                ApprovalRequest latestReq = requests.stream().max(Comparator.comparing(ApprovalRequest::getUpdatedAt, Comparator.nullsFirst(Comparator.naturalOrder()))).orElse(requests.get(0));
+
+                courseCards.add(CourseApprovalCardDto.builder()
+                        .programmeBatchCourseId(pbc.getId())
+                        .masterCourseId(pbc.getMasterCourseId())
+                        .courseCode(code)
+                        .courseName(name)
+                        .semester(pbc.getSemester())
+                        .reviewedApprovalCount(items.size())
+                        .approvalItems(items)
+                        .latestSubmittedAt(latestReq.getSubmittedAt())
+                        .build());
+            }
+        }
+
+        return ProgrammeBatchApprovalInboxDto.builder()
+                .programmeBatchId(batch.getId())
+                .programmeBatchName(batch.getName())
+                .totalReviewedItems(totalReviewedItems)
+                .totalProgrammeBatchCourses(courseCards.size())
+                .courses(courseCards)
+                .build();
+    }
+
+    @Transactional(readOnly = true)
+    public CourseApprovalWorkspaceDto getCourseApprovalWorkspace(String programmeBatchCourseId) {
+        System.out.println("[ApprovalService] getCourseApprovalWorkspace called | programmeBatchCourseId: " + programmeBatchCourseId);
+        if (programmeBatchCourseId == null || programmeBatchCourseId.isBlank()) {
+            throw new BadRequestException("programmeBatchCourseId is required.");
+        }
+
+        ProgrammeBatchCourse pbc = programmeBatchCourseRepository.findById(programmeBatchCourseId)
+                .orElseThrow(() -> new ResourceNotFoundException("Programme batch course not found: " + programmeBatchCourseId));
+
+        if (pbc.getProgrammeBatchId() != null) {
+            ProgrammeBatch batch = programmeBatchRepository.findById(pbc.getProgrammeBatchId()).orElse(null);
+            if (batch != null) {
+                enforceProgrammeBatchScope(batch);
+            }
+        }
+
+        MasterCourse mc = pbc.getMasterCourseId() != null ? masterCourseRepository.findById(pbc.getMasterCourseId()).orElse(null) : null;
+        String batchName = "";
+        if (pbc.getProgrammeBatchId() != null) {
+            ProgrammeBatch b = programmeBatchRepository.findById(pbc.getProgrammeBatchId()).orElse(null);
+            if (b != null && b.getName() != null) batchName = b.getName();
+        }
+
+        String code = pbc.getCourseCodeOverride() != null && !pbc.getCourseCodeOverride().isBlank()
+                ? pbc.getCourseCodeOverride()
+                : (mc != null ? mc.getCode() : "");
+        String name = pbc.getCourseNameOverride() != null && !pbc.getCourseNameOverride().isBlank()
+                ? pbc.getCourseNameOverride()
+                : (mc != null ? mc.getName() : "");
+
+        Map<String, Object> pbcMap = new LinkedHashMap<>();
+        pbcMap.put("programmeBatchCourseId", pbc.getId());
+        pbcMap.put("programmeBatchId", pbc.getProgrammeBatchId());
+        pbcMap.put("masterCourseId", pbc.getMasterCourseId());
+        pbcMap.put("courseCode", code);
+        pbcMap.put("courseName", name);
+        pbcMap.put("semester", pbc.getSemester());
+        pbcMap.put("programmeBatchName", batchName);
+
+        List<ApprovalRequest> requests = approvalRequestRepository.findByProgrammeBatchCourseId(pbc.getId()).stream()
+                .filter(a -> a.getType() == ApprovalType.ATTAINMENT_SETTINGS
+                        || a.getType() == ApprovalType.ATTAINMENT_CONFIGURATION
+                        || a.getType() == ApprovalType.COURSE_OUTCOMES_TARGETS
+                        || a.getType() == ApprovalType.CO_DEFINITION
+                        || a.getType() == ApprovalType.CO_TARGETS
+                        || a.getType() == ApprovalType.COURSE_ATR)
+                .toList();
+
+        List<ApprovalItemDto> items = requests.stream().map(req -> {
+            String canonStatus = normalizeCanonicalApprovalStatus(req.getStatus());
+            Map<String, Object> reviewerMap = buildUserIdentityMap(null, req.getApprovedBy(), null);
+            return ApprovalItemDto.builder()
+                    .approvalRequestId(req.getId())
+                    .type(normalizeCanonicalApprovalType(req.getType()))
+                    .status(canonStatus)
+                    .reviewedAt(req.getApprovedAt() != null ? req.getApprovedAt() : req.getUpdatedAt())
+                    .reviewedBy(reviewerMap)
+                    .revisionReason("REVISION_REQUESTED".equalsIgnoreCase(canonStatus) ? req.getRemarks() : null)
+                    .build();
+        }).toList();
+
+        return CourseApprovalWorkspaceDto.builder()
+                .programmeBatchCourse(pbcMap)
+                .approvalItems(items)
+                .build();
+    }
+
+    @Transactional
+    public ApprovalActionResultDto approveRequestDto(String id, String clientActorName, String clientActorRole) {
+        ApprovalRequest updated = approveRequest(id, clientActorName, clientActorRole);
+        syncDomainEntityFromApproval(updated, ApprovalStatus.APPROVED, updated.getApprovedBy(), null);
+
+        CurrentUserScope scope = getScope();
+        Long reviewerId = scope != null ? scope.getUserId() : null;
+        String reviewerName = updated.getApprovedBy() != null ? updated.getApprovedBy() : (scope != null ? scope.getName() : "Programme Coordinator");
+        String reviewerEmail = scope != null ? scope.getEmail() : null;
+
+        return ApprovalActionResultDto.builder()
+                .approvalRequestId(updated.getId())
+                .type(normalizeCanonicalApprovalType(updated.getType()))
+                .status("APPROVED")
+                .reviewedBy(buildUserIdentityMap(reviewerId, reviewerName, reviewerEmail))
+                .reviewedAt(updated.getApprovedAt() != null ? updated.getApprovedAt() : updated.getUpdatedAt())
+                .build();
+    }
+
+    @Transactional
+    public ApprovalActionResultDto requestRevisionDto(String id, String reason, String clientActorName, String clientActorRole) {
+        ApprovalRequest updated = rejectRequest(id, reason, clientActorName, clientActorRole);
+        syncDomainEntityFromApproval(updated, ApprovalStatus.REVISION_REQUESTED, updated.getApprovedBy(), reason);
+
+        CurrentUserScope scope = getScope();
+        Long reviewerId = scope != null ? scope.getUserId() : null;
+        String reviewerName = updated.getApprovedBy() != null ? updated.getApprovedBy() : (scope != null ? scope.getName() : "Programme Coordinator");
+        String reviewerEmail = scope != null ? scope.getEmail() : null;
+
+        return ApprovalActionResultDto.builder()
+                .approvalRequestId(updated.getId())
+                .type(normalizeCanonicalApprovalType(updated.getType()))
+                .status("REVISION_REQUESTED")
+                .reviewedBy(buildUserIdentityMap(reviewerId, reviewerName, reviewerEmail))
+                .reviewedAt(updated.getUpdatedAt() != null ? updated.getUpdatedAt() : ZonedDateTime.now())
+                .revisionReason(reason)
+                .build();
     }
 
     private static final java.util.Comparator<ApprovalRequest> LATEST_APPROVAL_COMPARATOR = (a, b) -> {
@@ -531,8 +917,16 @@ public class ApprovalService {
 
         if (lowerKey.startsWith("allocation")) {
             String progId = key.replace("allocation-", "").replace("allocation_", "").replace("allocation", "");
-            if (scope != null && scope.isProgrammeCoordinator() && !progId.equalsIgnoreCase(scope.getRequiredMasterProgrammeId())) {
-                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Programme is outside your scope.");
+            if (scope != null && scope.isProgrammeCoordinator()) {
+                boolean matchesDirect = scope.getMasterProgrammeId() != null && progId.equalsIgnoreCase(scope.getMasterProgrammeId());
+                boolean matchesBatch = false;
+                if (scope.getEmail() != null && !scope.getEmail().isBlank()) {
+                    matchesBatch = programmeBatchRepository.findByCoordinatorEmailIgnoreCaseAndDeletedAtIsNull(scope.getEmail().trim())
+                            .stream().anyMatch(b -> progId.equalsIgnoreCase(b.getMasterProgrammeId()));
+                }
+                if (!matchesDirect && !matchesBatch) {
+                    throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Programme is outside your scope.");
+                }
             }
             ApprovalRequest req = approvalRequestRepository.findAll().stream()
                     .filter(a -> a.getType() == ApprovalType.COURSE_ALLOCATION && (progId.equalsIgnoreCase(a.getMasterProgrammeId()) || progId.equalsIgnoreCase(a.getMasterProgrammeId()) || key.equalsIgnoreCase(a.getResourceId())))
@@ -543,8 +937,16 @@ public class ApprovalService {
             result.put("verifiedBy", req != null && req.getApprovedBy() != null ? req.getApprovedBy() : "");
         } else if (lowerKey.startsWith("targets") || lowerKey.startsWith("po-pso-targets") || lowerKey.startsWith("po_pso_targets")) {
             String progId = key.replace("po-pso-targets-", "").replace("po_pso_targets-", "").replace("po-pso-targets_", "").replace("po_pso_targets_", "").replace("targets-", "").replace("targets_", "").replace("targets", "");
-            if (scope != null && scope.isProgrammeCoordinator() && !progId.equalsIgnoreCase(scope.getRequiredMasterProgrammeId())) {
-                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Programme is outside your scope.");
+            if (scope != null && scope.isProgrammeCoordinator()) {
+                boolean matchesDirect = scope.getMasterProgrammeId() != null && progId.equalsIgnoreCase(scope.getMasterProgrammeId());
+                boolean matchesBatch = false;
+                if (scope.getEmail() != null && !scope.getEmail().isBlank()) {
+                    matchesBatch = programmeBatchRepository.findByCoordinatorEmailIgnoreCaseAndDeletedAtIsNull(scope.getEmail().trim())
+                            .stream().anyMatch(b -> progId.equalsIgnoreCase(b.getMasterProgrammeId()));
+                }
+                if (!matchesDirect && !matchesBatch) {
+                    throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Programme is outside your scope.");
+                }
             }
             ApprovalRequest req = approvalRequestRepository.findAll().stream()
                     .filter(a -> a.getType() == ApprovalType.PO_PSO_TARGETS && (progId.equalsIgnoreCase(a.getMasterProgrammeId()) || progId.equalsIgnoreCase(a.getMasterProgrammeId()) || key.equalsIgnoreCase(a.getResourceId())))
@@ -555,9 +957,6 @@ public class ApprovalService {
             result.put("verifiedBy", req != null && req.getApprovedBy() != null ? req.getApprovedBy() : "");
         } else if (lowerKey.startsWith("prog-atr") || lowerKey.startsWith("programme-atr") || lowerKey.startsWith("prog_atr")) {
             String batchOrProgId = key.replace("prog-atr-", "").replace("programme-atr-", "").replace("prog_atr-", "").replace("prog_atr_", "").replace("prog-atr", "").replace("programme-atr", "");
-            if (scope != null && scope.isProgrammeCoordinator() && !batchOrProgId.equalsIgnoreCase(scope.getRequiredMasterProgrammeId())) {
-                // If it's programmeBatchId or progId, allow if matches PC scope
-            }
             com.dypiu.nba.entity.ProgrammeAtr patr = programmeAtrRepository.findAll().stream()
                     .filter(p -> batchOrProgId.equalsIgnoreCase(p.getProgrammeBatchId()) || key.equalsIgnoreCase(p.getId()))
                     .max(java.util.Comparator.comparing(com.dypiu.nba.entity.ProgrammeAtr::getUpdatedAt, java.util.Comparator.nullsFirst(java.util.Comparator.naturalOrder())))
@@ -964,5 +1363,30 @@ public class ApprovalService {
         if (atrReq != null) return atrReq.getStatus() == ApprovalStatus.APPROVED;
         List<CourseAtr> atrs = courseAtrRepository.findByProgrammeBatchCourseId(batchCourseId);
         return !atrs.isEmpty() && atrs.stream().allMatch(a -> a.getStatus() == CourseAtrStatus.APPROVED);
+    }
+
+    @Transactional
+    public void resetToDraftOnModification(ApprovalType type, String programmeBatchCourseId, String programmeBatchOrProgrammeId) {
+        if (programmeBatchCourseId != null && !programmeBatchCourseId.isBlank()) {
+            List<ApprovalRequest> requests = approvalRequestRepository.findAll().stream()
+                    .filter(a -> (a.getType() == type || (type == ApprovalType.CO_DEFINITION && a.getType() == ApprovalType.CO_TARGETS))
+                            && (programmeBatchCourseId.equalsIgnoreCase(a.getProgrammeBatchCourseId()) || programmeBatchCourseId.equalsIgnoreCase(a.getResourceId())))
+                    .toList();
+            for (ApprovalRequest req : requests) {
+                req.setStatus(ApprovalStatus.DRAFT);
+                approvalRequestRepository.save(req);
+            }
+        }
+        if (programmeBatchOrProgrammeId != null && !programmeBatchOrProgrammeId.isBlank()) {
+            List<ApprovalRequest> requests = approvalRequestRepository.findAll().stream()
+                    .filter(a -> a.getType() == type && (programmeBatchOrProgrammeId.equalsIgnoreCase(a.getProgrammeBatchId())
+                            || programmeBatchOrProgrammeId.equalsIgnoreCase(a.getMasterProgrammeId())
+                            || programmeBatchOrProgrammeId.equalsIgnoreCase(a.getResourceId())))
+                    .toList();
+            for (ApprovalRequest req : requests) {
+                req.setStatus(ApprovalStatus.DRAFT);
+                approvalRequestRepository.save(req);
+            }
+        }
     }
 }

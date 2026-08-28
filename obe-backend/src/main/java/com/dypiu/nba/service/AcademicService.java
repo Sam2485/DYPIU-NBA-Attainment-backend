@@ -2262,6 +2262,42 @@ public class AcademicService {
         List<ProgrammeBatch> batches = programmeBatchRepository.findBatchesFiltered(
                 targetMasterProgrammeId, targetDepartmentId, targetCoordinatorEmail, effectiveStatus);
 
+        if (scope != null && scope.isProgrammeCoordinator()) {
+            List<ProgrammeBatch> byCoordId = scope.getUserId() != null 
+                    ? programmeBatchRepository.findByCoordinatorIdAndDeletedAtIsNull(scope.getUserId()) 
+                    : Collections.emptyList();
+            List<ProgrammeBatch> byEmail = scope.getEmail() != null && !scope.getEmail().isBlank()
+                    ? programmeBatchRepository.findByCoordinatorEmailIgnoreCaseAndDeletedAtIsNull(scope.getEmail().trim())
+                    : Collections.emptyList();
+            List<ProgrammeBatch> combined = new ArrayList<>(batches);
+            for (ProgrammeBatch b : byCoordId) {
+                if (combined.stream().noneMatch(existing -> existing.getId().equals(b.getId()))) {
+                    combined.add(b);
+                }
+            }
+            for (ProgrammeBatch b : byEmail) {
+                if (combined.stream().noneMatch(existing -> existing.getId().equals(b.getId()))) {
+                    combined.add(b);
+                }
+            }
+            final String filterProgId = targetMasterProgrammeId;
+            batches = combined.stream().filter(b -> {
+                if (filterProgId != null && !filterProgId.equalsIgnoreCase(b.getMasterProgrammeId())) {
+                    return false;
+                }
+                if (effectiveStatus != null && b.getStatus() != null && !effectiveStatus.equalsIgnoreCase(b.getStatus())) {
+                    return false;
+                }
+                if (scope.getUserId() != null && b.getCoordinatorId() != null && Objects.equals(b.getCoordinatorId(), scope.getUserId())) {
+                    return true;
+                }
+                if (scope.getEmail() != null && !scope.getEmail().isBlank() && b.getCoordinatorEmail() != null && !b.getCoordinatorEmail().isBlank()) {
+                    return b.getCoordinatorEmail().trim().equalsIgnoreCase(scope.getEmail().trim());
+                }
+                return false;
+            }).toList();
+        }
+
         // 6. Enrich metadata in memory without N+1 queries
         enrichBatchMetadata(batches);
         return batches;

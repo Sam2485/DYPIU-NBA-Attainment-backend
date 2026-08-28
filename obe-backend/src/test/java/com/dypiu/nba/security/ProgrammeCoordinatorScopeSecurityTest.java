@@ -160,6 +160,7 @@ public class ProgrammeCoordinatorScopeSecurityTest {
                 .name("ProgrammeBatch CS 2022-2026")
                 .startYear(2022)
                 .endYear(2026)
+                .coordinatorEmail("pc.a1@dypiu.ac.in")
                 .build());
 
         batchA2 = programmeBatchRepository.save(ProgrammeBatch.builder()
@@ -177,6 +178,7 @@ public class ProgrammeCoordinatorScopeSecurityTest {
                 .startYear(2023)
                 .endYear(2025)
                 .durationYears(2)
+                .coordinatorEmail("pc.b1@dypiu.ac.in")
                 .build());
 
         // 5. Courses

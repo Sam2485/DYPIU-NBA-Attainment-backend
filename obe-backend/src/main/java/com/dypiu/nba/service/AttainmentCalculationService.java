@@ -149,6 +149,48 @@ public class AttainmentCalculationService {
         }
     }
 
+    public boolean isCourseCoordinatorAssigned(ProgrammeBatchCourse offering, Long userId, String userName, String userEmail) {
+        if (offering == null) return false;
+
+        // 1. programmeBatchCourse.courseCoordinatorId equals authenticatedUser.id
+        boolean idMatch = offering.getCourseCoordinatorId() != null && userId != null
+                && Objects.equals(offering.getCourseCoordinatorId(), userId);
+
+        // 2a. programmeBatchCourse.courseCoordinatorEmail equals authenticatedUser.email, case-insensitive (independent)
+        String ccEmail = offering.getCourseCoordinatorEmail();
+        boolean ccEmailMatch = ccEmail != null && !ccEmail.isBlank() && userEmail != null && !userEmail.isBlank()
+                && ccEmail.trim().equalsIgnoreCase(userEmail.trim());
+
+        // 2b. programmeBatchCourse.coordinatorEmail equals authenticatedUser.email, case-insensitive (independent)
+        String cEmail = offering.getCoordinatorEmail();
+        boolean cEmailMatch = cEmail != null && !cEmail.isBlank() && userEmail != null && !userEmail.isBlank()
+                && cEmail.trim().equalsIgnoreCase(userEmail.trim());
+
+        // 3. programmeBatchCourse.courseCoordinatorName equals authenticatedUser.name, case-insensitive
+        String ccName = offering.getCourseCoordinatorName();
+        boolean nameMatch = ccName != null && !ccName.isBlank() && userName != null && !userName.isBlank()
+                && ccName.trim().equalsIgnoreCase(userName.trim());
+
+        // 4. If legacy records store an email inside courseCoordinatorName, compare it with authenticatedUser.email, case-insensitive
+        boolean nameEmailMatch = ccName != null && !ccName.isBlank() && userEmail != null && !userEmail.isBlank()
+                && ccName.trim().equalsIgnoreCase(userEmail.trim());
+
+        // 5. Assigned faculty fallback when coordinator ID/name are unassigned
+        boolean assignedFacultyFallback = false;
+        if (offering.getCourseCoordinatorId() == null && (ccName == null || ccName.isBlank())) {
+            String assignedFaculty = offering.getAssignedFaculty();
+            if (assignedFaculty != null && !assignedFaculty.isBlank()) {
+                if (userEmail != null && !userEmail.isBlank() && assignedFaculty.toLowerCase().contains(userEmail.trim().toLowerCase())) {
+                    assignedFacultyFallback = true;
+                } else if (userName != null && !userName.isBlank() && assignedFaculty.toLowerCase().contains(userName.trim().toLowerCase())) {
+                    assignedFacultyFallback = true;
+                }
+            }
+        }
+
+        return idMatch || ccEmailMatch || cEmailMatch || nameMatch || nameEmailMatch || assignedFacultyFallback;
+    }
+
     private void enforceOfferingOrCourseScope(String courseOfferingOrMasterCourseId) {
         if (courseOfferingOrMasterCourseId == null || courseOfferingOrMasterCourseId.isBlank()) return;
         com.dypiu.nba.security.CurrentUserScope scope = getScope();
@@ -159,19 +201,30 @@ public class AttainmentCalculationService {
             ProgrammeBatchCourse offering = programmeBatchCourseRepository.findById(offeringId).orElse(null);
             if (offering != null) {
                 if (scope.isFaculty()) {
-                    boolean isCoord = (offering.getCourseCoordinatorId() != null && Objects.equals(offering.getCourseCoordinatorId(), scope.getUserId()))
-                            ;
-                    boolean isAssigned = isCoord || (offering.getAssignedFaculty() != null && (offering.getAssignedFaculty().contains(scope.getEmail()) || offering.getAssignedFaculty().contains(scope.getName())));
-                    if (!isAssigned) {
+                    boolean isCoord = isCourseCoordinatorAssigned(offering, scope.getUserId(), scope.getName(), scope.getEmail());
+                    if (!isCoord) {
+                        log.info("Course coordinator authorization failed for resolved ProgrammeBatchCourse ID={}: authenticated JWT user [id={}, name={}, email={}], offering coordinator [courseCoordinatorId={}, courseCoordinatorName={}, courseCoordinatorEmail={}, coordinatorEmail={}, assignedFaculty={}]",
+                                offering.getId(), scope.getUserId(), scope.getName(), scope.getEmail(),
+                                offering.getCourseCoordinatorId(), offering.getCourseCoordinatorName(),
+                                offering.getCourseCoordinatorEmail(), offering.getCoordinatorEmail(), offering.getAssignedFaculty());
                         throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: You are not assigned to this Course Offering.");
                     }
                     return;
                 }
-                if (scope.isProgrammeCoordinator() && offering.getMasterCourseId() != null) {
-                    MasterCourse course = masterCourseRepository.findById(offering.getMasterCourseId()).orElse(null);
-                    if (course != null && !scope.getRequiredMasterProgrammeId().equals(course.getMasterProgrammeId())) {
-                        throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Resource is outside your assigned programme scope.");
+                if (scope.isProgrammeCoordinator()) {
+                    if (offering.getProgrammeBatchId() != null) {
+                        ProgrammeBatch batch = programmeBatchRepository.findByIdAndDeletedAtIsNull(offering.getProgrammeBatchId())
+                                .orElseThrow(() -> new ResourceNotFoundException("Programme batch not found: " + offering.getProgrammeBatchId()));
+                        boolean isAssigned = (scope.getUserId() != null && Objects.equals(batch.getCoordinatorId(), scope.getUserId()))
+                                || (scope.getEmail() != null && batch.getCoordinatorEmail() != null && batch.getCoordinatorEmail().trim().equalsIgnoreCase(scope.getEmail().trim()))
+                                || (scope.getName() != null && batch.getCoordinatorName() != null && batch.getCoordinatorName().trim().equalsIgnoreCase(scope.getName().trim()));
+                        if (!isAssigned) {
+                            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: You are not the assigned Programme Coordinator for this Programme Batch.");
+                        }
+                    } else {
+                        throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Course Offering is not associated with any Programme Batch.");
                     }
+                    return;
                 }
                 return;
             }
@@ -182,18 +235,25 @@ public class AttainmentCalculationService {
             if (course != null) {
                 if (scope.isFaculty()) {
                     List<ProgrammeBatchCourse> offerings = programmeBatchCourseRepository.findByMasterCourseId(course.getId());
-                    boolean hasAssigned = offerings.stream().anyMatch(o -> {
-                        boolean isCoord = (o.getCourseCoordinatorId() != null && Objects.equals(o.getCourseCoordinatorId(), scope.getUserId()))
-                                ;
-                        return isCoord || (o.getAssignedFaculty() != null && (o.getAssignedFaculty().contains(scope.getEmail()) || o.getAssignedFaculty().contains(scope.getName())));
-                    });
+                    boolean hasAssigned = offerings.stream().anyMatch(o -> isCourseCoordinatorAssigned(o, scope.getUserId(), scope.getName(), scope.getEmail()));
                     if (!hasAssigned) {
+                        log.debug("Course coordinator authorization failed for course {}: authenticated user [id={}, name={}, email={}]",
+                                course.getId(), scope.getUserId(), scope.getName(), scope.getEmail());
                         throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: You are not assigned to this Course.");
                     }
                     return;
                 }
-                if (scope.isProgrammeCoordinator() && !course.getMasterProgrammeId().equals(scope.getRequiredMasterProgrammeId())) {
-                    throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Resource is outside your assigned programme scope.");
+                if (scope.isProgrammeCoordinator()) {
+                    boolean matchesDirect = scope.getMasterProgrammeId() != null && scope.getMasterProgrammeId().equals(course.getMasterProgrammeId());
+                    boolean matchesBatch = false;
+                    if (scope.getEmail() != null && !scope.getEmail().isBlank()) {
+                        matchesBatch = programmeBatchRepository.findByCoordinatorEmailIgnoreCaseAndDeletedAtIsNull(scope.getEmail().trim())
+                                .stream().anyMatch(b -> course.getMasterProgrammeId().equals(b.getMasterProgrammeId()));
+                    }
+                    if (!matchesDirect && !matchesBatch) {
+                        throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Resource is outside your assigned programme scope.");
+                    }
+                    return;
                 }
             }
         }
@@ -222,9 +282,10 @@ public class AttainmentCalculationService {
         enforceOfferingOrCourseScope(courseOfferingOrMasterCourseId);
         enforceOfferingEditability(courseOfferingOrMasterCourseId);
         String offeringId = resolveOfferingId(courseOfferingOrMasterCourseId);
-        if (approvalService != null && approvalService.isAttainmentConfigApproved(offeringId)) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Cannot modify approved Attainment Configuration. A revision must be requested first.");
+        if (approvalService != null) {
+            approvalService.resetToDraftOnModification(ApprovalType.ATTAINMENT_CONFIGURATION, offeringId, null);
         }
+        config.setStatus(AttainmentConfigStatus.DRAFT);
         config.setProgrammeBatchCourseId(offeringId);
         if (config.getId() == null) config.setId("cfg-" + offeringId);
         return configRepository.save(config);
@@ -652,6 +713,70 @@ public class AttainmentCalculationService {
 
         examinationAttainmentStore.put(offeringId, result);
         return result;
+    }
+
+    @Transactional
+    public void deleteExaminationData(String courseOfferingOrMasterCourseId) {
+        System.out.println("[AttainmentCalculationService] deleteExaminationData called | courseOfferingOrMasterCourseId: " + courseOfferingOrMasterCourseId);
+        enforceOfferingOrCourseScope(courseOfferingOrMasterCourseId);
+        enforceOfferingEditability(courseOfferingOrMasterCourseId);
+        String offeringId = resolveOfferingId(courseOfferingOrMasterCourseId);
+
+        // 1. Delete physical files
+        List<UploadedDocument> docs = uploadedDocumentRepository.findByProgrammeBatchCourseId(offeringId);
+        for (UploadedDocument doc : docs) {
+            if (doc.getDocumentType() == DocumentType.EXAMINATION) {
+                if (doc.getSavedPath() != null) {
+                    try {
+                        Files.deleteIfExists(Path.of(doc.getSavedPath()));
+                    } catch (Exception ignored) {}
+                }
+            }
+        }
+
+        // 2. Delete database records
+        uploadedDocumentRepository.deleteByProgrammeBatchCourseIdAndDocumentType(offeringId, DocumentType.EXAMINATION);
+        studentCoMarkRepository.deleteByProgrammeBatchCourseId(offeringId);
+        studentCoMarkRepository.flush();
+
+        // 3. Clear in-memory store
+        examinationAttainmentStore.remove(offeringId);
+
+        // 4. Reset approval to DRAFT if applicable
+        if (approvalService != null) {
+            approvalService.resetToDraftOnModification(ApprovalType.ATTAINMENT_SETTINGS, offeringId, null);
+        }
+    }
+
+    @Transactional
+    public void deleteSurveyData(String courseOfferingOrMasterCourseId) {
+        System.out.println("[AttainmentCalculationService] deleteSurveyData called | courseOfferingOrMasterCourseId: " + courseOfferingOrMasterCourseId);
+        enforceOfferingOrCourseScope(courseOfferingOrMasterCourseId);
+        enforceOfferingEditability(courseOfferingOrMasterCourseId);
+        String offeringId = resolveOfferingId(courseOfferingOrMasterCourseId);
+
+        // 1. Delete physical files
+        List<UploadedDocument> docs = uploadedDocumentRepository.findByProgrammeBatchCourseId(offeringId);
+        for (UploadedDocument doc : docs) {
+            if (doc.getDocumentType() == DocumentType.SURVEY) {
+                if (doc.getSavedPath() != null) {
+                    try {
+                        Files.deleteIfExists(Path.of(doc.getSavedPath()));
+                    } catch (Exception ignored) {}
+                }
+            }
+        }
+
+        // 2. Delete database records
+        uploadedDocumentRepository.deleteByProgrammeBatchCourseIdAndDocumentType(offeringId, DocumentType.SURVEY);
+
+        // 3. Clear in-memory store
+        surveyAttainmentStore.remove(offeringId);
+
+        // 4. Reset approval to DRAFT if applicable
+        if (approvalService != null) {
+            approvalService.resetToDraftOnModification(ApprovalType.ATTAINMENT_SETTINGS, offeringId, null);
+        }
     }
 
     @Transactional

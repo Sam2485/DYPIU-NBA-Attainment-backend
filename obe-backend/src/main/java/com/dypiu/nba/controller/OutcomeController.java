@@ -11,7 +11,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/outcomes")
+@RequestMapping({"/outcomes", "/api/v1/outcomes"})
 @RequiredArgsConstructor
 public class OutcomeController {
 
@@ -112,7 +112,7 @@ public class OutcomeController {
                 .build());
     }
 
-    @PostMapping("/master-courses/{masterCourseId}/mappings")
+    @RequestMapping(value = "/master-courses/{masterCourseId}/mappings", method = {RequestMethod.POST, RequestMethod.PUT})
     public ResponseEntity<ApiResponse<com.dypiu.nba.dto.CourseMappingMatrixDto>> saveCourseMappings(@PathVariable String masterCourseId, @RequestBody com.dypiu.nba.dto.CourseMappingMatrixDto dto) {
         return ResponseEntity.ok(ApiResponse.<com.dypiu.nba.dto.CourseMappingMatrixDto>builder()
                 .success(true)

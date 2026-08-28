@@ -4,6 +4,7 @@ import com.dypiu.nba.dto.ReportFiltersDto;
 import com.dypiu.nba.entity.*;
 import com.dypiu.nba.repository.*;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -15,6 +16,7 @@ import java.security.Principal;
 import java.util.*;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ReportAccessService {
@@ -26,6 +28,57 @@ public class ReportAccessService {
     private final ProgrammeBatchRepository programmeBatchRepository;
     private final MasterCourseRepository masterCourseRepository;
     private final ProgrammeBatchCourseRepository programmeBatchCourseRepository;
+
+    public boolean isCourseCoordinatorAssigned(ProgrammeBatchCourse offering, User user) {
+        if (offering == null || user == null) return false;
+        return isCourseCoordinatorAssigned(offering, user.getId(), user.getUsername(), user.getName(), user.getEmail());
+    }
+
+    public boolean isCourseCoordinatorAssigned(ProgrammeBatchCourse offering, Long userId, String username, String userName, String userEmail) {
+        if (offering == null) return false;
+
+        // 1. programmeBatchCourse.courseCoordinatorId equals authenticatedUser.id
+        boolean idMatch = offering.getCourseCoordinatorId() != null && userId != null
+                && Objects.equals(offering.getCourseCoordinatorId(), userId);
+
+        // 2a. programmeBatchCourse.courseCoordinatorEmail equals authenticatedUser.email, case-insensitive (independent)
+        String ccEmail = offering.getCourseCoordinatorEmail();
+        boolean ccEmailMatch = ccEmail != null && !ccEmail.isBlank() && userEmail != null && !userEmail.isBlank()
+                && ccEmail.trim().equalsIgnoreCase(userEmail.trim());
+
+        // 2b. programmeBatchCourse.coordinatorEmail equals authenticatedUser.email, case-insensitive (independent)
+        String cEmail = offering.getCoordinatorEmail();
+        boolean cEmailMatch = cEmail != null && !cEmail.isBlank() && userEmail != null && !userEmail.isBlank()
+                && cEmail.trim().equalsIgnoreCase(userEmail.trim());
+
+        // 3. programmeBatchCourse.courseCoordinatorName equals authenticatedUser.name or username, case-insensitive
+        String ccName = offering.getCourseCoordinatorName();
+        boolean nameMatch = ccName != null && !ccName.isBlank() && userName != null && !userName.isBlank()
+                && ccName.trim().equalsIgnoreCase(userName.trim());
+        boolean usernameMatch = ccName != null && !ccName.isBlank() && username != null && !username.isBlank()
+                && ccName.trim().equalsIgnoreCase(username.trim());
+
+        // 4. If legacy records store an email inside courseCoordinatorName, compare it with authenticatedUser.email, case-insensitive
+        boolean nameEmailMatch = ccName != null && !ccName.isBlank() && userEmail != null && !userEmail.isBlank()
+                && ccName.trim().equalsIgnoreCase(userEmail.trim());
+
+        // 5. Assigned faculty fallback when coordinator ID/name are unassigned
+        boolean assignedFacultyFallback = false;
+        if (offering.getCourseCoordinatorId() == null && (ccName == null || ccName.isBlank())) {
+            String assignedFaculty = offering.getAssignedFaculty();
+            if (assignedFaculty != null && !assignedFaculty.isBlank()) {
+                if (userEmail != null && !userEmail.isBlank() && assignedFaculty.toLowerCase().contains(userEmail.trim().toLowerCase())) {
+                    assignedFacultyFallback = true;
+                } else if (userName != null && !userName.isBlank() && assignedFaculty.toLowerCase().contains(userName.trim().toLowerCase())) {
+                    assignedFacultyFallback = true;
+                } else if (username != null && !username.isBlank() && assignedFaculty.toLowerCase().contains(username.trim().toLowerCase())) {
+                    assignedFacultyFallback = true;
+                }
+            }
+        }
+
+        return idMatch || ccEmailMatch || cEmailMatch || nameMatch || usernameMatch || nameEmailMatch || assignedFacultyFallback;
+    }
 
     @Transactional(readOnly = true)
     public User getAuthenticatedUser(Principal principal) {
@@ -44,8 +97,10 @@ public class ReportAccessService {
             return userRepository.findAll().stream().findFirst().orElse(null);
         }
 
-        return userRepository.findByUsernameOrEmail(usernameOrEmail, usernameOrEmail)
-                .orElseGet(() -> userRepository.findAll().stream().findFirst().orElse(null));
+        final String lookup = usernameOrEmail;
+        return userRepository.findByUsername(lookup)
+                .or(() -> userRepository.findByEmail(lookup))
+                .orElse(null);
     }
 
     @Transactional(readOnly = true)
@@ -83,10 +138,20 @@ public class ReportAccessService {
     public void validateBatchAccess(User user, String programmeBatchId) {
         System.out.println("[ReportAccessService] validateBatchAccess called | user: " + (user != null ? user.getEmail() : "null") + " | programmeBatchId: " + programmeBatchId);
         if (user == null || programmeBatchId == null) return;
-        if (user.getRole() == UserRole.IQAC) return;
+        if (user.getRole() == UserRole.IQAC || user.getRole() == UserRole.ADMIN) return;
 
         ProgrammeBatch batch = programmeBatchRepository.findById(programmeBatchId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Batch not found: " + programmeBatchId));
+
+        if (user.getRole() == UserRole.PROGRAMME_COORDINATOR) {
+            boolean isAssigned = (user.getId() != null && Objects.equals(batch.getCoordinatorId(), user.getId()))
+                    || (user.getEmail() != null && batch.getCoordinatorEmail() != null && batch.getCoordinatorEmail().trim().equalsIgnoreCase(user.getEmail().trim()))
+                    || (user.getName() != null && batch.getCoordinatorName() != null && batch.getCoordinatorName().trim().equalsIgnoreCase(user.getName().trim()));
+            if (!isAssigned) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: You are not the assigned Programme Coordinator for this Programme Batch.");
+            }
+            return;
+        }
 
         validateProgrammeAccess(user, batch.getMasterProgrammeId());
     }
@@ -101,8 +166,47 @@ public class ReportAccessService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Course Offering not found: " + programmeBatchCourseId));
 
         if (user.getRole() == UserRole.FACULTY) {
-            boolean isCoordinator = (offering.getCourseCoordinatorId() != null && Objects.equals(offering.getCourseCoordinatorId(), user.getId()));
+            boolean idMatch = offering.getCourseCoordinatorId() != null && user.getId() != null
+                    && Objects.equals(offering.getCourseCoordinatorId(), user.getId());
+
+            String ccEmail = offering.getCourseCoordinatorEmail();
+            boolean ccEmailMatch = ccEmail != null && !ccEmail.isBlank() && user.getEmail() != null && !user.getEmail().isBlank()
+                    && ccEmail.trim().equalsIgnoreCase(user.getEmail().trim());
+
+            String cEmail = offering.getCoordinatorEmail();
+            boolean cEmailMatch = cEmail != null && !cEmail.isBlank() && user.getEmail() != null && !user.getEmail().isBlank()
+                    && cEmail.trim().equalsIgnoreCase(user.getEmail().trim());
+
+            String ccName = offering.getCourseCoordinatorName();
+            boolean nameMatch = ccName != null && !ccName.isBlank() && user.getName() != null && !user.getName().isBlank()
+                    && ccName.trim().equalsIgnoreCase(user.getName().trim());
+            boolean usernameMatch = ccName != null && !ccName.isBlank() && user.getUsername() != null && !user.getUsername().isBlank()
+                    && ccName.trim().equalsIgnoreCase(user.getUsername().trim());
+
+            boolean nameEmailMatch = ccName != null && !ccName.isBlank() && user.getEmail() != null && !user.getEmail().isBlank()
+                    && ccName.trim().equalsIgnoreCase(user.getEmail().trim());
+
+            boolean assignedFacultyFallback = false;
+            if (offering.getCourseCoordinatorId() == null && (ccName == null || ccName.isBlank())) {
+                String assignedFaculty = offering.getAssignedFaculty();
+                if (assignedFaculty != null && !assignedFaculty.isBlank()) {
+                    if (user.getEmail() != null && !user.getEmail().isBlank() && assignedFaculty.toLowerCase().contains(user.getEmail().trim().toLowerCase())) {
+                        assignedFacultyFallback = true;
+                    } else if (user.getName() != null && !user.getName().isBlank() && assignedFaculty.toLowerCase().contains(user.getName().trim().toLowerCase())) {
+                        assignedFacultyFallback = true;
+                    } else if (user.getUsername() != null && !user.getUsername().isBlank() && assignedFaculty.toLowerCase().contains(user.getUsername().trim().toLowerCase())) {
+                        assignedFacultyFallback = true;
+                    }
+                }
+            }
+
+            boolean isCoordinator = idMatch || ccEmailMatch || cEmailMatch || nameMatch || usernameMatch || nameEmailMatch || assignedFacultyFallback;
+
             if (!isCoordinator) {
+                log.info("Course coordinator authorization failed for resolved ProgrammeBatchCourse ID={}: authenticated JWT user [id={}, username={}, name={}, email={}, role={}], offering coordinator [courseCoordinatorId={}, courseCoordinatorName={}, courseCoordinatorEmail={}, coordinatorEmail={}, assignedFaculty={}], comparison results [idMatch={}, ccEmailMatch={}, cEmailMatch={}, nameMatch={}, usernameMatch={}, nameEmailMatch={}, assignedFacultyFallback={}]",
+                        offering.getId(), user.getId(), user.getUsername(), user.getName(), user.getEmail(), user.getRole(),
+                        offering.getCourseCoordinatorId(), offering.getCourseCoordinatorName(), offering.getCourseCoordinatorEmail(), offering.getCoordinatorEmail(), offering.getAssignedFaculty(),
+                        idMatch, ccEmailMatch, cEmailMatch, nameMatch, usernameMatch, nameEmailMatch, assignedFacultyFallback);
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: You are not assigned to this Course Offering.");
             }
             return;
@@ -123,8 +227,11 @@ public class ReportAccessService {
         ProgrammeBatchCourse offering = programmeBatchCourseRepository.findById(programmeBatchCourseId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Course Offering not found: " + programmeBatchCourseId));
 
-        boolean isCoordinator = (offering.getCourseCoordinatorId() != null && Objects.equals(offering.getCourseCoordinatorId(), user.getId()));
+        boolean isCoordinator = isCourseCoordinatorAssigned(offering, user);
         if (!isCoordinator) {
+            log.info("Course coordinator authorization failed for resolved ProgrammeBatchCourse ID={}: authenticated JWT user [id={}, username={}, name={}, email={}, role={}], offering coordinator [courseCoordinatorId={}, courseCoordinatorName={}, courseCoordinatorEmail={}, coordinatorEmail={}, assignedFaculty={}]",
+                    offering.getId(), user.getId(), user.getUsername(), user.getName(), user.getEmail(), user.getRole(),
+                    offering.getCourseCoordinatorId(), offering.getCourseCoordinatorName(), offering.getCourseCoordinatorEmail(), offering.getCoordinatorEmail(), offering.getAssignedFaculty());
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Only the assigned Course Coordinator can perform this action.");
         }
     }
@@ -140,10 +247,10 @@ public class ReportAccessService {
 
         if (user.getRole() == UserRole.FACULTY) {
             List<ProgrammeBatchCourse> offerings = programmeBatchCourseRepository.findByMasterCourseId(masterCourseId);
-            boolean hasAssignedOffering = offerings.stream().anyMatch(o -> 
-                (o.getCourseCoordinatorId() != null && Objects.equals(o.getCourseCoordinatorId(), user.getId()))
-            );
+            boolean hasAssignedOffering = offerings.stream().anyMatch(o -> isCourseCoordinatorAssigned(o, user));
             if (!hasAssignedOffering) {
+                log.info("Course coordinator authorization failed for course {}: authenticated user [id={}, name={}, email={}]",
+                        course.getId(), user.getId(), user.getName(), user.getEmail());
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: You are not assigned to any offering of this Course.");
             }
             return;
