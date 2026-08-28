@@ -41,6 +41,7 @@ public class OutcomeService {
     private final CurrentUserScopeService currentUserScopeService;
     private final AuditLogService auditLogService;
     private final ApprovalService approvalService;
+    private final ApprovalRequestRepository approvalRequestRepository;
     private final BatchLifecycleService batchLifecycleService;
     private final ObjectMapper objectMapper;
 
@@ -83,7 +84,11 @@ public class OutcomeService {
         boolean isAssignedCourseCoordinator = (offering.getCourseCoordinatorId() != null && scope.getUserId() != null && Objects.equals(offering.getCourseCoordinatorId(), scope.getUserId()))
                 || (coordEmail != null && scope.getEmail() != null && !coordEmail.isBlank() && !scope.getEmail().isBlank() && coordEmail.trim().equalsIgnoreCase(scope.getEmail().trim()))
                 || (offering.getCourseCoordinatorName() != null && scope.getName() != null && !offering.getCourseCoordinatorName().isBlank() && !scope.getName().isBlank() && offering.getCourseCoordinatorName().trim().equalsIgnoreCase(scope.getName().trim()))
-                || (offering.getCourseCoordinatorName() != null && scope.getEmail() != null && !offering.getCourseCoordinatorName().isBlank() && !scope.getEmail().isBlank() && offering.getCourseCoordinatorName().trim().equalsIgnoreCase(scope.getEmail().trim()));
+                || (offering.getCourseCoordinatorName() != null && scope.getUsername() != null && !offering.getCourseCoordinatorName().isBlank() && !scope.getUsername().isBlank() && offering.getCourseCoordinatorName().trim().equalsIgnoreCase(scope.getUsername().trim()))
+                || (offering.getCourseCoordinatorName() != null && scope.getEmail() != null && !offering.getCourseCoordinatorName().isBlank() && !scope.getEmail().isBlank() && offering.getCourseCoordinatorName().trim().equalsIgnoreCase(scope.getEmail().trim()))
+                || (offering.getAssignedFaculty() != null && scope.getEmail() != null && !scope.getEmail().isBlank() && offering.getAssignedFaculty().toLowerCase().contains(scope.getEmail().trim().toLowerCase()))
+                || (offering.getAssignedFaculty() != null && scope.getName() != null && !scope.getName().isBlank() && offering.getAssignedFaculty().toLowerCase().contains(scope.getName().trim().toLowerCase()))
+                || (offering.getAssignedFaculty() != null && scope.getUsername() != null && !scope.getUsername().isBlank() && offering.getAssignedFaculty().toLowerCase().contains(scope.getUsername().trim().toLowerCase()));
         
         boolean isAssignedProgrammeCoordinator = false;
         if (scope.isProgrammeCoordinator()) {
@@ -635,6 +640,17 @@ public class OutcomeService {
         String targetOfferingId = resolveOfferingId(masterCourseIdOrOfferingId);
         List<CourseOutcome> list = coRepository.findByProgrammeBatchCourseId(targetOfferingId);
         list.sort(Comparator.comparing(CourseOutcome::getCode, NATURAL_CODE_COMPARATOR));
+        if (approvalRequestRepository != null && targetOfferingId != null) {
+            approvalRequestRepository.findByProgrammeBatchCourseId(targetOfferingId).stream()
+                    .filter(a -> a.getType() == ApprovalType.CO_DEFINITION || a.getType() == ApprovalType.CO_TARGETS || a.getType() == ApprovalType.COURSE_OUTCOMES_TARGETS)
+                    .max(Comparator.comparing(ApprovalRequest::getUpdatedAt, Comparator.nullsFirst(Comparator.naturalOrder())))
+                    .ifPresent(req -> {
+                        for (CourseOutcome co : list) {
+                            co.setRevisionReason(req.getRemarks());
+                            co.setReviewedBy(req.getApprovedBy());
+                        }
+                    });
+        }
         return list;
     }
 
@@ -1028,41 +1044,76 @@ public class OutcomeService {
         List<CourseOutcome> cos = getCOsByCourse(targetOfferingId);
         List<String> coIds = cos.stream().map(CourseOutcome::getId).collect(Collectors.toList());
 
-        if (!coIds.isEmpty()) {
-            coPoMappingRepository.deleteByCourseOutcomeIdIn(coIds);
-            coPsoMappingRepository.deleteByCourseOutcomeIdIn(coIds);
-            coPoMappingRepository.flush();
-            coPsoMappingRepository.flush();
-        }
+        List<CoPoMapping> existingPoMappings = coIds.isEmpty() ? Collections.emptyList() : coPoMappingRepository.findByCourseOutcomeIdIn(coIds);
+        Map<String, CoPoMapping> existingPoMap = existingPoMappings.stream()
+                .collect(Collectors.toMap(m -> m.getCourseOutcomeId() + "::" + m.getPoCode(), m -> m, (a, b) -> a));
 
-        List<CoPoMapping> savedPo = Collections.emptyList();
-        if (dto != null && dto.getPoMappings() != null && !dto.getPoMappings().isEmpty()) {
-            Map<String, CoPoMapping> uniquePoMap = new LinkedHashMap<>();
+        List<CoPsoMapping> existingPsoMappings = coIds.isEmpty() ? Collections.emptyList() : coPsoMappingRepository.findByCourseOutcomeIdIn(coIds);
+        Map<String, CoPsoMapping> existingPsoMap = existingPsoMappings.stream()
+                .collect(Collectors.toMap(m -> m.getCourseOutcomeId() + "::" + m.getPsoCode(), m -> m, (a, b) -> a));
+
+        List<CoPoMapping> toSavePo = new ArrayList<>();
+        Set<String> newPoKeys = new HashSet<>();
+        if (dto != null && dto.getPoMappings() != null) {
             for (CoPoMapping m : dto.getPoMappings()) {
                 if (m.getCourseOutcomeId() == null || m.getPoCode() == null) continue;
                 String key = m.getCourseOutcomeId() + "::" + m.getPoCode();
-                if (m.getId() == null || m.getId().isBlank()) {
-                    m.setId("copomap-" + UUID.randomUUID().toString().substring(0, 8));
+                if (newPoKeys.contains(key)) continue;
+                newPoKeys.add(key);
+
+                CoPoMapping existing = existingPoMap.get(key);
+                if (existing != null) {
+                    existing.setMappingLevel(m.getMappingLevel() != null ? m.getMappingLevel() : 0);
+                    toSavePo.add(existing);
+                } else {
+                    if (m.getId() == null || m.getId().isBlank()) {
+                        m.setId("copomap-" + UUID.randomUUID().toString().substring(0, 8));
+                    }
+                    toSavePo.add(m);
                 }
-                uniquePoMap.put(key, m);
             }
-            savedPo = coPoMappingRepository.saveAll(uniquePoMap.values());
-            coPoMappingRepository.flush();
         }
 
-        List<CoPsoMapping> savedPso = Collections.emptyList();
-        if (dto != null && dto.getPsoMappings() != null && !dto.getPsoMappings().isEmpty()) {
-            Map<String, CoPsoMapping> uniquePsoMap = new LinkedHashMap<>();
+        List<CoPoMapping> toDeletePo = existingPoMappings.stream()
+                .filter(m -> !newPoKeys.contains(m.getCourseOutcomeId() + "::" + m.getPoCode()))
+                .toList();
+        if (!toDeletePo.isEmpty()) {
+            coPoMappingRepository.deleteAllInBatch(toDeletePo);
+        }
+        if (!toSavePo.isEmpty()) {
+            coPoMappingRepository.saveAll(toSavePo);
+        }
+
+        List<CoPsoMapping> toSavePso = new ArrayList<>();
+        Set<String> newPsoKeys = new HashSet<>();
+        if (dto != null && dto.getPsoMappings() != null) {
             for (CoPsoMapping m : dto.getPsoMappings()) {
                 if (m.getCourseOutcomeId() == null || m.getPsoCode() == null) continue;
                 String key = m.getCourseOutcomeId() + "::" + m.getPsoCode();
-                if (m.getId() == null || m.getId().isBlank()) {
-                    m.setId("copsomap-" + UUID.randomUUID().toString().substring(0, 8));
+                if (newPsoKeys.contains(key)) continue;
+                newPsoKeys.add(key);
+
+                CoPsoMapping existing = existingPsoMap.get(key);
+                if (existing != null) {
+                    existing.setMappingLevel(m.getMappingLevel() != null ? m.getMappingLevel() : 0);
+                    toSavePso.add(existing);
+                } else {
+                    if (m.getId() == null || m.getId().isBlank()) {
+                        m.setId("copsomap-" + UUID.randomUUID().toString().substring(0, 8));
+                    }
+                    toSavePso.add(m);
                 }
-                uniquePsoMap.put(key, m);
             }
-            savedPso = coPsoMappingRepository.saveAll(uniquePsoMap.values());
-            coPsoMappingRepository.flush();
+        }
+
+        List<CoPsoMapping> toDeletePso = existingPsoMappings.stream()
+                .filter(m -> !newPsoKeys.contains(m.getCourseOutcomeId() + "::" + m.getPsoCode()))
+                .toList();
+        if (!toDeletePso.isEmpty()) {
+            coPsoMappingRepository.deleteAllInBatch(toDeletePso);
+        }
+        if (!toSavePso.isEmpty()) {
+            coPsoMappingRepository.saveAll(toSavePso);
         }
 
         return getCourseMappings(masterCourseIdOrOfferingId);

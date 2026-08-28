@@ -242,6 +242,15 @@ public class ProgrammeBatchCourseController {
                 .build());
     }
 
+    @GetMapping({"/{programmeBatchCourseId}/previous-year-atr", "/{programmeBatchCourseId}/previous-batch-atr"})
+    public ResponseEntity<ApiResponse<CourseAtrReportDto>> getPreviousYearCourseAtr(
+            @PathVariable String programmeBatchCourseId) {
+        return ResponseEntity.ok(ApiResponse.<CourseAtrReportDto>builder()
+                .success(true)
+                .data(atrService.getPreviousBatchCourseAtrReport(programmeBatchCourseId))
+                .build());
+    }
+
     // --- Examination Marks Upload ---
     @GetMapping("/{programmeBatchCourseId}/examination")
     public ResponseEntity<ApiResponse<ExaminationAttainmentResultDto>> getExaminationAttainment(

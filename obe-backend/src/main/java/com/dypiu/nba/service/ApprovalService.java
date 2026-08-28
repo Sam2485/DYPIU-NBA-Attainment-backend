@@ -32,8 +32,29 @@ public class ApprovalService {
     private final ProgrammeBatchRepository programmeBatchRepository;
     private final DepartmentRepository departmentRepository;
     private final SchoolRepository schoolRepository;
+    private final CourseOutcomeRepository coRepository;
     private final CurrentUserScopeService currentUserScopeService;
     private final AuditLogService auditLogService;
+
+    private boolean isSameApprovalCategory(ApprovalType a, ApprovalType b) {
+        if (a == b) return true;
+        if (a == null || b == null) return false;
+        if ((a == ApprovalType.CO_DEFINITION || a == ApprovalType.CO_TARGETS || a == ApprovalType.COURSE_OUTCOMES_TARGETS) &&
+            (b == ApprovalType.CO_DEFINITION || b == ApprovalType.CO_TARGETS || b == ApprovalType.COURSE_OUTCOMES_TARGETS)) {
+            return true;
+        }
+        if ((a == ApprovalType.ATTAINMENT_CONFIGURATION || a == ApprovalType.ATTAINMENT_SETTINGS) &&
+            (b == ApprovalType.ATTAINMENT_CONFIGURATION || b == ApprovalType.ATTAINMENT_SETTINGS)) {
+            return true;
+        }
+        if (a == ApprovalType.COURSE_ATR && b == ApprovalType.COURSE_ATR) {
+            return true;
+        }
+        if (a == ApprovalType.PROGRAMME_ATR && b == ApprovalType.PROGRAMME_ATR) {
+            return true;
+        }
+        return false;
+    }
 
     private CurrentUserScope getScope() {
         try {
@@ -384,12 +405,6 @@ public class ApprovalService {
         if (request == null) {
             throw new BadRequestException("Approval request payload cannot be null.");
         }
-        if (request.getId() == null || request.getId().isBlank()) {
-            request.setId("app-" + UUID.randomUUID().toString().substring(0, 8));
-        }
-
-        ActorInfo actor = resolveActorInfo(request.getSubmittedBy(), "SUBMITTER");
-        request.setSubmittedBy(actor.actorName());
 
         resolveMissingScopeFields(request);
         CurrentUserScope scope = getScope();
@@ -406,10 +421,40 @@ public class ApprovalService {
             enforceApprovalScope(request);
         }
 
-        request.setStatus(request.getStatus() != null ? request.getStatus() : ApprovalStatus.PENDING);
+        String batchCourseId = request.getProgrammeBatchCourseId() != null ? request.getProgrammeBatchCourseId() : request.getResourceId();
+
+        // 1. Check for existing approval requests for this batch-course/resource in the same category
+        List<ApprovalRequest> existingRequests = approvalRequestRepository.findAll().stream()
+                .filter(a -> isSameApprovalCategory(a.getType(), request.getType())
+                        && (batchCourseId != null && (batchCourseId.equalsIgnoreCase(a.getProgrammeBatchCourseId()) || batchCourseId.equalsIgnoreCase(a.getResourceId()))))
+                .toList();
+
+        ApprovalRequest latestExisting = existingRequests.stream().max(LATEST_APPROVAL_COMPARATOR).orElse(null);
+
+        if (latestExisting != null) {
+            String canonStatus = normalizeCanonicalApprovalStatus(latestExisting.getStatus());
+            if ("PENDING".equalsIgnoreCase(canonStatus)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A submission for this item is already pending review.");
+            }
+            if ("APPROVED".equalsIgnoreCase(canonStatus)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "This item has already been approved.");
+            }
+            // Reuse the existing approval request record for resubmission after revision
+            request.setId(latestExisting.getId());
+        } else if (request.getId() == null || request.getId().isBlank()) {
+            request.setId("app-" + UUID.randomUUID().toString().substring(0, 8));
+        }
+
+        ActorInfo actor = resolveActorInfo(request.getSubmittedBy(), "SUBMITTER");
+        request.setSubmittedBy(actor.actorName());
+        request.setStatus(ApprovalStatus.PENDING);
         request.setSubmittedAt(ZonedDateTime.now());
         request.setUpdatedAt(ZonedDateTime.now());
         ApprovalRequest saved = approvalRequestRepository.save(request);
+
+        // 2. Sync underlying domain entities to PENDING / SUBMITTED
+        syncDomainEntityFromApproval(saved, ApprovalStatus.PENDING, actor.actorName(), null);
+
         if (auditLogService != null) {
             auditLogService.recordSuccess(com.dypiu.nba.audit.AuditAction.SUBMIT, com.dypiu.nba.audit.ResourceType.APPROVAL_REQUEST, saved.getId(), "DRAFT", "PENDING", "Submitted for review", java.util.Map.of("type", saved.getType() != null ? saved.getType().name() : "", "title", saved.getTitle() != null ? saved.getTitle() : ""));
         }
@@ -597,7 +642,7 @@ public class ApprovalService {
 
     private void syncDomainEntityFromApproval(ApprovalRequest req, ApprovalStatus status, String verifierName, String remarks) {
         if (req == null) return;
-        String batchCourseId = req.getProgrammeBatchCourseId();
+        String batchCourseId = req.getProgrammeBatchCourseId() != null ? req.getProgrammeBatchCourseId() : req.getResourceId();
         if (batchCourseId != null && !batchCourseId.isBlank()) {
             if (req.getType() == ApprovalType.ATTAINMENT_CONFIGURATION || req.getType() == ApprovalType.ATTAINMENT_SETTINGS) {
                 configRepository.findByProgrammeBatchCourseId(batchCourseId).ifPresent(cfg -> {
@@ -605,9 +650,31 @@ public class ApprovalService {
                         cfg.setStatus(AttainmentConfigStatus.APPROVED);
                     } else if (status == ApprovalStatus.REVISION_REQUESTED || status == ApprovalStatus.REJECTED || status == ApprovalStatus.NEEDS_REVISION) {
                         cfg.setStatus(AttainmentConfigStatus.REVISION_REQUESTED);
+                    } else if (status == ApprovalStatus.PENDING || status == ApprovalStatus.SUBMITTED || status == ApprovalStatus.PENDING_APPROVAL) {
+                        cfg.setStatus(AttainmentConfigStatus.SUBMITTED);
+                        cfg.setSubmittedBy(verifierName != null ? verifierName : req.getSubmittedBy());
+                        cfg.setSubmittedAt(ZonedDateTime.now());
+                    } else if (status == ApprovalStatus.DRAFT) {
+                        cfg.setStatus(AttainmentConfigStatus.DRAFT);
                     }
                     configRepository.save(cfg);
                 });
+            } else if (req.getType() == ApprovalType.CO_DEFINITION || req.getType() == ApprovalType.CO_TARGETS || req.getType() == ApprovalType.COURSE_OUTCOMES_TARGETS) {
+                List<CourseOutcome> cos = coRepository.findByProgrammeBatchCourseId(batchCourseId);
+                for (CourseOutcome co : cos) {
+                    if (status == ApprovalStatus.APPROVED) {
+                        co.setStatus(ApprovalStatus.APPROVED);
+                    } else if (status == ApprovalStatus.REVISION_REQUESTED || status == ApprovalStatus.REJECTED || status == ApprovalStatus.NEEDS_REVISION) {
+                        co.setStatus(ApprovalStatus.REVISION_REQUESTED);
+                    } else if (status == ApprovalStatus.PENDING || status == ApprovalStatus.SUBMITTED || status == ApprovalStatus.PENDING_APPROVAL) {
+                        co.setStatus(ApprovalStatus.PENDING);
+                    } else if (status == ApprovalStatus.DRAFT) {
+                        co.setStatus(ApprovalStatus.DRAFT);
+                    }
+                }
+                if (!cos.isEmpty()) {
+                    coRepository.saveAll(cos);
+                }
             } else if (req.getType() == ApprovalType.COURSE_ATR) {
                 List<CourseAtr> atrs = courseAtrRepository.findByProgrammeBatchCourseId(batchCourseId);
                 for (CourseAtr a : atrs) {
@@ -615,10 +682,23 @@ public class ApprovalService {
                         a.setStatus(CourseAtrStatus.APPROVED);
                     } else if (status == ApprovalStatus.REVISION_REQUESTED || status == ApprovalStatus.REJECTED || status == ApprovalStatus.NEEDS_REVISION) {
                         a.setStatus(CourseAtrStatus.REVISION_REQUESTED);
+                    } else if (status == ApprovalStatus.PENDING || status == ApprovalStatus.SUBMITTED || status == ApprovalStatus.PENDING_APPROVAL) {
+                        a.setStatus(CourseAtrStatus.SUBMITTED_FOR_VERIFICATION);
+                        a.setSubmittedBy(verifierName != null ? verifierName : req.getSubmittedBy());
+                        a.setSubmittedAt(ZonedDateTime.now());
+                    } else if (status == ApprovalStatus.DRAFT) {
+                        a.setStatus(CourseAtrStatus.DRAFT);
                     }
-                    a.setVerifiedBy(verifierName);
-                    a.setVerificationComments(remarks);
-                    courseAtrRepository.save(a);
+                    if (verifierName != null && status == ApprovalStatus.APPROVED) {
+                        a.setVerifiedBy(verifierName);
+                        a.setVerifiedAt(ZonedDateTime.now());
+                    }
+                    if (remarks != null) {
+                        a.setVerificationComments(remarks);
+                    }
+                }
+                if (!atrs.isEmpty()) {
+                    courseAtrRepository.saveAll(atrs);
                 }
             }
         }
@@ -1369,17 +1449,18 @@ public class ApprovalService {
     public void resetToDraftOnModification(ApprovalType type, String programmeBatchCourseId, String programmeBatchOrProgrammeId) {
         if (programmeBatchCourseId != null && !programmeBatchCourseId.isBlank()) {
             List<ApprovalRequest> requests = approvalRequestRepository.findAll().stream()
-                    .filter(a -> (a.getType() == type || (type == ApprovalType.CO_DEFINITION && a.getType() == ApprovalType.CO_TARGETS))
+                    .filter(a -> isSameApprovalCategory(a.getType(), type)
                             && (programmeBatchCourseId.equalsIgnoreCase(a.getProgrammeBatchCourseId()) || programmeBatchCourseId.equalsIgnoreCase(a.getResourceId())))
                     .toList();
             for (ApprovalRequest req : requests) {
                 req.setStatus(ApprovalStatus.DRAFT);
                 approvalRequestRepository.save(req);
+                syncDomainEntityFromApproval(req, ApprovalStatus.DRAFT, null, null);
             }
         }
         if (programmeBatchOrProgrammeId != null && !programmeBatchOrProgrammeId.isBlank()) {
             List<ApprovalRequest> requests = approvalRequestRepository.findAll().stream()
-                    .filter(a -> a.getType() == type && (programmeBatchOrProgrammeId.equalsIgnoreCase(a.getProgrammeBatchId())
+                    .filter(a -> isSameApprovalCategory(a.getType(), type) && (programmeBatchOrProgrammeId.equalsIgnoreCase(a.getProgrammeBatchId())
                             || programmeBatchOrProgrammeId.equalsIgnoreCase(a.getMasterProgrammeId())
                             || programmeBatchOrProgrammeId.equalsIgnoreCase(a.getResourceId())))
                     .toList();

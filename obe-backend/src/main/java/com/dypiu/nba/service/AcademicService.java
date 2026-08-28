@@ -1646,8 +1646,40 @@ public class AcademicService {
 
     @Transactional(readOnly = true)
     public CourseCoordinatorSetupProgressDto getCourseCoordinatorSetupProgress(String coordinatorEmail, String masterCourseId) {
-        String targetMasterCourseId = resolveTargetMasterCourseId(masterCourseId);
-        System.out.println("[AcademicService] getCourseCoordinatorSetupProgress called | masterCourseId: " + masterCourseId + " -> targetMasterCourseId: " + targetMasterCourseId);
+        return getCourseCoordinatorSetupProgress(coordinatorEmail, masterCourseId, null);
+    }
+
+    @Transactional(readOnly = true)
+    public CourseCoordinatorSetupProgressDto getCourseCoordinatorSetupProgress(String coordinatorEmail, String masterCourseIdOrOfferingId, String programmeBatchId) {
+        String targetId = masterCourseIdOrOfferingId;
+        if ((targetId == null || targetId.isBlank()) && programmeBatchId != null && !programmeBatchId.isBlank()) {
+            List<ProgrammeBatchCourse> pbcs = programmeBatchCourseRepository.findByProgrammeBatchId(programmeBatchId);
+            if (coordinatorEmail != null && !coordinatorEmail.isBlank()) {
+                final String searchEmail = coordinatorEmail.trim().toLowerCase();
+                Optional<ProgrammeBatchCourse> matched = pbcs.stream()
+                        .filter(o -> {
+                            boolean matches = false;
+                            if (o.getCourseCoordinatorId() != null) {
+                                User u = userRepository.findById(o.getCourseCoordinatorId()).orElse(null);
+                                if (u != null && (u.getEmail().equalsIgnoreCase(searchEmail) || u.getName().equalsIgnoreCase(searchEmail))) {
+                                    matches = true;
+                                }
+                            }
+                            boolean matchFaculty = (o.getAssignedFaculty() != null && o.getAssignedFaculty().toLowerCase().contains(searchEmail));
+                            return matches || matchFaculty;
+                        })
+                        .findFirst();
+                if (matched.isPresent()) {
+                    targetId = matched.get().getId();
+                } else if (!pbcs.isEmpty()) {
+                    targetId = pbcs.get(0).getId();
+                }
+            } else if (!pbcs.isEmpty()) {
+                targetId = pbcs.get(0).getId();
+            }
+        }
+        String targetMasterCourseId = resolveTargetMasterCourseId(targetId);
+        System.out.println("[AcademicService] getCourseCoordinatorSetupProgress called | masterCourseId: " + masterCourseIdOrOfferingId + " | batch: " + programmeBatchId + " -> targetMasterCourseId: " + targetMasterCourseId);
         if (targetMasterCourseId != null && !targetMasterCourseId.isBlank()) {
             if (programmeBatchCourseRepository.existsById(targetMasterCourseId)) {
                 enforceProgrammeBatchCourseScope(targetMasterCourseId);
@@ -1657,7 +1689,7 @@ public class AcademicService {
         }
         CourseCoordinatorSetupProgress progress = (targetMasterCourseId != null)
                 ? ccSetupProgressRepository.findByProgrammeBatchCourseId(targetMasterCourseId).orElseGet(() -> CourseCoordinatorSetupProgress.builder()
-                        .id("ccprog-" + targetMasterCourseId)
+                        .id("ccprog-" + UUID.randomUUID().toString().substring(0, 8))
                         .programmeBatchCourseId(targetMasterCourseId)
                         .coordinatorEmail(coordinatorEmail)
                         .currentStep(1)
@@ -1680,7 +1712,8 @@ public class AcademicService {
 
         return CourseCoordinatorSetupProgressDto.builder()
                 .id(progress.getId())
-                .masterCourseId(progress.getMasterCourseId())
+                .programmeBatchCourseId(progress.getProgrammeBatchCourseId())
+                .masterCourseId(progress.getProgrammeBatchCourseId())
                 .currentStep(progress.getCurrentStep())
                 .completedSteps(completed)
                 .pendingSteps(pending)

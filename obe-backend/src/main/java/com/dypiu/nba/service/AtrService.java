@@ -160,7 +160,13 @@ public class AtrService {
             List<ProgrammeBatchCourse> offerings = programmeBatchCourseRepository.findByMasterCourseId(masterCourseId);
             boolean hasAssigned = offerings.stream().anyMatch(o -> {
                 boolean isCoord = (o.getCourseCoordinatorId() != null && Objects.equals(o.getCourseCoordinatorId(), scope.getUserId()));
-                return isCoord || (o.getAssignedFaculty() != null && (o.getAssignedFaculty().contains(scope.getEmail()) || o.getAssignedFaculty().contains(scope.getName())));
+                boolean nameMatch = (o.getCourseCoordinatorName() != null && (o.getCourseCoordinatorName().equalsIgnoreCase(scope.getName()) || o.getCourseCoordinatorName().equalsIgnoreCase(scope.getUsername()) || o.getCourseCoordinatorName().equalsIgnoreCase(scope.getEmail())));
+                boolean facultyMatch = (o.getAssignedFaculty() != null && (
+                        (scope.getEmail() != null && o.getAssignedFaculty().toLowerCase().contains(scope.getEmail().toLowerCase()))
+                        || (scope.getName() != null && o.getAssignedFaculty().toLowerCase().contains(scope.getName().toLowerCase()))
+                        || (scope.getUsername() != null && o.getAssignedFaculty().toLowerCase().contains(scope.getUsername().toLowerCase()))
+                ));
+                return isCoord || nameMatch || facultyMatch;
             });
             if (!hasAssigned) {
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: You are not assigned to this Course.");
@@ -201,7 +207,15 @@ public class AtrService {
         }
         ProgrammeBatchCourse offering = programmeBatchCourseRepository.findById(offeringId)
                 .orElseThrow(() -> new ResourceNotFoundException("Course offering not found: " + offeringId));
-        boolean isCoordinator = (offering.getCourseCoordinatorId() != null && Objects.equals(offering.getCourseCoordinatorId(), scope.getUserId()));
+        String coordEmail = offering.getCourseCoordinatorEmail() != null ? offering.getCourseCoordinatorEmail() : offering.getCoordinatorEmail();
+        boolean isCoordinator = (offering.getCourseCoordinatorId() != null && scope.getUserId() != null && Objects.equals(offering.getCourseCoordinatorId(), scope.getUserId()))
+                || (coordEmail != null && scope.getEmail() != null && !coordEmail.isBlank() && !scope.getEmail().isBlank() && coordEmail.trim().equalsIgnoreCase(scope.getEmail().trim()))
+                || (offering.getCourseCoordinatorName() != null && scope.getName() != null && !offering.getCourseCoordinatorName().isBlank() && !scope.getName().isBlank() && offering.getCourseCoordinatorName().trim().equalsIgnoreCase(scope.getName().trim()))
+                || (offering.getCourseCoordinatorName() != null && scope.getUsername() != null && !offering.getCourseCoordinatorName().isBlank() && !scope.getUsername().isBlank() && offering.getCourseCoordinatorName().trim().equalsIgnoreCase(scope.getUsername().trim()))
+                || (offering.getCourseCoordinatorName() != null && scope.getEmail() != null && !offering.getCourseCoordinatorName().isBlank() && !scope.getEmail().isBlank() && offering.getCourseCoordinatorName().trim().equalsIgnoreCase(scope.getEmail().trim()))
+                || (offering.getAssignedFaculty() != null && scope.getEmail() != null && !scope.getEmail().isBlank() && offering.getAssignedFaculty().toLowerCase().contains(scope.getEmail().trim().toLowerCase()))
+                || (offering.getAssignedFaculty() != null && scope.getName() != null && !scope.getName().isBlank() && offering.getAssignedFaculty().toLowerCase().contains(scope.getName().trim().toLowerCase()))
+                || (offering.getAssignedFaculty() != null && scope.getUsername() != null && !scope.getUsername().isBlank() && offering.getAssignedFaculty().toLowerCase().contains(scope.getUsername().trim().toLowerCase()));
         if (!isCoordinator) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Only the assigned Course Coordinator can perform this action.");
         }
@@ -433,16 +447,22 @@ public class AtrService {
         Map<String, CourseAtr> atrMap = existingAtrs.stream().collect(Collectors.toMap(CourseAtr::getCoCode, a -> a, (a, b) -> a));
 
         Map<String, BigDecimal> attainmentScoreMap = new HashMap<>();
-        try {
-            Map<String, Object> calcResult = attainmentCalculationService.calculateCourseCoAttainment(offering.getId());
-            @SuppressWarnings("unchecked")
-            List<Map<String, Object>> coAttainments = (List<Map<String, Object>>) calcResult.getOrDefault("coAttainments", Collections.emptyList());
-            for (Map<String, Object> m : coAttainments) {
-                String code = (String) m.get("coCode");
-                BigDecimal combined = (BigDecimal) m.get("combinedAttainment");
-                if (code != null && combined != null) attainmentScoreMap.put(code, combined);
-            }
-        } catch (Exception ignored) {}
+        if (existingAtrs.isEmpty() && attainmentCalculationService != null) {
+            try {
+                Map<String, Object> calcResult = attainmentCalculationService.calculateCourseCoAttainment(offering.getId());
+                if (calcResult != null) {
+                    @SuppressWarnings("unchecked")
+                    List<Map<String, Object>> coAttainments = (List<Map<String, Object>>) calcResult.getOrDefault("coAttainments", Collections.emptyList());
+                    if (coAttainments != null) {
+                        for (Map<String, Object> m : coAttainments) {
+                            String code = (String) m.get("coCode");
+                            BigDecimal combined = (BigDecimal) m.get("combinedAttainment");
+                            if (code != null && combined != null) attainmentScoreMap.put(code, combined);
+                        }
+                    }
+                }
+            } catch (Throwable ignored) {}
+        }
 
         List<CourseAtrReportDto.OutcomeRow> rows = new ArrayList<>();
         String atrStatus = existingAtrs.isEmpty() ? "DRAFT" : existingAtrs.get(0).getStatus().name();
@@ -591,12 +611,42 @@ public class AtrService {
             saveCourseAtrReport(getCourseAtrReport(targetOfferingId));
             atrs = courseAtrRepository.findByProgrammeBatchCourseId(targetOfferingId);
         }
+        boolean alreadyPending = atrs.stream().anyMatch(a -> a.getStatus() == CourseAtrStatus.SUBMITTED_FOR_VERIFICATION);
+        if (alreadyPending) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Course ATR has already been submitted and is pending review.");
+        }
+        boolean alreadyApproved = atrs.stream().anyMatch(a -> a.getStatus() == CourseAtrStatus.APPROVED || a.getStatus() == CourseAtrStatus.VERIFIED);
+        if (alreadyApproved) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Course ATR has already been approved.");
+        }
         for (CourseAtr a : atrs) {
             a.setStatus(CourseAtrStatus.SUBMITTED_FOR_VERIFICATION);
             a.setSubmittedBy(submittedBy);
             a.setSubmittedAt(ZonedDateTime.now());
         }
         List<CourseAtr> saved = courseAtrRepository.saveAll(atrs);
+
+        if (approvalService != null) {
+            ProgrammeBatchCourse pbc = programmeBatchCourseRepository.findById(targetOfferingId).orElse(null);
+            MasterCourse mc = pbc != null && pbc.getMasterCourseId() != null ? masterCourseRepository.findById(pbc.getMasterCourseId()).orElse(null) : null;
+            String courseName = pbc != null && pbc.getCourseNameOverride() != null && !pbc.getCourseNameOverride().isBlank()
+                    ? pbc.getCourseNameOverride()
+                    : (mc != null ? mc.getName() : "Course ATR");
+            try {
+                approvalService.submitApprovalRequest(ApprovalRequest.builder()
+                        .type(ApprovalType.COURSE_ATR)
+                        .title("Course ATR for " + courseName)
+                        .programmeBatchCourseId(targetOfferingId)
+                        .resourceId(targetOfferingId)
+                        .masterCourseId(pbc != null ? pbc.getMasterCourseId() : null)
+                        .programmeBatchId(pbc != null ? pbc.getProgrammeBatchId() : null)
+                        .submittedBy(submittedBy)
+                        .build());
+            } catch (Exception e) {
+                System.out.println("[AtrService] Approval request sync log: " + e.getMessage());
+            }
+        }
+
         return saved.isEmpty() ? null : saved.get(0);
     }
 
@@ -1066,6 +1116,37 @@ public class AtrService {
             }
         }
         return historicalReports;
+    }
+
+    @Transactional(readOnly = true)
+    public CourseAtrReportDto getPreviousBatchCourseAtrReport(String programmeBatchCourseId) {
+        System.out.println("[AtrService] getPreviousBatchCourseAtrReport called | programmeBatchCourseId: " + programmeBatchCourseId);
+        String offeringId = resolveOfferingId(programmeBatchCourseId);
+        if (offeringId == null || offeringId.isBlank()) return null;
+        enforceOfferingScope(offeringId);
+
+        ProgrammeBatchCourse currentOffering = programmeBatchCourseRepository.findById(offeringId).orElse(null);
+        if (currentOffering == null || currentOffering.getProgrammeBatchId() == null) return null;
+
+        ProgrammeBatch currentBatch = programmeBatchRepository.findById(currentOffering.getProgrammeBatchId()).orElse(null);
+        if (currentBatch == null || currentBatch.getMasterProgrammeId() == null) return null;
+
+        List<ProgrammeBatch> batches = programmeBatchRepository.findByMasterProgrammeIdOrderByStartYearDesc(currentBatch.getMasterProgrammeId());
+
+        for (ProgrammeBatch b : batches) {
+            if (b.getStartYear() != null && currentBatch.getStartYear() != null && b.getStartYear() < currentBatch.getStartYear()) {
+                List<ProgrammeBatchCourse> prevOfferings = programmeBatchCourseRepository.findByProgrammeBatchId(b.getId());
+                for (ProgrammeBatchCourse prevOffering : prevOfferings) {
+                    if (Objects.equals(prevOffering.getMasterCourseId(), currentOffering.getMasterCourseId())) {
+                        List<CourseAtr> atrs = courseAtrRepository.findByProgrammeBatchCourseId(prevOffering.getId());
+                        if (!atrs.isEmpty()) {
+                            return buildCourseAtrReport(prevOffering);
+                        }
+                    }
+                }
+            }
+        }
+        return null;
     }
 
     @Transactional(readOnly = true)

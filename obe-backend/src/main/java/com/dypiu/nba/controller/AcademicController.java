@@ -358,10 +358,18 @@ public class AcademicController {
     @GetMapping("/course-coordinator/setup-progress")
     public ResponseEntity<ApiResponse<CourseCoordinatorSetupProgressDto>> getCourseCoordinatorSetupProgress(
             @RequestParam(required = false) String coordinatorEmail,
-            @RequestParam(required = false) String masterCourseId) {
+            @RequestParam(required = false) String masterCourseId,
+            @RequestParam(required = false) String offeringId,
+            @RequestParam(required = false) String programmeBatchCourseId,
+            @RequestParam(required = false) String programmeBatchId,
+            java.security.Principal principal) {
+        String targetCourseId = (programmeBatchCourseId != null && !programmeBatchCourseId.isBlank()) ? programmeBatchCourseId
+                : ((offeringId != null && !offeringId.isBlank()) ? offeringId : masterCourseId);
+        String targetEmail = (coordinatorEmail != null && !coordinatorEmail.isBlank()) ? coordinatorEmail
+                : (principal != null ? principal.getName() : null);
         return ResponseEntity.ok(ApiResponse.<CourseCoordinatorSetupProgressDto>builder()
                 .success(true)
-                .data(academicService.getCourseCoordinatorSetupProgress(coordinatorEmail, masterCourseId))
+                .data(academicService.getCourseCoordinatorSetupProgress(targetEmail, targetCourseId, programmeBatchId))
                 .build());
     }
 
