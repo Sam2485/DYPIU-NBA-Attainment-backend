@@ -12,7 +12,7 @@ import java.util.List;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/approvals")
+@RequestMapping({"/approvals", "/api/v1/approvals"})
 @RequiredArgsConstructor
 public class ApprovalController {
 
@@ -33,14 +33,43 @@ public class ApprovalController {
     }
 
     @GetMapping("/pending")
-    public ResponseEntity<ApiResponse<List<ApprovalRequest>>> getPendingApprovals(
+    public ResponseEntity<ApiResponse<?>> getPendingApprovals(
+            @RequestParam(required = false) String programmeBatchId,
             @RequestParam(required = false) String role,
             @RequestParam(required = false) String schoolId,
             @RequestParam(required = false) String masterProgrammeId) {
+        if (programmeBatchId != null && !programmeBatchId.isBlank()) {
+            return ResponseEntity.ok(ApiResponse.<com.dypiu.nba.dto.ProgrammeBatchApprovalInboxDto>builder()
+                    .success(true)
+                    .message("Pending approvals fetched successfully")
+                    .data(approvalService.getPendingApprovalsByProgrammeBatch(programmeBatchId.trim()))
+                    .build());
+        }
         String effectiveProgId = (masterProgrammeId != null && !masterProgrammeId.isBlank()) ? masterProgrammeId : masterProgrammeId;
         return ResponseEntity.ok(ApiResponse.<List<ApprovalRequest>>builder()
                 .success(true)
+                .message("Pending approvals fetched successfully")
                 .data(approvalService.getPendingApprovals(role, schoolId, effectiveProgId))
+                .build());
+    }
+
+    @GetMapping("/reviewed")
+    public ResponseEntity<ApiResponse<com.dypiu.nba.dto.ProgrammeBatchApprovalInboxDto>> getReviewedApprovals(
+            @RequestParam(required = false) String programmeBatchId) {
+        return ResponseEntity.ok(ApiResponse.<com.dypiu.nba.dto.ProgrammeBatchApprovalInboxDto>builder()
+                .success(true)
+                .message("Reviewed approvals fetched successfully")
+                .data(approvalService.getReviewedApprovalsByProgrammeBatch(programmeBatchId))
+                .build());
+    }
+
+    @GetMapping("/programme-batch-courses/{programmeBatchCourseId}")
+    public ResponseEntity<ApiResponse<com.dypiu.nba.dto.CourseApprovalWorkspaceDto>> getCourseApprovalWorkspace(
+            @PathVariable String programmeBatchCourseId) {
+        return ResponseEntity.ok(ApiResponse.<com.dypiu.nba.dto.CourseApprovalWorkspaceDto>builder()
+                .success(true)
+                .message("Programme-Batch-Course approval details fetched successfully")
+                .data(approvalService.getCourseApprovalWorkspace(programmeBatchCourseId))
                 .build());
     }
 
@@ -87,26 +116,32 @@ public class ApprovalController {
                 .build());
     }
 
-    @PostMapping("/{id}/approve")
-    public ResponseEntity<ApiResponse<ApprovalRequest>> approveRequest(@PathVariable String id, @RequestBody(required = false) Map<String, String> body) {
-        String actorName = body != null && body.containsKey("actorName") ? body.get("actorName") : "Approver";
-        String actorRole = body != null && body.containsKey("actorRole") ? body.get("actorRole") : "APPROVER";
-        return ResponseEntity.ok(ApiResponse.<ApprovalRequest>builder()
+    @PostMapping({"/{approvalRequestId}/approve"})
+    public ResponseEntity<ApiResponse<com.dypiu.nba.dto.ApprovalActionResultDto>> approveRequest(
+            @PathVariable String approvalRequestId,
+            @RequestBody(required = false) Map<String, String> body) {
+        String actorName = body != null && body.containsKey("actorName") ? body.get("actorName") : null;
+        String actorRole = body != null && body.containsKey("actorRole") ? body.get("actorRole") : null;
+        return ResponseEntity.ok(ApiResponse.<com.dypiu.nba.dto.ApprovalActionResultDto>builder()
                 .success(true)
-                .message("Request approved successfully")
-                .data(approvalService.approveRequest(id, actorName, actorRole))
+                .message("Approval completed successfully")
+                .data(approvalService.approveRequestDto(approvalRequestId, actorName, actorRole))
                 .build());
     }
 
-    @PostMapping({"/{id}/reject", "/{id}/request-revision"})
-    public ResponseEntity<ApiResponse<ApprovalRequest>> rejectRequest(@PathVariable String id, @RequestBody(required = false) Map<String, String> body) {
-        String remarks = body != null && body.containsKey("remarks") ? body.get("remarks") : (body != null && body.containsKey("comments") ? body.get("comments") : "Revision requested.");
-        String actorName = body != null && body.containsKey("actorName") ? body.get("actorName") : "Reviewer";
-        String actorRole = body != null && body.containsKey("actorRole") ? body.get("actorRole") : "REVIEWER";
-        return ResponseEntity.ok(ApiResponse.<ApprovalRequest>builder()
+    @PostMapping({"/{approvalRequestId}/request-revision", "/{approvalRequestId}/reject"})
+    public ResponseEntity<ApiResponse<com.dypiu.nba.dto.ApprovalActionResultDto>> rejectRequest(
+            @PathVariable String approvalRequestId,
+            @RequestBody(required = false) Map<String, String> body) {
+        String reason = body != null && body.containsKey("reason") ? body.get("reason")
+                : (body != null && body.containsKey("remarks") ? body.get("remarks")
+                : (body != null && body.containsKey("comments") ? body.get("comments") : "Revision requested."));
+        String actorName = body != null && body.containsKey("actorName") ? body.get("actorName") : null;
+        String actorRole = body != null && body.containsKey("actorRole") ? body.get("actorRole") : null;
+        return ResponseEntity.ok(ApiResponse.<com.dypiu.nba.dto.ApprovalActionResultDto>builder()
                 .success(true)
-                .message("Revision requested")
-                .data(approvalService.rejectRequest(id, remarks, actorName, actorRole))
+                .message("Revision requested successfully")
+                .data(approvalService.requestRevisionDto(approvalRequestId, reason, actorName, actorRole))
                 .build());
     }
 

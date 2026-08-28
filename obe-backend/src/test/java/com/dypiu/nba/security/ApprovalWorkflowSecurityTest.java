@@ -112,6 +112,7 @@ public class ApprovalWorkflowSecurityTest {
                 .name("2022-2026")
                 .startYear(2022)
                 .endYear(2026)
+                .coordinatorEmail("pc.a." + salt + "@dypiu.ac.in")
                 .build());
 
         courseA = masterCourseRepository.save(MasterCourse.builder()
@@ -607,12 +608,12 @@ public class ApprovalWorkflowSecurityTest {
                 "actorRole", "DIRECTOR"
         );
 
-        ResponseEntity<ApiResponse<ApprovalRequest>> res = approvalController.approveRequest(reqA.getId(), body);
+        ResponseEntity<ApiResponse<com.dypiu.nba.dto.ApprovalActionResultDto>> res = approvalController.approveRequest(reqA.getId(), body);
         assertNotNull(res.getBody());
-        ApprovalRequest approved = res.getBody().getData();
+        com.dypiu.nba.dto.ApprovalActionResultDto approved = res.getBody().getData();
 
         // Must record PC Alpha (authenticated user's name), NOT "Dr. Fake Director"
-        assertEquals(pcA.getName(), approved.getApprovedBy());
+        assertEquals(pcA.getName(), approved.getReviewedBy().get("name"));
 
         List<ApprovalHistory> history = approvalHistoryRepository.findByApprovalRequestId(reqA.getId());
         assertFalse(history.isEmpty());
@@ -646,11 +647,11 @@ public class ApprovalWorkflowSecurityTest {
                 "remarks", "Needs changes"
         );
 
-        ResponseEntity<ApiResponse<ApprovalRequest>> res = approvalController.rejectRequest(reqA.getId(), body);
+        ResponseEntity<ApiResponse<com.dypiu.nba.dto.ApprovalActionResultDto>> res = approvalController.rejectRequest(reqA.getId(), body);
         assertNotNull(res.getBody());
-        ApprovalRequest rejected = res.getBody().getData();
-        assertEquals(ApprovalStatus.REVISION_REQUESTED, rejected.getStatus());
-        assertEquals(pcA.getName(), rejected.getApprovedBy());
+        com.dypiu.nba.dto.ApprovalActionResultDto rejected = res.getBody().getData();
+        assertEquals("REVISION_REQUESTED", rejected.getStatus());
+        assertEquals(pcA.getName(), rejected.getReviewedBy().get("name"));
 
         List<ApprovalHistory> history = approvalHistoryRepository.findByApprovalRequestId(reqA.getId());
         assertFalse(history.isEmpty());
@@ -703,12 +704,12 @@ public class ApprovalWorkflowSecurityTest {
                 .build());
 
         // First approval
-        ResponseEntity<ApiResponse<ApprovalRequest>> res1 = approvalController.approveRequest(reqA.getId(), null);
-        assertEquals(ApprovalStatus.APPROVED, res1.getBody().getData().getStatus());
+        ResponseEntity<ApiResponse<com.dypiu.nba.dto.ApprovalActionResultDto>> res1 = approvalController.approveRequest(reqA.getId(), null);
+        assertEquals("APPROVED", res1.getBody().getData().getStatus());
 
         // Second approval (idempotent no-op)
-        ResponseEntity<ApiResponse<ApprovalRequest>> res2 = approvalController.approveRequest(reqA.getId(), null);
-        assertEquals(ApprovalStatus.APPROVED, res2.getBody().getData().getStatus());
+        ResponseEntity<ApiResponse<com.dypiu.nba.dto.ApprovalActionResultDto>> res2 = approvalController.approveRequest(reqA.getId(), null);
+        assertEquals("APPROVED", res2.getBody().getData().getStatus());
 
         // Only 1 history record should be generated for the actual approval
         List<ApprovalHistory> history = approvalHistoryRepository.findByApprovalRequestId(reqA.getId());

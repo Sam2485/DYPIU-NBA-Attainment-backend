@@ -18,7 +18,7 @@ import java.security.Principal;
 import java.util.List;
 
 @RestController
-@RequestMapping("/programme-batch-courses")
+@RequestMapping({"/programme-batch-courses", "/api/v1/programme-batch-courses", "/api/v1/academic/programme-batch-courses"})
 @RequiredArgsConstructor
 public class ProgrammeBatchCourseController {
 
@@ -122,6 +122,17 @@ public class ProgrammeBatchCourseController {
                 .build());
     }
 
+    @DeleteMapping("/{programmeBatchCourseId}/course-outcomes/{coId}")
+    public ResponseEntity<ApiResponse<Void>> deleteCourseOutcome(
+            @PathVariable String programmeBatchCourseId,
+            @PathVariable String coId) {
+        outcomeService.deleteCourseOutcome(programmeBatchCourseId, coId);
+        return ResponseEntity.ok(ApiResponse.<Void>builder()
+                .success(true)
+                .message("Course outcome deleted successfully")
+                .build());
+    }
+
     // --- CO -> PO/PSO Mapping Matrix & Keywords ---
     @GetMapping("/{programmeBatchCourseId}/co-po-pso-mappings")
     public ResponseEntity<ApiResponse<CourseMappingMatrixDto>> getCourseMappings(
@@ -164,12 +175,17 @@ public class ProgrammeBatchCourseController {
                 .build());
     }
 
-    // --- Course Attainment Main Report ---
-    @GetMapping("/{programmeBatchCourseId}/attainment-main")
+    // --- Course Attainment Main Report (Table 1, Table 2, Attainment Table) ---
+    @GetMapping({
+            "/{programmeBatchCourseId}/attainment-main",
+            "/{programmeBatchCourseId}/co-attainment",
+            "/{programmeBatchCourseId}/course-attainment"
+    })
     public ResponseEntity<ApiResponse<CourseAttainmentReportDto>> getCourseAttainmentMainReport(
             @PathVariable String programmeBatchCourseId) {
         return ResponseEntity.ok(ApiResponse.<CourseAttainmentReportDto>builder()
                 .success(true)
+                .message("Course CO attainment report fetched successfully")
                 .data(attainmentReportService.getOrCreateCourseAttainmentReport(programmeBatchCourseId))
                 .build());
     }
@@ -252,6 +268,16 @@ public class ProgrammeBatchCourseController {
                 .build());
     }
 
+    @DeleteMapping("/{programmeBatchCourseId}/examination")
+    public ResponseEntity<ApiResponse<Void>> deleteExaminationMarks(
+            @PathVariable String programmeBatchCourseId) {
+        calculationService.deleteExaminationData(programmeBatchCourseId);
+        return ResponseEntity.ok(ApiResponse.<Void>builder()
+                .success(true)
+                .message("Examination marks and uploaded sheet deleted successfully")
+                .build());
+    }
+
     // --- Course End Survey Upload ---
     @GetMapping("/{programmeBatchCourseId}/survey")
     public ResponseEntity<ApiResponse<SurveyAttainmentResultDto>> getSurveyAttainment(
@@ -260,6 +286,17 @@ public class ProgrammeBatchCourseController {
                 .success(true)
                 .message("Course End Survey attainment fetched successfully")
                 .data(calculationService.getSurveyAttainment(programmeBatchCourseId))
+                .build());
+    }
+
+    @PostMapping("/{programmeBatchCourseId}/survey")
+    public ResponseEntity<ApiResponse<SurveyAttainmentResultDto>> saveSurveyResponses(
+            @PathVariable String programmeBatchCourseId,
+            @RequestBody com.dypiu.nba.dto.SurveyMarksPayloadDto payload) {
+        return ResponseEntity.ok(ApiResponse.<SurveyAttainmentResultDto>builder()
+                .success(true)
+                .message("Course End Survey responses saved successfully")
+                .data(calculationService.calculateSurveyAttainment(programmeBatchCourseId, payload))
                 .build());
     }
 
@@ -275,6 +312,16 @@ public class ProgrammeBatchCourseController {
                 .success(true)
                 .message("Course End Survey responses processed successfully")
                 .data(calculationService.processAndSaveSurveyFile(programmeBatchCourseId, file, thresholdPercentage, uploader))
+                .build());
+    }
+
+    @DeleteMapping("/{programmeBatchCourseId}/survey")
+    public ResponseEntity<ApiResponse<Void>> deleteSurveyResponses(
+            @PathVariable String programmeBatchCourseId) {
+        calculationService.deleteSurveyData(programmeBatchCourseId);
+        return ResponseEntity.ok(ApiResponse.<Void>builder()
+                .success(true)
+                .message("Course End Survey responses and uploaded sheet deleted successfully")
                 .build());
     }
 }

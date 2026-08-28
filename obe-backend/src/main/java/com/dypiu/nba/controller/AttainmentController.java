@@ -13,7 +13,7 @@ import java.math.BigDecimal;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/attainment")
+@RequestMapping({"/attainment", "/api/v1/attainment"})
 @RequiredArgsConstructor
 public class AttainmentController {
 
@@ -24,7 +24,7 @@ public class AttainmentController {
     private final com.dypiu.nba.service.ReportAccessService reportAccessService;
     private final com.dypiu.nba.repository.ProgrammeBatchCourseRepository programmeBatchCourseRepository;
 
-    @GetMapping({"/config/{masterCourseId}", "/configs/{masterCourseId}"})
+    @GetMapping({"/config/{masterCourseId}", "/configs/{masterCourseId}", "/configurations/programme-batch-courses/{masterCourseId}"})
     public ResponseEntity<ApiResponse<AttainmentConfiguration>> getConfig(
             @PathVariable String masterCourseId,
             @RequestParam(required = false) String programmeBatchId,
@@ -41,7 +41,7 @@ public class AttainmentController {
                 .build());
     }
 
-    @RequestMapping(value = {"/config/{masterCourseId}", "/configs/{masterCourseId}"}, method = {RequestMethod.POST, RequestMethod.PUT})
+    @RequestMapping(value = {"/config/{masterCourseId}", "/configs/{masterCourseId}", "/configurations/programme-batch-courses/{masterCourseId}"}, method = {RequestMethod.POST, RequestMethod.PUT})
     public ResponseEntity<ApiResponse<AttainmentConfiguration>> saveConfig(
             @PathVariable String masterCourseId,
             @RequestBody AttainmentConfiguration config,
@@ -344,9 +344,43 @@ public class AttainmentController {
                 .build());
     }
 
+    @DeleteMapping({"/examination/{programmeBatchCourseId}", "/course-offerings/{programmeBatchCourseId}/examination"})
+    public ResponseEntity<ApiResponse<Void>> deleteExaminationData(
+            @PathVariable String programmeBatchCourseId,
+            java.security.Principal principal) {
+        com.dypiu.nba.entity.User user = reportAccessService.getAuthenticatedUser(principal);
+        reportAccessService.validateCourseOfferingAccess(user, programmeBatchCourseId);
+        calculationService.deleteExaminationData(programmeBatchCourseId);
+        return ResponseEntity.ok(ApiResponse.<Void>builder()
+                .success(true)
+                .message("Examination marks and uploaded sheet deleted successfully")
+                .build());
+    }
+
+    // --- Course CO Attainment Full Report (Table 1, Table 2, Attainment Table) ---
+    @GetMapping({
+            "/course/{programmeBatchCourseId}",
+            "/co-attainment/{programmeBatchCourseId}",
+            "/course-offerings/{programmeBatchCourseId}/attainment",
+            "/programme-batch-courses/{programmeBatchCourseId}/attainment-main",
+            "/programme-batch-courses/{programmeBatchCourseId}/co-attainment",
+            "/programme-batch-courses/{programmeBatchCourseId}/course-attainment"
+    })
+    public ResponseEntity<ApiResponse<CourseAttainmentReportDto>> getCourseCoAttainmentReport(
+            @PathVariable String programmeBatchCourseId,
+            java.security.Principal principal) {
+        com.dypiu.nba.entity.User user = reportAccessService.getAuthenticatedUser(principal);
+        reportAccessService.validateCourseOfferingAccess(user, programmeBatchCourseId);
+        return ResponseEntity.ok(ApiResponse.<CourseAttainmentReportDto>builder()
+                .success(true)
+                .message("Course CO attainment report fetched successfully")
+                .data(attainmentReportService.getOrCreateCourseAttainmentReport(programmeBatchCourseId))
+                .build());
+    }
+
     // --- Course End Survey Attainment Endpoints (Sheet 3: Course End Survey) ---
 
-    @GetMapping("/programme-batch-courses/{programmeBatchCourseId}/survey")
+    @GetMapping({"/survey/{programmeBatchCourseId}", "/course-offerings/{programmeBatchCourseId}/survey", "/programme-batch-courses/{programmeBatchCourseId}/survey"})
     public ResponseEntity<ApiResponse<SurveyAttainmentResultDto>> getSurveyAttainment(
             @PathVariable String programmeBatchCourseId,
             java.security.Principal principal) {
@@ -359,7 +393,7 @@ public class AttainmentController {
                 .build());
     }
 
-    @PostMapping("/programme-batch-courses/{programmeBatchCourseId}/survey")
+    @PostMapping({"/survey/{programmeBatchCourseId}", "/course-offerings/{programmeBatchCourseId}/survey", "/programme-batch-courses/{programmeBatchCourseId}/survey"})
     public ResponseEntity<ApiResponse<SurveyAttainmentResultDto>> saveAndCalculateSurveyAttainment(
             @PathVariable String programmeBatchCourseId,
             @RequestBody SurveyMarksPayloadDto payload,
@@ -373,7 +407,7 @@ public class AttainmentController {
                 .build());
     }
 
-    @PostMapping(value = "/programme-batch-courses/{programmeBatchCourseId}/survey/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PostMapping(value = {"/survey/{programmeBatchCourseId}/upload", "/course-offerings/{programmeBatchCourseId}/survey/upload", "/programme-batch-courses/{programmeBatchCourseId}/survey/upload"}, consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ApiResponse<SurveyAttainmentResultDto>> uploadAndProcessSurveySheet(
             @PathVariable String programmeBatchCourseId,
             @RequestParam("file") MultipartFile file,
@@ -387,6 +421,19 @@ public class AttainmentController {
                 .success(true)
                 .message("Course End Survey sheet saved with audit metadata, parsed via POI, and indirect attainment calculated successfully")
                 .data(calculationService.processAndSaveSurveyFile(programmeBatchCourseId, file, thresholdPercentage, uploader))
+                .build());
+    }
+
+    @DeleteMapping({"/survey/{programmeBatchCourseId}", "/course-offerings/{programmeBatchCourseId}/survey", "/programme-batch-courses/{programmeBatchCourseId}/survey"})
+    public ResponseEntity<ApiResponse<Void>> deleteSurveyData(
+            @PathVariable String programmeBatchCourseId,
+            java.security.Principal principal) {
+        com.dypiu.nba.entity.User user = reportAccessService.getAuthenticatedUser(principal);
+        reportAccessService.validateCourseOfferingAccess(user, programmeBatchCourseId);
+        calculationService.deleteSurveyData(programmeBatchCourseId);
+        return ResponseEntity.ok(ApiResponse.<Void>builder()
+                .success(true)
+                .message("Course End Survey responses and uploaded sheet deleted successfully")
                 .build());
     }
 

@@ -79,13 +79,23 @@ public class OutcomeService {
         ProgrammeBatchCourse offering = programmeBatchCourseRepository.findById(offeringId)
                 .orElseThrow(() -> new ResourceNotFoundException("Course offering not found: " + offeringId));
         
-        boolean isAssignedCourseCoordinator = Objects.equals(offering.getCourseCoordinatorId(), scope.getUserId());
+        String coordEmail = offering.getCourseCoordinatorEmail() != null ? offering.getCourseCoordinatorEmail() : offering.getCoordinatorEmail();
+        boolean isAssignedCourseCoordinator = (offering.getCourseCoordinatorId() != null && scope.getUserId() != null && Objects.equals(offering.getCourseCoordinatorId(), scope.getUserId()))
+                || (coordEmail != null && scope.getEmail() != null && !coordEmail.isBlank() && !scope.getEmail().isBlank() && coordEmail.trim().equalsIgnoreCase(scope.getEmail().trim()))
+                || (offering.getCourseCoordinatorName() != null && scope.getName() != null && !offering.getCourseCoordinatorName().isBlank() && !scope.getName().isBlank() && offering.getCourseCoordinatorName().trim().equalsIgnoreCase(scope.getName().trim()))
+                || (offering.getCourseCoordinatorName() != null && scope.getEmail() != null && !offering.getCourseCoordinatorName().isBlank() && !scope.getEmail().isBlank() && offering.getCourseCoordinatorName().trim().equalsIgnoreCase(scope.getEmail().trim()));
         
         boolean isAssignedProgrammeCoordinator = false;
         if (scope.isProgrammeCoordinator()) {
             ProgrammeBatch batch = programmeBatchRepository.findById(offering.getProgrammeBatchId()).orElse(null);
-            if (batch != null && Objects.equals(batch.getMasterProgrammeId(), scope.getMasterProgrammeId())) {
-                isAssignedProgrammeCoordinator = true;
+            if (batch != null) {
+                if (scope.getUserId() != null && Objects.equals(batch.getCoordinatorId(), scope.getUserId())) {
+                    isAssignedProgrammeCoordinator = true;
+                } else if (scope.getEmail() != null && batch.getCoordinatorEmail() != null && batch.getCoordinatorEmail().trim().equalsIgnoreCase(scope.getEmail().trim())) {
+                    isAssignedProgrammeCoordinator = true;
+                } else if (scope.getMasterProgrammeId() != null && Objects.equals(batch.getMasterProgrammeId(), scope.getMasterProgrammeId())) {
+                    isAssignedProgrammeCoordinator = true;
+                }
             }
         }
         
@@ -102,9 +112,10 @@ public class OutcomeService {
         ProgrammeBatch batch = programmeBatchRepository.findById(programmeBatchId)
                 .orElseThrow(() -> new ResourceNotFoundException("Programme batch not found: " + programmeBatchId));
         
-        boolean isAssignedBatchCoordinator = Objects.equals(batch.getCoordinatorId(), scope.getUserId());
+        boolean isAssignedBatchCoordinator = (scope.getUserId() != null && Objects.equals(batch.getCoordinatorId(), scope.getUserId()))
+                || (scope.getEmail() != null && batch.getCoordinatorEmail() != null && batch.getCoordinatorEmail().trim().equalsIgnoreCase(scope.getEmail().trim()));
         boolean isAssignedProgrammeCoordinator = scope.isProgrammeCoordinator() && 
-                                               Objects.equals(batch.getMasterProgrammeId(), scope.getMasterProgrammeId());
+                                               (isAssignedBatchCoordinator || (scope.getMasterProgrammeId() != null && Objects.equals(batch.getMasterProgrammeId(), scope.getMasterProgrammeId())));
         
         if (!isAssignedBatchCoordinator && !isAssignedProgrammeCoordinator) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN,
@@ -209,6 +220,15 @@ public class OutcomeService {
             return;
         }
 
+        if (scope.isProgrammeCoordinator()) {
+            boolean isAssigned = (scope.getUserId() != null && Objects.equals(batch.getCoordinatorId(), scope.getUserId()))
+                    || (scope.getEmail() != null && batch.getCoordinatorEmail() != null && batch.getCoordinatorEmail().trim().equalsIgnoreCase(scope.getEmail().trim()));
+            if (!isAssigned) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: You are not the assigned Programme Coordinator for this Programme Batch.");
+            }
+            return;
+        }
+
         enforceProgrammeScope(batch.getMasterProgrammeId());
     }
 
@@ -250,7 +270,10 @@ public class OutcomeService {
             return;
         }
 
-        if (offering.getProgrammeBatchId() != null) enforceBatchScope(offering.getProgrammeBatchId());
+        if (offering.getProgrammeBatchId() != null) {
+            enforceBatchScope(offering.getProgrammeBatchId());
+            return;
+        }
         if (offering.getMasterCourseId() != null) enforceCourseScope(offering.getMasterCourseId());
     }
 
@@ -624,8 +647,8 @@ public class OutcomeService {
             enforceOfferingEditability(masterCourseIdOrOfferingId);
         }
         String targetOfferingId = resolveOfferingId(masterCourseIdOrOfferingId);
-        if (approvalService != null && approvalService.isCoDefinitionApproved(targetOfferingId)) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Cannot modify approved Course Outcomes. A revision must be requested first.");
+        if (approvalService != null) {
+            approvalService.resetToDraftOnModification(ApprovalType.CO_DEFINITION, targetOfferingId, null);
         }
         List<CourseOutcome> existing = coRepository.findByProgrammeBatchCourseId(targetOfferingId);
         Map<String, CourseOutcome> existingByCode = existing.stream()
@@ -641,14 +664,19 @@ public class OutcomeService {
         if (cos != null) {
             for (CourseOutcome co : cos) {
                 co.setProgrammeBatchCourseId(targetOfferingId);
+                co.setStatus(ApprovalStatus.DRAFT);
 
                 String key = co.getCode().toLowerCase();
                 CourseOutcome targetCo;
                 if (existingByCode.containsKey(key)) {
                     targetCo = existingByCode.get(key);
                     targetCo.setStatement(co.getStatement());
+                    targetCo.setStatus(ApprovalStatus.DRAFT);
                     if (co.getTargetLevel() != null) {
                         targetCo.setTargetLevel(co.getTargetLevel());
+                    }
+                    if (co.getBloomsLevel() != null) {
+                        targetCo.setBloomsLevel(co.getBloomsLevel());
                     }
                 } else {
                     targetCo = co;
@@ -658,6 +686,10 @@ public class OutcomeService {
                     if (targetCo.getTargetLevel() == null) {
                         targetCo.setTargetLevel(new BigDecimal("2.50"));
                     }
+                    if (targetCo.getBloomsLevel() == null) {
+                        targetCo.setBloomsLevel("L3 - Apply");
+                    }
+                    targetCo.setStatus(ApprovalStatus.DRAFT);
                 }
 
                 processedIds.add(targetCo.getId());
@@ -675,6 +707,28 @@ public class OutcomeService {
         List<CourseOutcome> saved = coRepository.saveAll(toSave);
         saved.sort(Comparator.comparing(CourseOutcome::getCode, NATURAL_CODE_COMPARATOR));
         return saved;
+    }
+
+    @Transactional
+    public void deleteCourseOutcome(String masterCourseIdOrOfferingId, String coId) {
+        System.out.println("[OutcomeService] deleteCourseOutcome called | masterCourseIdOrOfferingId: " + masterCourseIdOrOfferingId + " | coId: " + coId);
+        if (masterCourseIdOrOfferingId != null && !masterCourseIdOrOfferingId.isBlank()) {
+            enforceCourseOrOfferingScope(masterCourseIdOrOfferingId);
+            enforceCourseCoordinatorMutation(masterCourseIdOrOfferingId);
+            enforceOfferingEditability(masterCourseIdOrOfferingId);
+        }
+        String targetOfferingId = resolveOfferingId(masterCourseIdOrOfferingId);
+        if (approvalService != null) {
+            approvalService.resetToDraftOnModification(ApprovalType.CO_DEFINITION, targetOfferingId, null);
+        }
+        CourseOutcome co = coRepository.findById(coId)
+                .orElseThrow(() -> new ResourceNotFoundException("Course outcome not found: " + coId));
+        if (targetOfferingId != null && !targetOfferingId.equalsIgnoreCase(co.getProgrammeBatchCourseId())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Course outcome does not belong to the specified course offering.");
+        }
+        coPoMappingRepository.deleteByCourseOutcomeIdIn(List.of(co.getId()));
+        coPsoMappingRepository.deleteByCourseOutcomeIdIn(List.of(co.getId()));
+        coRepository.delete(co);
     }
 
     // --- Programme Target Benchmark Levels ---
@@ -926,8 +980,8 @@ public class OutcomeService {
             enforceOfferingEditability(masterCourseIdOrOfferingId);
         }
         String targetOfferingId = resolveOfferingId(masterCourseIdOrOfferingId);
-        if (approvalService != null && approvalService.isCoDefinitionApproved(targetOfferingId)) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Cannot modify approved Course Outcomes / Mappings. A revision must be requested first.");
+        if (approvalService != null) {
+            approvalService.resetToDraftOnModification(ApprovalType.CO_DEFINITION, targetOfferingId, null);
         }
         ProgrammeBatchCourse offering = programmeBatchCourseRepository.findById(targetOfferingId).orElse(null);
         String masterCourseId = offering != null ? offering.getMasterCourseId() : targetOfferingId;
@@ -1011,20 +1065,7 @@ public class OutcomeService {
             coPsoMappingRepository.flush();
         }
 
-        List<ProgrammeOutcome> pos = (programmeBatchId != null) ? getPOsByProgramme(programmeBatchId) : ((progId != null) ? getPOsByProgramme(progId) : Collections.emptyList());
-        List<ProgrammeSpecificOutcome> psos = (programmeBatchId != null) ? getPSOsByProgramme(programmeBatchId) : ((progId != null) ? getPSOsByProgramme(progId) : Collections.emptyList());
-
-        return CourseMappingMatrixDto.builder()
-                .masterCourseId(masterCourseIdOrOfferingId)
-                .masterProgrammeId(progId)
-                .cos(cos)
-                .pos(pos)
-                .psos(psos)
-                .poMappings(savedPo)
-                .psoMappings(savedPso)
-                .poKeywordsStore(poKwToReturn)
-                .psoKeywordsStore(psoKwToReturn)
-                .build();
+        return getCourseMappings(masterCourseIdOrOfferingId);
     }
 
     @Transactional(readOnly = true)

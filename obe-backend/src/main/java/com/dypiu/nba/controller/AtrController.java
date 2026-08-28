@@ -13,13 +13,13 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/atr")
+@RequestMapping({"/atr", "/api/v1/atr"})
 @RequiredArgsConstructor
 public class AtrController {
 
     private final AtrService atrService;
 
-    @GetMapping("/master-courses/{masterCourseId}")
+    @GetMapping({"/master-courses/{masterCourseId}", "/course/{masterCourseId}"})
     public ResponseEntity<ApiResponse<List<CourseAtr>>> getCourseAtrs(
             @PathVariable String masterCourseId,
             @RequestParam(required = false) String programmeBatchId) {
@@ -29,7 +29,7 @@ public class AtrController {
                 .build());
     }
 
-    @RequestMapping(value = "/master-courses/{masterCourseId}", method = {RequestMethod.POST, RequestMethod.PUT})
+    @RequestMapping(value = {"/master-courses/{masterCourseId}", "/course/{masterCourseId}"}, method = {RequestMethod.POST, RequestMethod.PUT})
     public ResponseEntity<ApiResponse<List<CourseAtr>>> saveCourseAtrs(
             @PathVariable String masterCourseId,
             @RequestBody List<CourseAtr> atrs,

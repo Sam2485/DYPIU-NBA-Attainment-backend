@@ -89,6 +89,14 @@ public class ProgrammeBatchCourse {
         this.courseCoordinatorName = coordinator;
     }
 
+    public String getCourseCoordinatorEmail() {
+        return coordinatorEmail;
+    }
+
+    public void setCourseCoordinatorEmail(String courseCoordinatorEmail) {
+        this.coordinatorEmail = courseCoordinatorEmail;
+    }
+
     // Helper compatibility methods
     public String getMasterCourseId() {
         return masterCourseId;

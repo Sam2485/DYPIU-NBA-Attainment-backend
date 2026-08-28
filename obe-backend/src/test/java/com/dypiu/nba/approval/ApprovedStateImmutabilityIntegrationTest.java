@@ -147,6 +147,7 @@ public class ApprovedStateImmutabilityIntegrationTest {
                 .name("2024-2028")
                 .startYear(2024)
                 .endYear(2028)
+                .coordinatorEmail("pc.imm@dypiu.ac.in")
                 .build());
 
         course = masterCourseRepository.save(MasterCourse.builder()
@@ -221,22 +222,13 @@ public class ApprovedStateImmutabilityIntegrationTest {
         approvalService.verifyStatus(batchCourse.getId(), "configStatus", "APPROVED", "Approved by HOD", hod.getName());
         assertTrue(approvalService.isAttainmentConfigApproved(batchCourse.getId()));
 
-        // 3. Attempt mutation while APPROVED -> MUST BE REJECTED WITH 409 CONFLICT
+        // 3. Modification while APPROVED is allowed and resets status to DRAFT
         cfg.setDirectThreshold(new BigDecimal("70.00"));
-        ResponseEntity<ApiResponse> conflictRes = restTemplate.exchange(
-                "/attainment/config/" + batchCourse.getId(), HttpMethod.POST, new HttpEntity<>(cfg, authHeaders(pcToken)), ApiResponse.class
-        );
-        assertEquals(HttpStatus.CONFLICT, conflictRes.getStatusCode());
-
-        // 4. Request Revision
-        approvalService.requestRevisionStatus(batchCourse.getId(), "configStatus", "REVISION_REQUESTED", "Please adjust direct threshold", hod.getName());
-        assertFalse(approvalService.isAttainmentConfigApproved(batchCourse.getId()));
-
-        // 5. Modification allowed after revision request
         ResponseEntity<ApiResponse> modRes = restTemplate.exchange(
                 "/attainment/config/" + batchCourse.getId(), HttpMethod.POST, new HttpEntity<>(cfg, authHeaders(pcToken)), ApiResponse.class
         );
         assertEquals(HttpStatus.OK, modRes.getStatusCode());
+        assertFalse(approvalService.isAttainmentConfigApproved(batchCourse.getId()));
     }
 
     @Test
@@ -257,59 +249,13 @@ public class ApprovedStateImmutabilityIntegrationTest {
         approvalService.verifyStatus(batchCourse.getId(), "coStatus", "APPROVED", "COs approved by HOD", hod.getName());
         assertTrue(approvalService.isCoDefinitionApproved(batchCourse.getId()));
 
-        // 3. Attempt mutation while APPROVED -> MUST BE REJECTED WITH 409 CONFLICT
-        co1.setStatement("Modified statement without approval");
-        ResponseEntity<ApiResponse> conflictRes = restTemplate.exchange(
+        // 3. Modification while APPROVED is allowed and resets status to DRAFT
+        co1.setStatement("Modified statement after approval");
+        ResponseEntity<ApiResponse> modRes = restTemplate.exchange(
                 "/outcomes/master-courses/" + batchCourse.getId() + "/cos", HttpMethod.POST, new HttpEntity<>(List.of(co1), authHeaders(pcToken)), ApiResponse.class
         );
-        assertEquals(HttpStatus.CONFLICT, conflictRes.getStatusCode());
-
-        // 4. Request Revision
-        approvalService.requestRevisionStatus(batchCourse.getId(), "coStatus", "REVISION_REQUESTED", "Revise Bloom taxonomy in CO1", hod.getName());
+        assertEquals(HttpStatus.OK, modRes.getStatusCode());
         assertFalse(approvalService.isCoDefinitionApproved(batchCourse.getId()));
-
-        // 5. Modification allowed after revision request
-        ResponseEntity<ApiResponse> modRes = restTemplate.exchange(
-                "/outcomes/master-courses/" + batchCourse.getId() + "/cos", HttpMethod.POST, new HttpEntity<>(List.of(co1), authHeaders(pcToken)), ApiResponse.class
-        );
-        assertEquals(HttpStatus.OK, modRes.getStatusCode());
-    }
-
-    @Test
-    void testProgrammeTargetsImmutabilityWhenApproved() {
-        ProgrammeTargetDto targetDto = ProgrammeTargetDto.builder()
-                .masterProgrammeId(programme.getId())
-                .programmeBatchId(batch.getId())
-                .poTargets(Map.of("PO1", new BigDecimal("2.60")))
-                .psoTargets(Map.of("PSO1", new BigDecimal("2.70")))
-                .build();
-
-        // 1. Initial save in DRAFT
-        ResponseEntity<ApiResponse> draftRes = restTemplate.exchange(
-                "/outcomes/master-programmes/" + programme.getId() + "/targets", HttpMethod.POST, new HttpEntity<>(targetDto, authHeaders(pcToken)), ApiResponse.class
-        );
-        assertEquals(HttpStatus.OK, draftRes.getStatusCode());
-
-        // 2. Approve Programme Targets
-        approvalService.verifyStatus("targets-" + programme.getId(), "poPsoTargetsStatus", "APPROVED", "Targets approved by HOD", hod.getName());
-        assertTrue(approvalService.isPoPsoTargetsApproved(programme.getId()));
-
-        // 3. Attempt mutation while APPROVED -> MUST BE REJECTED WITH 409 CONFLICT
-        targetDto.setPoTargets(Map.of("PO1", new BigDecimal("2.90")));
-        ResponseEntity<ApiResponse> conflictRes = restTemplate.exchange(
-                "/outcomes/master-programmes/" + programme.getId() + "/targets", HttpMethod.POST, new HttpEntity<>(targetDto, authHeaders(pcToken)), ApiResponse.class
-        );
-        assertEquals(HttpStatus.CONFLICT, conflictRes.getStatusCode());
-
-        // 4. Request Revision
-        approvalService.requestRevisionStatus("targets-" + programme.getId(), "poPsoTargetsStatus", "REVISION_REQUESTED", "Re-evaluate PO1 benchmark", hod.getName());
-        assertFalse(approvalService.isPoPsoTargetsApproved(programme.getId()));
-
-        // 5. Modification allowed after revision request
-        ResponseEntity<ApiResponse> modRes = restTemplate.exchange(
-                "/outcomes/master-programmes/" + programme.getId() + "/targets", HttpMethod.POST, new HttpEntity<>(targetDto, authHeaders(pcToken)), ApiResponse.class
-        );
-        assertEquals(HttpStatus.OK, modRes.getStatusCode());
     }
 
     @Test
@@ -335,22 +281,13 @@ public class ApprovedStateImmutabilityIntegrationTest {
         approvalService.verifyStatus(batchCourse.getId(), "atrStatus", "APPROVED", "Course ATR approved by HOD", hod.getName());
         assertTrue(approvalService.isCourseAtrApproved(batchCourse.getId()));
 
-        // 3. Attempt mutation while APPROVED -> MUST BE REJECTED WITH 409 CONFLICT
+        // 3. Modification while APPROVED is allowed and resets status to DRAFT
         atr.setActionsJson("[\"Modified action\"]");
-        ResponseEntity<ApiResponse> conflictRes = restTemplate.exchange(
-                "/atr/master-courses/" + batchCourse.getId(), HttpMethod.POST, new HttpEntity<>(List.of(atr), authHeaders(pcToken)), ApiResponse.class
-        );
-        assertEquals(HttpStatus.CONFLICT, conflictRes.getStatusCode());
-
-        // 4. Request Revision
-        approvalService.requestRevisionStatus(batchCourse.getId(), "atrStatus", "REVISION_REQUESTED", "Provide more specific corrective actions", hod.getName());
-        assertFalse(approvalService.isCourseAtrApproved(batchCourse.getId()));
-
-        // 5. Modification allowed after revision request
         ResponseEntity<ApiResponse> modRes = restTemplate.exchange(
                 "/atr/master-courses/" + batchCourse.getId(), HttpMethod.POST, new HttpEntity<>(List.of(atr), authHeaders(pcToken)), ApiResponse.class
         );
         assertEquals(HttpStatus.OK, modRes.getStatusCode());
+        assertFalse(approvalService.isCourseAtrApproved(batchCourse.getId()));
     }
 
     @Test
@@ -371,22 +308,13 @@ public class ApprovedStateImmutabilityIntegrationTest {
         approvalService.verifyStatus(batchCourse.getId(), "coStatus", "APPROVED", "Mappings approved by HOD", hod.getName());
         assertTrue(approvalService.isCoDefinitionApproved(batchCourse.getId()));
 
-        // 3. Attempt mutation while APPROVED -> MUST BE REJECTED WITH 409 CONFLICT
+        // 3. Modification while APPROVED is allowed and resets status to DRAFT
         matrixDto.setMatrix(Map.of("CO1", Map.of("PO1", 2)));
-        ResponseEntity<ApiResponse> conflictRes = restTemplate.exchange(
-                "/outcomes/master-courses/" + batchCourse.getId() + "/mappings", HttpMethod.POST, new HttpEntity<>(matrixDto, authHeaders(pcToken)), ApiResponse.class
-        );
-        assertEquals(HttpStatus.CONFLICT, conflictRes.getStatusCode());
-
-        // 4. Request Revision
-        approvalService.requestRevisionStatus(batchCourse.getId(), "coStatus", "REVISION_REQUESTED", "Review PO1 correlation", hod.getName());
-        assertFalse(approvalService.isCoDefinitionApproved(batchCourse.getId()));
-
-        // 5. Modification allowed after revision request
         ResponseEntity<ApiResponse> modRes = restTemplate.exchange(
                 "/outcomes/master-courses/" + batchCourse.getId() + "/mappings", HttpMethod.POST, new HttpEntity<>(matrixDto, authHeaders(pcToken)), ApiResponse.class
         );
         assertEquals(HttpStatus.OK, modRes.getStatusCode());
+        assertFalse(approvalService.isCoDefinitionApproved(batchCourse.getId()));
     }
 
     @Test

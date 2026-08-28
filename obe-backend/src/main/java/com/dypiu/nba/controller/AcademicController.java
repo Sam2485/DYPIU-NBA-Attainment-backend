@@ -26,7 +26,7 @@ import java.util.List;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/academic")
+@RequestMapping({"/academic", "/api/v1/academic"})
 @RequiredArgsConstructor
 public class AcademicController {
 
@@ -36,6 +36,7 @@ public class AcademicController {
     private final com.dypiu.nba.service.OutcomeService outcomeService;
     private final com.dypiu.nba.service.AtrService atrService;
     private final RequestScopeAuthorizer requestScopeAuthorizer;
+    private final com.dypiu.nba.repository.ProgrammeBatchCourseRepository programmeBatchCourseRepository;
 
 
     // --- Users by Role ---
@@ -849,22 +850,49 @@ public class AcademicController {
         return ResponseEntity.ok(ApiResponse.<Void>builder().success(true).message("MasterCourse Offering deleted").build());
     }
 
-    @GetMapping("/programme-batch-courses/{offeringId}/outcomes")
-    public ResponseEntity<ApiResponse<List<CourseOutcome>>> getOfferingOutcomes(@PathVariable String offeringId) {
+    @GetMapping({"/course-outcomes", "/programme-batch-courses/{offeringId}/outcomes"})
+    public ResponseEntity<ApiResponse<List<CourseOutcome>>> getOfferingOutcomes(
+            @PathVariable(required = false) String offeringId,
+            @RequestParam(required = false) String programmeBatchCourseId,
+            @RequestParam(required = false) String masterCourseId) {
+        String effectiveId = (programmeBatchCourseId != null && !programmeBatchCourseId.isBlank())
+                ? programmeBatchCourseId
+                : ((offeringId != null && !offeringId.isBlank()) ? offeringId : masterCourseId);
+        if (effectiveId != null && programmeBatchCourseRepository.existsById(effectiveId)) {
+            return ResponseEntity.ok(ApiResponse.<List<CourseOutcome>>builder()
+                    .success(true)
+                    .data(outcomeService.getOutcomesByOffering(effectiveId))
+                    .build());
+        }
         return ResponseEntity.ok(ApiResponse.<List<CourseOutcome>>builder()
                 .success(true)
-                .data(outcomeService.getOutcomesByOffering(offeringId))
+                .data(outcomeService.getCOsByCourse(effectiveId))
                 .build());
     }
 
-    @PostMapping("/programme-batch-courses/{offeringId}/outcomes")
+    @RequestMapping(value = {"/programme-batch-courses/{offeringId}/outcomes", "/course-outcomes"}, method = {RequestMethod.POST, RequestMethod.PUT})
     public ResponseEntity<ApiResponse<List<CourseOutcome>>> saveOfferingOutcomes(
-            @PathVariable String offeringId,
+            @PathVariable(required = false) String offeringId,
+            @RequestParam(required = false) String programmeBatchCourseId,
             @RequestBody List<CourseOutcome> outcomes) {
+        String effectiveId = (programmeBatchCourseId != null && !programmeBatchCourseId.isBlank()) ? programmeBatchCourseId : offeringId;
         return ResponseEntity.ok(ApiResponse.<List<CourseOutcome>>builder()
                 .success(true)
-                .message("MasterCourse outcomes saved for offering")
-                .data(outcomeService.saveOutcomesByOffering(offeringId, outcomes))
+                .message("Course outcomes saved successfully")
+                .data(outcomeService.saveCOs(effectiveId, outcomes))
+                .build());
+    }
+
+    @DeleteMapping({"/programme-batch-courses/{offeringId}/outcomes/{coId}", "/course-outcomes/{coId}"})
+    public ResponseEntity<ApiResponse<Void>> deleteOfferingOutcome(
+            @PathVariable(required = false) String offeringId,
+            @PathVariable String coId,
+            @RequestParam(required = false) String programmeBatchCourseId) {
+        String effectiveId = (programmeBatchCourseId != null && !programmeBatchCourseId.isBlank()) ? programmeBatchCourseId : offeringId;
+        outcomeService.deleteCourseOutcome(effectiveId, coId);
+        return ResponseEntity.ok(ApiResponse.<Void>builder()
+                .success(true)
+                .message("Course outcome deleted successfully")
                 .build());
     }
 

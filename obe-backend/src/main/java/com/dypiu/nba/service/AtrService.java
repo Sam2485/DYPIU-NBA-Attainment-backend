@@ -137,6 +137,15 @@ public class AtrService {
             return;
         }
 
+        if (scope.isProgrammeCoordinator()) {
+            boolean isAssigned = (scope.getUserId() != null && Objects.equals(batch.getCoordinatorId(), scope.getUserId()))
+                    || (scope.getEmail() != null && batch.getCoordinatorEmail() != null && batch.getCoordinatorEmail().trim().equalsIgnoreCase(scope.getEmail().trim()));
+            if (!isAssigned) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: You are not the assigned Programme Coordinator for this Programme Batch.");
+            }
+            return;
+        }
+
         enforceProgrammeScope(batch.getMasterProgrammeId());
     }
 
@@ -178,7 +187,10 @@ public class AtrService {
             return;
         }
 
-        if (offering.getProgrammeBatchId() != null) enforceBatchScope(offering.getProgrammeBatchId());
+        if (offering.getProgrammeBatchId() != null) {
+            enforceBatchScope(offering.getProgrammeBatchId());
+            return;
+        }
         if (offering.getMasterCourseId() != null) enforceCourseScope(offering.getMasterCourseId());
     }
 
@@ -240,8 +252,8 @@ public class AtrService {
         if (targetOfferingId != null && !targetOfferingId.isBlank()) {
             enforceCourseOrOfferingScope(targetOfferingId);
             enforceOfferingEditability(targetOfferingId);
-            if (approvalService != null && approvalService.isCourseAtrApproved(targetOfferingId)) {
-                throw new ResponseStatusException(HttpStatus.CONFLICT, "Cannot modify approved Course ATR. A revision must be requested first.");
+            if (approvalService != null) {
+                approvalService.resetToDraftOnModification(ApprovalType.COURSE_ATR, targetOfferingId, null);
             }
         }
         List<CourseAtr> existing = courseAtrRepository.findByProgrammeBatchCourseId(targetOfferingId);
@@ -533,8 +545,8 @@ public class AtrService {
         String offeringId = resolveOfferingId(dto.getCourseOffering().getId());
         enforceOfferingScope(offeringId);
         enforceOfferingEditability(offeringId);
-        if (approvalService != null && approvalService.isCourseAtrApproved(offeringId)) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Cannot modify approved Course ATR. A revision must be requested first.");
+        if (approvalService != null) {
+            approvalService.resetToDraftOnModification(ApprovalType.COURSE_ATR, offeringId, null);
         }
         List<CourseAtr> toSave = new ArrayList<>();
 
