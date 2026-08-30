@@ -183,13 +183,19 @@ public class DashboardController {
         List<MasterCourse> courses = progIds.isEmpty() ? Collections.emptyList() : masterCourseRepository.findByMasterProgrammeIdIn(new ArrayList<>(progIds));
 
         long allocationsPending = progIds.isEmpty() ? 0 : approvalRequestRepository.findAll().stream()
-                .filter(a -> a.getType() == ApprovalType.COURSE_ALLOCATION && progIds.contains(a.getMasterProgrammeId()) && a.getStatus() == ApprovalStatus.PENDING)
+                .filter(a -> (a.getType() == ApprovalType.COURSE_ALLOCATION || a.getType() == ApprovalType.COURSE_OFFERING)
+                        && a.getMasterProgrammeId() != null && progIds.contains(a.getMasterProgrammeId())
+                        && a.getStatus() == ApprovalStatus.PENDING)
                 .count();
         long targetsPending = progIds.isEmpty() ? 0 : approvalRequestRepository.findAll().stream()
-                .filter(a -> a.getType() == ApprovalType.PO_PSO_TARGETS && progIds.contains(a.getMasterProgrammeId()) && a.getStatus() == ApprovalStatus.PENDING)
+                .filter(a -> a.getType() == ApprovalType.PO_PSO_TARGETS
+                        && a.getMasterProgrammeId() != null && progIds.contains(a.getMasterProgrammeId())
+                        && a.getStatus() == ApprovalStatus.PENDING)
                 .count();
-        long programmeAtrPending = progIds.isEmpty() ? 0 : programmeAtrRepository.findAll().stream()
-                .filter(p -> progIds.contains(p.getMasterProgrammeId()) && p.getStatus() == ProgrammeAtrStatus.SUBMITTED_FOR_VERIFICATION)
+        long programmeAtrPending = progIds.isEmpty() ? 0 : approvalRequestRepository.findAll().stream()
+                .filter(a -> a.getType() == ApprovalType.PROGRAMME_ATR
+                        && a.getMasterProgrammeId() != null && progIds.contains(a.getMasterProgrammeId())
+                        && a.getStatus() == ApprovalStatus.PENDING)
                 .count();
         long pendingApprovalsCount = allocationsPending + targetsPending + programmeAtrPending;
 
@@ -342,14 +348,20 @@ public class DashboardController {
         List<MasterCourse> courses = masterCourseRepository.findByMasterProgrammeId(finalProgId);
 
         List<String> offeringIds = offerings.stream().map(ProgrammeBatchCourse::getId).collect(Collectors.toList());
-        long configPending = offeringIds.isEmpty() ? 0 : configRepository.findAll().stream()
-                .filter(c -> offeringIds.contains(c.getProgrammeBatchCourseId()) && (c.getStatus() == AttainmentConfigStatus.DRAFT || c.getStatus() == null))
+        long configPending = offeringIds.isEmpty() ? 0 : approvalRequestRepository.findAll().stream()
+                .filter(a -> (a.getType() == ApprovalType.ATTAINMENT_CONFIGURATION || a.getType() == ApprovalType.ATTAINMENT_SETTINGS)
+                        && a.getProgrammeBatchCourseId() != null && offeringIds.contains(a.getProgrammeBatchCourseId())
+                        && a.getStatus() == ApprovalStatus.PENDING)
                 .count();
         long coTargetsPending = offeringIds.isEmpty() ? 0 : approvalRequestRepository.findAll().stream()
-                .filter(a -> (a.getType() == ApprovalType.CO_DEFINITION || a.getType() == ApprovalType.CO_TARGETS) && offeringIds.contains(a.getProgrammeBatchCourseId()) && a.getStatus() == ApprovalStatus.PENDING)
+                .filter(a -> (a.getType() == ApprovalType.CO_DEFINITION || a.getType() == ApprovalType.CO_TARGETS || a.getType() == ApprovalType.COURSE_OUTCOMES_TARGETS)
+                        && a.getProgrammeBatchCourseId() != null && offeringIds.contains(a.getProgrammeBatchCourseId())
+                        && a.getStatus() == ApprovalStatus.PENDING)
                 .count();
-        long courseAtrPending = offeringIds.isEmpty() ? 0 : courseAtrRepository.findByProgrammeBatchCourseIdIn(offeringIds).stream()
-                .filter(a -> a.getStatus() == CourseAtrStatus.SUBMITTED_FOR_VERIFICATION)
+        long courseAtrPending = offeringIds.isEmpty() ? 0 : approvalRequestRepository.findAll().stream()
+                .filter(a -> a.getType() == ApprovalType.COURSE_ATR
+                        && a.getProgrammeBatchCourseId() != null && offeringIds.contains(a.getProgrammeBatchCourseId())
+                        && a.getStatus() == ApprovalStatus.PENDING)
                 .count();
         long pendingVerifications = configPending + coTargetsPending + courseAtrPending;
 

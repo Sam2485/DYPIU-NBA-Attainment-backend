@@ -42,10 +42,11 @@ public class AcademicController {
     // --- Users by Role ---
     @GetMapping("/users")
     public ResponseEntity<ApiResponse<List<UserDto>>> getUsersByRole(
-            @RequestParam(required = false) String role) {
+            @RequestParam(required = false) String role,
+            @RequestParam(required = false) String departmentId) {
         return ResponseEntity.ok(ApiResponse.<List<UserDto>>builder()
                 .success(true)
-                .data(academicService.getUsersByRole(role))
+                .data(academicService.getUsersByRole(role, departmentId))
                 .build());
     }
 
@@ -943,10 +944,65 @@ public class AcademicController {
                 .build());
     }
 
-    @DeleteMapping("/students/{id}")
-    public ResponseEntity<ApiResponse<Void>> deleteStudent(@PathVariable String id) {
+    @PutMapping("/programme-batches/{programmeBatchId}/students/{studentId}")
+    public ResponseEntity<ApiResponse<Student>> updateStudent(
+            @PathVariable String programmeBatchId,
+            @PathVariable String studentId,
+            @RequestBody Student student) {
+        student.setId(studentId);
+        student.setProgrammeBatchId(programmeBatchId);
+        return ResponseEntity.ok(ApiResponse.<Student>builder()
+                .success(true)
+                .message("Student updated successfully")
+                .data(academicService.saveStudent(student))
+                .build());
+    }
+
+    @DeleteMapping({"/students/{id}", "/programme-batches/{programmeBatchId}/students/{id}"})
+    public ResponseEntity<ApiResponse<Void>> deleteStudent(
+            @PathVariable(required = false) String programmeBatchId,
+            @PathVariable String id) {
         academicService.deleteStudent(id);
-        return ResponseEntity.ok(ApiResponse.<Void>builder().success(true).message("Student deleted").build());
+        return ResponseEntity.ok(ApiResponse.<Void>builder().success(true).message("Student deleted successfully").build());
+    }
+
+    @RequestMapping(value = {"/programme-batches/{programmeBatchId}/coordinator", "/batches/{programmeBatchId}/coordinator"}, method = {RequestMethod.POST, RequestMethod.PUT})
+    public ResponseEntity<ApiResponse<ProgrammeBatch>> assignProgrammeBatchCoordinator(
+            @PathVariable String programmeBatchId,
+            @RequestBody Map<String, Object> body) {
+        ProgrammeBatch batch = academicService.getBatchById(programmeBatchId);
+        if (body != null) {
+            if (body.containsKey("coordinatorId") && body.get("coordinatorId") != null) {
+                try {
+                    batch.setCoordinatorId(Long.parseLong(body.get("coordinatorId").toString()));
+                } catch (Exception ignored) {}
+            }
+            if (body.containsKey("coordinatorName") && body.get("coordinatorName") != null) {
+                batch.setCoordinatorName(body.get("coordinatorName").toString());
+            }
+            if (body.containsKey("coordinatorEmail") && body.get("coordinatorEmail") != null) {
+                batch.setCoordinatorEmail(body.get("coordinatorEmail").toString());
+            }
+        }
+        return ResponseEntity.ok(ApiResponse.<ProgrammeBatch>builder()
+                .success(true)
+                .message("Programme Batch coordinator assigned successfully")
+                .data(academicService.saveBatch(batch))
+                .build());
+    }
+
+    @RequestMapping(value = "/master-programmes/{masterProgrammeId}/coordinator", method = {RequestMethod.POST, RequestMethod.PUT})
+    public ResponseEntity<ApiResponse<Map<String, Object>>> assignMasterProgrammeCoordinator(
+            @PathVariable String masterProgrammeId,
+            @RequestBody Map<String, Object> body) {
+        Map<String, Object> payload = body != null ? new java.util.HashMap<>(body) : new java.util.HashMap<>();
+        payload.put("masterProgrammeId", masterProgrammeId);
+        payload.put("programmeId", masterProgrammeId);
+        return ResponseEntity.ok(ApiResponse.<Map<String, Object>>builder()
+                .success(true)
+                .message("Master Programme coordinator assigned successfully")
+                .data(academicService.assignHodCoordinator(payload))
+                .build());
     }
 
     // --- HOD Coordinators Management ---

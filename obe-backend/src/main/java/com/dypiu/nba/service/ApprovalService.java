@@ -349,9 +349,22 @@ public class ApprovalService {
     }
 
     @Transactional(readOnly = true)
-    public List<ApprovalRequest> getHodApprovals(String masterProgrammeId) {
-        System.out.println("[ApprovalService] getHodApprovals called | masterProgrammeId: " + masterProgrammeId);
+    public List<ApprovalRequest> getHodApprovals(String masterProgrammeId, String status) {
+        System.out.println("[ApprovalService] getHodApprovals called | masterProgrammeId: " + masterProgrammeId + " | status: " + status);
         CurrentUserScope scope = getScope();
+
+        Set<ApprovalType> hodTypes = Set.of(
+                ApprovalType.COURSE_ALLOCATION,
+                ApprovalType.COURSE_OFFERING,
+                ApprovalType.PO_PSO_TARGETS,
+                ApprovalType.PROGRAMME_ATR
+        );
+
+        List<ApprovalRequest> allRequests = approvalRequestRepository.findAll();
+        allRequests.forEach(this::resolveMissingScopeFields);
+
+        List<ApprovalRequest> scopedList;
+
         if (scope != null && scope.isHod()) {
             String deptId = scope.getRequiredDepartmentId();
             List<MasterProgramme> deptProgrammes = masterProgrammeRepository.findByDepartmentId(deptId);
@@ -361,30 +374,72 @@ public class ApprovalService {
                 if (!deptProgIds.contains(masterProgrammeId.trim())) {
                     throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Programme does not belong to your department.");
                 }
-                return approvalRequestRepository.findByMasterProgrammeId(masterProgrammeId.trim());
+                scopedList = allRequests.stream()
+                        .filter(a -> hodTypes.contains(a.getType())
+                                && masterProgrammeId.trim().equalsIgnoreCase(a.getMasterProgrammeId()))
+                        .toList();
+            } else {
+                scopedList = allRequests.stream()
+                        .filter(a -> hodTypes.contains(a.getType())
+                                && ((a.getMasterProgrammeId() != null && deptProgIds.contains(a.getMasterProgrammeId()))
+                                || (deptId.equalsIgnoreCase(a.getDepartmentId()))))
+                        .toList();
             }
-            List<ApprovalRequest> list = approvalRequestRepository.findAll().stream()
-                    .filter(a -> {
-                        String pId = a.getMasterProgrammeId() != null ? a.getMasterProgrammeId() : a.getMasterProgrammeId();
-                        return (pId != null && deptProgIds.contains(pId)) || (deptId.equalsIgnoreCase(a.getDepartmentId()));
-                    })
-                    .toList();
-            list.forEach(this::resolveMissingScopeFields);
-            return list;
         } else if (scope != null && scope.isProgrammeCoordinator()) {
             String progId = scope.getRequiredMasterProgrammeId();
             if (masterProgrammeId != null && !masterProgrammeId.isBlank() && !masterProgrammeId.trim().equalsIgnoreCase(progId)) {
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Programme is outside your scope.");
             }
-            return approvalRequestRepository.findByMasterProgrammeId(progId);
+            scopedList = allRequests.stream()
+                    .filter(a -> hodTypes.contains(a.getType())
+                            && progId.equalsIgnoreCase(a.getMasterProgrammeId()))
+                    .toList();
         } else if (scope != null && !scope.isAdmin() && !scope.isIqac() && !scope.isDirector()) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Role is not authorized for HOD approvals.");
+        } else {
+            if (masterProgrammeId != null && !masterProgrammeId.isBlank()) {
+                scopedList = allRequests.stream()
+                        .filter(a -> hodTypes.contains(a.getType())
+                                && masterProgrammeId.trim().equalsIgnoreCase(a.getMasterProgrammeId()))
+                        .toList();
+            } else {
+                scopedList = allRequests.stream()
+                        .filter(a -> hodTypes.contains(a.getType()))
+                        .toList();
+            }
         }
 
-        if (masterProgrammeId != null && !masterProgrammeId.isBlank()) {
-            return approvalRequestRepository.findByMasterProgrammeId(masterProgrammeId);
+        if (status != null && !status.isBlank()) {
+            String trimmedStatus = status.trim().toUpperCase();
+            if ("REVIEWED".equalsIgnoreCase(trimmedStatus)) {
+                return scopedList.stream()
+                        .filter(a -> a.getStatus() == ApprovalStatus.APPROVED || a.getStatus() == ApprovalStatus.REVISION_REQUESTED)
+                        .toList();
+            }
+            try {
+                ApprovalStatus targetStatus = ApprovalStatus.valueOf(trimmedStatus);
+                return scopedList.stream()
+                        .filter(a -> a.getStatus() == targetStatus)
+                        .toList();
+            } catch (IllegalArgumentException ignored) {}
         }
-        return approvalRequestRepository.findAll();
+
+        return scopedList;
+    }
+
+    @Transactional(readOnly = true)
+    public List<ApprovalRequest> getHodApprovals(String masterProgrammeId) {
+        return getHodApprovals(masterProgrammeId, null);
+    }
+
+    @Transactional(readOnly = true)
+    public List<ApprovalRequest> getHodPendingApprovals(String masterProgrammeId) {
+        return getHodApprovals(masterProgrammeId, "PENDING");
+    }
+
+    @Transactional(readOnly = true)
+    public List<ApprovalRequest> getHodReviewedApprovals(String masterProgrammeId) {
+        return getHodApprovals(masterProgrammeId, "REVIEWED");
     }
 
     @Transactional

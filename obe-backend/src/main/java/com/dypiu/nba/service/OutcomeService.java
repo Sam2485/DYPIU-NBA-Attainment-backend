@@ -112,7 +112,11 @@ public class OutcomeService {
 
     private void enforceProgrammeCoordinatorMutation(String programmeOrProgrammeBatchId) {
         CurrentUserScope scope = getScope();
-        if (scope.isAdmin() || scope.isIqac()) return;
+        if (scope == null || scope.isAdmin() || scope.isIqac()) return;
+        if (scope.isDirector() || scope.isHod()) {
+            enforceBatchOrProgrammeScope(programmeOrProgrammeBatchId);
+            return;
+        }
         String programmeBatchId = resolveProgrammeBatchId(programmeOrProgrammeBatchId);
         ProgrammeBatch batch = programmeBatchRepository.findById(programmeBatchId)
                 .orElseThrow(() -> new ResourceNotFoundException("Programme batch not found: " + programmeBatchId));
