@@ -1044,8 +1044,24 @@ public class AtrService {
                 }
             } catch (Exception ignored) {}
         }
+        ProgrammeAtr saved = programmeAtrRepository.save(atr);
 
-        return programmeAtrRepository.save(atr);
+        if (approvalService != null) {
+            ApprovalRequest req = ApprovalRequest.builder()
+                    .id("app-" + UUID.randomUUID().toString().substring(0, 8))
+                    .type(ApprovalType.PROGRAMME_ATR)
+                    .title("Programme ATR for " + batch.getName())
+                    .resourceId(programmeBatchId)
+                    .masterProgrammeId(progId)
+                    .programmeBatchId(programmeBatchId)
+                    .status(ApprovalStatus.PENDING)
+                    .submittedBy(authoritativeSubmitter)
+                    .submittedAt(ZonedDateTime.now())
+                    .build();
+            approvalService.submitApprovalRequest(req);
+        }
+
+        return saved;
     }
 
     // =========================================================================

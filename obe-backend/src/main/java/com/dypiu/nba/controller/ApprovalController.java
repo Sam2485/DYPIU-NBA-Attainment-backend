@@ -99,11 +99,34 @@ public class ApprovalController {
 
     @GetMapping("/hod")
     public ResponseEntity<ApiResponse<List<ApprovalRequest>>> getHodApprovals(
+            @RequestParam(required = false) String masterProgrammeId,
+            @RequestParam(required = false) String status) {
+        String effectiveProgId = (masterProgrammeId != null && !masterProgrammeId.isBlank()) ? masterProgrammeId : masterProgrammeId;
+        return ResponseEntity.ok(ApiResponse.<List<ApprovalRequest>>builder()
+                .success(true)
+                .data(approvalService.getHodApprovals(effectiveProgId, status))
+                .build());
+    }
+
+    @GetMapping("/hod/pending")
+    public ResponseEntity<ApiResponse<List<ApprovalRequest>>> getHodPendingApprovals(
             @RequestParam(required = false) String masterProgrammeId) {
         String effectiveProgId = (masterProgrammeId != null && !masterProgrammeId.isBlank()) ? masterProgrammeId : masterProgrammeId;
         return ResponseEntity.ok(ApiResponse.<List<ApprovalRequest>>builder()
                 .success(true)
-                .data(approvalService.getHodApprovals(effectiveProgId))
+                .message("HOD pending approvals fetched successfully")
+                .data(approvalService.getHodPendingApprovals(effectiveProgId))
+                .build());
+    }
+
+    @GetMapping("/hod/reviewed")
+    public ResponseEntity<ApiResponse<List<ApprovalRequest>>> getHodReviewedApprovals(
+            @RequestParam(required = false) String masterProgrammeId) {
+        String effectiveProgId = (masterProgrammeId != null && !masterProgrammeId.isBlank()) ? masterProgrammeId : masterProgrammeId;
+        return ResponseEntity.ok(ApiResponse.<List<ApprovalRequest>>builder()
+                .success(true)
+                .message("HOD reviewed approvals fetched successfully")
+                .data(approvalService.getHodReviewedApprovals(effectiveProgId))
                 .build());
     }
 

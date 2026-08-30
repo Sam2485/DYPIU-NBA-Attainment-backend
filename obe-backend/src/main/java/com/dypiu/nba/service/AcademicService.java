@@ -1306,7 +1306,12 @@ public class AcademicService {
     // --- Users by Role ---
     @Transactional(readOnly = true)
     public List<UserDto> getUsersByRole(String role) {
-        System.out.println("[AcademicService] getUsersByRole called | role: " + role);
+        return getUsersByRole(role, null);
+    }
+
+    @Transactional(readOnly = true)
+    public List<UserDto> getUsersByRole(String role, String departmentId) {
+        System.out.println("[AcademicService] getUsersByRole called | role: " + role + " | departmentId: " + departmentId);
         CurrentUserScope scope = getScope();
         List<User> users;
 
@@ -1337,6 +1342,12 @@ public class AcademicService {
                     users = userRepository.findAll();
                 }
             }
+        }
+
+        if (departmentId != null && !departmentId.isBlank()) {
+            users = users.stream()
+                    .filter(u -> u.getDepartmentId() != null && u.getDepartmentId().equalsIgnoreCase(departmentId.trim()))
+                    .collect(Collectors.toList());
         }
 
         // Apply organizational scope isolation for Director, HOD, and MasterProgramme Coordinator

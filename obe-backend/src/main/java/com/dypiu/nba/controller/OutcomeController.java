@@ -17,7 +17,7 @@ public class OutcomeController {
 
     private final OutcomeService outcomeService;
 
-    @GetMapping("/master-programmes/{masterProgrammeId}/pos")
+    @GetMapping({"/master-programmes/{masterProgrammeId}/pos", "/programme-batches/{masterProgrammeId}/pos", "/batches/{masterProgrammeId}/pos"})
     public ResponseEntity<ApiResponse<List<ProgrammeOutcome>>> getPOs(@PathVariable String masterProgrammeId) {
         return ResponseEntity.ok(ApiResponse.<List<ProgrammeOutcome>>builder()
                 .success(true)
@@ -25,7 +25,7 @@ public class OutcomeController {
                 .build());
     }
 
-    @PostMapping("/master-programmes/{masterProgrammeId}/pos")
+    @PostMapping({"/master-programmes/{masterProgrammeId}/pos", "/programme-batches/{masterProgrammeId}/pos", "/batches/{masterProgrammeId}/pos"})
     public ResponseEntity<ApiResponse<List<ProgrammeOutcome>>> savePOs(@PathVariable String masterProgrammeId, @RequestBody List<ProgrammeOutcome> pos) {
         return ResponseEntity.ok(ApiResponse.<List<ProgrammeOutcome>>builder()
                 .success(true)
@@ -34,7 +34,7 @@ public class OutcomeController {
                 .build());
     }
 
-    @GetMapping("/master-programmes/{masterProgrammeId}/psos")
+    @GetMapping({"/master-programmes/{masterProgrammeId}/psos", "/programme-batches/{masterProgrammeId}/psos", "/batches/{masterProgrammeId}/psos"})
     public ResponseEntity<ApiResponse<List<ProgrammeSpecificOutcome>>> getPSOs(@PathVariable String masterProgrammeId) {
         return ResponseEntity.ok(ApiResponse.<List<ProgrammeSpecificOutcome>>builder()
                 .success(true)
@@ -42,7 +42,7 @@ public class OutcomeController {
                 .build());
     }
 
-    @PostMapping("/master-programmes/{masterProgrammeId}/psos")
+    @PostMapping({"/master-programmes/{masterProgrammeId}/psos", "/programme-batches/{masterProgrammeId}/psos", "/batches/{masterProgrammeId}/psos"})
     public ResponseEntity<ApiResponse<List<ProgrammeSpecificOutcome>>> savePSOs(@PathVariable String masterProgrammeId, @RequestBody List<ProgrammeSpecificOutcome> psos) {
         return ResponseEntity.ok(ApiResponse.<List<ProgrammeSpecificOutcome>>builder()
                 .success(true)
@@ -51,7 +51,7 @@ public class OutcomeController {
                 .build());
     }
 
-    @GetMapping("/master-programmes/{masterProgrammeId}/peos")
+    @GetMapping({"/master-programmes/{masterProgrammeId}/peos", "/programme-batches/{masterProgrammeId}/peos", "/batches/{masterProgrammeId}/peos"})
     public ResponseEntity<ApiResponse<List<PeoOutcome>>> getPEOs(@PathVariable String masterProgrammeId) {
         return ResponseEntity.ok(ApiResponse.<List<PeoOutcome>>builder()
                 .success(true)
@@ -59,7 +59,7 @@ public class OutcomeController {
                 .build());
     }
 
-    @PostMapping("/master-programmes/{masterProgrammeId}/peos")
+    @PostMapping({"/master-programmes/{masterProgrammeId}/peos", "/programme-batches/{masterProgrammeId}/peos", "/batches/{masterProgrammeId}/peos"})
     public ResponseEntity<ApiResponse<List<PeoOutcome>>> savePEOs(@PathVariable String masterProgrammeId, @RequestBody List<PeoOutcome> peos) {
         return ResponseEntity.ok(ApiResponse.<List<PeoOutcome>>builder()
                 .success(true)
@@ -86,7 +86,7 @@ public class OutcomeController {
     }
 
     // --- Target Benchmark Levels ---
-    @GetMapping("/master-programmes/{masterProgrammeId}/targets")
+    @GetMapping({"/master-programmes/{masterProgrammeId}/targets", "/programme-batches/{masterProgrammeId}/targets", "/batches/{masterProgrammeId}/targets"})
     public ResponseEntity<ApiResponse<ProgrammeTargetDto>> getProgrammeTargets(@PathVariable String masterProgrammeId) {
         return ResponseEntity.ok(ApiResponse.<ProgrammeTargetDto>builder()
                 .success(true)
@@ -94,7 +94,7 @@ public class OutcomeController {
                 .build());
     }
 
-    @PostMapping("/master-programmes/{masterProgrammeId}/targets")
+    @PostMapping({"/master-programmes/{masterProgrammeId}/targets", "/programme-batches/{masterProgrammeId}/targets", "/batches/{masterProgrammeId}/targets"})
     public ResponseEntity<ApiResponse<ProgrammeTargetDto>> saveProgrammeTargets(@PathVariable String masterProgrammeId, @RequestBody ProgrammeTargetDto targets) {
         return ResponseEntity.ok(ApiResponse.<ProgrammeTargetDto>builder()
                 .success(true)

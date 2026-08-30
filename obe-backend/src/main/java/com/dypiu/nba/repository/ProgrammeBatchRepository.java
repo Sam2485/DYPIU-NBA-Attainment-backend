@@ -40,12 +40,12 @@ public interface ProgrammeBatchRepository extends JpaRepository<ProgrammeBatch, 
         LEFT JOIN MasterProgramme mp ON b.masterProgrammeId = mp.id
         WHERE b.deletedAt IS NULL
           AND (mp.deletedAt IS NULL OR mp.id IS NULL)
-          AND (:status IS NULL OR b.status IS NULL OR UPPER(b.status) = UPPER(:status))
-          AND (:masterProgrammeId IS NULL OR b.masterProgrammeId = :masterProgrammeId)
-          AND (:departmentId IS NULL OR mp.departmentId = :departmentId)
-          AND (:coordinatorEmail IS NULL 
-               OR (b.coordinatorEmail IS NOT NULL AND LOWER(TRIM(b.coordinatorEmail)) = LOWER(TRIM(:coordinatorEmail)))
-               OR (b.coordinatorEmail IS NULL AND :masterProgrammeId IS NOT NULL AND b.masterProgrammeId = :masterProgrammeId)
+          AND (cast(:status as String) IS NULL OR b.status IS NULL OR b.status = cast(:status as String))
+          AND (cast(:masterProgrammeId as String) IS NULL OR b.masterProgrammeId = cast(:masterProgrammeId as String))
+          AND (cast(:departmentId as String) IS NULL OR mp.departmentId = cast(:departmentId as String))
+          AND (cast(:coordinatorEmail as String) IS NULL 
+               OR (b.coordinatorEmail IS NOT NULL AND b.coordinatorEmail = cast(:coordinatorEmail as String))
+               OR (b.coordinatorEmail IS NULL AND cast(:masterProgrammeId as String) IS NOT NULL AND b.masterProgrammeId = cast(:masterProgrammeId as String))
               )
         ORDER BY b.startYear DESC
     """)
@@ -61,12 +61,12 @@ public interface ProgrammeBatchRepository extends JpaRepository<ProgrammeBatch, 
         LEFT JOIN MasterProgramme mp ON b.masterProgrammeId = mp.id
         WHERE b.deletedAt IS NULL
           AND (mp.deletedAt IS NULL OR mp.id IS NULL)
-          AND (:status IS NULL OR b.status IS NULL OR UPPER(b.status) = UPPER(:status))
-          AND (:masterProgrammeId IS NULL OR b.masterProgrammeId = :masterProgrammeId)
+          AND (cast(:status as String) IS NULL OR b.status IS NULL OR b.status = cast(:status as String))
+          AND (cast(:masterProgrammeId as String) IS NULL OR b.masterProgrammeId = cast(:masterProgrammeId as String))
           AND (mp.departmentId IN :departmentIds)
-          AND (:coordinatorEmail IS NULL 
-               OR (b.coordinatorEmail IS NOT NULL AND LOWER(TRIM(b.coordinatorEmail)) = LOWER(TRIM(:coordinatorEmail)))
-               OR (b.coordinatorEmail IS NULL AND :masterProgrammeId IS NOT NULL AND b.masterProgrammeId = :masterProgrammeId)
+          AND (cast(:coordinatorEmail as String) IS NULL 
+               OR (b.coordinatorEmail IS NOT NULL AND b.coordinatorEmail = cast(:coordinatorEmail as String))
+               OR (b.coordinatorEmail IS NULL AND cast(:masterProgrammeId as String) IS NOT NULL AND b.masterProgrammeId = cast(:masterProgrammeId as String))
               )
         ORDER BY b.startYear DESC
     """)
