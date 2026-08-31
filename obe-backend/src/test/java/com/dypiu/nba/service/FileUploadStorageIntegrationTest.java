@@ -30,6 +30,9 @@ public class FileUploadStorageIntegrationTest {
     @Autowired
     private AttainmentCalculationService attainmentCalculationService;
 
+    @org.springframework.beans.factory.annotation.Value("${app.upload-dir:${app.upload.dir:./target/test-uploads}}")
+    private String baseUploadDir;
+
     @Autowired
     private SchoolRepository schoolRepository;
 
@@ -167,7 +170,7 @@ public class FileUploadStorageIntegrationTest {
 
         assertNotNull(result);
 
-        Path expectedDir = Paths.get("/Users/rajshaikh/Desktop/uploads/examination/offering-8dd53799");
+        Path expectedDir = Paths.get(baseUploadDir, "examination", "offering-8dd53799");
         assertTrue(Files.exists(expectedDir), "Directory must exist: " + expectedDir);
         assertTrue(Files.isDirectory(expectedDir), "Path must be a directory: " + expectedDir);
 
@@ -181,7 +184,7 @@ public class FileUploadStorageIntegrationTest {
     }
 
     @Test
-    @DisplayName("Verify survey upload stores file in /Users/rajshaikh/Desktop/uploads/survey/offering-8dd53799/")
+    @DisplayName("Verify survey upload stores file in target directory")
     void testSurveyUploadStorageLocation() throws Exception {
         File surveySource = new File("/Users/rajshaikh/Desktop/testing/survey.xlsx");
         byte[] content;
@@ -209,7 +212,7 @@ public class FileUploadStorageIntegrationTest {
 
         assertNotNull(result);
 
-        Path expectedDir = Paths.get("/Users/rajshaikh/Desktop/uploads/survey/offering-8dd53799");
+        Path expectedDir = Paths.get(baseUploadDir, "survey", "offering-8dd53799");
         assertTrue(Files.exists(expectedDir), "Directory must exist: " + expectedDir);
         assertTrue(Files.isDirectory(expectedDir), "Path must be a directory: " + expectedDir);
 
