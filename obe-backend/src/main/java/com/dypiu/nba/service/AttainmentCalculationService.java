@@ -1885,34 +1885,80 @@ public class AttainmentCalculationService {
                         throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "No valid survey response rows found in the Programme End Survey sheet.");
                     }
 
-                    // Compute average indirect attainment for each PO & PSO
+                    // Compute weighted percentage and range-based indirect attainment (1-3) for each PO & PSO:
+                    // totalPct = (pct3 * 1.0) + (pct2 * 0.67) + (pct1 * 0.33)
+                    // Level bands: 0-40% -> 1.0, 40-70% -> 2.0, 70-100% -> 3.0
                     for (String poCode : configuredPOCodes) {
                         List<Double> ratings = poRatingsMap.get(poCode);
-                        BigDecimal avgVal;
+                        BigDecimal attainmentVal;
                         if (ratings != null && !ratings.isEmpty()) {
-                            double avg = ratings.stream().mapToDouble(Double::doubleValue).average().orElse(0.0);
-                            avgVal = BigDecimal.valueOf(avg).setScale(2, RoundingMode.HALF_UP);
+                            int count1 = 0, count2 = 0, count3 = 0;
+                            for (Double r : ratings) {
+                                if (r <= 1.5) count1++;
+                                else if (r <= 2.5) count2++;
+                                else count3++;
+                            }
+                            int total = ratings.size();
+                            double pct1 = total > 0 ? ((double) count1 * 100.0 / total) : 0.0;
+                            double pct2 = total > 0 ? ((double) count2 * 100.0 / total) : 0.0;
+                            double pct3 = total > 0 ? ((double) count3 * 100.0 / total) : 0.0;
+
+                            double totalPct = (pct3 * 1.0) + (pct2 * 0.67) + (pct1 * 0.33);
+
+                            int level;
+                            if (totalPct > 70.0) {
+                                level = 3;
+                            } else if (totalPct > 40.0) {
+                                level = 2;
+                            } else if (totalPct > 0.0) {
+                                level = 1;
+                            } else {
+                                level = 0;
+                            }
+                            attainmentVal = BigDecimal.valueOf(level).setScale(2, RoundingMode.HALF_UP);
                         } else {
-                            avgVal = BigDecimal.ZERO;
+                            attainmentVal = BigDecimal.ZERO;
                         }
                         poItems.add(ProgrammeSurveyResultDto.PoIndirectItem.builder()
                                 .poCode(poCode)
-                                .indirectAttainment(avgVal)
+                                .indirectAttainment(attainmentVal)
                                 .build());
                     }
 
                     for (String psoCode : configuredPSOCodes) {
                         List<Double> ratings = psoRatingsMap.get(psoCode);
-                        BigDecimal avgVal;
+                        BigDecimal attainmentVal;
                         if (ratings != null && !ratings.isEmpty()) {
-                            double avg = ratings.stream().mapToDouble(Double::doubleValue).average().orElse(0.0);
-                            avgVal = BigDecimal.valueOf(avg).setScale(2, RoundingMode.HALF_UP);
+                            int count1 = 0, count2 = 0, count3 = 0;
+                            for (Double r : ratings) {
+                                if (r <= 1.5) count1++;
+                                else if (r <= 2.5) count2++;
+                                else count3++;
+                            }
+                            int total = ratings.size();
+                            double pct1 = total > 0 ? ((double) count1 * 100.0 / total) : 0.0;
+                            double pct2 = total > 0 ? ((double) count2 * 100.0 / total) : 0.0;
+                            double pct3 = total > 0 ? ((double) count3 * 100.0 / total) : 0.0;
+
+                            double totalPct = (pct3 * 1.0) + (pct2 * 0.67) + (pct1 * 0.33);
+
+                            int level;
+                            if (totalPct > 70.0) {
+                                level = 3;
+                            } else if (totalPct > 40.0) {
+                                level = 2;
+                            } else if (totalPct > 0.0) {
+                                level = 1;
+                            } else {
+                                level = 0;
+                            }
+                            attainmentVal = BigDecimal.valueOf(level).setScale(2, RoundingMode.HALF_UP);
                         } else {
-                            avgVal = BigDecimal.ZERO;
+                            attainmentVal = BigDecimal.ZERO;
                         }
                         psoItems.add(ProgrammeSurveyResultDto.PsoIndirectItem.builder()
                                 .psoCode(psoCode)
-                                .indirectAttainment(avgVal)
+                                .indirectAttainment(attainmentVal)
                                 .build());
                     }
 
@@ -1965,6 +2011,105 @@ public class AttainmentCalculationService {
 
         programmeSurveyStore.put(key, result);
         return result;
+    }
+
+    @Transactional(readOnly = true)
+    public ProgrammeSurveyResultDto getProgrammeSurveyResult(String masterProgrammeId, String programmeBatchId) {
+        System.out.println("[AttainmentCalculationService] getProgrammeSurveyResult called | masterProgrammeId: " + masterProgrammeId + " | programmeBatchId: " + programmeBatchId);
+        String key = masterProgrammeId + "::" + programmeBatchId;
+        if (programmeSurveyStore.containsKey(key)) {
+            return programmeSurveyStore.get(key);
+        }
+
+        // Check if there is an existing uploaded document on disk
+        List<UploadedDocument> docs = uploadedDocumentRepository.findAll().stream()
+                .filter(d -> programmeBatchId.equalsIgnoreCase(d.getProgrammeBatchId()) && d.getDocumentType() == DocumentType.SURVEY)
+                .sorted(Comparator.comparing(UploadedDocument::getUploadedAt, Comparator.nullsLast(Comparator.reverseOrder())))
+                .toList();
+
+        if (!docs.isEmpty()) {
+            UploadedDocument latestDoc = docs.get(0);
+            if (latestDoc.getSavedPath() != null) {
+                Path p = Paths.get(latestDoc.getSavedPath());
+                if (Files.exists(p)) {
+                    try {
+                        byte[] bytes = Files.readAllBytes(p);
+                        ByteArrayMultipartFile mockFile = new ByteArrayMultipartFile(
+                                "file", latestDoc.getFileName() != null ? latestDoc.getFileName() : "programme_survey.xlsx",
+                                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", bytes);
+                        return processAndSaveProgrammeSurveyFile(masterProgrammeId, programmeBatchId, mockFile, latestDoc.getUploadedBy());
+                    } catch (Exception ignored) {}
+                }
+            }
+        }
+
+        return processAndSaveProgrammeSurveyFile(masterProgrammeId, programmeBatchId, null, null);
+    }
+
+    private static class ByteArrayMultipartFile implements MultipartFile {
+        private final String name;
+        private final String originalFilename;
+        private final String contentType;
+        private final byte[] content;
+
+        public ByteArrayMultipartFile(String name, String originalFilename, String contentType, byte[] content) {
+            this.name = name;
+            this.originalFilename = originalFilename;
+            this.contentType = contentType;
+            this.content = content != null ? content : new byte[0];
+        }
+
+        @Override public String getName() { return name; }
+        @Override public String getOriginalFilename() { return originalFilename; }
+        @Override public String getContentType() { return contentType; }
+        @Override public boolean isEmpty() { return content.length == 0; }
+        @Override public long getSize() { return content.length; }
+        @Override public byte[] getBytes() { return content; }
+        @Override public java.io.InputStream getInputStream() { return new java.io.ByteArrayInputStream(content); }
+        @Override public void transferTo(java.io.File dest) throws java.io.IOException, IllegalStateException { Files.write(dest.toPath(), content); }
+    }
+
+    @Transactional
+    public ProgrammeSurveyResultDto saveProgrammeSurveyResult(String masterProgrammeId, String programmeBatchId, ProgrammeSurveyResultDto payload) {
+        System.out.println("[AttainmentCalculationService] saveProgrammeSurveyResult called | masterProgrammeId: " + masterProgrammeId + " | programmeBatchId: " + programmeBatchId);
+        if (programmeBatchId != null) {
+            batchLifecycleService.enforceBatchEditability(programmeBatchId);
+        }
+        String key = masterProgrammeId + "::" + programmeBatchId;
+        if (payload != null) {
+            payload.setMasterProgrammeId(masterProgrammeId);
+            payload.setProgrammeBatchId(programmeBatchId);
+            if (payload.getUploadId() == null || payload.getUploadId().isBlank()) {
+                payload.setUploadId("psurvey-" + UUID.randomUUID().toString().substring(0, 8));
+            }
+            payload.setStatus("SAVED");
+            programmeSurveyStore.put(key, payload);
+            return payload;
+        }
+        return getProgrammeSurveyResult(masterProgrammeId, programmeBatchId);
+    }
+
+    @Transactional
+    public void deleteProgrammeSurvey(String masterProgrammeId, String programmeBatchId) {
+        System.out.println("[AttainmentCalculationService] deleteProgrammeSurvey called | masterProgrammeId: " + masterProgrammeId + " | programmeBatchId: " + programmeBatchId);
+        if (programmeBatchId != null) {
+            batchLifecycleService.enforceBatchEditability(programmeBatchId);
+        }
+        String key = masterProgrammeId + "::" + programmeBatchId;
+        programmeSurveyStore.remove(key);
+
+        List<UploadedDocument> docs = uploadedDocumentRepository.findAll().stream()
+                .filter(d -> programmeBatchId.equalsIgnoreCase(d.getProgrammeBatchId()) && d.getDocumentType() == DocumentType.SURVEY)
+                .toList();
+
+        for (UploadedDocument doc : docs) {
+            if (doc.getSavedPath() != null) {
+                try {
+                    Files.deleteIfExists(Paths.get(doc.getSavedPath()));
+                } catch (Exception ignored) {}
+            }
+            uploadedDocumentRepository.delete(doc);
+        }
     }
 
     // =========================================================================
