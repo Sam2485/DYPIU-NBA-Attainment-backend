@@ -56,7 +56,7 @@ public class AttainmentCalculationService {
     private final MappingService mappingService;
     private final BatchLifecycleService batchLifecycleService;
 
-    @org.springframework.beans.factory.annotation.Value("${app.upload-dir:${app.upload.dir:/Users/rajshaikh/Desktop/uploads}}")
+    @org.springframework.beans.factory.annotation.Value("${app.upload-dir:${app.upload.dir:${UPLOAD_STORAGE_PATH:${APP_UPLOAD_DIR:/app/uploads}}}}")
     private String baseUploadDir;
 
     private final Map<String, ExaminationAttainmentResultDto> examinationAttainmentStore = new ConcurrentHashMap<>();
@@ -76,7 +76,7 @@ public class AttainmentCalculationService {
             return null;
         }
         try {
-            String base = (baseUploadDir != null && !baseUploadDir.isBlank()) ? baseUploadDir : "/Users/rajshaikh/Desktop/uploads";
+            String base = (baseUploadDir != null && !baseUploadDir.isBlank()) ? baseUploadDir : "/app/uploads";
             Path targetDirectory = Paths.get(base, subCategory, programmeBatchCourseId).toAbsolutePath().normalize();
             Files.createDirectories(targetDirectory);
 
@@ -100,7 +100,7 @@ public class AttainmentCalculationService {
             return null;
         }
         try {
-            String base = (baseUploadDir != null && !baseUploadDir.isBlank()) ? baseUploadDir : "/Users/rajshaikh/Desktop/uploads";
+            String base = (baseUploadDir != null && !baseUploadDir.isBlank()) ? baseUploadDir : "/app/uploads";
             Path targetDirectory = Paths.get(base, "programme-survey", masterProgrammeId, programmeBatchId).toAbsolutePath().normalize();
             Files.createDirectories(targetDirectory);
 

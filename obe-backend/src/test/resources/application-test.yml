@@ -28,5 +28,8 @@ app:
     expiration-ms: 3600000
   storage:
     local-dir: ./target/test-storage
+  upload-dir: ./target/test-uploads
+  upload:
+    dir: ./target/test-uploads
   cors:
     allowed-origins: "*"
