@@ -304,7 +304,7 @@ public class ProgrammeBatchController {
                 .build());
     }
 
-    @PostMapping("/{programmeBatchId}/atr")
+    @RequestMapping(value = "/{programmeBatchId}/atr", method = {RequestMethod.POST, RequestMethod.PUT})
     public ResponseEntity<ApiResponse<ProgrammeAtrReportDto>> saveProgrammeBatchAtr(
             @PathVariable String programmeBatchId,
             @RequestBody ProgrammeAtrReportDto dto) {
@@ -337,8 +337,19 @@ public class ProgrammeBatchController {
                 .build());
     }
 
-    // --- Programme End Survey Excel Upload ---
-    @PostMapping(value = "/{programmeBatchId}/survey/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    // --- Programme End Survey Endpoints (GET, POST upload, POST manual save, DELETE) ---
+    @GetMapping({"/{programmeBatchId}/survey", "/{programmeBatchId}/indirect-attainment"})
+    public ResponseEntity<ApiResponse<ProgrammeSurveyResultDto>> getProgrammeSurvey(
+            @PathVariable String programmeBatchId) {
+        ProgrammeBatch batch = academicService.getBatchById(programmeBatchId);
+        return ResponseEntity.ok(ApiResponse.<ProgrammeSurveyResultDto>builder()
+                .success(true)
+                .message("Programme exit survey fetched successfully")
+                .data(calculationService.getProgrammeSurveyResult(batch.getMasterProgrammeId(), programmeBatchId))
+                .build());
+    }
+
+    @PostMapping(value = {"/{programmeBatchId}/survey/upload", "/{programmeBatchId}/indirect-attainment/upload"}, consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ApiResponse<ProgrammeSurveyResultDto>> uploadProgrammeSurvey(
             @PathVariable String programmeBatchId,
             @RequestParam("file") MultipartFile file,
@@ -350,6 +361,29 @@ public class ProgrammeBatchController {
                 .success(true)
                 .message("Programme exit survey processed successfully")
                 .data(calculationService.processAndSaveProgrammeSurveyFile(batch.getMasterProgrammeId(), programmeBatchId, file, uploader))
+                .build());
+    }
+
+    @PostMapping({"/{programmeBatchId}/survey", "/{programmeBatchId}/indirect-attainment"})
+    public ResponseEntity<ApiResponse<ProgrammeSurveyResultDto>> saveProgrammeSurvey(
+            @PathVariable String programmeBatchId,
+            @RequestBody ProgrammeSurveyResultDto payload) {
+        ProgrammeBatch batch = academicService.getBatchById(programmeBatchId);
+        return ResponseEntity.ok(ApiResponse.<ProgrammeSurveyResultDto>builder()
+                .success(true)
+                .message("Programme exit survey saved successfully")
+                .data(calculationService.saveProgrammeSurveyResult(batch.getMasterProgrammeId(), programmeBatchId, payload))
+                .build());
+    }
+
+    @DeleteMapping({"/{programmeBatchId}/survey", "/{programmeBatchId}/indirect-attainment"})
+    public ResponseEntity<ApiResponse<Void>> deleteProgrammeSurvey(
+            @PathVariable String programmeBatchId) {
+        ProgrammeBatch batch = academicService.getBatchById(programmeBatchId);
+        calculationService.deleteProgrammeSurvey(batch.getMasterProgrammeId(), programmeBatchId);
+        return ResponseEntity.ok(ApiResponse.<Void>builder()
+                .success(true)
+                .message("Programme exit survey deleted successfully")
                 .build());
     }
 }

@@ -717,205 +717,271 @@ public class AtrService {
             }
         }
 
-        Optional<ProgrammeAtr> existingAtr = programmeAtrRepository.findByProgrammeBatchId(batch.getId());
-        boolean isLocked = existingAtr.isPresent() && isAtrLocked(existingAtr.get().getStatus());
-
-        if (existingAtr.isPresent() && existingAtr.get().getObservationsJson() != null && !existingAtr.get().getObservationsJson().isBlank()) {
-            try {
-                ProgrammeAtrReportDto savedDto = objectMapper.readValue(existingAtr.get().getObservationsJson(), ProgrammeAtrReportDto.class);
-                if (savedDto != null && (savedDto.getPoOutcomes() != null || savedDto.getPsoOutcomes() != null)) {
-                    savedDto.setStatus(existingAtr.get().getStatus() != null ? existingAtr.get().getStatus().name() : "DRAFT");
-                    savedDto.setProgrammeAtrId(existingAtr.get().getId());
-                    if (savedDto.getProgramme() == null) {
-                        savedDto.setProgramme(ProgrammeAtrReportDto.ProgrammeSummary.builder().id(prog.getId()).code(prog.getCode()).name(prog.getName()).build());
-                    } else {
-                        savedDto.getProgramme().setId(prog.getId());
-                        savedDto.getProgramme().setCode(prog.getCode());
-                        savedDto.getProgramme().setName(prog.getName());
-                    }
-                    if (savedDto.getBatch() == null) {
-                        savedDto.setBatch(ProgrammeAtrReportDto.BatchSummary.builder()
-                                .id(batch.getId())
-                                .name(batch.getName())
-                                .startYear(batch.getStartYear() != null ? String.valueOf(batch.getStartYear()) : "")
-                                .endYear(batch.getEndYear() != null ? String.valueOf(batch.getEndYear()) : "")
-                                .build());
-                    } else {
-                        savedDto.getBatch().setId(batch.getId());
-                        savedDto.getBatch().setName(batch.getName());
-                    }
-
-                    // If submitted or approved, lock ATR and preserve exact historical snapshot
-                    if (isLocked) {
-                        return savedDto;
-                    }
-
-                    // In editable/draft/revision states: dynamically reflect live PO/PSO definitions, statements, and targets
-                    Map<String, ProgrammeAtrReportDto.OutcomeRow> existingPoRowMap = new HashMap<>();
-                    if (savedDto.getPoOutcomes() != null) {
-                        for (ProgrammeAtrReportDto.OutcomeRow r : savedDto.getPoOutcomes()) {
-                            if (r.getOutcomeCode() != null) existingPoRowMap.put(r.getOutcomeCode().toUpperCase(), r);
-                        }
-                    }
-
-                    List<ProgrammeAtrReportDto.OutcomeRow> updatedPoRows = new ArrayList<>();
-                    if (!pos.isEmpty()) {
-                        for (ProgrammeOutcome po : pos) {
-                            String codeKey = po.getCode() != null ? po.getCode().toUpperCase() : "";
-                            ProgrammeAtrReportDto.OutcomeRow existingRow = existingPoRowMap.get(codeKey);
-
-                            BigDecimal target = po.getTarget() != null ? po.getTarget() : (existingRow != null && existingRow.getTargetLevel() != null ? existingRow.getTargetLevel() : new BigDecimal("2.0"));
-                            BigDecimal attainment = existingRow != null && existingRow.getAttainmentLevel() != null ? existingRow.getAttainmentLevel() : new BigDecimal("0.0");
-                            BigDecimal pct = target.compareTo(BigDecimal.ZERO) > 0
-                                    ? attainment.divide(target, 4, RoundingMode.HALF_UP).multiply(new BigDecimal("100")).setScale(2, RoundingMode.HALF_UP)
-                                    : BigDecimal.ZERO;
-
-                            updatedPoRows.add(ProgrammeAtrReportDto.OutcomeRow.builder()
-                                    .outcomeCode(po.getCode())
-                                    .outcomeStatement(po.getStatement() != null ? po.getStatement() : "Programme Outcome " + po.getCode())
-                                    .targetLevel(target)
-                                    .attainmentLevel(attainment)
-                                    .achievementPercentage(pct)
-                                    .observation(existingRow != null && existingRow.getObservation() != null ? existingRow.getObservation() : "")
-                                    .actions(existingRow != null && existingRow.getActions() != null ? existingRow.getActions() : Collections.emptyList())
-                                    .build());
-                        }
-                    } else if (savedDto.getPoOutcomes() != null) {
-                        updatedPoRows = savedDto.getPoOutcomes();
-                    }
-                    savedDto.setPoOutcomes(updatedPoRows);
-
-                    Map<String, ProgrammeAtrReportDto.OutcomeRow> existingPsoRowMap = new HashMap<>();
-                    if (savedDto.getPsoOutcomes() != null) {
-                        for (ProgrammeAtrReportDto.OutcomeRow r : savedDto.getPsoOutcomes()) {
-                            if (r.getOutcomeCode() != null) existingPsoRowMap.put(r.getOutcomeCode().toUpperCase(), r);
-                        }
-                    }
-
-                    List<ProgrammeAtrReportDto.OutcomeRow> updatedPsoRows = new ArrayList<>();
-                    if (!psos.isEmpty()) {
-                        for (ProgrammeSpecificOutcome pso : psos) {
-                            String codeKey = pso.getCode() != null ? pso.getCode().toUpperCase() : "";
-                            ProgrammeAtrReportDto.OutcomeRow existingRow = existingPsoRowMap.get(codeKey);
-
-                            BigDecimal target = pso.getTarget() != null ? pso.getTarget() : (existingRow != null && existingRow.getTargetLevel() != null ? existingRow.getTargetLevel() : new BigDecimal("2.0"));
-                            BigDecimal attainment = existingRow != null && existingRow.getAttainmentLevel() != null ? existingRow.getAttainmentLevel() : new BigDecimal("0.0");
-                            BigDecimal pct = target.compareTo(BigDecimal.ZERO) > 0
-                                    ? attainment.divide(target, 4, RoundingMode.HALF_UP).multiply(new BigDecimal("100")).setScale(2, RoundingMode.HALF_UP)
-                                    : BigDecimal.ZERO;
-
-                            updatedPsoRows.add(ProgrammeAtrReportDto.OutcomeRow.builder()
-                                    .outcomeCode(pso.getCode())
-                                    .outcomeStatement(pso.getStatement() != null ? pso.getStatement() : "Programme Specific Outcome " + pso.getCode())
-                                    .targetLevel(target)
-                                    .attainmentLevel(attainment)
-                                    .achievementPercentage(pct)
-                                    .observation(existingRow != null && existingRow.getObservation() != null ? existingRow.getObservation() : "")
-                                    .actions(existingRow != null && existingRow.getActions() != null ? existingRow.getActions() : Collections.emptyList())
-                                    .build());
-                        }
-                    } else if (savedDto.getPsoOutcomes() != null) {
-                        updatedPsoRows = savedDto.getPsoOutcomes();
-                    }
-                    savedDto.setPsoOutcomes(updatedPsoRows);
-
-                    return savedDto;
-                }
-            } catch (Exception ignored) {}
-        }
-
         ProgrammeAttainmentResultDto attainment = null;
         try {
             attainment = attainmentCalculationService.calculateProgrammeAttainment(prog.getId(), batch.getId());
         } catch (Exception ignored) {}
 
-        List<ProgrammeAtrReportDto.OutcomeRow> poRows = new ArrayList<>();
-        if (attainment != null && attainment.getOverallAttainment() != null && attainment.getOverallAttainment().getPos() != null && !attainment.getOverallAttainment().getPos().isEmpty()) {
+        Map<String, ProgrammeAttainmentResultDto.OutcomeAttainmentItem> poAttainmentMap = new HashMap<>();
+        if (attainment != null && attainment.getOverallAttainment() != null && attainment.getOverallAttainment().getPos() != null) {
             for (ProgrammeAttainmentResultDto.OutcomeAttainmentItem it : attainment.getOverallAttainment().getPos()) {
                 String code = it.getOutcomeCode() != null ? it.getOutcomeCode() : (it.getPoCode() != null ? it.getPoCode() : "");
-                String statement = poStatementMap.getOrDefault(code.toUpperCase(), it.getOutcomeStatement() != null && !it.getOutcomeStatement().isBlank() ? it.getOutcomeStatement() : "Programme Outcome " + code);
-                BigDecimal target = it.getTarget() != null ? it.getTarget() : poTargetMap.getOrDefault(code.toUpperCase(), new BigDecimal("2.0"));
+                if (!code.isBlank()) poAttainmentMap.put(code.toUpperCase(), it);
+            }
+        }
+
+        Map<String, ProgrammeAttainmentResultDto.OutcomeAttainmentItem> psoAttainmentMap = new HashMap<>();
+        if (attainment != null && attainment.getOverallAttainment() != null && attainment.getOverallAttainment().getPsos() != null) {
+            for (ProgrammeAttainmentResultDto.OutcomeAttainmentItem it : attainment.getOverallAttainment().getPsos()) {
+                String code = it.getOutcomeCode() != null ? it.getOutcomeCode() : (it.getPsoCode() != null ? it.getPsoCode() : "");
+                if (!code.isBlank()) psoAttainmentMap.put(code.toUpperCase(), it);
+            }
+        }
+
+        Optional<ProgrammeAtr> existingAtr = programmeAtrRepository.findByProgrammeBatchId(batch.getId());
+
+        Map<String, String> savedPoObs = new HashMap<>();
+        Map<String, List<String>> savedPoActions = new HashMap<>();
+        Map<String, String> savedPsoObs = new HashMap<>();
+        Map<String, List<String>> savedPsoActions = new HashMap<>();
+        List<ProgrammeAtrReportDto.OutcomeRow> extraSavedPoRows = new ArrayList<>();
+        List<ProgrammeAtrReportDto.OutcomeRow> extraSavedPsoRows = new ArrayList<>();
+
+        if (existingAtr.isPresent() && existingAtr.get().getObservationsJson() != null && !existingAtr.get().getObservationsJson().isBlank()) {
+            try {
+                ProgrammeAtrReportDto savedDto = objectMapper.readValue(existingAtr.get().getObservationsJson(), ProgrammeAtrReportDto.class);
+                if (savedDto != null) {
+                    if (savedDto.getPoOutcomes() != null) {
+                        for (ProgrammeAtrReportDto.OutcomeRow r : savedDto.getPoOutcomes()) {
+                            if (r.getOutcomeCode() != null) {
+                                String codeUpper = r.getOutcomeCode().toUpperCase();
+                                if (r.getObservation() != null) savedPoObs.put(codeUpper, r.getObservation());
+                                if (r.getActions() != null) savedPoActions.put(codeUpper, r.getActions());
+                                extraSavedPoRows.add(r);
+                            }
+                        }
+                    }
+                    if (savedDto.getPsoOutcomes() != null) {
+                        for (ProgrammeAtrReportDto.OutcomeRow r : savedDto.getPsoOutcomes()) {
+                            if (r.getOutcomeCode() != null) {
+                                String codeUpper = r.getOutcomeCode().toUpperCase();
+                                if (r.getObservation() != null) savedPsoObs.put(codeUpper, r.getObservation());
+                                if (r.getActions() != null) savedPsoActions.put(codeUpper, r.getActions());
+                                extraSavedPsoRows.add(r);
+                            }
+                        }
+                    }
+                }
+            } catch (Exception ignored) {}
+        }
+
+        List<ProgrammeAtrReportDto.OutcomeRow> poRows = new ArrayList<>();
+        Set<String> processedPoCodes = new HashSet<>();
+
+        if (!pos.isEmpty()) {
+            for (ProgrammeOutcome po : pos) {
+                String code = po.getCode() != null ? po.getCode() : "";
+                String codeUpper = code.toUpperCase();
+                processedPoCodes.add(codeUpper);
+
+                String statement = po.getStatement() != null && !po.getStatement().isBlank()
+                        ? po.getStatement()
+                        : poStatementMap.getOrDefault(codeUpper, "Programme Outcome " + code);
+
+                ProgrammeAttainmentResultDto.OutcomeAttainmentItem attItem = poAttainmentMap.get(codeUpper);
+
+                BigDecimal target = po.getTarget() != null
+                        ? po.getTarget()
+                        : (attItem != null && attItem.getTarget() != null ? attItem.getTarget() : new BigDecimal("2.50"));
+
+                BigDecimal attainmentLevel = attItem != null && attItem.getOverallAttainment() != null
+                        ? attItem.getOverallAttainment()
+                        : BigDecimal.ZERO;
+
+                BigDecimal pct = target.compareTo(BigDecimal.ZERO) > 0
+                        ? attainmentLevel.divide(target, 4, RoundingMode.HALF_UP).multiply(new BigDecimal("100")).setScale(2, RoundingMode.HALF_UP)
+                        : BigDecimal.ZERO;
 
                 poRows.add(ProgrammeAtrReportDto.OutcomeRow.builder()
                         .outcomeCode(code)
                         .outcomeStatement(statement)
                         .targetLevel(target)
-                        .attainmentLevel(it.getOverallAttainment() != null ? it.getOverallAttainment() : new BigDecimal("0.0"))
-                        .achievementPercentage(it.getAchievementPercentage() != null ? it.getAchievementPercentage() : new BigDecimal("0.0"))
-                        .observation("")
-                        .actions(Collections.emptyList())
+                        .attainmentLevel(attainmentLevel)
+                        .achievementPercentage(pct)
+                        .observation(savedPoObs.getOrDefault(codeUpper, ""))
+                        .actions(savedPoActions.getOrDefault(codeUpper, Collections.emptyList()))
                         .build());
             }
-        } else {
-            if (pos.isEmpty()) {
-                for (int i = 1; i <= 12; i++) {
-                    poRows.add(ProgrammeAtrReportDto.OutcomeRow.builder()
-                            .outcomeCode("PO" + i)
-                            .outcomeStatement("Programme Outcome " + i)
-                            .targetLevel(new BigDecimal("2.0"))
-                            .attainmentLevel(new BigDecimal("0.0"))
-                            .achievementPercentage(new BigDecimal("0.0"))
-                            .observation("")
-                            .actions(Collections.emptyList())
-                            .build());
-                }
-            } else {
-                for (ProgrammeOutcome po : pos) {
-                    poRows.add(ProgrammeAtrReportDto.OutcomeRow.builder()
-                            .outcomeCode(po.getCode())
-                            .outcomeStatement(po.getStatement() != null ? po.getStatement() : "Programme Outcome " + po.getCode())
-                            .targetLevel(po.getTarget() != null ? po.getTarget() : new BigDecimal("2.0"))
-                            .attainmentLevel(new BigDecimal("0.0"))
-                            .achievementPercentage(new BigDecimal("0.0"))
-                            .observation("")
-                            .actions(Collections.emptyList())
-                            .build());
-                }
+        } else if (!poAttainmentMap.isEmpty()) {
+            for (ProgrammeAttainmentResultDto.OutcomeAttainmentItem it : attainment.getOverallAttainment().getPos()) {
+                String code = it.getOutcomeCode() != null ? it.getOutcomeCode() : (it.getPoCode() != null ? it.getPoCode() : "");
+                String codeUpper = code.toUpperCase();
+                processedPoCodes.add(codeUpper);
+
+                String statement = it.getOutcomeStatement() != null && !it.getOutcomeStatement().isBlank()
+                        ? it.getOutcomeStatement()
+                        : poStatementMap.getOrDefault(codeUpper, "Programme Outcome " + code);
+
+                BigDecimal target = it.getTarget() != null ? it.getTarget() : poTargetMap.getOrDefault(codeUpper, new BigDecimal("2.50"));
+                BigDecimal attainmentLevel = it.getOverallAttainment() != null ? it.getOverallAttainment() : BigDecimal.ZERO;
+                BigDecimal pct = it.getAchievementPercentage() != null ? it.getAchievementPercentage() : (target.compareTo(BigDecimal.ZERO) > 0 ? attainmentLevel.divide(target, 4, RoundingMode.HALF_UP).multiply(new BigDecimal("100")).setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO);
+
+                poRows.add(ProgrammeAtrReportDto.OutcomeRow.builder()
+                        .outcomeCode(code)
+                        .outcomeStatement(statement)
+                        .targetLevel(target)
+                        .attainmentLevel(attainmentLevel)
+                        .achievementPercentage(pct)
+                        .observation(savedPoObs.getOrDefault(codeUpper, ""))
+                        .actions(savedPoActions.getOrDefault(codeUpper, Collections.emptyList()))
+                        .build());
+            }
+        }
+
+        for (ProgrammeAtrReportDto.OutcomeRow r : extraSavedPoRows) {
+            String code = r.getOutcomeCode() != null ? r.getOutcomeCode() : "";
+            String codeUpper = code.toUpperCase();
+            if (!processedPoCodes.contains(codeUpper)) {
+                processedPoCodes.add(codeUpper);
+                String statement = r.getOutcomeStatement() != null && !r.getOutcomeStatement().isBlank()
+                        ? r.getOutcomeStatement()
+                        : poStatementMap.getOrDefault(codeUpper, "Programme Outcome " + code);
+
+                ProgrammeAttainmentResultDto.OutcomeAttainmentItem attItem = poAttainmentMap.get(codeUpper);
+                BigDecimal target = r.getTargetLevel() != null ? r.getTargetLevel() : (attItem != null && attItem.getTarget() != null ? attItem.getTarget() : poTargetMap.getOrDefault(codeUpper, new BigDecimal("2.50")));
+                BigDecimal attainmentLevel = r.getAttainmentLevel() != null ? r.getAttainmentLevel() : (attItem != null && attItem.getOverallAttainment() != null ? attItem.getOverallAttainment() : BigDecimal.ZERO);
+                BigDecimal pct = target.compareTo(BigDecimal.ZERO) > 0 ? attainmentLevel.divide(target, 4, RoundingMode.HALF_UP).multiply(new BigDecimal("100")).setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO;
+
+                poRows.add(ProgrammeAtrReportDto.OutcomeRow.builder()
+                        .outcomeCode(code)
+                        .outcomeStatement(statement)
+                        .targetLevel(target)
+                        .attainmentLevel(attainmentLevel)
+                        .achievementPercentage(pct)
+                        .observation(r.getObservation() != null ? r.getObservation() : "")
+                        .actions(r.getActions() != null ? r.getActions() : Collections.emptyList())
+                        .build());
+            }
+        }
+
+        if (poRows.isEmpty()) {
+            for (int i = 1; i <= 12; i++) {
+                String code = "PO" + i;
+                String codeUpper = code.toUpperCase();
+                poRows.add(ProgrammeAtrReportDto.OutcomeRow.builder()
+                        .outcomeCode(code)
+                        .outcomeStatement("Programme Outcome " + i)
+                        .targetLevel(new BigDecimal("2.50"))
+                        .attainmentLevel(BigDecimal.ZERO)
+                        .achievementPercentage(BigDecimal.ZERO)
+                        .observation(savedPoObs.getOrDefault(codeUpper, ""))
+                        .actions(savedPoActions.getOrDefault(codeUpper, Collections.emptyList()))
+                        .build());
             }
         }
 
         List<ProgrammeAtrReportDto.OutcomeRow> psoRows = new ArrayList<>();
-        if (attainment != null && attainment.getOverallAttainment() != null && attainment.getOverallAttainment().getPsos() != null && !attainment.getOverallAttainment().getPsos().isEmpty()) {
-            for (ProgrammeAttainmentResultDto.OutcomeAttainmentItem it : attainment.getOverallAttainment().getPsos()) {
-                String code = it.getOutcomeCode() != null ? it.getOutcomeCode() : (it.getPsoCode() != null ? it.getPsoCode() : "");
-                String statement = psoStatementMap.getOrDefault(code.toUpperCase(), it.getOutcomeStatement() != null && !it.getOutcomeStatement().isBlank() ? it.getOutcomeStatement() : "Programme Specific Outcome " + code);
-                BigDecimal target = it.getTarget() != null ? it.getTarget() : psoTargetMap.getOrDefault(code.toUpperCase(), new BigDecimal("2.0"));
+        Set<String> processedPsoCodes = new HashSet<>();
+
+        if (!psos.isEmpty()) {
+            for (ProgrammeSpecificOutcome pso : psos) {
+                String code = pso.getCode() != null ? pso.getCode() : "";
+                String codeUpper = code.toUpperCase();
+                processedPsoCodes.add(codeUpper);
+
+                String statement = pso.getStatement() != null && !pso.getStatement().isBlank()
+                        ? pso.getStatement()
+                        : psoStatementMap.getOrDefault(codeUpper, "Programme Specific Outcome " + code);
+
+                ProgrammeAttainmentResultDto.OutcomeAttainmentItem attItem = psoAttainmentMap.get(codeUpper);
+
+                BigDecimal target = pso.getTarget() != null
+                        ? pso.getTarget()
+                        : (attItem != null && attItem.getTarget() != null ? attItem.getTarget() : new BigDecimal("2.50"));
+
+                BigDecimal attainmentLevel = attItem != null && attItem.getOverallAttainment() != null
+                        ? attItem.getOverallAttainment()
+                        : BigDecimal.ZERO;
+
+                BigDecimal pct = target.compareTo(BigDecimal.ZERO) > 0
+                        ? attainmentLevel.divide(target, 4, RoundingMode.HALF_UP).multiply(new BigDecimal("100")).setScale(2, RoundingMode.HALF_UP)
+                        : BigDecimal.ZERO;
 
                 psoRows.add(ProgrammeAtrReportDto.OutcomeRow.builder()
                         .outcomeCode(code)
                         .outcomeStatement(statement)
                         .targetLevel(target)
-                        .attainmentLevel(it.getOverallAttainment() != null ? it.getOverallAttainment() : new BigDecimal("0.0"))
-                        .achievementPercentage(it.getAchievementPercentage() != null ? it.getAchievementPercentage() : new BigDecimal("0.0"))
-                        .observation("")
-                        .actions(Collections.emptyList())
+                        .attainmentLevel(attainmentLevel)
+                        .achievementPercentage(pct)
+                        .observation(savedPsoObs.getOrDefault(codeUpper, ""))
+                        .actions(savedPsoActions.getOrDefault(codeUpper, Collections.emptyList()))
                         .build());
             }
-        } else {
-            if (psos.isEmpty()) {
-                for (int i = 1; i <= 2; i++) {
-                    psoRows.add(ProgrammeAtrReportDto.OutcomeRow.builder()
-                            .outcomeCode("PSO" + i)
-                            .outcomeStatement("Programme Specific Outcome " + i)
-                            .targetLevel(new BigDecimal("2.0"))
-                            .attainmentLevel(new BigDecimal("0.0"))
-                            .achievementPercentage(new BigDecimal("0.0"))
-                            .observation("")
-                            .actions(Collections.emptyList())
-                            .build());
-                }
-            } else {
-                for (ProgrammeSpecificOutcome pso : psos) {
-                    psoRows.add(ProgrammeAtrReportDto.OutcomeRow.builder()
-                            .outcomeCode(pso.getCode())
-                            .outcomeStatement(pso.getStatement() != null ? pso.getStatement() : "Programme Specific Outcome " + pso.getCode())
-                            .targetLevel(pso.getTarget() != null ? pso.getTarget() : new BigDecimal("2.0"))
-                            .attainmentLevel(new BigDecimal("0.0"))
-                            .achievementPercentage(new BigDecimal("0.0"))
-                            .observation("")
-                            .actions(Collections.emptyList())
-                            .build());
-                }
+        } else if (!psoAttainmentMap.isEmpty()) {
+            for (ProgrammeAttainmentResultDto.OutcomeAttainmentItem it : attainment.getOverallAttainment().getPsos()) {
+                String code = it.getOutcomeCode() != null ? it.getOutcomeCode() : (it.getPsoCode() != null ? it.getPsoCode() : "");
+                String codeUpper = code.toUpperCase();
+                processedPsoCodes.add(codeUpper);
+
+                String statement = it.getOutcomeStatement() != null && !it.getOutcomeStatement().isBlank()
+                        ? it.getOutcomeStatement()
+                        : psoStatementMap.getOrDefault(codeUpper, "Programme Specific Outcome " + code);
+
+                BigDecimal target = it.getTarget() != null ? it.getTarget() : psoTargetMap.getOrDefault(codeUpper, new BigDecimal("2.50"));
+                BigDecimal attainmentLevel = it.getOverallAttainment() != null ? it.getOverallAttainment() : BigDecimal.ZERO;
+                BigDecimal pct = it.getAchievementPercentage() != null ? it.getAchievementPercentage() : (target.compareTo(BigDecimal.ZERO) > 0 ? attainmentLevel.divide(target, 4, RoundingMode.HALF_UP).multiply(new BigDecimal("100")).setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO);
+
+                psoRows.add(ProgrammeAtrReportDto.OutcomeRow.builder()
+                        .outcomeCode(code)
+                        .outcomeStatement(statement)
+                        .targetLevel(target)
+                        .attainmentLevel(attainmentLevel)
+                        .achievementPercentage(pct)
+                        .observation(savedPsoObs.getOrDefault(codeUpper, ""))
+                        .actions(savedPsoActions.getOrDefault(codeUpper, Collections.emptyList()))
+                        .build());
+            }
+        }
+
+        for (ProgrammeAtrReportDto.OutcomeRow r : extraSavedPsoRows) {
+            String code = r.getOutcomeCode() != null ? r.getOutcomeCode() : "";
+            String codeUpper = code.toUpperCase();
+            if (!processedPsoCodes.contains(codeUpper)) {
+                processedPsoCodes.add(codeUpper);
+                String statement = r.getOutcomeStatement() != null && !r.getOutcomeStatement().isBlank()
+                        ? r.getOutcomeStatement()
+                        : psoStatementMap.getOrDefault(codeUpper, "Programme Specific Outcome " + code);
+
+                ProgrammeAttainmentResultDto.OutcomeAttainmentItem attItem = psoAttainmentMap.get(codeUpper);
+                BigDecimal target = r.getTargetLevel() != null ? r.getTargetLevel() : (attItem != null && attItem.getTarget() != null ? attItem.getTarget() : psoTargetMap.getOrDefault(codeUpper, new BigDecimal("2.50")));
+                BigDecimal attainmentLevel = r.getAttainmentLevel() != null ? r.getAttainmentLevel() : (attItem != null && attItem.getOverallAttainment() != null ? attItem.getOverallAttainment() : BigDecimal.ZERO);
+                BigDecimal pct = target.compareTo(BigDecimal.ZERO) > 0 ? attainmentLevel.divide(target, 4, RoundingMode.HALF_UP).multiply(new BigDecimal("100")).setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO;
+
+                psoRows.add(ProgrammeAtrReportDto.OutcomeRow.builder()
+                        .outcomeCode(code)
+                        .outcomeStatement(statement)
+                        .targetLevel(target)
+                        .attainmentLevel(attainmentLevel)
+                        .achievementPercentage(pct)
+                        .observation(r.getObservation() != null ? r.getObservation() : "")
+                        .actions(r.getActions() != null ? r.getActions() : Collections.emptyList())
+                        .build());
+            }
+        }
+
+        if (psoRows.isEmpty()) {
+            for (int i = 1; i <= 2; i++) {
+                String code = "PSO" + i;
+                String codeUpper = code.toUpperCase();
+                psoRows.add(ProgrammeAtrReportDto.OutcomeRow.builder()
+                        .outcomeCode(code)
+                        .outcomeStatement("Programme Specific Outcome " + i)
+                        .targetLevel(new BigDecimal("2.50"))
+                        .attainmentLevel(BigDecimal.ZERO)
+                        .achievementPercentage(BigDecimal.ZERO)
+                        .observation(savedPsoObs.getOrDefault(codeUpper, ""))
+                        .actions(savedPsoActions.getOrDefault(codeUpper, Collections.emptyList()))
+                        .build());
             }
         }
 
@@ -960,9 +1026,14 @@ public class AtrService {
             dto.setProgramme(ProgrammeAtrReportDto.ProgrammeSummary.builder().id(progId).name(batch.getProgrammeName()).code(batch.getProgrammeCode()).build());
         } else {
             dto.getProgramme().setId(progId);
+            dto.getProgramme().setName(batch.getProgrammeName());
+            dto.getProgramme().setCode(batch.getProgrammeCode());
         }
         dto.getBatch().setId(programmeBatchId);
         dto.getBatch().setName(batch.getName());
+        dto.getBatch().setStartYear(batch.getStartYear() != null ? String.valueOf(batch.getStartYear()) : "");
+        dto.getBatch().setEndYear(batch.getEndYear() != null ? String.valueOf(batch.getEndYear()) : "");
+        dto.setReportType("PROGRAMME_ATR");
 
         ProgrammeAtr atr = programmeAtrRepository.findByProgrammeBatchId(programmeBatchId)
                 .orElseGet(() -> ProgrammeAtr.builder()
@@ -970,9 +1041,9 @@ public class AtrService {
                         .programmeBatchId(programmeBatchId)
                         .build());
 
-        if (atr.getStatus() != null && isAtrLocked(atr.getStatus())) {
+        if (atr.getStatus() == ProgrammeAtrStatus.APPROVED || (approvalService != null && approvalService.isProgrammeAtrApproved(programmeBatchId))) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "Cannot modify Programme ATR in " + atr.getStatus() + " status. A revision must be requested first.");
+                    "Cannot modify approved Programme ATR. A revision must be requested first.");
         }
 
         if (dto.getStatus() != null && !dto.getStatus().isBlank()) {

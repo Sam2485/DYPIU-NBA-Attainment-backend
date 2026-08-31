@@ -723,7 +723,7 @@ public class AcademicController {
                 .build());
     }
 
-    @PostMapping("/programme-batches/{programmeBatchId}/atr")
+    @RequestMapping(value = "/programme-batches/{programmeBatchId}/atr", method = {RequestMethod.POST, RequestMethod.PUT})
     public ResponseEntity<ApiResponse<com.dypiu.nba.dto.ProgrammeAtrReportDto>> saveProgrammeBatchAtr(
             @PathVariable String programmeBatchId,
             @RequestBody com.dypiu.nba.dto.ProgrammeAtrReportDto dto) {
