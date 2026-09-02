@@ -827,24 +827,62 @@ public class AttainmentCalculationService {
                     }
 
                     // 2. Locate CO header row & map CO columns
+                    List<CourseOutcome> configuredCos = getConfiguredCourseOutcomes(offeringId, offering.getMasterCourseId());
+                    Set<String> configuredCoCodes = configuredCos.stream()
+                            .map(c -> normalizeOutcomeCode(c.getCode()))
+                            .filter(Objects::nonNull)
+                            .collect(Collectors.toCollection(LinkedHashSet::new));
+
                     int coHeaderRowNum = -1;
                     Map<Integer, String> coColMap = new LinkedHashMap<>();
+                    Set<String> duplicateCodes = new LinkedHashSet<>();
+
                     for (Row row : sheet) {
                         Map<Integer, String> candidateCols = new LinkedHashMap<>();
+                        Set<String> candidateDups = new LinkedHashSet<>();
+                        Set<String> seen = new HashSet<>();
                         for (Cell cell : row) {
                             String text = getStringCellValue(cell, evaluator);
                             if (text != null && text.matches("(?i)^CO\\s*\\d+$")) {
-                                candidateCols.put(cell.getColumnIndex(), text.toUpperCase().replaceAll("\\s+", ""));
+                                String clean = normalizeOutcomeCode(text);
+                                if (clean != null) {
+                                    if (!seen.add(clean)) candidateDups.add(clean);
+                                    candidateCols.put(cell.getColumnIndex(), clean);
+                                }
                             }
                         }
                         if (candidateCols.size() > coColMap.size()) {
                             coColMap = candidateCols;
+                            duplicateCodes = candidateDups;
                             coHeaderRowNum = row.getRowNum();
                         }
                     }
 
                     if (coColMap.isEmpty()) {
-                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "No Course Outcome (CO) headers found in Examination sheet.");
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "No Course Outcome (CO) headers found in Direct Examination sheet.");
+                    }
+
+                    if (!configuredCoCodes.isEmpty()) {
+                        if (!duplicateCodes.isEmpty()) {
+                            String dup = duplicateCodes.iterator().next();
+                            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Direct Examination sheet contains duplicate Course Outcome " + dup + ".");
+                        }
+
+                        for (String foundCo : coColMap.values()) {
+                            if (!configuredCoCodes.contains(foundCo)) {
+                                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Direct Examination sheet contains unconfigured Course Outcome " + foundCo + ". Configured COs for this course: " + configuredCoCodes + ".");
+                            }
+                        }
+
+                        for (String cfgCo : configuredCoCodes) {
+                            if (!coColMap.containsValue(cfgCo)) {
+                                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Direct Examination sheet is missing configured Course Outcome " + cfgCo + ". Configured COs for this course: " + configuredCoCodes + ".");
+                            }
+                        }
+
+                        if (coColMap.size() != configuredCoCodes.size()) {
+                            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Course Outcome count mismatch. Direct Examination sheet contains " + coColMap.size() + " COs, but course requires " + configuredCoCodes.size() + " COs (" + configuredCoCodes + ").");
+                        }
                     }
 
                     // 3. Locate Out Of row
@@ -1213,11 +1251,17 @@ public class AttainmentCalculationService {
                 String originalFilename = file.getOriginalFilename() != null ? file.getOriginalFilename() : "survey_responses.xlsx";
                 String savedFileName = targetFilePath.getFileName().toString();
                 String savedPath = targetFilePath.toAbsolutePath().toString();
+                List<CourseOutcome> configuredCos = getConfiguredCourseOutcomes(offeringId, offering.getMasterCourseId());
+                Set<String> configuredCoCodes = configuredCos.stream()
+                        .map(c -> normalizeOutcomeCode(c.getCode()))
+                        .filter(Objects::nonNull)
+                        .collect(Collectors.toCollection(LinkedHashSet::new));
+
                 try (InputStream is = Files.newInputStream(targetFilePath);
                      Workbook workbook = WorkbookFactory.create(is)) {
                     FormulaEvaluator evaluator = workbook.getCreationHelper().createFormulaEvaluator();
                     Sheet sheet = findSurveySheet(workbook);
-                    surveyResponses = parseSurveySheet(sheet, evaluator);
+                    surveyResponses = parseSurveySheet(sheet, evaluator, configuredCoCodes);
                 }
 
                 if (surveyResponses.isEmpty()) {
@@ -1287,30 +1331,66 @@ public class AttainmentCalculationService {
              Workbook workbook = WorkbookFactory.create(is)) {
             FormulaEvaluator evaluator = workbook.getCreationHelper().createFormulaEvaluator();
             Sheet sheet = findSurveySheet(workbook);
-            return parseSurveySheet(sheet, evaluator);
+            return parseSurveySheet(sheet, evaluator, Collections.emptySet());
         }
     }
 
     public List<SurveyResponseRowDto> parseSurveySheet(Sheet sheet, FormulaEvaluator evaluator) {
+        return parseSurveySheet(sheet, evaluator, Collections.emptySet());
+    }
+
+    public List<SurveyResponseRowDto> parseSurveySheet(Sheet sheet, FormulaEvaluator evaluator, Set<String> configuredCoCodes) {
         List<SurveyResponseRowDto> responses = new ArrayList<>();
         int coHeaderRowNum = -1;
         Map<Integer, String> coColMap = new LinkedHashMap<>();
+        Set<String> duplicateCodes = new LinkedHashSet<>();
+
         for (Row row : sheet) {
             Map<Integer, String> candidateCols = new LinkedHashMap<>();
+            Set<String> candidateDups = new LinkedHashSet<>();
+            Set<String> seen = new HashSet<>();
             for (Cell cell : row) {
                 String text = getStringCellValue(cell, evaluator);
                 if (text != null && text.matches("(?i)^CO\\s*\\d+$")) {
-                    candidateCols.put(cell.getColumnIndex(), text.toUpperCase().replaceAll("\\s+", ""));
+                    String clean = normalizeOutcomeCode(text);
+                    if (clean != null) {
+                        if (!seen.add(clean)) candidateDups.add(clean);
+                        candidateCols.put(cell.getColumnIndex(), clean);
+                    }
                 }
             }
             if (candidateCols.size() >= coColMap.size() && !candidateCols.isEmpty()) {
                 coColMap = candidateCols;
+                duplicateCodes = candidateDups;
                 coHeaderRowNum = row.getRowNum();
             }
         }
 
         if (coColMap.isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "No Course Outcome (CO) headers found in Survey sheet.");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "No Course Outcome (CO) headers found in Course End Survey sheet.");
+        }
+
+        if (configuredCoCodes != null && !configuredCoCodes.isEmpty()) {
+            if (!duplicateCodes.isEmpty()) {
+                String dup = duplicateCodes.iterator().next();
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Course End Survey sheet contains duplicate Course Outcome " + dup + ".");
+            }
+
+            for (String foundCo : coColMap.values()) {
+                if (!configuredCoCodes.contains(foundCo)) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Course End Survey sheet contains unconfigured Course Outcome " + foundCo + ". Configured COs for this course: " + configuredCoCodes + ".");
+                }
+            }
+
+            for (String cfgCo : configuredCoCodes) {
+                if (!coColMap.containsValue(cfgCo)) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Course End Survey sheet is missing configured Course Outcome " + cfgCo + ". Configured COs for this course: " + configuredCoCodes + ".");
+                }
+            }
+
+            if (coColMap.size() != configuredCoCodes.size()) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Course Outcome count mismatch. Course End Survey sheet contains " + coColMap.size() + " COs, but course requires " + configuredCoCodes.size() + " COs (" + configuredCoCodes + ").");
+            }
         }
 
         int prnColIdx = -1;
@@ -1643,10 +1723,14 @@ public class AttainmentCalculationService {
     private String normalizeOutcomeCode(String text) {
         if (text == null || text.isBlank()) return null;
         String raw = text.trim().toUpperCase().replaceAll("\\s+", "");
-        if (raw.matches("^(PO|PSO)\\d+$")) {
+        if (raw.matches("^(PO|PSO|CO)\\d+$")) {
             return raw;
         }
         String clean = raw.replaceAll("[^A-Z0-9]", "");
+        java.util.regex.Matcher mCo = java.util.regex.Pattern.compile("^(CO\\d+)").matcher(clean);
+        if (mCo.find()) {
+            return mCo.group(1);
+        }
         java.util.regex.Matcher mPo = java.util.regex.Pattern.compile("^(PO\\d+)").matcher(clean);
         if (mPo.find()) {
             return mPo.group(1);
@@ -2717,5 +2801,19 @@ public class AttainmentCalculationService {
         List<T> values = new ArrayList<>(map.values());
         if (index < values.size()) return values.get(index);
         return fallback;
+    }
+
+    private List<CourseOutcome> getConfiguredCourseOutcomes(String offeringId, String masterCourseId) {
+        List<CourseOutcome> cos = (offeringId != null && !offeringId.isBlank())
+                ? courseOutcomeRepository.findByProgrammeBatchCourseId(offeringId)
+                : Collections.emptyList();
+        if ((cos == null || cos.isEmpty()) && masterCourseId != null && !masterCourseId.isBlank()) {
+            List<ProgrammeBatchCourse> relatedOfferings = programmeBatchCourseRepository.findByMasterCourseId(masterCourseId);
+            if (relatedOfferings != null && !relatedOfferings.isEmpty()) {
+                List<String> offIds = relatedOfferings.stream().map(ProgrammeBatchCourse::getId).toList();
+                cos = courseOutcomeRepository.findByProgrammeBatchCourseIdIn(offIds);
+            }
+        }
+        return cos != null ? cos : Collections.emptyList();
     }
 }
