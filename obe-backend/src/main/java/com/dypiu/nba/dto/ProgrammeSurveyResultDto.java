@@ -16,6 +16,7 @@ public class ProgrammeSurveyResultDto {
     private int recordsProcessed;
     private List<PoIndirectItem> poIndirectAttainment;
     private List<PsoIndirectItem> psoIndirectAttainment;
+    private List<StudentSurveyResponseRow> studentSurveyResponses;
     private String status;
 
     @Data @Builder @NoArgsConstructor @AllArgsConstructor
@@ -28,5 +29,14 @@ public class ProgrammeSurveyResultDto {
     public static class PsoIndirectItem {
         private String psoCode;
         private BigDecimal indirectAttainment;
+    }
+
+    @Data @Builder @NoArgsConstructor @AllArgsConstructor
+    public static class StudentSurveyResponseRow {
+        private Integer srNo;
+        private String prn;
+        private String studentName;
+        private java.util.Map<String, String> poRatings;
+        private java.util.Map<String, String> psoRatings;
     }
 }
