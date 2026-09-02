@@ -10,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.xssf.usermodel.*;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Service;
@@ -880,6 +881,484 @@ public class AttainmentReportExportService {
         cell.addElement(pName);
 
         table.addCell(cell);
+    }
+
+    /**
+     * Generates a multi-sheet Programme Batch Attainment Excel matching the official NBA format.
+     */
+    @Transactional(readOnly = true)
+    public byte[] generateProgrammeBatchExcel(String masterProgrammeId, String programmeBatchId) {
+        System.out.println("[AttainmentReportExportService] generateProgrammeBatchExcel called | masterProgrammeId: " + masterProgrammeId + " | programmeBatchId: " + programmeBatchId);
+        log.info("[AttainmentReportExportService] Generating Programme Batch Attainment Excel for masterProgrammeId: {}, programmeBatchId: {}", masterProgrammeId, programmeBatchId);
+
+        MasterProgramme prog = (masterProgrammeId != null && !masterProgrammeId.isBlank())
+                ? masterProgrammeRepository.findById(masterProgrammeId).orElse(null)
+                : null;
+        ProgrammeBatch batch = (programmeBatchId != null && !programmeBatchId.isBlank())
+                ? programmeBatchRepository.findById(programmeBatchId).orElse(null)
+                : null;
+
+        if (prog == null && batch != null && batch.getMasterProgrammeId() != null) {
+            prog = masterProgrammeRepository.findById(batch.getMasterProgrammeId()).orElse(null);
+        }
+        String pId = prog != null ? prog.getId() : masterProgrammeId;
+        String bId = batch != null ? batch.getId() : programmeBatchId;
+
+        ProgrammeAttainmentResultDto res = calculationService.calculateProgrammeAttainment(pId, bId);
+
+        Department department = (prog != null && prog.getDepartmentId() != null)
+                ? departmentRepository.findById(prog.getDepartmentId()).orElse(null)
+                : null;
+        School school = (department != null && department.getSchoolId() != null)
+                ? schoolRepository.findById(department.getSchoolId()).orElse(null)
+                : null;
+
+        String schoolName = (school != null && school.getName() != null) ? school.getName() : "School of Engineering and Technology";
+        String deptName = (department != null && department.getName() != null) ? department.getName() : (prog != null ? prog.getName() : "Computer Engineering");
+        String batchYear = (batch != null && batch.getStartYear() != null && batch.getEndYear() != null)
+                ? batch.getStartYear() + "-" + batch.getEndYear()
+                : (batch != null ? batch.getName() : "2024-2028");
+
+        List<String> poCodes = new ArrayList<>();
+        if (res.getAverageMapping() != null && res.getAverageMapping().getPos() != null) {
+            for (ProgrammeAttainmentResultDto.OutcomeMappingItem item : res.getAverageMapping().getPos()) {
+                if (item.getPoCode() != null) poCodes.add(item.getPoCode());
+            }
+        }
+        List<String> psoCodes = new ArrayList<>();
+        if (res.getAverageMapping() != null && res.getAverageMapping().getPsos() != null) {
+            for (ProgrammeAttainmentResultDto.OutcomeMappingItem item : res.getAverageMapping().getPsos()) {
+                if (item.getPsoCode() != null) psoCodes.add(item.getPsoCode());
+            }
+        }
+
+        try (XSSFWorkbook wb = new XSSFWorkbook(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+            org.apache.poi.ss.usermodel.Font bold12 = wb.createFont();
+            bold12.setBold(true);
+            bold12.setFontHeightInPoints((short) 12);
+
+            org.apache.poi.ss.usermodel.Font bold10 = wb.createFont();
+            bold10.setBold(true);
+            bold10.setFontHeightInPoints((short) 10);
+
+            org.apache.poi.ss.usermodel.Font normal10 = wb.createFont();
+            normal10.setFontHeightInPoints((short) 10);
+
+            CellStyle titleStyle = wb.createCellStyle();
+            titleStyle.setFont(bold12);
+            titleStyle.setAlignment(HorizontalAlignment.CENTER);
+
+            CellStyle subTitleStyle = wb.createCellStyle();
+            subTitleStyle.setFont(bold10);
+            subTitleStyle.setAlignment(HorizontalAlignment.CENTER);
+
+            CellStyle headerStyle = wb.createCellStyle();
+            headerStyle.setFont(bold10);
+            headerStyle.setAlignment(HorizontalAlignment.CENTER);
+            headerStyle.setVerticalAlignment(VerticalAlignment.CENTER);
+            headerStyle.setFillForegroundColor(IndexedColors.GREY_25_PERCENT.getIndex());
+            headerStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+            headerStyle.setBorderTop(BorderStyle.THIN);
+            headerStyle.setBorderBottom(BorderStyle.THIN);
+            headerStyle.setBorderLeft(BorderStyle.THIN);
+            headerStyle.setBorderRight(BorderStyle.THIN);
+
+            CellStyle semHeaderStyle = wb.createCellStyle();
+            semHeaderStyle.setFont(bold10);
+            semHeaderStyle.setFillForegroundColor(IndexedColors.LEMON_CHIFFON.getIndex());
+            semHeaderStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+            semHeaderStyle.setBorderTop(BorderStyle.THIN);
+            semHeaderStyle.setBorderBottom(BorderStyle.THIN);
+            semHeaderStyle.setBorderLeft(BorderStyle.THIN);
+            semHeaderStyle.setBorderRight(BorderStyle.THIN);
+
+            CellStyle dataStyle = wb.createCellStyle();
+            dataStyle.setFont(normal10);
+            dataStyle.setAlignment(HorizontalAlignment.CENTER);
+            dataStyle.setBorderTop(BorderStyle.THIN);
+            dataStyle.setBorderBottom(BorderStyle.THIN);
+            dataStyle.setBorderLeft(BorderStyle.THIN);
+            dataStyle.setBorderRight(BorderStyle.THIN);
+
+            CellStyle dataLeftStyle = wb.createCellStyle();
+            dataLeftStyle.setFont(normal10);
+            dataLeftStyle.setAlignment(HorizontalAlignment.LEFT);
+            dataLeftStyle.setBorderTop(BorderStyle.THIN);
+            dataLeftStyle.setBorderBottom(BorderStyle.THIN);
+            dataLeftStyle.setBorderLeft(BorderStyle.THIN);
+            dataLeftStyle.setBorderRight(BorderStyle.THIN);
+
+            CellStyle summaryStyle = wb.createCellStyle();
+            summaryStyle.setFont(bold10);
+            summaryStyle.setAlignment(HorizontalAlignment.CENTER);
+            summaryStyle.setFillForegroundColor(IndexedColors.GREY_25_PERCENT.getIndex());
+            summaryStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+            summaryStyle.setBorderTop(BorderStyle.THIN);
+            summaryStyle.setBorderBottom(BorderStyle.DOUBLE);
+            summaryStyle.setBorderLeft(BorderStyle.THIN);
+            summaryStyle.setBorderRight(BorderStyle.THIN);
+
+            // ==========================================
+            // SHEET 1: Average Mapping
+            // ==========================================
+            XSSFSheet sheet1 = wb.createSheet("Average Mapping");
+            buildProgrammeCourseGridSheet(sheet1, "Average Mapping Strength", schoolName, deptName, batchYear,
+                    poCodes, psoCodes, res.getCourseMappingRows(), res.getAverageMapping(),
+                    titleStyle, subTitleStyle, headerStyle, semHeaderStyle, dataStyle, dataLeftStyle, summaryStyle);
+
+            // ==========================================
+            // SHEET 2: Average Attainment(D)
+            // ==========================================
+            XSSFSheet sheet2 = wb.createSheet("Average Attainment(D)");
+            buildProgrammeCourseGridSheet(sheet2, "PO & PSO Attainment (Direct)", schoolName, deptName, batchYear,
+                    poCodes, psoCodes, res.getCourseDirectAttainmentRows(), res.getAverageDirectAttainment(),
+                    titleStyle, subTitleStyle, headerStyle, semHeaderStyle, dataStyle, dataLeftStyle, summaryStyle);
+
+            // ==========================================
+            // SHEET 3: Average Attainment(ID)
+            // ==========================================
+            XSSFSheet sheet3 = wb.createSheet("Average Attainment(ID)");
+            buildIndirectSurveySheet(sheet3, schoolName, deptName, batchYear, poCodes, psoCodes, res.getAverageIndirectAttainment(),
+                    titleStyle, subTitleStyle, headerStyle, dataStyle, summaryStyle);
+
+            // ==========================================
+            // SHEET 4: Overall-attainment
+            // ==========================================
+            XSSFSheet sheet4 = wb.createSheet("Overall-attainment");
+            buildOverallAttainmentSheet(sheet4, schoolName, deptName, batchYear, poCodes, psoCodes, res,
+                    titleStyle, subTitleStyle, headerStyle, dataStyle, dataLeftStyle, summaryStyle);
+
+            wb.write(out);
+            return out.toByteArray();
+        } catch (Exception e) {
+            log.error("[AttainmentReportExportService] Failed to generate Programme Batch Excel: {}", e.getMessage(), e);
+            throw new RuntimeException("Failed to generate Programme Batch Excel: " + e.getMessage(), e);
+        }
+    }
+
+    private void buildProgrammeCourseGridSheet(XSSFSheet sheet, String sheetTitle, String schoolName, String deptName, String batchYear,
+                                                List<String> poCodes, List<String> psoCodes,
+                                                List<ProgrammeAttainmentResultDto.CourseContributionRow> courseRows,
+                                                Object outcomeBreakdown,
+                                                CellStyle titleStyle, CellStyle subTitleStyle, CellStyle headerStyle,
+                                                CellStyle semHeaderStyle, CellStyle dataStyle, CellStyle dataLeftStyle, CellStyle summaryStyle) {
+        int rowNum = 0;
+
+        Row r0 = sheet.createRow(rowNum++);
+        Cell c0 = r0.createCell(2);
+        c0.setCellValue("D Y Patil International University, Akurdi Pune");
+        c0.setCellStyle(titleStyle);
+
+        Row r1 = sheet.createRow(rowNum++);
+        Cell c1 = r1.createCell(2);
+        c1.setCellValue(schoolName);
+        c1.setCellStyle(subTitleStyle);
+
+        Row r2 = sheet.createRow(rowNum++);
+        Cell c2a = r2.createCell(0);
+        c2a.setCellValue("Academic Year: " + batchYear);
+        c2a.setCellStyle(subTitleStyle);
+        Cell c2b = r2.createCell(2);
+        c2b.setCellValue(sheetTitle);
+        c2b.setCellStyle(subTitleStyle);
+
+        Row r3 = sheet.createRow(rowNum++);
+        Cell c3a = r3.createCell(0);
+        c3a.setCellValue("Term – I & II");
+        c3a.setCellStyle(subTitleStyle);
+        Cell c3b = r3.createCell(2);
+        c3b.setCellValue("Department : " + deptName);
+        c3b.setCellStyle(subTitleStyle);
+
+        rowNum++; // blank row
+
+        // Headers row
+        Row hRow = sheet.createRow(rowNum++);
+        int colIdx = 0;
+        createCell(hRow, colIdx++, "Sem", headerStyle);
+        createCell(hRow, colIdx++, "Course Code", headerStyle);
+        createCell(hRow, colIdx++, "Course Name", headerStyle);
+        createCell(hRow, colIdx++, "Course No", headerStyle);
+
+        for (String po : poCodes) {
+            createCell(hRow, colIdx++, po, headerStyle);
+        }
+        for (String pso : psoCodes) {
+            createCell(hRow, colIdx++, pso, headerStyle);
+        }
+
+        // Group courses by semester
+        Map<Integer, List<ProgrammeAttainmentResultDto.CourseContributionRow>> semMap = new TreeMap<>();
+        if (courseRows != null) {
+            for (ProgrammeAttainmentResultDto.CourseContributionRow cr : courseRows) {
+                int sem = (cr.getSemester() != null) ? cr.getSemester() : 1;
+                semMap.computeIfAbsent(sem, k -> new ArrayList<>()).add(cr);
+            }
+        }
+
+        for (Map.Entry<Integer, List<ProgrammeAttainmentResultDto.CourseContributionRow>> entry : semMap.entrySet()) {
+            int sem = entry.getKey();
+            Row sHeader = sheet.createRow(rowNum++);
+            createCell(sHeader, 0, "Sem - " + sem, semHeaderStyle);
+            for (int i = 1; i < colIdx; i++) {
+                createCell(sHeader, i, "", semHeaderStyle);
+            }
+
+            for (ProgrammeAttainmentResultDto.CourseContributionRow cr : entry.getValue()) {
+                Row cRow = sheet.createRow(rowNum++);
+                int cCol = 0;
+                createCell(cRow, cCol++, "", dataStyle);
+                createCell(cRow, cCol++, cr.getCourseCode() != null ? cr.getCourseCode() : "", dataStyle);
+                createCell(cRow, cCol++, cr.getCourseName() != null ? cr.getCourseName() : "", dataLeftStyle);
+                createCell(cRow, cCol++, cr.getCourseNo() != null ? cr.getCourseNo() : "", dataStyle);
+
+                for (String po : poCodes) {
+                    BigDecimal v = (cr.getPoValues() != null) ? cr.getPoValues().get(po.toUpperCase()) : null;
+                    createCell(cRow, cCol++, (v != null && v.compareTo(BigDecimal.ZERO) > 0) ? v.toString() : "-", dataStyle);
+                }
+                for (String pso : psoCodes) {
+                    BigDecimal v = (cr.getPsoValues() != null) ? cr.getPsoValues().get(pso.toUpperCase()) : null;
+                    createCell(cRow, cCol++, (v != null && v.compareTo(BigDecimal.ZERO) > 0) ? v.toString() : "-", dataStyle);
+                }
+            }
+        }
+
+        // Bottom Summary Row
+        Row sumRow = sheet.createRow(rowNum++);
+        createCell(sumRow, 0, sheetTitle, summaryStyle);
+        createCell(sumRow, 1, "", summaryStyle);
+        createCell(sumRow, 2, "", summaryStyle);
+        createCell(sumRow, 3, "", summaryStyle);
+
+        int sumCol = 4;
+        Map<String, BigDecimal> poSummaryMap = new HashMap<>();
+        Map<String, BigDecimal> psoSummaryMap = new HashMap<>();
+
+        if (outcomeBreakdown instanceof ProgrammeAttainmentResultDto.MappingBreakdown mb) {
+            if (mb.getPos() != null) {
+                for (ProgrammeAttainmentResultDto.OutcomeMappingItem it : mb.getPos()) {
+                    if (it.getPoCode() != null) poSummaryMap.put(it.getPoCode().toUpperCase(), it.getOverallAverage());
+                }
+            }
+            if (mb.getPsos() != null) {
+                for (ProgrammeAttainmentResultDto.OutcomeMappingItem it : mb.getPsos()) {
+                    if (it.getPsoCode() != null) psoSummaryMap.put(it.getPsoCode().toUpperCase(), it.getOverallAverage());
+                }
+            }
+        } else if (outcomeBreakdown instanceof ProgrammeAttainmentResultDto.DirectAttainmentBreakdown db) {
+            if (db.getPos() != null) {
+                for (ProgrammeAttainmentResultDto.OutcomeDirectItem it : db.getPos()) {
+                    if (it.getPoCode() != null) poSummaryMap.put(it.getPoCode().toUpperCase(), it.getOverallAverage());
+                }
+            }
+            if (db.getPsos() != null) {
+                for (ProgrammeAttainmentResultDto.OutcomeDirectItem it : db.getPsos()) {
+                    if (it.getPsoCode() != null) psoSummaryMap.put(it.getPsoCode().toUpperCase(), it.getOverallAverage());
+                }
+            }
+        }
+
+        for (String po : poCodes) {
+            BigDecimal val = poSummaryMap.getOrDefault(po.toUpperCase(), BigDecimal.ZERO);
+            createCell(sumRow, sumCol++, val != null ? val.toString() : "0.00", summaryStyle);
+        }
+        for (String pso : psoCodes) {
+            BigDecimal val = psoSummaryMap.getOrDefault(pso.toUpperCase(), BigDecimal.ZERO);
+            createCell(sumRow, sumCol++, val != null ? val.toString() : "0.00", summaryStyle);
+        }
+
+        for (int i = 0; i < colIdx; i++) {
+            sheet.autoSizeColumn(i);
+        }
+    }
+
+    private void buildIndirectSurveySheet(XSSFSheet sheet, String schoolName, String deptName, String batchYear,
+                                           List<String> poCodes, List<String> psoCodes,
+                                           Map<String, BigDecimal> indirectMap,
+                                           CellStyle titleStyle, CellStyle subTitleStyle, CellStyle headerStyle,
+                                           CellStyle dataStyle, CellStyle summaryStyle) {
+        int rowNum = 0;
+
+        Row r0 = sheet.createRow(rowNum++);
+        Cell c0 = r0.createCell(2);
+        c0.setCellValue("D Y Patil International University, Akurdi Pune");
+        c0.setCellStyle(titleStyle);
+
+        Row r1 = sheet.createRow(rowNum++);
+        Cell c1 = r1.createCell(2);
+        c1.setCellValue(schoolName);
+        c1.setCellStyle(subTitleStyle);
+
+        Row r2 = sheet.createRow(rowNum++);
+        Cell c2a = r2.createCell(0);
+        c2a.setCellValue("Academic Year: " + batchYear);
+        c2a.setCellStyle(subTitleStyle);
+        Cell c2b = r2.createCell(2);
+        c2b.setCellValue("PO & PSO Attainment (Indirect) - Exit Survey");
+        c2b.setCellStyle(subTitleStyle);
+
+        rowNum++; // blank row
+
+        Row hRow = sheet.createRow(rowNum++);
+        int colIdx = 0;
+        createCell(hRow, colIdx++, "Parameter", headerStyle);
+        for (String po : poCodes) createCell(hRow, colIdx++, po, headerStyle);
+        for (String pso : psoCodes) createCell(hRow, colIdx++, pso, headerStyle);
+
+        Row dRow = sheet.createRow(rowNum++);
+        int dCol = 0;
+        createCell(dRow, dCol++, "Indirect Attainment Level", summaryStyle);
+        for (String po : poCodes) {
+            BigDecimal v = (indirectMap != null) ? indirectMap.getOrDefault(po.toUpperCase(), BigDecimal.ZERO) : BigDecimal.ZERO;
+            createCell(dRow, dCol++, v != null ? v.toString() : "0.00", summaryStyle);
+        }
+        for (String pso : psoCodes) {
+            BigDecimal v = (indirectMap != null) ? indirectMap.getOrDefault(pso.toUpperCase(), BigDecimal.ZERO) : BigDecimal.ZERO;
+            createCell(dRow, dCol++, v != null ? v.toString() : "0.00", summaryStyle);
+        }
+
+        for (int i = 0; i < colIdx; i++) sheet.autoSizeColumn(i);
+    }
+
+    private void buildOverallAttainmentSheet(XSSFSheet sheet, String schoolName, String deptName, String batchYear,
+                                              List<String> poCodes, List<String> psoCodes,
+                                              ProgrammeAttainmentResultDto res,
+                                              CellStyle titleStyle, CellStyle subTitleStyle, CellStyle headerStyle,
+                                              CellStyle dataStyle, CellStyle dataLeftStyle, CellStyle summaryStyle) {
+        int rowNum = 0;
+
+        Row r0 = sheet.createRow(rowNum++);
+        Cell c0 = r0.createCell(2);
+        c0.setCellValue("D Y Patil International University, Akurdi Pune");
+        c0.setCellStyle(titleStyle);
+
+        Row r1 = sheet.createRow(rowNum++);
+        Cell c1 = r1.createCell(2);
+        c1.setCellValue(schoolName);
+        c1.setCellStyle(subTitleStyle);
+
+        Row r2 = sheet.createRow(rowNum++);
+        Cell c2a = r2.createCell(0);
+        c2a.setCellValue("Academic Year: " + batchYear);
+        c2a.setCellStyle(subTitleStyle);
+        Cell c2b = r2.createCell(2);
+        c2b.setCellValue("Overall Attainment Matrix (Direct 80% + Indirect 20%)");
+        c2b.setCellStyle(subTitleStyle);
+
+        rowNum++; // blank row
+
+        Row hRow = sheet.createRow(rowNum++);
+        int colIdx = 0;
+        createCell(hRow, colIdx++, "Evaluation Metric", headerStyle);
+        for (String po : poCodes) createCell(hRow, colIdx++, po, headerStyle);
+        for (String pso : psoCodes) createCell(hRow, colIdx++, pso, headerStyle);
+
+        Map<String, BigDecimal> mapValues = new LinkedHashMap<>();
+        if (res.getAverageMapping() != null) {
+            if (res.getAverageMapping().getPos() != null) {
+                for (ProgrammeAttainmentResultDto.OutcomeMappingItem it : res.getAverageMapping().getPos()) {
+                    if (it.getPoCode() != null) mapValues.put(it.getPoCode().toUpperCase(), it.getOverallAverage());
+                }
+            }
+            if (res.getAverageMapping().getPsos() != null) {
+                for (ProgrammeAttainmentResultDto.OutcomeMappingItem it : res.getAverageMapping().getPsos()) {
+                    if (it.getPsoCode() != null) mapValues.put(it.getPsoCode().toUpperCase(), it.getOverallAverage());
+                }
+            }
+        }
+
+        Map<String, BigDecimal> dirValues = new LinkedHashMap<>();
+        if (res.getAverageDirectAttainment() != null) {
+            if (res.getAverageDirectAttainment().getPos() != null) {
+                for (ProgrammeAttainmentResultDto.OutcomeDirectItem it : res.getAverageDirectAttainment().getPos()) {
+                    if (it.getPoCode() != null) dirValues.put(it.getPoCode().toUpperCase(), it.getOverallAverage());
+                }
+            }
+            if (res.getAverageDirectAttainment().getPsos() != null) {
+                for (ProgrammeAttainmentResultDto.OutcomeDirectItem it : res.getAverageDirectAttainment().getPsos()) {
+                    if (it.getPsoCode() != null) dirValues.put(it.getPsoCode().toUpperCase(), it.getOverallAverage());
+                }
+            }
+        }
+
+        Map<String, BigDecimal> indValues = (res.getAverageIndirectAttainment() != null) ? res.getAverageIndirectAttainment() : Collections.emptyMap();
+
+        Map<String, BigDecimal> finalValues = new LinkedHashMap<>();
+        Map<String, BigDecimal> targetValues = new LinkedHashMap<>();
+        Map<String, String> obsValues = new LinkedHashMap<>();
+
+        if (res.getOverallAttainment() != null) {
+            if (res.getOverallAttainment().getPos() != null) {
+                for (ProgrammeAttainmentResultDto.OutcomeAttainmentItem it : res.getOverallAttainment().getPos()) {
+                    String c = it.getPoCode() != null ? it.getPoCode().toUpperCase() : (it.getOutcomeCode() != null ? it.getOutcomeCode().toUpperCase() : "");
+                    finalValues.put(c, it.getOverallAttainment());
+                    targetValues.put(c, it.getTarget());
+                    obsValues.put(c, it.getObservation());
+                }
+            }
+            if (res.getOverallAttainment().getPsos() != null) {
+                for (ProgrammeAttainmentResultDto.OutcomeAttainmentItem it : res.getOverallAttainment().getPsos()) {
+                    String c = it.getPsoCode() != null ? it.getPsoCode().toUpperCase() : (it.getOutcomeCode() != null ? it.getOutcomeCode().toUpperCase() : "");
+                    finalValues.put(c, it.getOverallAttainment());
+                    targetValues.put(c, it.getTarget());
+                    obsValues.put(c, it.getObservation());
+                }
+            }
+        }
+
+        // Row 1: Average Mapping Values
+        Row rowMap = sheet.createRow(rowNum++);
+        int cM = 0;
+        createCell(rowMap, cM++, "Average Mapping Values", dataLeftStyle);
+        for (String po : poCodes) createCell(rowMap, cM++, formatVal(mapValues.get(po.toUpperCase())), dataStyle);
+        for (String pso : psoCodes) createCell(rowMap, cM++, formatVal(mapValues.get(pso.toUpperCase())), dataStyle);
+
+        // Row 2: Average Attainment (Direct)
+        Row rowDir = sheet.createRow(rowNum++);
+        int cD = 0;
+        createCell(rowDir, cD++, "Average Attainment (Direct)", dataLeftStyle);
+        for (String po : poCodes) createCell(rowDir, cD++, formatVal(dirValues.get(po.toUpperCase())), dataStyle);
+        for (String pso : psoCodes) createCell(rowDir, cD++, formatVal(dirValues.get(pso.toUpperCase())), dataStyle);
+
+        // Row 3: Average Attainment (Indirect)
+        Row rowInd = sheet.createRow(rowNum++);
+        int cI = 0;
+        createCell(rowInd, cI++, "Average Attainment (Indirect)", dataLeftStyle);
+        for (String po : poCodes) createCell(rowInd, cI++, formatVal(indValues.get(po.toUpperCase())), dataStyle);
+        for (String pso : psoCodes) createCell(rowInd, cI++, formatVal(indValues.get(pso.toUpperCase())), dataStyle);
+
+        // Row 4: Overall Attainment (80% Direct + 20% Indirect)
+        Row rowFinal = sheet.createRow(rowNum++);
+        int cF = 0;
+        createCell(rowFinal, cF++, "Overall Attainment (80% Direct + 20% Indirect)", summaryStyle);
+        for (String po : poCodes) createCell(rowFinal, cF++, formatVal(finalValues.get(po.toUpperCase())), summaryStyle);
+        for (String pso : psoCodes) createCell(rowFinal, cF++, formatVal(finalValues.get(pso.toUpperCase())), summaryStyle);
+
+        // Row 5: Target Benchmark
+        Row rowTarget = sheet.createRow(rowNum++);
+        int cT = 0;
+        createCell(rowTarget, cT++, "Target Benchmark", dataLeftStyle);
+        for (String po : poCodes) createCell(rowTarget, cT++, formatVal(targetValues.get(po.toUpperCase())), dataStyle);
+        for (String pso : psoCodes) createCell(rowTarget, cT++, formatVal(targetValues.get(pso.toUpperCase())), dataStyle);
+
+        // Row 6: Observations
+        Row rowObs = sheet.createRow(rowNum++);
+        int cO = 0;
+        createCell(rowObs, cO++, "Observation & Target Met", dataLeftStyle);
+        for (String po : poCodes) createCell(rowObs, cO++, obsValues.getOrDefault(po.toUpperCase(), "-"), dataStyle);
+        for (String pso : psoCodes) createCell(rowObs, cO++, obsValues.getOrDefault(pso.toUpperCase(), "-"), dataStyle);
+
+        for (int i = 0; i < colIdx; i++) sheet.autoSizeColumn(i);
+    }
+
+    private void createCell(Row row, int col, String value, CellStyle style) {
+        Cell cell = row.createCell(col);
+        cell.setCellValue(value != null ? value : "");
+        cell.setCellStyle(style);
+    }
+
+    private String formatVal(BigDecimal val) {
+        return (val != null && val.compareTo(BigDecimal.ZERO) > 0) ? val.setScale(2, RoundingMode.HALF_UP).toString() : "0.00";
     }
 
     // Page Event for numbering

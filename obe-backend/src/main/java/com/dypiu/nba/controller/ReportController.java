@@ -400,6 +400,29 @@ public class ReportController {
     }
 
     // --- Generic Reports Export ---
+    @GetMapping(value = {"/programme/{masterProgrammeId}/batch/{programmeBatchId}/export/excel", "/programme-batch/{programmeBatchId}/export/excel"}, produces = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    public ResponseEntity<byte[]> exportProgrammeBatchExcel(
+            @PathVariable(required = false) String masterProgrammeId,
+            @PathVariable String programmeBatchId,
+            Principal principal) {
+        User user = reportAccessService.getAuthenticatedUser(principal);
+        String progId = masterProgrammeId;
+        if (progId == null || progId.isBlank()) {
+            ProgrammeBatch b = programmeBatchRepository.findById(programmeBatchId).orElse(null);
+            if (b != null) progId = b.getMasterProgrammeId();
+        }
+        if (progId != null) {
+            reportAccessService.validateProgrammeAccess(user, progId);
+        }
+        byte[] excelBytes = exportService.generateProgrammeBatchExcel(progId, programmeBatchId);
+        String filename = "Programme_Attainment_Report_" + programmeBatchId + ".xlsx";
+
+        return ResponseEntity.ok()
+                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
+                .contentType(org.springframework.http.MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .body(excelBytes);
+    }
+
     @GetMapping(value = "/export/excel", produces = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
     public ResponseEntity<byte[]> exportReportsExcel(
             @RequestParam(required = false) String masterProgrammeId,
@@ -407,8 +430,11 @@ public class ReportController {
             @RequestParam(required = false) String programmeBatchId,
             @RequestParam(required = false) String reportType,
             Principal principal) {
+        if ("PROGRAMME".equalsIgnoreCase(reportType) || (masterCourseId == null && programmeBatchId != null)) {
+            return exportProgrammeBatchExcel(masterProgrammeId, programmeBatchId, principal);
+        }
         if (masterCourseId == null || masterCourseId.isBlank()) {
-            throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST, "MasterCourse ID is required for export.");
+            throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST, "MasterCourse ID is required for course export.");
         }
         User user = reportAccessService.getAuthenticatedUser(principal);
         if (programmeBatchCourseRepository.existsById(masterCourseId)) {
