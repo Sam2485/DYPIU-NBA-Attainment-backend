@@ -44,10 +44,25 @@ public class ProgrammeBatchAttainmentReportDto {
     private List<CourseContributionRow> courseMappingRows;
     private List<CourseContributionRow> courseDirectAttainmentRows;
 
+    // Granular student survey feedback rows for Sheet 3 (Indirect Attainment)
+    private List<StudentSurveyResponseRow> studentSurveyRows;
+
     private String submittedBy;
     private ZonedDateTime submittedAt;
     private String approvedBy;
     private ZonedDateTime approvedAt;
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class StudentSurveyResponseRow {
+        private Integer srNo;
+        private String prn;
+        private String studentName;
+        private Map<String, String> poRatings;
+        private Map<String, String> psoRatings;
+    }
 
     @Data
     @Builder

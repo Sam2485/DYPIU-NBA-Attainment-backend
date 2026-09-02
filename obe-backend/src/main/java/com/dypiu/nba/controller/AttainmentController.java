@@ -10,7 +10,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.math.BigDecimal;
-import java.util.Map;
+import java.util.*;
 
 @RestController
 @RequestMapping({"/attainment", "/api/v1/attainment"})
@@ -23,6 +23,7 @@ public class AttainmentController {
     private final com.dypiu.nba.repository.UploadedDocumentRepository uploadedDocumentRepository;
     private final com.dypiu.nba.service.ReportAccessService reportAccessService;
     private final com.dypiu.nba.repository.ProgrammeBatchCourseRepository programmeBatchCourseRepository;
+    private final com.dypiu.nba.repository.ProgrammeBatchRepository programmeBatchRepository;
 
     @GetMapping({"/config/{masterCourseId}", "/configs/{masterCourseId}", "/configurations/programme-batch-courses/{masterCourseId}"})
     public ResponseEntity<ApiResponse<AttainmentConfiguration>> getConfig(
@@ -60,7 +61,7 @@ public class AttainmentController {
                 .build());
     }
 
-    @GetMapping({"/course/{masterCourseId}", "/courses/{masterCourseId}", "/calculate/course/{masterCourseId}"})
+    @GetMapping({"/course/{masterCourseId}", "/courses/{masterCourseId}", "/calculate/course/{masterCourseId}", "/programme-batch-courses/{masterCourseId}"})
     public ResponseEntity<ApiResponse<Map<String, Object>>> getCourseCoAttainment(
             @PathVariable String masterCourseId,
             @RequestParam(required = false) String programmeBatchId,
@@ -78,7 +79,7 @@ public class AttainmentController {
                 .build());
     }
 
-    @GetMapping({"/courses/{masterCourseId}/direct", "/course/{masterCourseId}/direct"})
+    @GetMapping({"/courses/{masterCourseId}/direct", "/course/{masterCourseId}/direct", "/programme-batch-courses/{masterCourseId}/direct"})
     public ResponseEntity<ApiResponse<ExaminationAttainmentResultDto>> getDirectAttainment(
             @PathVariable String masterCourseId,
             @RequestParam(required = false) String programmeBatchId,
@@ -95,7 +96,7 @@ public class AttainmentController {
                 .build());
     }
 
-    @GetMapping({"/courses/{masterCourseId}/indirect", "/course/{masterCourseId}/indirect"})
+    @GetMapping({"/courses/{masterCourseId}/indirect", "/course/{masterCourseId}/indirect", "/programme-batch-courses/{masterCourseId}/indirect"})
     public ResponseEntity<ApiResponse<SurveyAttainmentResultDto>> getIndirectAttainment(
             @PathVariable String masterCourseId,
             @RequestParam(required = false) String programmeBatchId,
@@ -150,7 +151,7 @@ public class AttainmentController {
                 .build());
     }
 
-    @PostMapping("/assessment/indirect/upload")
+    @PostMapping({"/assessment/indirect/upload", "/survey/upload"})
     public ResponseEntity<ApiResponse<SurveyAttainmentResultDto>> uploadAssessmentIndirect(
             @RequestParam("file") MultipartFile file,
             @RequestParam(value = "masterCourseId", required = false) String masterCourseId,
@@ -184,101 +185,284 @@ public class AttainmentController {
                 .build());
     }
 
-    @GetMapping("/programme/{masterProgrammeId}/batch/{programmeBatchId}")
+    private String resolveProgrammeId(String masterProgrammeId, String programmeBatchId) {
+        if (masterProgrammeId != null && !masterProgrammeId.isBlank()) {
+            return masterProgrammeId;
+        }
+        if (programmeBatchId != null && !programmeBatchId.isBlank()) {
+            return programmeBatchRepository.findById(programmeBatchId)
+                    .map(com.dypiu.nba.entity.ProgrammeBatch::getMasterProgrammeId)
+                    .orElse(null);
+        }
+        return null;
+    }
+
+    @GetMapping({"/programme/{masterProgrammeId}/batch/{programmeBatchId}", "/programme-batch/{programmeBatchId}", "/batch/{programmeBatchId}"})
     public ResponseEntity<ApiResponse<ProgrammeAttainmentResultDto>> getProgrammeAttainment(
-            @PathVariable String masterProgrammeId,
+            @PathVariable(required = false) String masterProgrammeId,
             @PathVariable String programmeBatchId,
             java.security.Principal principal) {
+        String progId = resolveProgrammeId(masterProgrammeId, programmeBatchId);
         com.dypiu.nba.entity.User user = reportAccessService.getAuthenticatedUser(principal);
-        reportAccessService.validateProgrammeAtrAccess(user, masterProgrammeId, programmeBatchId);
+        if (progId != null) {
+            reportAccessService.validateProgrammeAtrAccess(user, progId, programmeBatchId);
+        }
         return ResponseEntity.ok(ApiResponse.<ProgrammeAttainmentResultDto>builder()
                 .success(true)
                 .message("Programme attainment calculated successfully")
-                .data(calculationService.calculateProgrammeAttainment(masterProgrammeId, programmeBatchId))
+                .data(calculationService.calculateProgrammeAttainment(progId, programmeBatchId))
                 .build());
     }
 
-    @GetMapping("/programme/{masterProgrammeId}/batch/{programmeBatchId}/dataset")
+    @GetMapping({"/programme/{masterProgrammeId}/batch/{programmeBatchId}/dataset", "/programme-batch/{programmeBatchId}/dataset", "/batch/{programmeBatchId}/dataset"})
     public ResponseEntity<ApiResponse<ProgrammeAttainmentDatasetDto>> getProgrammeAttainmentDataset(
-            @PathVariable String masterProgrammeId,
+            @PathVariable(required = false) String masterProgrammeId,
             @PathVariable String programmeBatchId,
             java.security.Principal principal) {
+        String progId = resolveProgrammeId(masterProgrammeId, programmeBatchId);
         com.dypiu.nba.entity.User user = reportAccessService.getAuthenticatedUser(principal);
-        reportAccessService.validateProgrammeAtrAccess(user, masterProgrammeId, programmeBatchId);
+        if (progId != null) {
+            reportAccessService.validateProgrammeAtrAccess(user, progId, programmeBatchId);
+        }
         return ResponseEntity.ok(ApiResponse.<ProgrammeAttainmentDatasetDto>builder()
                 .success(true)
                 .message("Programme attainment dataset retrieved successfully")
-                .data(calculationService.getProgrammeAttainmentDataset(masterProgrammeId, programmeBatchId))
+                .data(calculationService.getProgrammeAttainmentDataset(progId, programmeBatchId))
                 .build());
     }
 
-    @GetMapping("/programme/{masterProgrammeId}/batch/{programmeBatchId}/average-mapping")
+    @GetMapping({"/programme/{masterProgrammeId}/batch/{programmeBatchId}/average-mapping", "/programme-batch/{programmeBatchId}/average-mapping", "/batch/{programmeBatchId}/average-mapping"})
     public ResponseEntity<ApiResponse<Object>> getProgrammeAverageMapping(
-            @PathVariable String masterProgrammeId,
+            @PathVariable(required = false) String masterProgrammeId,
             @PathVariable String programmeBatchId,
             java.security.Principal principal) {
+        String progId = resolveProgrammeId(masterProgrammeId, programmeBatchId);
         com.dypiu.nba.entity.User user = reportAccessService.getAuthenticatedUser(principal);
-        reportAccessService.validateProgrammeAtrAccess(user, masterProgrammeId, programmeBatchId);
-        ProgrammeBatchAttainmentReportDto report = attainmentReportService.getOrCreateProgrammeAttainmentReport(masterProgrammeId, programmeBatchId);
+        if (progId != null) {
+            reportAccessService.validateProgrammeAtrAccess(user, progId, programmeBatchId);
+        }
+        ProgrammeBatchAttainmentReportDto report = attainmentReportService.getOrCreateProgrammeAttainmentReport(progId, programmeBatchId);
+
+        Map<String, BigDecimal> avgMappingStrength = new LinkedHashMap<>();
+        BigDecimal sum = BigDecimal.ZERO;
+        int count = 0;
+        if (report.getReport1AverageMappingPO() != null) {
+            for (ProgrammeBatchAttainmentReportDto.Report1PoRow r : report.getReport1AverageMappingPO()) {
+                if (r.getPoCode() != null && r.getProgrammeAverageMapping() != null) {
+                    avgMappingStrength.put(r.getPoCode().toUpperCase(), r.getProgrammeAverageMapping());
+                    sum = sum.add(r.getProgrammeAverageMapping());
+                    count++;
+                }
+            }
+        }
+        if (report.getReport1AverageMappingPSO() != null) {
+            for (ProgrammeBatchAttainmentReportDto.Report1PsoRow r : report.getReport1AverageMappingPSO()) {
+                if (r.getPsoCode() != null && r.getProgrammeAverageMapping() != null) {
+                    avgMappingStrength.put(r.getPsoCode().toUpperCase(), r.getProgrammeAverageMapping());
+                    sum = sum.add(r.getProgrammeAverageMapping());
+                    count++;
+                }
+            }
+        }
+        BigDecimal overallAvg = count > 0 ? sum.divide(BigDecimal.valueOf(count), 2, java.math.RoundingMode.HALF_UP) : BigDecimal.ZERO;
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("averageMappingStrength", avgMappingStrength);
+        result.put("overallAverageMappingStrength", overallAvg);
+        result.put("poMappings", report.getReport1AverageMappingPO() != null ? report.getReport1AverageMappingPO() : Collections.emptyList());
+        result.put("psoMappings", report.getReport1AverageMappingPSO() != null ? report.getReport1AverageMappingPSO() : Collections.emptyList());
+        result.put("courses", report.getCourseMappingRows() != null ? report.getCourseMappingRows() : Collections.emptyList());
+
         return ResponseEntity.ok(ApiResponse.builder()
                 .success(true)
-                .data(java.util.Map.of(
-                        "courses", report.getCourseMappingRows() != null ? report.getCourseMappingRows() : java.util.Collections.emptyList(),
-                        "poMappings", report.getReport1AverageMappingPO() != null ? report.getReport1AverageMappingPO() : java.util.Collections.emptyList(),
-                        "psoMappings", report.getReport1AverageMappingPSO() != null ? report.getReport1AverageMappingPSO() : java.util.Collections.emptyList()
-                ))
+                .data(result)
                 .build());
     }
 
-    @GetMapping("/programme/{masterProgrammeId}/batch/{programmeBatchId}/average-direct")
+    @GetMapping({"/programme/{masterProgrammeId}/batch/{programmeBatchId}/average-direct", "/programme-batch/{programmeBatchId}/average-direct", "/batch/{programmeBatchId}/average-direct"})
     public ResponseEntity<ApiResponse<Object>> getProgrammeAverageDirect(
-            @PathVariable String masterProgrammeId,
+            @PathVariable(required = false) String masterProgrammeId,
             @PathVariable String programmeBatchId,
             java.security.Principal principal) {
+        String progId = resolveProgrammeId(masterProgrammeId, programmeBatchId);
         com.dypiu.nba.entity.User user = reportAccessService.getAuthenticatedUser(principal);
-        reportAccessService.validateProgrammeAtrAccess(user, masterProgrammeId, programmeBatchId);
-        ProgrammeBatchAttainmentReportDto report = attainmentReportService.getOrCreateProgrammeAttainmentReport(masterProgrammeId, programmeBatchId);
+        if (progId != null) {
+            reportAccessService.validateProgrammeAtrAccess(user, progId, programmeBatchId);
+        }
+        ProgrammeBatchAttainmentReportDto report = attainmentReportService.getOrCreateProgrammeAttainmentReport(progId, programmeBatchId);
+
+        Map<String, BigDecimal> avgDirectAttainment = new LinkedHashMap<>();
+        BigDecimal sum = BigDecimal.ZERO;
+        int count = 0;
+        if (report.getReport2DirectAttainmentPO() != null) {
+            for (ProgrammeBatchAttainmentReportDto.Report2PoRow r : report.getReport2DirectAttainmentPO()) {
+                if (r.getPoCode() != null && r.getProgrammeDirectAttainment() != null) {
+                    avgDirectAttainment.put(r.getPoCode().toUpperCase(), r.getProgrammeDirectAttainment());
+                    sum = sum.add(r.getProgrammeDirectAttainment());
+                    count++;
+                }
+            }
+        }
+        if (report.getReport2DirectAttainmentPSO() != null) {
+            for (ProgrammeBatchAttainmentReportDto.Report2PsoRow r : report.getReport2DirectAttainmentPSO()) {
+                if (r.getPsoCode() != null && r.getProgrammeDirectAttainment() != null) {
+                    avgDirectAttainment.put(r.getPsoCode().toUpperCase(), r.getProgrammeDirectAttainment());
+                    sum = sum.add(r.getProgrammeDirectAttainment());
+                    count++;
+                }
+            }
+        }
+        BigDecimal overallDirect = count > 0 ? sum.divide(BigDecimal.valueOf(count), 2, java.math.RoundingMode.HALF_UP) : BigDecimal.ZERO;
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("averageDirectAttainment", avgDirectAttainment);
+        result.put("overallDirectAttainment", overallDirect);
+        result.put("poDirectAttainment", report.getReport2DirectAttainmentPO() != null ? report.getReport2DirectAttainmentPO() : Collections.emptyList());
+        result.put("psoDirectAttainment", report.getReport2DirectAttainmentPSO() != null ? report.getReport2DirectAttainmentPSO() : Collections.emptyList());
+        result.put("courses", report.getCourseDirectAttainmentRows() != null ? report.getCourseDirectAttainmentRows() : Collections.emptyList());
+
         return ResponseEntity.ok(ApiResponse.builder()
                 .success(true)
-                .data(java.util.Map.of(
-                        "courses", report.getCourseDirectAttainmentRows() != null ? report.getCourseDirectAttainmentRows() : java.util.Collections.emptyList(),
-                        "poDirectAttainment", report.getReport2DirectAttainmentPO() != null ? report.getReport2DirectAttainmentPO() : java.util.Collections.emptyList(),
-                        "psoDirectAttainment", report.getReport2DirectAttainmentPSO() != null ? report.getReport2DirectAttainmentPSO() : java.util.Collections.emptyList()
-                ))
+                .data(result)
                 .build());
     }
 
-    @GetMapping("/programme/{masterProgrammeId}/batch/{programmeBatchId}/average-indirect")
+    @GetMapping({"/programme/{masterProgrammeId}/batch/{programmeBatchId}/average-indirect", "/programme-batch/{programmeBatchId}/average-indirect", "/batch/{programmeBatchId}/average-indirect"})
     public ResponseEntity<ApiResponse<Object>> getProgrammeAverageIndirect(
-            @PathVariable String masterProgrammeId,
+            @PathVariable(required = false) String masterProgrammeId,
             @PathVariable String programmeBatchId,
             java.security.Principal principal) {
+        String progId = resolveProgrammeId(masterProgrammeId, programmeBatchId);
         com.dypiu.nba.entity.User user = reportAccessService.getAuthenticatedUser(principal);
-        reportAccessService.validateProgrammeAtrAccess(user, masterProgrammeId, programmeBatchId);
-        ProgrammeBatchAttainmentReportDto report = attainmentReportService.getOrCreateProgrammeAttainmentReport(masterProgrammeId, programmeBatchId);
+        if (progId != null) {
+            reportAccessService.validateProgrammeAtrAccess(user, progId, programmeBatchId);
+        }
+        ProgrammeBatchAttainmentReportDto report = attainmentReportService.getOrCreateProgrammeAttainmentReport(progId, programmeBatchId);
+
+        Map<String, BigDecimal> avgIndirectAttainment = new LinkedHashMap<>();
+        BigDecimal sum = BigDecimal.ZERO;
+        int count = 0;
+        if (report.getReport3IndirectAttainmentPO() != null) {
+            for (ProgrammeBatchAttainmentReportDto.Report3PoRow r : report.getReport3IndirectAttainmentPO()) {
+                if (r.getPoCode() != null && r.getIndirectAttainmentLevel() != null) {
+                    avgIndirectAttainment.put(r.getPoCode().toUpperCase(), r.getIndirectAttainmentLevel());
+                    sum = sum.add(r.getIndirectAttainmentLevel());
+                    count++;
+                }
+            }
+        }
+        if (report.getReport3IndirectAttainmentPSO() != null) {
+            for (ProgrammeBatchAttainmentReportDto.Report3PsoRow r : report.getReport3IndirectAttainmentPSO()) {
+                if (r.getPsoCode() != null && r.getIndirectAttainmentLevel() != null) {
+                    avgIndirectAttainment.put(r.getPsoCode().toUpperCase(), r.getIndirectAttainmentLevel());
+                    sum = sum.add(r.getIndirectAttainmentLevel());
+                    count++;
+                }
+            }
+        }
+        BigDecimal overallIndirect = count > 0 ? sum.divide(BigDecimal.valueOf(count), 2, java.math.RoundingMode.HALF_UP) : BigDecimal.ZERO;
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("averageIndirectAttainment", avgIndirectAttainment);
+        result.put("overallIndirectAttainment", overallIndirect);
+        result.put("poIndirectAttainment", report.getReport3IndirectAttainmentPO() != null ? report.getReport3IndirectAttainmentPO() : Collections.emptyList());
+        result.put("psoIndirectAttainment", report.getReport3IndirectAttainmentPSO() != null ? report.getReport3IndirectAttainmentPSO() : Collections.emptyList());
+        result.put("studentResponses", report.getStudentSurveyRows() != null ? report.getStudentSurveyRows() : Collections.emptyList());
+
         return ResponseEntity.ok(ApiResponse.builder()
                 .success(true)
-                .data(java.util.Map.of(
-                        "poIndirectAttainment", report.getReport3IndirectAttainmentPO() != null ? report.getReport3IndirectAttainmentPO() : java.util.Collections.emptyList(),
-                        "psoIndirectAttainment", report.getReport3IndirectAttainmentPSO() != null ? report.getReport3IndirectAttainmentPSO() : java.util.Collections.emptyList()
-                ))
+                .data(result)
                 .build());
     }
 
-    @GetMapping("/programme/{masterProgrammeId}/batch/{programmeBatchId}/overall")
+    @GetMapping({"/programme/{masterProgrammeId}/batch/{programmeBatchId}/overall", "/programme-batch/{programmeBatchId}/overall", "/batch/{programmeBatchId}/overall"})
     public ResponseEntity<ApiResponse<Object>> getProgrammeOverall(
-            @PathVariable String masterProgrammeId,
+            @PathVariable(required = false) String masterProgrammeId,
             @PathVariable String programmeBatchId,
             java.security.Principal principal) {
+        String progId = resolveProgrammeId(masterProgrammeId, programmeBatchId);
         com.dypiu.nba.entity.User user = reportAccessService.getAuthenticatedUser(principal);
-        reportAccessService.validateProgrammeAtrAccess(user, masterProgrammeId, programmeBatchId);
-        ProgrammeBatchAttainmentReportDto report = attainmentReportService.getOrCreateProgrammeAttainmentReport(masterProgrammeId, programmeBatchId);
+        if (progId != null) {
+            reportAccessService.validateProgrammeAtrAccess(user, progId, programmeBatchId);
+        }
+        ProgrammeBatchAttainmentReportDto report = attainmentReportService.getOrCreateProgrammeAttainmentReport(progId, programmeBatchId);
+
+        Map<String, BigDecimal> avgMappingStrength = new LinkedHashMap<>();
+        if (report.getReport1AverageMappingPO() != null) {
+            for (ProgrammeBatchAttainmentReportDto.Report1PoRow r : report.getReport1AverageMappingPO()) {
+                if (r.getPoCode() != null && r.getProgrammeAverageMapping() != null) {
+                    avgMappingStrength.put(r.getPoCode().toUpperCase(), r.getProgrammeAverageMapping());
+                }
+            }
+        }
+        if (report.getReport1AverageMappingPSO() != null) {
+            for (ProgrammeBatchAttainmentReportDto.Report1PsoRow r : report.getReport1AverageMappingPSO()) {
+                if (r.getPsoCode() != null && r.getProgrammeAverageMapping() != null) {
+                    avgMappingStrength.put(r.getPsoCode().toUpperCase(), r.getProgrammeAverageMapping());
+                }
+            }
+        }
+
+        Map<String, BigDecimal> avgDirectAttainment = new LinkedHashMap<>();
+        if (report.getReport2DirectAttainmentPO() != null) {
+            for (ProgrammeBatchAttainmentReportDto.Report2PoRow r : report.getReport2DirectAttainmentPO()) {
+                if (r.getPoCode() != null && r.getProgrammeDirectAttainment() != null) {
+                    avgDirectAttainment.put(r.getPoCode().toUpperCase(), r.getProgrammeDirectAttainment());
+                }
+            }
+        }
+        if (report.getReport2DirectAttainmentPSO() != null) {
+            for (ProgrammeBatchAttainmentReportDto.Report2PsoRow r : report.getReport2DirectAttainmentPSO()) {
+                if (r.getPsoCode() != null && r.getProgrammeDirectAttainment() != null) {
+                    avgDirectAttainment.put(r.getPsoCode().toUpperCase(), r.getProgrammeDirectAttainment());
+                }
+            }
+        }
+
+        Map<String, BigDecimal> avgIndirectAttainment = new LinkedHashMap<>();
+        if (report.getReport3IndirectAttainmentPO() != null) {
+            for (ProgrammeBatchAttainmentReportDto.Report3PoRow r : report.getReport3IndirectAttainmentPO()) {
+                if (r.getPoCode() != null && r.getIndirectAttainmentLevel() != null) {
+                    avgIndirectAttainment.put(r.getPoCode().toUpperCase(), r.getIndirectAttainmentLevel());
+                }
+            }
+        }
+        if (report.getReport3IndirectAttainmentPSO() != null) {
+            for (ProgrammeBatchAttainmentReportDto.Report3PsoRow r : report.getReport3IndirectAttainmentPSO()) {
+                if (r.getPsoCode() != null && r.getIndirectAttainmentLevel() != null) {
+                    avgIndirectAttainment.put(r.getPsoCode().toUpperCase(), r.getIndirectAttainmentLevel());
+                }
+            }
+        }
+
+        Map<String, BigDecimal> finalAttainments = new LinkedHashMap<>();
+        if (report.getReport4OverallAttainmentPO() != null) {
+            for (ProgrammeBatchAttainmentReportDto.Report4PoRow r : report.getReport4OverallAttainmentPO()) {
+                if (r.getPoCode() != null && r.getFinalAttainment() != null) {
+                    finalAttainments.put(r.getPoCode().toUpperCase(), r.getFinalAttainment());
+                }
+            }
+        }
+        if (report.getReport4OverallAttainmentPSO() != null) {
+            for (ProgrammeBatchAttainmentReportDto.Report4PsoRow r : report.getReport4OverallAttainmentPSO()) {
+                if (r.getPsoCode() != null && r.getFinalAttainment() != null) {
+                    finalAttainments.put(r.getPsoCode().toUpperCase(), r.getFinalAttainment());
+                }
+            }
+        }
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("averageMappingStrength", avgMappingStrength);
+        result.put("averageDirectAttainment", avgDirectAttainment);
+        result.put("averageIndirectAttainment", avgIndirectAttainment);
+        result.put("finalAttainments", finalAttainments);
+        result.put("overallProgrammeAttainment", report.getOverallProgrammeAttainment());
+        result.put("poOverallAttainment", report.getReport4OverallAttainmentPO() != null ? report.getReport4OverallAttainmentPO() : Collections.emptyList());
+        result.put("psoOverallAttainment", report.getReport4OverallAttainmentPSO() != null ? report.getReport4OverallAttainmentPSO() : Collections.emptyList());
+
         return ResponseEntity.ok(ApiResponse.builder()
                 .success(true)
-                .data(java.util.Map.of(
-                        "poOverallAttainment", report.getReport4OverallAttainmentPO() != null ? report.getReport4OverallAttainmentPO() : java.util.Collections.emptyList(),
-                        "psoOverallAttainment", report.getReport4OverallAttainmentPSO() != null ? report.getReport4OverallAttainmentPSO() : java.util.Collections.emptyList()
-                ))
+                .data(result)
                 .build());
     }
 

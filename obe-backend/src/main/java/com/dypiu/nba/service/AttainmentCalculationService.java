@@ -1729,6 +1729,7 @@ public class AttainmentCalculationService {
 
         List<ProgrammeSurveyResultDto.PoIndirectItem> poItems = new ArrayList<>();
         List<ProgrammeSurveyResultDto.PsoIndirectItem> psoItems = new ArrayList<>();
+        List<ProgrammeSurveyResultDto.StudentSurveyResponseRow> studentResponses = new ArrayList<>();
         int rowsProcessed = 0;
 
         if (file != null && !file.isEmpty()) {
@@ -1815,6 +1816,26 @@ public class AttainmentCalculationService {
                     }
 
                     // 3. Dynamic Student Response Rows Processing (A9)
+                    int prnColIdx = -1;
+                    int nameColIdx = -1;
+                    int srNoColIdx = -1;
+                    Row headerRow = sheet.getRow(headerRowNum);
+                    if (headerRow != null) {
+                        for (Cell cell : headerRow) {
+                            String hText = getStringCellValue(cell, evaluator);
+                            if (hText != null) {
+                                String clean = hText.toLowerCase().replaceAll("[^a-z]", "");
+                                if (clean.contains("prn") || clean.contains("rollno") || clean.contains("studentid")) {
+                                    prnColIdx = cell.getColumnIndex();
+                                } else if (clean.contains("name") || clean.contains("studentname")) {
+                                    nameColIdx = cell.getColumnIndex();
+                                } else if (clean.contains("srno") || clean.contains("sno")) {
+                                    srNoColIdx = cell.getColumnIndex();
+                                }
+                            }
+                        }
+                    }
+
                     Map<String, List<Double>> poRatingsMap = new LinkedHashMap<>();
                     Map<String, List<Double>> psoRatingsMap = new LinkedHashMap<>();
                     for (String po : configuredPOCodes) poRatingsMap.put(po, new ArrayList<>());
@@ -1827,24 +1848,32 @@ public class AttainmentCalculationService {
                         boolean hasData = false;
                         Map<String, Double> rowPoVals = new HashMap<>();
                         Map<String, Double> rowPsoVals = new HashMap<>();
+                        Map<String, String> rowPoFeedbacks = new LinkedHashMap<>();
+                        Map<String, String> rowPsoFeedbacks = new LinkedHashMap<>();
 
                         for (Map.Entry<Integer, String> entry : poColMap.entrySet()) {
                             Cell c = row.getCell(entry.getKey());
                             Double num = getNumericCellValue(c, evaluator);
+                            String feedback = "Substantial";
                             if (num == null) {
                                 String s = getStringCellValue(c, evaluator);
                                 if (s != null && !s.isBlank()) {
                                     String tr = s.trim().toLowerCase();
-                                    if (tr.contains("substantial") || tr.equals("3") || tr.equals("3.0") || tr.equals("high")) num = 3.0;
-                                    else if (tr.contains("moderate") || tr.equals("2") || tr.equals("2.0") || tr.equals("medium")) num = 2.0;
-                                    else if (tr.contains("slight") || tr.equals("1") || tr.equals("1.0") || tr.equals("low")) num = 1.0;
+                                    if (tr.contains("substantial") || tr.equals("3") || tr.equals("3.0")) {
+                                        num = 3.0; feedback = "Substantial";
+                                    } else if (tr.contains("moderate") || tr.equals("2") || tr.equals("2.0")) {
+                                        num = 2.0; feedback = "Moderate";
+                                    } else if (tr.contains("slight") || tr.equals("1") || tr.equals("1.0")) {
+                                        num = 1.0; feedback = "Slight";
+                                    }
                                 }
+                            } else {
+                                int v = (int) Math.round(num);
+                                feedback = v == 3 ? "Substantial" : (v == 2 ? "Moderate" : "Slight");
                             }
                             if (num != null && num >= 0) {
-                                if (num > 3.0 && num <= 100.0) {
-                                    num = (num / 100.0) * 3.0;
-                                }
                                 rowPoVals.put(entry.getValue(), Math.min(3.0, num));
+                                rowPoFeedbacks.put(entry.getValue(), feedback);
                                 hasData = true;
                             }
                         }
@@ -1852,20 +1881,26 @@ public class AttainmentCalculationService {
                         for (Map.Entry<Integer, String> entry : psoColMap.entrySet()) {
                             Cell c = row.getCell(entry.getKey());
                             Double num = getNumericCellValue(c, evaluator);
+                            String feedback = "Substantial";
                             if (num == null) {
                                 String s = getStringCellValue(c, evaluator);
                                 if (s != null && !s.isBlank()) {
                                     String tr = s.trim().toLowerCase();
-                                    if (tr.contains("substantial") || tr.equals("3") || tr.equals("3.0") || tr.equals("high")) num = 3.0;
-                                    else if (tr.contains("moderate") || tr.equals("2") || tr.equals("2.0") || tr.equals("medium")) num = 2.0;
-                                    else if (tr.contains("slight") || tr.equals("1") || tr.equals("1.0") || tr.equals("low")) num = 1.0;
+                                    if (tr.contains("substantial") || tr.equals("3") || tr.equals("3.0")) {
+                                        num = 3.0; feedback = "Substantial";
+                                    } else if (tr.contains("moderate") || tr.equals("2") || tr.equals("2.0")) {
+                                        num = 2.0; feedback = "Moderate";
+                                    } else if (tr.contains("slight") || tr.equals("1") || tr.equals("1.0")) {
+                                        num = 1.0; feedback = "Slight";
+                                    }
                                 }
+                            } else {
+                                int v = (int) Math.round(num);
+                                feedback = v == 3 ? "Substantial" : (v == 2 ? "Moderate" : "Slight");
                             }
                             if (num != null && num >= 0) {
-                                if (num > 3.0 && num <= 100.0) {
-                                    num = (num / 100.0) * 3.0;
-                                }
                                 rowPsoVals.put(entry.getValue(), Math.min(3.0, num));
+                                rowPsoFeedbacks.put(entry.getValue(), feedback);
                                 hasData = true;
                             }
                         }
@@ -1878,6 +1913,30 @@ public class AttainmentCalculationService {
                             for (Map.Entry<String, Double> e : rowPsoVals.entrySet()) {
                                 psoRatingsMap.get(e.getKey()).add(e.getValue());
                             }
+
+                            String prn = null;
+                            if (prnColIdx != -1) {
+                                String p = getStringCellValue(row.getCell(prnColIdx), evaluator);
+                                if (p != null && !p.isBlank()) prn = p.trim();
+                            }
+                            String sName = null;
+                            if (nameColIdx != -1) {
+                                String n = getStringCellValue(row.getCell(nameColIdx), evaluator);
+                                if (n != null && !n.isBlank()) sName = n.trim();
+                            }
+                            if (prn == null || prn.isBlank()) {
+                                prn = "PRN-" + (studentResponses.size() + 1);
+                            }
+                            if (sName == null || sName.isBlank()) {
+                                sName = "Student " + prn;
+                            }
+                            studentResponses.add(ProgrammeSurveyResultDto.StudentSurveyResponseRow.builder()
+                                    .srNo(studentResponses.size() + 1)
+                                    .prn(prn)
+                                    .studentName(sName)
+                                    .poRatings(rowPoFeedbacks)
+                                    .psoRatings(rowPsoFeedbacks)
+                                    .build());
                         }
                     }
 
@@ -1886,7 +1945,7 @@ public class AttainmentCalculationService {
                     }
 
                     // Compute weighted percentage and range-based indirect attainment (1-3) for each PO & PSO:
-                    // totalPct = (pct3 * 1.0) + (pct2 * 0.67) + (pct1 * 0.33)
+                    // totalPct = (pct1 * 0.33) + (pct2 * 0.67) + (pct3 * 1.0)
                     // Level bands: 0-40% -> 1.0, 40-70% -> 2.0, 70-100% -> 3.0
                     for (String poCode : configuredPOCodes) {
                         List<Double> ratings = poRatingsMap.get(poCode);
@@ -1894,16 +1953,18 @@ public class AttainmentCalculationService {
                         if (ratings != null && !ratings.isEmpty()) {
                             int count1 = 0, count2 = 0, count3 = 0;
                             for (Double r : ratings) {
-                                if (r <= 1.5) count1++;
-                                else if (r <= 2.5) count2++;
+                                if (r == null) continue;
+                                long rounded = Math.round(r);
+                                if (rounded <= 1) count1++;
+                                else if (rounded == 2) count2++;
                                 else count3++;
                             }
-                            int total = ratings.size();
+                            int total = count1 + count2 + count3;
                             double pct1 = total > 0 ? ((double) count1 * 100.0 / total) : 0.0;
                             double pct2 = total > 0 ? ((double) count2 * 100.0 / total) : 0.0;
                             double pct3 = total > 0 ? ((double) count3 * 100.0 / total) : 0.0;
 
-                            double totalPct = (pct3 * 1.0) + (pct2 * 0.67) + (pct1 * 0.33);
+                            double totalPct = (pct1 * 0.33) + (pct2 * 0.67) + (pct3 * 1.0);
 
                             int level;
                             if (totalPct > 70.0) {
@@ -1931,16 +1992,18 @@ public class AttainmentCalculationService {
                         if (ratings != null && !ratings.isEmpty()) {
                             int count1 = 0, count2 = 0, count3 = 0;
                             for (Double r : ratings) {
-                                if (r <= 1.5) count1++;
-                                else if (r <= 2.5) count2++;
+                                if (r == null) continue;
+                                long rounded = Math.round(r);
+                                if (rounded <= 1) count1++;
+                                else if (rounded == 2) count2++;
                                 else count3++;
                             }
-                            int total = ratings.size();
+                            int total = count1 + count2 + count3;
                             double pct1 = total > 0 ? ((double) count1 * 100.0 / total) : 0.0;
                             double pct2 = total > 0 ? ((double) count2 * 100.0 / total) : 0.0;
                             double pct3 = total > 0 ? ((double) count3 * 100.0 / total) : 0.0;
 
-                            double totalPct = (pct3 * 1.0) + (pct2 * 0.67) + (pct1 * 0.33);
+                            double totalPct = (pct1 * 0.33) + (pct2 * 0.67) + (pct3 * 1.0);
 
                             int level;
                             if (totalPct > 70.0) {
@@ -2006,6 +2069,7 @@ public class AttainmentCalculationService {
                 .recordsProcessed(rowsProcessed)
                 .poIndirectAttainment(poItems)
                 .psoIndirectAttainment(psoItems)
+                .studentSurveyResponses(studentResponses)
                 .status("PROCESSED")
                 .build();
 
@@ -2289,10 +2353,11 @@ public class AttainmentCalculationService {
             String poCode = pos.get(i).getCode();
             List<ProgrammeAttainmentResultDto.SemesterValue> semMapValues = new ArrayList<>();
             List<ProgrammeAttainmentResultDto.SemesterValue> semDirectValues = new ArrayList<>();
-            double totalMap = 0;
-            double totalDirect = 0;
-            int semCountWithMap = 0;
-            int semCountWithDirect = 0;
+
+            double batchAllCoursesMapSum = 0;
+            int batchAllCoursesMapCount = 0;
+            double batchAllCoursesDirectSum = 0;
+            int batchAllCoursesDirectCount = 0;
 
             for (int s = 1; s <= maxSem; s++) {
                 final int currentSem = s;
@@ -2310,6 +2375,8 @@ public class AttainmentCalculationService {
                     if (val != null && val.compareTo(BigDecimal.ZERO) > 0) {
                         semMapSum += val.doubleValue();
                         semMapCount++;
+                        batchAllCoursesMapSum += val.doubleValue();
+                        batchAllCoursesMapCount++;
                     }
                 }
 
@@ -2320,6 +2387,8 @@ public class AttainmentCalculationService {
                     if (val != null && val.compareTo(BigDecimal.ZERO) > 0) {
                         semDirectSum += val.doubleValue();
                         semDirectCount++;
+                        batchAllCoursesDirectSum += val.doubleValue();
+                        batchAllCoursesDirectCount++;
                     }
                 }
 
@@ -2328,19 +2397,14 @@ public class AttainmentCalculationService {
 
                 semMapValues.add(ProgrammeAttainmentResultDto.SemesterValue.builder().semester(s).averageMapping(mapVal).averageAttainment(directVal).build());
                 semDirectValues.add(ProgrammeAttainmentResultDto.SemesterValue.builder().semester(s).averageMapping(mapVal).averageAttainment(directVal).build());
-
-                if (mapVal.compareTo(BigDecimal.ZERO) > 0) {
-                    totalMap += mapVal.doubleValue();
-                    semCountWithMap++;
-                }
-                if (directVal.compareTo(BigDecimal.ZERO) > 0) {
-                    totalDirect += directVal.doubleValue();
-                    semCountWithDirect++;
-                }
             }
 
-            BigDecimal avgMap = semCountWithMap > 0 ? BigDecimal.valueOf(totalMap / semCountWithMap).setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO;
-            BigDecimal avgDirect = semCountWithDirect > 0 ? BigDecimal.valueOf(totalDirect / semCountWithDirect).setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO;
+            BigDecimal avgMap = batchAllCoursesMapCount > 0
+                    ? BigDecimal.valueOf(batchAllCoursesMapSum / batchAllCoursesMapCount).setScale(2, RoundingMode.HALF_UP)
+                    : BigDecimal.ZERO;
+            BigDecimal avgDirect = batchAllCoursesDirectCount > 0
+                    ? BigDecimal.valueOf(batchAllCoursesDirectSum / batchAllCoursesDirectCount).setScale(2, RoundingMode.HALF_UP)
+                    : BigDecimal.ZERO;
 
             poMappingBreakdown.add(ProgrammeAttainmentResultDto.OutcomeMappingItem.builder()
                     .poCode(poCode)
@@ -2362,10 +2426,11 @@ public class AttainmentCalculationService {
             String psoCode = psos.get(i).getCode();
             List<ProgrammeAttainmentResultDto.SemesterValue> semMapValues = new ArrayList<>();
             List<ProgrammeAttainmentResultDto.SemesterValue> semDirectValues = new ArrayList<>();
-            double totalMap = 0;
-            double totalDirect = 0;
-            int semCountWithMap = 0;
-            int semCountWithDirect = 0;
+
+            double batchAllCoursesMapSum = 0;
+            int batchAllCoursesMapCount = 0;
+            double batchAllCoursesDirectSum = 0;
+            int batchAllCoursesDirectCount = 0;
 
             for (int s = 1; s <= maxSem; s++) {
                 final int currentSem = s;
@@ -2383,6 +2448,8 @@ public class AttainmentCalculationService {
                     if (val != null && val.compareTo(BigDecimal.ZERO) > 0) {
                         semMapSum += val.doubleValue();
                         semMapCount++;
+                        batchAllCoursesMapSum += val.doubleValue();
+                        batchAllCoursesMapCount++;
                     }
                 }
 
@@ -2393,6 +2460,8 @@ public class AttainmentCalculationService {
                     if (val != null && val.compareTo(BigDecimal.ZERO) > 0) {
                         semDirectSum += val.doubleValue();
                         semDirectCount++;
+                        batchAllCoursesDirectSum += val.doubleValue();
+                        batchAllCoursesDirectCount++;
                     }
                 }
 
@@ -2401,19 +2470,14 @@ public class AttainmentCalculationService {
 
                 semMapValues.add(ProgrammeAttainmentResultDto.SemesterValue.builder().semester(s).averageMapping(mapVal).averageAttainment(directVal).build());
                 semDirectValues.add(ProgrammeAttainmentResultDto.SemesterValue.builder().semester(s).averageMapping(mapVal).averageAttainment(directVal).build());
-
-                if (mapVal.compareTo(BigDecimal.ZERO) > 0) {
-                    totalMap += mapVal.doubleValue();
-                    semCountWithMap++;
-                }
-                if (directVal.compareTo(BigDecimal.ZERO) > 0) {
-                    totalDirect += directVal.doubleValue();
-                    semCountWithDirect++;
-                }
             }
 
-            BigDecimal avgMap = semCountWithMap > 0 ? BigDecimal.valueOf(totalMap / semCountWithMap).setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO;
-            BigDecimal avgDirect = semCountWithDirect > 0 ? BigDecimal.valueOf(totalDirect / semCountWithDirect).setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO;
+            BigDecimal avgMap = batchAllCoursesMapCount > 0
+                    ? BigDecimal.valueOf(batchAllCoursesMapSum / batchAllCoursesMapCount).setScale(2, RoundingMode.HALF_UP)
+                    : BigDecimal.ZERO;
+            BigDecimal avgDirect = batchAllCoursesDirectCount > 0
+                    ? BigDecimal.valueOf(batchAllCoursesDirectSum / batchAllCoursesDirectCount).setScale(2, RoundingMode.HALF_UP)
+                    : BigDecimal.ZERO;
 
             psoMappingBreakdown.add(ProgrammeAttainmentResultDto.OutcomeMappingItem.builder()
                     .psoCode(psoCode)
@@ -2520,6 +2584,19 @@ public class AttainmentCalculationService {
         exitSurveyPoMap.forEach(indirectMap::put);
         exitSurveyPsoMap.forEach(indirectMap::put);
 
+        List<ProgrammeAttainmentResultDto.StudentSurveyResponseRow> studentRows = new ArrayList<>();
+        if (exitSurvey != null && exitSurvey.getStudentSurveyResponses() != null) {
+            for (ProgrammeSurveyResultDto.StudentSurveyResponseRow sr : exitSurvey.getStudentSurveyResponses()) {
+                studentRows.add(ProgrammeAttainmentResultDto.StudentSurveyResponseRow.builder()
+                        .srNo(sr.getSrNo())
+                        .prn(sr.getPrn())
+                        .studentName(sr.getStudentName())
+                        .poRatings(sr.getPoRatings())
+                        .psoRatings(sr.getPsoRatings())
+                        .build());
+            }
+        }
+
         return ProgrammeAttainmentResultDto.builder()
                 .programme(prog != null ? ProgrammeAttainmentResultDto.ProgrammeSummary.builder().id(prog.getId()).code(prog.getCode()).name(prog.getName()).build() : null)
                 .batch(batch != null ? ProgrammeAttainmentResultDto.BatchSummary.builder().id(batch.getId()).name(batch.getName()).startYear(batch.getStartYear() != null ? String.valueOf(batch.getStartYear()) : "").endYear(batch.getEndYear() != null ? String.valueOf(batch.getEndYear()) : "").build() : null)
@@ -2530,6 +2607,7 @@ public class AttainmentCalculationService {
                 .overallAttainment(ProgrammeAttainmentResultDto.OverallAttainmentBreakdown.builder().pos(poOverallList).psos(psoOverallList).build())
                 .courseMappingRows(courseMappingRows)
                 .courseDirectAttainmentRows(courseDirectAttainmentRows)
+                .studentSurveyRows(studentRows)
                 .build();
     }
 

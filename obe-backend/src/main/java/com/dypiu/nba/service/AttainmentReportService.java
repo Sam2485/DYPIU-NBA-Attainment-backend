@@ -523,11 +523,24 @@ public class AttainmentReportService {
             }
         }
 
+        List<ProgrammeBatchAttainmentReportDto.StudentSurveyResponseRow> studentSurveyRows = new ArrayList<>();
+        if (calcResult.getStudentSurveyRows() != null) {
+            for (ProgrammeAttainmentResultDto.StudentSurveyResponseRow sr : calcResult.getStudentSurveyRows()) {
+                studentSurveyRows.add(ProgrammeBatchAttainmentReportDto.StudentSurveyResponseRow.builder()
+                        .srNo(sr.getSrNo())
+                        .prn(sr.getPrn())
+                        .studentName(sr.getStudentName())
+                        .poRatings(sr.getPoRatings())
+                        .psoRatings(sr.getPsoRatings())
+                        .build());
+            }
+        }
+
         report.setStatus(status);
         report.setOverallProgrammeAttainment(overall);
         report.setAverageMappingReportJson(toJson(java.util.Map.of("po", report1PO, "pso", report1PSO, "courses", courseMappingRows)));
         report.setDirectAttainmentReportJson(toJson(java.util.Map.of("po", report2PO, "pso", report2PSO, "courses", courseDirectAttainmentRows)));
-        report.setIndirectAttainmentReportJson(toJson(java.util.Map.of("po", report3PO, "pso", report3PSO)));
+        report.setIndirectAttainmentReportJson(toJson(java.util.Map.of("po", report3PO, "pso", report3PSO, "students", studentSurveyRows)));
         report.setOverallAttainmentReportJson(toJson(java.util.Map.of("po", report4PO, "pso", report4PSO)));
         report.setUpdatedAt(ZonedDateTime.now());
 
@@ -548,6 +561,7 @@ public class AttainmentReportService {
                 .report4OverallAttainmentPO(report4PO).report4OverallAttainmentPSO(report4PSO)
                 .courseMappingRows(courseMappingRows)
                 .courseDirectAttainmentRows(courseDirectAttainmentRows)
+                .studentSurveyRows(studentSurveyRows)
                 .submittedBy(report.getSubmittedBy())
                 .submittedAt(report.getSubmittedAt())
                 .approvedBy(report.getApprovedBy())
@@ -569,6 +583,7 @@ public class AttainmentReportService {
         java.util.Map<String, Object> r3Map = fromJson(report.getIndirectAttainmentReportJson(), new TypeReference<>() {});
         List<ProgrammeBatchAttainmentReportDto.Report3PoRow> report3PO = r3Map == null ? null : objectMapper.convertValue(r3Map.get("po"), new TypeReference<>() {});
         List<ProgrammeBatchAttainmentReportDto.Report3PsoRow> report3PSO = r3Map == null ? null : objectMapper.convertValue(r3Map.get("pso"), new TypeReference<>() {});
+        List<ProgrammeBatchAttainmentReportDto.StudentSurveyResponseRow> studentSurveyRows = r3Map == null ? null : objectMapper.convertValue(r3Map.get("students"), new TypeReference<>() {});
 
         java.util.Map<String, Object> r4Map = fromJson(report.getOverallAttainmentReportJson(), new TypeReference<>() {});
         List<ProgrammeBatchAttainmentReportDto.Report4PoRow> report4PO = r4Map == null ? null : objectMapper.convertValue(r4Map.get("po"), new TypeReference<>() {});
@@ -589,6 +604,7 @@ public class AttainmentReportService {
                 .report4OverallAttainmentPO(report4PO != null ? report4PO : Collections.emptyList()).report4OverallAttainmentPSO(report4PSO != null ? report4PSO : Collections.emptyList())
                 .courseMappingRows(courseMappingRows != null ? courseMappingRows : Collections.emptyList())
                 .courseDirectAttainmentRows(courseDirectAttainmentRows != null ? courseDirectAttainmentRows : Collections.emptyList())
+                .studentSurveyRows(studentSurveyRows != null ? studentSurveyRows : Collections.emptyList())
                 .submittedBy(report.getSubmittedBy())
                 .submittedAt(report.getSubmittedAt())
                 .approvedBy(report.getApprovedBy())

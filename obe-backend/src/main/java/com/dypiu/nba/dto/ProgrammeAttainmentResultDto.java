@@ -19,6 +19,16 @@ public class ProgrammeAttainmentResultDto {
     private OverallAttainmentBreakdown overallAttainment;
     private List<CourseContributionRow> courseMappingRows;
     private List<CourseContributionRow> courseDirectAttainmentRows;
+    private List<StudentSurveyResponseRow> studentSurveyRows;
+
+    @Data @Builder @NoArgsConstructor @AllArgsConstructor
+    public static class StudentSurveyResponseRow {
+        private Integer srNo;
+        private String prn;
+        private String studentName;
+        private Map<String, String> poRatings;
+        private Map<String, String> psoRatings;
+    }
 
     @Data @Builder @NoArgsConstructor @AllArgsConstructor
     public static class CourseContributionRow {
