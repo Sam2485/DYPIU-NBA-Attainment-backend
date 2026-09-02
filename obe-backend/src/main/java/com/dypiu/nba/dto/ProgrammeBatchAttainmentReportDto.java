@@ -6,6 +6,7 @@ import lombok.*;
 import java.math.BigDecimal;
 import java.time.ZonedDateTime;
 import java.util.List;
+import java.util.Map;
 
 @Data
 @Builder
@@ -39,10 +40,31 @@ public class ProgrammeBatchAttainmentReportDto {
     private List<Report4PoRow> report4OverallAttainmentPO;
     private List<Report4PsoRow> report4OverallAttainmentPSO;
 
+    // Granular course-level contribution rows for Sheet 1 (Mapping) and Sheet 2 (Direct Attainment)
+    private List<CourseContributionRow> courseMappingRows;
+    private List<CourseContributionRow> courseDirectAttainmentRows;
+
     private String submittedBy;
     private ZonedDateTime submittedAt;
     private String approvedBy;
     private ZonedDateTime approvedAt;
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class CourseContributionRow {
+        private String programmeBatchCourseId;
+        private String masterCourseId;
+        private Integer semester;
+        private String courseCode;
+        private String courseName;
+        private String resourceName;
+        private String courseNo;
+        private Boolean isLab;
+        private Map<String, BigDecimal> poValues;
+        private Map<String, BigDecimal> psoValues;
+    }
 
     @Data
     @Builder

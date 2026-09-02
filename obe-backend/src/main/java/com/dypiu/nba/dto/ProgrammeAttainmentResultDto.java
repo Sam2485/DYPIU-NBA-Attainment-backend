@@ -17,6 +17,22 @@ public class ProgrammeAttainmentResultDto {
     private DirectAttainmentBreakdown averageDirectAttainment;
     private Map<String, BigDecimal> averageIndirectAttainment;
     private OverallAttainmentBreakdown overallAttainment;
+    private List<CourseContributionRow> courseMappingRows;
+    private List<CourseContributionRow> courseDirectAttainmentRows;
+
+    @Data @Builder @NoArgsConstructor @AllArgsConstructor
+    public static class CourseContributionRow {
+        private String programmeBatchCourseId;
+        private String masterCourseId;
+        private Integer semester;
+        private String courseCode;
+        private String courseName;
+        private String resourceName;
+        private String courseNo;
+        private Boolean isLab;
+        private Map<String, BigDecimal> poValues;
+        private Map<String, BigDecimal> psoValues;
+    }
 
     @Data @Builder @NoArgsConstructor @AllArgsConstructor
     public static class ProgrammeSummary {

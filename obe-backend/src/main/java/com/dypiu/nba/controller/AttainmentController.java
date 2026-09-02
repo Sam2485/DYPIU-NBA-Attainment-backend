@@ -223,6 +223,7 @@ public class AttainmentController {
         return ResponseEntity.ok(ApiResponse.builder()
                 .success(true)
                 .data(java.util.Map.of(
+                        "courses", report.getCourseMappingRows() != null ? report.getCourseMappingRows() : java.util.Collections.emptyList(),
                         "poMappings", report.getReport1AverageMappingPO() != null ? report.getReport1AverageMappingPO() : java.util.Collections.emptyList(),
                         "psoMappings", report.getReport1AverageMappingPSO() != null ? report.getReport1AverageMappingPSO() : java.util.Collections.emptyList()
                 ))
@@ -240,6 +241,7 @@ public class AttainmentController {
         return ResponseEntity.ok(ApiResponse.builder()
                 .success(true)
                 .data(java.util.Map.of(
+                        "courses", report.getCourseDirectAttainmentRows() != null ? report.getCourseDirectAttainmentRows() : java.util.Collections.emptyList(),
                         "poDirectAttainment", report.getReport2DirectAttainmentPO() != null ? report.getReport2DirectAttainmentPO() : java.util.Collections.emptyList(),
                         "psoDirectAttainment", report.getReport2DirectAttainmentPSO() != null ? report.getReport2DirectAttainmentPSO() : java.util.Collections.emptyList()
                 ))

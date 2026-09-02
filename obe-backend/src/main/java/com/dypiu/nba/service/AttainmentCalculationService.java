@@ -2180,11 +2180,107 @@ public class AttainmentCalculationService {
             }
         }
 
+        int duration = (prog != null && prog.getDurationYears() != null && prog.getDurationYears() > 0) ? prog.getDurationYears() : 4;
+        int maxSem = duration * 2;
+        if (!offerings.isEmpty()) {
+            int maxOfferingSem = offerings.stream()
+                    .map(ProgrammeBatchCourse::getSemester)
+                    .filter(Objects::nonNull)
+                    .mapToInt(Integer::intValue)
+                    .max()
+                    .orElse(maxSem);
+            if (maxOfferingSem > maxSem) {
+                maxSem = maxOfferingSem;
+            }
+        }
+
         Map<Integer, List<ProgrammeBatchCourse>> semOfferings = new TreeMap<>();
         for (ProgrammeBatchCourse o : offerings) {
             int sem = o.getSemester() != null ? o.getSemester() : 1;
             semOfferings.computeIfAbsent(sem, k -> new ArrayList<>()).add(o);
         }
+
+        List<ProgrammeAttainmentResultDto.CourseContributionRow> courseMappingRows = new ArrayList<>();
+        List<ProgrammeAttainmentResultDto.CourseContributionRow> courseDirectAttainmentRows = new ArrayList<>();
+
+        for (ProgrammeBatchCourse off : offerings) {
+            MasterCourse mc = (off.getMasterCourseId() != null) ? masterCourseRepository.findById(off.getMasterCourseId()).orElse(null) : null;
+            String courseCode = (off.getCourseCodeOverride() != null && !off.getCourseCodeOverride().isBlank())
+                    ? off.getCourseCodeOverride()
+                    : ((mc != null && mc.getCode() != null) ? mc.getCode() : off.getId());
+            String courseName = (off.getCourseNameOverride() != null && !off.getCourseNameOverride().isBlank())
+                    ? off.getCourseNameOverride()
+                    : ((mc != null && mc.getName() != null) ? mc.getName() : "Course " + courseCode);
+            String coordinatorName = (off.getCourseCoordinatorName() != null && !off.getCourseCoordinatorName().isBlank())
+                    ? off.getCourseCoordinatorName()
+                    : ((off.getAssignedFaculty() != null && !off.getAssignedFaculty().isBlank())
+                    ? off.getAssignedFaculty()
+                    : (off.getCourseCoordinatorId() != null ? String.valueOf(off.getCourseCoordinatorId()) : ""));
+            boolean isLab = (courseName != null && courseName.toLowerCase().contains("lab"))
+                    || (courseCode != null && courseCode.toLowerCase().contains("lab"))
+                    || (mc != null && mc.getType() != null && mc.getType().equalsIgnoreCase("LAB"));
+
+            Map<String, Object> cAtt = null;
+            try {
+                cAtt = calculateCourseCoAttainment(off.getId());
+            } catch (Exception ignored) {}
+
+            @SuppressWarnings("unchecked")
+            Map<String, BigDecimal> poAvgMap = (cAtt != null && cAtt.get("poAverages") instanceof Map) ? (Map<String, BigDecimal>) cAtt.get("poAverages") : Collections.emptyMap();
+            @SuppressWarnings("unchecked")
+            Map<String, BigDecimal> psoAvgMap = (cAtt != null && cAtt.get("psoAverages") instanceof Map) ? (Map<String, BigDecimal>) cAtt.get("psoAverages") : Collections.emptyMap();
+            @SuppressWarnings("unchecked")
+            Map<String, BigDecimal> poAttMap = (cAtt != null && cAtt.get("poAttainment") instanceof Map) ? (Map<String, BigDecimal>) cAtt.get("poAttainment") : Collections.emptyMap();
+            @SuppressWarnings("unchecked")
+            Map<String, BigDecimal> psoAttMap = (cAtt != null && cAtt.get("psoAttainment") instanceof Map) ? (Map<String, BigDecimal>) cAtt.get("psoAttainment") : Collections.emptyMap();
+
+            Map<String, BigDecimal> courseMappingPoMap = new LinkedHashMap<>();
+            Map<String, BigDecimal> courseDirectPoMap = new LinkedHashMap<>();
+            for (ProgrammeOutcome po : pos) {
+                String code = po.getCode().toUpperCase();
+                courseMappingPoMap.put(code, poAvgMap.getOrDefault(code, null));
+                courseDirectPoMap.put(code, poAttMap.getOrDefault(code, null));
+            }
+
+            Map<String, BigDecimal> courseMappingPsoMap = new LinkedHashMap<>();
+            Map<String, BigDecimal> courseDirectPsoMap = new LinkedHashMap<>();
+            for (ProgrammeSpecificOutcome pso : psos) {
+                String code = pso.getCode().toUpperCase();
+                courseMappingPsoMap.put(code, psoAvgMap.getOrDefault(code, null));
+                courseDirectPsoMap.put(code, psoAttMap.getOrDefault(code, null));
+            }
+
+            courseMappingRows.add(ProgrammeAttainmentResultDto.CourseContributionRow.builder()
+                    .programmeBatchCourseId(off.getId())
+                    .masterCourseId(off.getMasterCourseId())
+                    .semester(off.getSemester() != null ? off.getSemester() : 1)
+                    .courseCode(courseCode)
+                    .courseName(courseName)
+                    .resourceName(coordinatorName)
+                    .courseNo(courseCode)
+                    .isLab(isLab)
+                    .poValues(courseMappingPoMap)
+                    .psoValues(courseMappingPsoMap)
+                    .build());
+
+            courseDirectAttainmentRows.add(ProgrammeAttainmentResultDto.CourseContributionRow.builder()
+                    .programmeBatchCourseId(off.getId())
+                    .masterCourseId(off.getMasterCourseId())
+                    .semester(off.getSemester() != null ? off.getSemester() : 1)
+                    .courseCode(courseCode)
+                    .courseName(courseName)
+                    .resourceName(coordinatorName)
+                    .courseNo(courseCode)
+                    .isLab(isLab)
+                    .poValues(courseDirectPoMap)
+                    .psoValues(courseDirectPsoMap)
+                    .build());
+        }
+
+        courseMappingRows.sort(Comparator.comparing((ProgrammeAttainmentResultDto.CourseContributionRow r) -> r.getSemester() != null ? r.getSemester() : 1)
+                .thenComparing(r -> r.getCourseCode() != null ? r.getCourseCode() : ""));
+        courseDirectAttainmentRows.sort(Comparator.comparing((ProgrammeAttainmentResultDto.CourseContributionRow r) -> r.getSemester() != null ? r.getSemester() : 1)
+                .thenComparing(r -> r.getCourseCode() != null ? r.getCourseCode() : ""));
 
         List<ProgrammeAttainmentResultDto.OutcomeMappingItem> poMappingBreakdown = new ArrayList<>();
         List<ProgrammeAttainmentResultDto.OutcomeDirectItem> poDirectBreakdown = new ArrayList<>();
@@ -2195,35 +2291,36 @@ public class AttainmentCalculationService {
             List<ProgrammeAttainmentResultDto.SemesterValue> semDirectValues = new ArrayList<>();
             double totalMap = 0;
             double totalDirect = 0;
-            int semCountWithData = 0;
+            int semCountWithMap = 0;
+            int semCountWithDirect = 0;
 
-            for (int s = 1; s <= 8; s++) {
-                List<ProgrammeBatchCourse> sOfferings = semOfferings.getOrDefault(s, Collections.emptyList());
+            for (int s = 1; s <= maxSem; s++) {
+                final int currentSem = s;
+                List<ProgrammeAttainmentResultDto.CourseContributionRow> sMapRows = courseMappingRows.stream()
+                        .filter(r -> r.getSemester() != null && r.getSemester() == currentSem)
+                        .collect(Collectors.toList());
+                List<ProgrammeAttainmentResultDto.CourseContributionRow> sDirRows = courseDirectAttainmentRows.stream()
+                        .filter(r -> r.getSemester() != null && r.getSemester() == currentSem)
+                        .collect(Collectors.toList());
+
                 double semMapSum = 0;
                 int semMapCount = 0;
+                for (ProgrammeAttainmentResultDto.CourseContributionRow r : sMapRows) {
+                    BigDecimal val = (r.getPoValues() != null) ? r.getPoValues().get(poCode.toUpperCase()) : null;
+                    if (val != null && val.compareTo(BigDecimal.ZERO) > 0) {
+                        semMapSum += val.doubleValue();
+                        semMapCount++;
+                    }
+                }
+
                 double semDirectSum = 0;
                 int semDirectCount = 0;
-
-                for (ProgrammeBatchCourse off : sOfferings) {
-                    List<CourseOutcome> cos = courseOutcomeRepository.findByProgrammeBatchCourseId(off.getId());
-                    for (CourseOutcome co : cos) {
-                        if (coPoMappingRepository != null) {
-                            List<CoPoMapping> mappings = coPoMappingRepository.findByCourseOutcomeId(co.getId());
-                            for (CoPoMapping m : mappings) {
-                                if (poCode.equalsIgnoreCase(m.getPoCode()) && m.getMappingLevel() != null && m.getMappingLevel() > 0) {
-                                    semMapSum += m.getMappingLevel();
-                                    semMapCount++;
-                                }
-                            }
-                        }
+                for (ProgrammeAttainmentResultDto.CourseContributionRow r : sDirRows) {
+                    BigDecimal val = (r.getPoValues() != null) ? r.getPoValues().get(poCode.toUpperCase()) : null;
+                    if (val != null && val.compareTo(BigDecimal.ZERO) > 0) {
+                        semDirectSum += val.doubleValue();
+                        semDirectCount++;
                     }
-                    try {
-                        Map<String, Object> cAtt = calculateCourseCoAttainment(off.getId());
-                        if (cAtt != null && cAtt.get("directAttainment") instanceof BigDecimal bDirect && bDirect.compareTo(BigDecimal.ZERO) > 0) {
-                            semDirectSum += bDirect.doubleValue();
-                            semDirectCount++;
-                        }
-                    } catch (Exception ignored) {}
                 }
 
                 BigDecimal mapVal = semMapCount > 0 ? BigDecimal.valueOf(semMapSum / semMapCount).setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO;
@@ -2232,15 +2329,18 @@ public class AttainmentCalculationService {
                 semMapValues.add(ProgrammeAttainmentResultDto.SemesterValue.builder().semester(s).averageMapping(mapVal).averageAttainment(directVal).build());
                 semDirectValues.add(ProgrammeAttainmentResultDto.SemesterValue.builder().semester(s).averageMapping(mapVal).averageAttainment(directVal).build());
 
-                if (mapVal.compareTo(BigDecimal.ZERO) > 0 || directVal.compareTo(BigDecimal.ZERO) > 0) {
+                if (mapVal.compareTo(BigDecimal.ZERO) > 0) {
                     totalMap += mapVal.doubleValue();
+                    semCountWithMap++;
+                }
+                if (directVal.compareTo(BigDecimal.ZERO) > 0) {
                     totalDirect += directVal.doubleValue();
-                    semCountWithData++;
+                    semCountWithDirect++;
                 }
             }
 
-            BigDecimal avgMap = semCountWithData > 0 ? BigDecimal.valueOf(totalMap / semCountWithData).setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO;
-            BigDecimal avgDirect = semCountWithData > 0 ? BigDecimal.valueOf(totalDirect / semCountWithData).setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO;
+            BigDecimal avgMap = semCountWithMap > 0 ? BigDecimal.valueOf(totalMap / semCountWithMap).setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO;
+            BigDecimal avgDirect = semCountWithDirect > 0 ? BigDecimal.valueOf(totalDirect / semCountWithDirect).setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO;
 
             poMappingBreakdown.add(ProgrammeAttainmentResultDto.OutcomeMappingItem.builder()
                     .poCode(poCode)
@@ -2264,35 +2364,36 @@ public class AttainmentCalculationService {
             List<ProgrammeAttainmentResultDto.SemesterValue> semDirectValues = new ArrayList<>();
             double totalMap = 0;
             double totalDirect = 0;
-            int semCountWithData = 0;
+            int semCountWithMap = 0;
+            int semCountWithDirect = 0;
 
-            for (int s = 1; s <= 8; s++) {
-                List<ProgrammeBatchCourse> sOfferings = semOfferings.getOrDefault(s, Collections.emptyList());
+            for (int s = 1; s <= maxSem; s++) {
+                final int currentSem = s;
+                List<ProgrammeAttainmentResultDto.CourseContributionRow> sMapRows = courseMappingRows.stream()
+                        .filter(r -> r.getSemester() != null && r.getSemester() == currentSem)
+                        .collect(Collectors.toList());
+                List<ProgrammeAttainmentResultDto.CourseContributionRow> sDirRows = courseDirectAttainmentRows.stream()
+                        .filter(r -> r.getSemester() != null && r.getSemester() == currentSem)
+                        .collect(Collectors.toList());
+
                 double semMapSum = 0;
                 int semMapCount = 0;
+                for (ProgrammeAttainmentResultDto.CourseContributionRow r : sMapRows) {
+                    BigDecimal val = (r.getPsoValues() != null) ? r.getPsoValues().get(psoCode.toUpperCase()) : null;
+                    if (val != null && val.compareTo(BigDecimal.ZERO) > 0) {
+                        semMapSum += val.doubleValue();
+                        semMapCount++;
+                    }
+                }
+
                 double semDirectSum = 0;
                 int semDirectCount = 0;
-
-                for (ProgrammeBatchCourse off : sOfferings) {
-                    List<CourseOutcome> cos = courseOutcomeRepository.findByProgrammeBatchCourseId(off.getId());
-                    for (CourseOutcome co : cos) {
-                        if (coPsoMappingRepository != null) {
-                            List<CoPsoMapping> mappings = coPsoMappingRepository.findByCourseOutcomeId(co.getId());
-                            for (CoPsoMapping m : mappings) {
-                                if (psoCode.equalsIgnoreCase(m.getPsoCode()) && m.getMappingLevel() != null && m.getMappingLevel() > 0) {
-                                    semMapSum += m.getMappingLevel();
-                                    semMapCount++;
-                                }
-                            }
-                        }
+                for (ProgrammeAttainmentResultDto.CourseContributionRow r : sDirRows) {
+                    BigDecimal val = (r.getPsoValues() != null) ? r.getPsoValues().get(psoCode.toUpperCase()) : null;
+                    if (val != null && val.compareTo(BigDecimal.ZERO) > 0) {
+                        semDirectSum += val.doubleValue();
+                        semDirectCount++;
                     }
-                    try {
-                        Map<String, Object> cAtt = calculateCourseCoAttainment(off.getId());
-                        if (cAtt != null && cAtt.get("directAttainment") instanceof BigDecimal bDirect && bDirect.compareTo(BigDecimal.ZERO) > 0) {
-                            semDirectSum += bDirect.doubleValue();
-                            semDirectCount++;
-                        }
-                    } catch (Exception ignored) {}
                 }
 
                 BigDecimal mapVal = semMapCount > 0 ? BigDecimal.valueOf(semMapSum / semMapCount).setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO;
@@ -2301,15 +2402,18 @@ public class AttainmentCalculationService {
                 semMapValues.add(ProgrammeAttainmentResultDto.SemesterValue.builder().semester(s).averageMapping(mapVal).averageAttainment(directVal).build());
                 semDirectValues.add(ProgrammeAttainmentResultDto.SemesterValue.builder().semester(s).averageMapping(mapVal).averageAttainment(directVal).build());
 
-                if (mapVal.compareTo(BigDecimal.ZERO) > 0 || directVal.compareTo(BigDecimal.ZERO) > 0) {
+                if (mapVal.compareTo(BigDecimal.ZERO) > 0) {
                     totalMap += mapVal.doubleValue();
+                    semCountWithMap++;
+                }
+                if (directVal.compareTo(BigDecimal.ZERO) > 0) {
                     totalDirect += directVal.doubleValue();
-                    semCountWithData++;
+                    semCountWithDirect++;
                 }
             }
 
-            BigDecimal avgMap = semCountWithData > 0 ? BigDecimal.valueOf(totalMap / semCountWithData).setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO;
-            BigDecimal avgDirect = semCountWithData > 0 ? BigDecimal.valueOf(totalDirect / semCountWithData).setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO;
+            BigDecimal avgMap = semCountWithMap > 0 ? BigDecimal.valueOf(totalMap / semCountWithMap).setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO;
+            BigDecimal avgDirect = semCountWithDirect > 0 ? BigDecimal.valueOf(totalDirect / semCountWithDirect).setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO;
 
             psoMappingBreakdown.add(ProgrammeAttainmentResultDto.OutcomeMappingItem.builder()
                     .psoCode(psoCode)
@@ -2424,6 +2528,8 @@ public class AttainmentCalculationService {
                 .averageDirectAttainment(ProgrammeAttainmentResultDto.DirectAttainmentBreakdown.builder().pos(poDirectBreakdown).psos(psoDirectBreakdown).build())
                 .averageIndirectAttainment(indirectMap)
                 .overallAttainment(ProgrammeAttainmentResultDto.OverallAttainmentBreakdown.builder().pos(poOverallList).psos(psoOverallList).build())
+                .courseMappingRows(courseMappingRows)
+                .courseDirectAttainmentRows(courseDirectAttainmentRows)
                 .build();
     }
 
@@ -2431,7 +2537,19 @@ public class AttainmentCalculationService {
         System.out.println("[AttainmentCalculationService] getProgrammeAttainmentDataset called | masterProgrammeId: " + masterProgrammeId + " | programmeBatchId: " + programmeBatchId);
         ProgrammeAttainmentResultDto res = calculateProgrammeAttainment(masterProgrammeId, programmeBatchId);
 
-        List<String> columns = List.of("Outcome", "Sem 1", "Sem 2", "Sem 3", "Sem 4", "Sem 5", "Sem 6", "Sem 7", "Sem 8", "Average");
+        MasterProgramme prog = masterProgrammeRepository.findById(masterProgrammeId).orElse(null);
+        int duration = (prog != null && prog.getDurationYears() != null && prog.getDurationYears() > 0) ? prog.getDurationYears() : 4;
+        int maxSem = duration * 2;
+        if (res.getSummary() != null && res.getSummary().getSemesterCount() > maxSem) {
+            maxSem = res.getSummary().getSemesterCount();
+        }
+
+        List<String> columns = new ArrayList<>();
+        columns.add("Outcome");
+        for (int s = 1; s <= maxSem; s++) {
+            columns.add("Sem " + s);
+        }
+        columns.add("Average");
 
         List<Map<String, Object>> mapRows = new ArrayList<>();
         if (res.getAverageMapping() != null && res.getAverageMapping().getPos() != null) {
