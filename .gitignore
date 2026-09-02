@@ -1,0 +1,37 @@
+# Environment and Secret files
+.env
+.env.*
+*.env
+
+# IDE and Editor files
+.idea/
+*.iml
+.classpath
+.project
+.settings/
+.vscode/
+.DS_Store
+
+# Maven target build directories
+target/
+**/target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+buildNumber.properties
+.mvn/timing.properties
+.mvn/wrapper/maven-wrapper.jar
+
+# Log files
+logs/
+*.log
+
+# Uploads and local storage
+uploads/
+storage/
+
+# Reports and temporary files
+ALL_BACKEND_APIS_REFERENCE_REPORT.md
