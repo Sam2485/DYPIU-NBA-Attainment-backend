@@ -46,21 +46,44 @@ public class RequestScopeAuthorizer {
                 .orElseThrow(() -> new ResourceNotFoundException("Department not found: " + departmentId));
         assertRequestedSchool(department.getSchoolId());
         if (scope.isHod()) {
-            if (scope.getEmail() != null && !scope.getEmail().isBlank()) {
+            boolean hodMatch = false;
+            if (scope.hasDepartmentScope() && scope.getDepartmentId().equalsIgnoreCase(departmentId.trim())) {
+                hodMatch = true;
+            } else if (scope.getEmail() != null && !scope.getEmail().isBlank()) {
                 List<Department> hodDepts = departmentRepository.findByHodEmailIgnoreCase(scope.getEmail().trim());
                 if (hodDepts != null && !hodDepts.isEmpty()) {
-                    boolean match = hodDepts.stream().anyMatch(d -> departmentId.trim().equalsIgnoreCase(d.getId()));
-                    if (!match) {
-                        forbidden("department", departmentId);
-                    }
-                    return;
+                    hodMatch = hodDepts.stream().anyMatch(d -> departmentId.trim().equalsIgnoreCase(d.getId()));
                 }
             }
-            if (!scope.getRequiredDepartmentId().equalsIgnoreCase(departmentId.trim())) {
+            if (!hodMatch) {
                 forbidden("department", departmentId);
             }
+            return;
         }
-        if (scope.isProgrammeCoordinator() || scope.isFaculty()) {
+        if (scope.isProgrammeCoordinator()) {
+            boolean matchesDirectDept = scope.hasDepartmentScope() && scope.getDepartmentId().equalsIgnoreCase(departmentId.trim());
+            boolean matchesProgrammeDept = false;
+            if (!matchesDirectDept) {
+                if (scope.getMasterProgrammeId() != null) {
+                    matchesProgrammeDept = masterProgrammeRepository.findById(scope.getMasterProgrammeId())
+                            .map(p -> departmentId.trim().equalsIgnoreCase(p.getDepartmentId()))
+                            .orElse(false);
+                }
+                if (!matchesProgrammeDept && scope.getEmail() != null && !scope.getEmail().isBlank()) {
+                    List<ProgrammeBatch> batches = programmeBatchRepository.findByCoordinatorEmailIgnoreCase(scope.getEmail().trim());
+                    if (batches != null && !batches.isEmpty()) {
+                        java.util.Set<String> pIds = batches.stream().map(ProgrammeBatch::getMasterProgrammeId).filter(java.util.Objects::nonNull).collect(java.util.stream.Collectors.toSet());
+                        matchesProgrammeDept = masterProgrammeRepository.findAllById(pIds).stream()
+                                .anyMatch(p -> departmentId.trim().equalsIgnoreCase(p.getDepartmentId()));
+                    }
+                }
+            }
+            if (!matchesDirectDept && !matchesProgrammeDept) {
+                forbidden("department", departmentId);
+            }
+            return;
+        }
+        if (scope.isFaculty()) {
             if (scope.hasDepartmentScope() && !scope.getDepartmentId().equalsIgnoreCase(departmentId.trim())) {
                 forbidden("department", departmentId);
             }
@@ -92,11 +115,13 @@ public class RequestScopeAuthorizer {
         CurrentUserScope scope = currentUserScopeService.getCurrentUserScope();
         if (global(scope)) return;
         if (scope.isProgrammeCoordinator()) {
-            if (scope.getEmail() == null || !scope.getEmail().trim().equalsIgnoreCase(coordinatorEmail.trim())) {
+            if (scope.getEmail() != null && !scope.getEmail().trim().equalsIgnoreCase(coordinatorEmail.trim())) {
                 forbidden("coordinator email", coordinatorEmail);
             }
-        } else if (scope.isFaculty() || scope.isHod() || scope.isDirector()) {
-            forbidden("coordinator email", coordinatorEmail);
+        } else if (scope.isFaculty()) {
+            if (scope.getEmail() != null && !scope.getEmail().trim().equalsIgnoreCase(coordinatorEmail.trim())) {
+                forbidden("coordinator email", coordinatorEmail);
+            }
         }
     }
 
@@ -105,11 +130,9 @@ public class RequestScopeAuthorizer {
         CurrentUserScope scope = currentUserScopeService.getCurrentUserScope();
         if (global(scope)) return;
         if (scope.isFaculty()) {
-            if (scope.getEmail() == null || !scope.getEmail().trim().equalsIgnoreCase(courseCoordinatorEmail.trim())) {
+            if (scope.getEmail() != null && !scope.getEmail().trim().equalsIgnoreCase(courseCoordinatorEmail.trim())) {
                 forbidden("course coordinator email", courseCoordinatorEmail);
             }
-        } else if (scope.isProgrammeCoordinator() || scope.isHod() || scope.isDirector()) {
-            forbidden("course coordinator email", courseCoordinatorEmail);
         }
     }
 
