@@ -21,7 +21,7 @@ import java.security.Principal;
 import java.util.List;
 
 @RestController
-@RequestMapping("/programme-batches")
+@RequestMapping({"/programme-batches", "/academic/programme-batches", "/api/v1/programme-batches", "/api/v1/academic/programme-batches"})
 @RequiredArgsConstructor
 public class ProgrammeBatchController {
 

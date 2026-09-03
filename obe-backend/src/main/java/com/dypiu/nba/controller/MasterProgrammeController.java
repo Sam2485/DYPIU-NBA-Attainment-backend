@@ -15,7 +15,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/master-programmes")
+@RequestMapping({"/master-programmes", "/academic/master-programmes", "/api/v1/master-programmes", "/api/v1/academic/master-programmes"})
 @RequiredArgsConstructor
 public class MasterProgrammeController {
 
