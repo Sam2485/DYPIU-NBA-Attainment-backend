@@ -63,6 +63,16 @@ public class ApprovalController {
                 .build());
     }
 
+    @GetMapping({"/programme-batches/{programmeBatchId}", "/batches/{programmeBatchId}"})
+    public ResponseEntity<ApiResponse<com.dypiu.nba.dto.ProgrammeBatchApprovalInboxDto>> getProgrammeBatchApprovalWorkspace(
+            @PathVariable String programmeBatchId) {
+        return ResponseEntity.ok(ApiResponse.<com.dypiu.nba.dto.ProgrammeBatchApprovalInboxDto>builder()
+                .success(true)
+                .message("Programme-Batch approval details fetched successfully")
+                .data(approvalService.getPendingApprovalsByProgrammeBatch(programmeBatchId))
+                .build());
+    }
+
     @GetMapping("/programme-batch-courses/{programmeBatchCourseId}")
     public ResponseEntity<ApiResponse<com.dypiu.nba.dto.CourseApprovalWorkspaceDto>> getCourseApprovalWorkspace(
             @PathVariable String programmeBatchCourseId) {
