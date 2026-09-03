@@ -54,6 +54,12 @@ public class RequestScopeAuthorizer {
                 if (hodDepts != null && !hodDepts.isEmpty()) {
                     hodMatch = hodDepts.stream().anyMatch(d -> departmentId.trim().equalsIgnoreCase(d.getId()));
                 }
+                if (!hodMatch && department.getHodEmail() != null && department.getHodEmail().trim().equalsIgnoreCase(scope.getEmail().trim())) {
+                    hodMatch = true;
+                }
+            }
+            if (!hodMatch && scope.getName() != null && department.getHodName() != null && department.getHodName().trim().equalsIgnoreCase(scope.getName().trim())) {
+                hodMatch = true;
             }
             if (!hodMatch) {
                 forbidden("department", departmentId);
@@ -103,6 +109,12 @@ public class RequestScopeAuthorizer {
             if (!matchesDirect && scope.getEmail() != null && !scope.getEmail().isBlank()) {
                 List<ProgrammeBatch> batches = programmeBatchRepository.findByCoordinatorEmailIgnoreCaseAndDeletedAtIsNull(scope.getEmail().trim());
                 matchesBatch = batches.stream().anyMatch(b -> masterProgrammeId.trim().equalsIgnoreCase(b.getMasterProgrammeId()));
+            }
+            if (!matchesDirect && !matchesBatch && programme.getCoordinatorEmail() != null && scope.getEmail() != null) {
+                matchesDirect = programme.getCoordinatorEmail().trim().equalsIgnoreCase(scope.getEmail().trim());
+            }
+            if (!matchesDirect && !matchesBatch && programme.getCoordinator() != null && scope.getName() != null) {
+                matchesDirect = programme.getCoordinator().trim().equalsIgnoreCase(scope.getName().trim());
             }
             if (!matchesDirect && !matchesBatch) {
                 forbidden("programme", masterProgrammeId);
@@ -169,8 +181,14 @@ public class RequestScopeAuthorizer {
         if (scope.getEmail() == null || !scope.getEmail().trim().equalsIgnoreCase(userEmail.trim())) {
             forbidden("user email", userEmail);
         }
-        if (!blank(role)) {
-            if (scope.getRole() == null || !scope.getRole().name().equalsIgnoreCase(role.trim())) {
+        if (!blank(role) && scope.getRole() != null) {
+            String canonUserRole = scope.getRole().name().toUpperCase();
+            String canonReqRole = role.trim().toUpperCase();
+            boolean match = canonUserRole.equals(canonReqRole)
+                    || (canonUserRole.equals("HOD") && (canonReqRole.equals("HEAD_OF_DEPARTMENT") || canonReqRole.equals("HOD")))
+                    || (canonUserRole.equals("PROGRAMME_COORDINATOR") && (canonReqRole.equals("COORDINATOR") || canonReqRole.equals("PROGRAMME_COORDINATOR") || canonReqRole.equals("PC")))
+                    || (canonUserRole.equals("FACULTY") && (canonReqRole.equals("COURSE_COORDINATOR") || canonReqRole.equals("FACULTY") || canonReqRole.equals("CC")));
+            if (!match) {
                 forbidden("role", role);
             }
         }
