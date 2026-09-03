@@ -144,6 +144,17 @@ public class AcademicService {
                 matchesBatchProg = batches.stream().anyMatch(b -> masterProgrammeId.equals(b.getMasterProgrammeId()));
             }
             if (!matchesDirectProg && !matchesBatchProg) {
+                MasterProgramme p = masterProgrammeRepository.findByIdAndDeletedAtIsNull(masterProgrammeId).orElse(null);
+                if (p != null) {
+                    if (scope.getEmail() != null && p.getCoordinatorEmail() != null && p.getCoordinatorEmail().trim().equalsIgnoreCase(scope.getEmail().trim())) {
+                        matchesDirectProg = true;
+                    }
+                    if (scope.getName() != null && p.getCoordinator() != null && p.getCoordinator().trim().equalsIgnoreCase(scope.getName().trim())) {
+                        matchesDirectProg = true;
+                    }
+                }
+            }
+            if (!matchesDirectProg && !matchesBatchProg) {
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Resource is outside your assigned programme scope.");
             }
         }
@@ -2258,8 +2269,19 @@ public class AcademicService {
                     targetMasterProgrammeId = scope.getMasterProgrammeId().trim();
                 }
             } else if (scope.isHod()) {
-                if (targetDepartmentId == null && scope.hasDepartmentScope()) {
-                    targetDepartmentId = scope.getRequiredDepartmentId();
+                if (targetDepartmentId == null) {
+                    if (scope.hasDepartmentScope()) {
+                        targetDepartmentId = scope.getDepartmentId();
+                    } else if (scope.getEmail() != null && !scope.getEmail().isBlank()) {
+                        List<Department> hodDepts = departmentRepository.findByHodEmailIgnoreCase(scope.getEmail().trim());
+                        if (hodDepts != null && !hodDepts.isEmpty()) {
+                            List<String> deptIds = hodDepts.stream().map(Department::getId).toList();
+                            List<ProgrammeBatch> batches = programmeBatchRepository.findBatchesFilteredByDepartmentIds(
+                                    targetMasterProgrammeId, deptIds, targetCoordinatorEmail, effectiveStatus);
+                            enrichBatchMetadata(batches);
+                            return batches;
+                        }
+                    }
                 }
             } else if (scope.isDirector()) {
                 if (targetDepartmentId == null) {
@@ -2336,7 +2358,28 @@ public class AcademicService {
                     return true;
                 }
                 if (scope.getEmail() != null && !scope.getEmail().isBlank() && b.getCoordinatorEmail() != null && !b.getCoordinatorEmail().isBlank()) {
-                    return b.getCoordinatorEmail().trim().equalsIgnoreCase(scope.getEmail().trim());
+                    if (b.getCoordinatorEmail().trim().equalsIgnoreCase(scope.getEmail().trim())) {
+                        return true;
+                    }
+                }
+                if (scope.getName() != null && !scope.getName().isBlank() && b.getCoordinatorName() != null && !b.getCoordinatorName().isBlank()) {
+                    if (b.getCoordinatorName().trim().equalsIgnoreCase(scope.getName().trim())) {
+                        return true;
+                    }
+                }
+                if (scope.getMasterProgrammeId() != null && scope.getMasterProgrammeId().equalsIgnoreCase(b.getMasterProgrammeId())) {
+                    return true;
+                }
+                if (b.getMasterProgrammeId() != null) {
+                    MasterProgramme p = masterProgrammeRepository.findById(b.getMasterProgrammeId()).orElse(null);
+                    if (p != null) {
+                        if (scope.getEmail() != null && p.getCoordinatorEmail() != null && p.getCoordinatorEmail().trim().equalsIgnoreCase(scope.getEmail().trim())) {
+                            return true;
+                        }
+                        if (scope.getName() != null && p.getCoordinator() != null && p.getCoordinator().trim().equalsIgnoreCase(scope.getName().trim())) {
+                            return true;
+                        }
+                    }
                 }
                 return false;
             }).toList();

@@ -859,7 +859,7 @@ public class AcademicController {
         return ResponseEntity.ok(ApiResponse.<Void>builder().success(true).message("MasterCourse Offering deleted").build());
     }
 
-    @GetMapping({"/course-outcomes", "/programme-batch-courses/{offeringId}/outcomes"})
+    @GetMapping({"/course-outcomes", "/programme-batch-courses/{offeringId}/outcomes", "/programme-batch-courses/{offeringId}/course-outcomes"})
     public ResponseEntity<ApiResponse<List<CourseOutcome>>> getOfferingOutcomes(
             @PathVariable(required = false) String offeringId,
             @RequestParam(required = false) String programmeBatchCourseId,
@@ -879,7 +879,7 @@ public class AcademicController {
                 .build());
     }
 
-    @RequestMapping(value = {"/programme-batch-courses/{offeringId}/outcomes", "/course-outcomes"}, method = {RequestMethod.POST, RequestMethod.PUT})
+    @RequestMapping(value = {"/programme-batch-courses/{offeringId}/outcomes", "/programme-batch-courses/{offeringId}/course-outcomes", "/course-outcomes"}, method = {RequestMethod.POST, RequestMethod.PUT})
     public ResponseEntity<ApiResponse<List<CourseOutcome>>> saveOfferingOutcomes(
             @PathVariable(required = false) String offeringId,
             @RequestParam(required = false) String programmeBatchCourseId,
@@ -892,7 +892,7 @@ public class AcademicController {
                 .build());
     }
 
-    @DeleteMapping({"/programme-batch-courses/{offeringId}/outcomes/{coId}", "/course-outcomes/{coId}"})
+    @DeleteMapping({"/programme-batch-courses/{offeringId}/outcomes/{coId}", "/programme-batch-courses/{offeringId}/course-outcomes/{coId}", "/course-outcomes/{coId}"})
     public ResponseEntity<ApiResponse<Void>> deleteOfferingOutcome(
             @PathVariable(required = false) String offeringId,
             @PathVariable String coId,
@@ -905,7 +905,7 @@ public class AcademicController {
                 .build());
     }
 
-    @GetMapping("/programme-batch-courses/{offeringId}/mappings")
+    @GetMapping({"/programme-batch-courses/{offeringId}/mappings", "/programme-batch-courses/{offeringId}/co-po-pso-mappings"})
     public ResponseEntity<ApiResponse<com.dypiu.nba.dto.CourseMappingMatrixDto>> getOfferingMappings(@PathVariable String offeringId) {
         return ResponseEntity.ok(ApiResponse.<com.dypiu.nba.dto.CourseMappingMatrixDto>builder()
                 .success(true)
@@ -913,7 +913,7 @@ public class AcademicController {
                 .build());
     }
 
-    @PutMapping("/programme-batch-courses/{offeringId}/mappings")
+    @PutMapping({"/programme-batch-courses/{offeringId}/mappings", "/programme-batch-courses/{offeringId}/co-po-pso-mappings"})
     public ResponseEntity<ApiResponse<com.dypiu.nba.dto.CourseMappingMatrixDto>> saveOfferingMappings(
             @PathVariable String offeringId,
             @RequestBody com.dypiu.nba.dto.CourseMappingMatrixDto dto) {
@@ -921,6 +921,15 @@ public class AcademicController {
                 .success(true)
                 .message("MasterCourse mappings saved for offering")
                 .data(outcomeService.saveMappingsByOffering(offeringId, dto))
+                .build());
+    }
+
+    @GetMapping({"/programme-batch-courses/{programmeBatchCourseId}/previous-year-atr", "/programme-batch-courses/{programmeBatchCourseId}/previous-batch-atr"})
+    public ResponseEntity<ApiResponse<com.dypiu.nba.dto.CourseAtrReportDto>> getPreviousYearCourseAtr(
+            @PathVariable String programmeBatchCourseId) {
+        return ResponseEntity.ok(ApiResponse.<com.dypiu.nba.dto.CourseAtrReportDto>builder()
+                .success(true)
+                .data(atrService.getPreviousBatchCourseAtrReport(programmeBatchCourseId))
                 .build());
     }
 

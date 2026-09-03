@@ -139,7 +139,19 @@ public class AtrService {
 
         if (scope.isProgrammeCoordinator()) {
             boolean isAssigned = (scope.getUserId() != null && Objects.equals(batch.getCoordinatorId(), scope.getUserId()))
-                    || (scope.getEmail() != null && batch.getCoordinatorEmail() != null && batch.getCoordinatorEmail().trim().equalsIgnoreCase(scope.getEmail().trim()));
+                    || (scope.getEmail() != null && batch.getCoordinatorEmail() != null && batch.getCoordinatorEmail().trim().equalsIgnoreCase(scope.getEmail().trim()))
+                    || (scope.getName() != null && batch.getCoordinatorName() != null && batch.getCoordinatorName().trim().equalsIgnoreCase(scope.getName().trim()))
+                    || (scope.getMasterProgrammeId() != null && scope.getMasterProgrammeId().equalsIgnoreCase(batch.getMasterProgrammeId()));
+            if (!isAssigned && batch.getMasterProgrammeId() != null) {
+                MasterProgramme prog = masterProgrammeRepository.findById(batch.getMasterProgrammeId()).orElse(null);
+                if (prog != null) {
+                    boolean progCoord = (scope.getEmail() != null && prog.getCoordinatorEmail() != null && prog.getCoordinatorEmail().trim().equalsIgnoreCase(scope.getEmail().trim()))
+                            || (scope.getName() != null && prog.getCoordinator() != null && prog.getCoordinator().trim().equalsIgnoreCase(scope.getName().trim()));
+                    if (progCoord) {
+                        isAssigned = true;
+                    }
+                }
+            }
             if (!isAssigned) {
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: You are not the assigned Programme Coordinator for this Programme Batch.");
             }
