@@ -107,13 +107,21 @@ public class ReportAccessService {
     public void validateProgrammeAccess(User user, String masterProgrammeId) {
         System.out.println("[ReportAccessService] validateProgrammeAccess called | user: " + (user != null ? user.getEmail() : "null") + " | masterProgrammeId: " + masterProgrammeId);
         if (user == null || masterProgrammeId == null) return;
-        if (user.getRole() == UserRole.IQAC) return;
+        if (user.getRole() == UserRole.IQAC || user.getRole() == UserRole.ADMIN) return;
 
         MasterProgramme prog = masterProgrammeRepository.findById(masterProgrammeId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Programme not found: " + masterProgrammeId));
 
         if (user.getRole() == UserRole.PROGRAMME_COORDINATOR) {
-            if (user.getMasterProgrammeId() != null && !user.getMasterProgrammeId().equals(masterProgrammeId)) {
+            boolean matchesDirect = user.getMasterProgrammeId() != null && user.getMasterProgrammeId().equalsIgnoreCase(masterProgrammeId);
+            boolean matchesBatch = false;
+            if (!matchesDirect && user.getEmail() != null && !user.getEmail().isBlank()) {
+                List<ProgrammeBatch> batches = programmeBatchRepository.findByCoordinatorEmailIgnoreCase(user.getEmail().trim());
+                if (batches != null) {
+                    matchesBatch = batches.stream().anyMatch(b -> masterProgrammeId.equalsIgnoreCase(b.getMasterProgrammeId()));
+                }
+            }
+            if (!matchesDirect && !matchesBatch) {
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Programme is outside your assigned programme scope.");
             }
             return;
@@ -121,7 +129,16 @@ public class ReportAccessService {
 
         Department dept = departmentRepository.findById(prog.getDepartmentId()).orElse(null);
         if (user.getRole() == UserRole.HOD) {
-            if (user.getDepartmentId() != null && dept != null && !user.getDepartmentId().equals(dept.getId())) {
+            boolean hodMatch = false;
+            if (user.getDepartmentId() != null && dept != null && user.getDepartmentId().equalsIgnoreCase(dept.getId())) {
+                hodMatch = true;
+            } else if (user.getEmail() != null && !user.getEmail().isBlank() && dept != null) {
+                List<Department> hodDepts = departmentRepository.findByHodEmailIgnoreCase(user.getEmail().trim());
+                if (hodDepts != null && !hodDepts.isEmpty()) {
+                    hodMatch = hodDepts.stream().anyMatch(d -> dept.getId().equalsIgnoreCase(d.getId()));
+                }
+            }
+            if (!hodMatch) {
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Programme is outside your department scope.");
             }
             return;
@@ -146,7 +163,14 @@ public class ReportAccessService {
         if (user.getRole() == UserRole.PROGRAMME_COORDINATOR) {
             boolean isAssigned = (user.getId() != null && Objects.equals(batch.getCoordinatorId(), user.getId()))
                     || (user.getEmail() != null && batch.getCoordinatorEmail() != null && batch.getCoordinatorEmail().trim().equalsIgnoreCase(user.getEmail().trim()))
-                    || (user.getName() != null && batch.getCoordinatorName() != null && batch.getCoordinatorName().trim().equalsIgnoreCase(user.getName().trim()));
+                    || (user.getName() != null && batch.getCoordinatorName() != null && batch.getCoordinatorName().trim().equalsIgnoreCase(user.getName().trim()))
+                    || (user.getMasterProgrammeId() != null && user.getMasterProgrammeId().equalsIgnoreCase(batch.getMasterProgrammeId()));
+            if (!isAssigned && user.getEmail() != null && !user.getEmail().isBlank()) {
+                List<ProgrammeBatch> batches = programmeBatchRepository.findByCoordinatorEmailIgnoreCase(user.getEmail().trim());
+                if (batches != null) {
+                    isAssigned = batches.stream().anyMatch(b -> b.getId().equals(batch.getId()) || (batch.getMasterProgrammeId() != null && batch.getMasterProgrammeId().equalsIgnoreCase(b.getMasterProgrammeId())));
+                }
+            }
             if (!isAssigned) {
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: You are not the assigned Programme Coordinator for this Programme Batch.");
             }
@@ -319,9 +343,14 @@ public class ReportAccessService {
             allowedOfferings = programmeBatchCourseRepository.findByProgrammeBatchIdIn(programmeBatchIds);
         } else if (user.getRole() == UserRole.PROGRAMME_COORDINATOR) {
             String progId = user.getMasterProgrammeId();
-            allowedProgrammes = progId != null ? masterProgrammeRepository.findById(progId).map(List::of).orElse(Collections.emptyList()) : masterProgrammeRepository.findAll();
-            Set<String> progIds = allowedProgrammes.stream().map(MasterProgramme::getId).collect(Collectors.toSet());
-            allowedBatches = programmeBatchRepository.findAll().stream().filter(b -> progIds.contains(b.getMasterProgrammeId())).collect(Collectors.toList());
+            if (progId != null && !progId.isBlank()) {
+                allowedProgrammes = masterProgrammeRepository.findById(progId).map(List::of).orElse(Collections.emptyList());
+                allowedBatches = programmeBatchRepository.findByMasterProgrammeId(progId);
+            } else if (user.getEmail() != null && !user.getEmail().isBlank()) {
+                allowedBatches = programmeBatchRepository.findByCoordinatorEmailIgnoreCase(user.getEmail().trim());
+                Set<String> progIds = allowedBatches.stream().map(ProgrammeBatch::getMasterProgrammeId).filter(Objects::nonNull).collect(Collectors.toSet());
+                allowedProgrammes = masterProgrammeRepository.findAllById(progIds);
+            }
             Set<String> programmeBatchIds = allowedBatches.stream().map(ProgrammeBatch::getId).collect(Collectors.toSet());
             allowedOfferings = programmeBatchCourseRepository.findByProgrammeBatchIdIn(programmeBatchIds);
         } else if (user.getRole() == UserRole.FACULTY) {

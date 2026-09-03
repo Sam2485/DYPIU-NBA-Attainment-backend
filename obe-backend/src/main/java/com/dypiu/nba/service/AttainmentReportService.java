@@ -700,30 +700,108 @@ public class AttainmentReportService {
 
     private void enforceProgrammeBatchScope(ProgrammeBatch batch) {
         CurrentUserScope scope = currentUserScopeService.getCurrentUserScope();
-        if (scope.isAdmin() || scope.isIqac()) return;
+        if (scope == null || scope.isAdmin() || scope.isIqac()) return;
 
         MasterProgramme prog = masterProgrammeRepository.findById(batch.getMasterProgrammeId()).orElse(null);
-        if (prog != null && prog.getDepartmentId() != null) {
-            if (scope.isHod() && !prog.getDepartmentId().equals(scope.getDepartmentId())) {
-                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Batch outside your department.");
+        String deptId = prog != null ? prog.getDepartmentId() : null;
+
+        if (scope.isDirector()) {
+            if (deptId != null) {
+                Department dept = departmentRepository.findById(deptId).orElse(null);
+                if (dept != null && dept.getSchoolId() != null && scope.getSchoolId() != null) {
+                    if (!scope.getSchoolId().equalsIgnoreCase(dept.getSchoolId())) {
+                        throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Batch outside your school.");
+                    }
+                }
             }
+            return;
         }
-        if (scope.isProgrammeCoordinator() && !batch.getMasterProgrammeId().equals(scope.getMasterProgrammeId())) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Batch outside your assigned programme.");
+
+        if (scope.isHod()) {
+            if (deptId != null) {
+                boolean hodMatch = false;
+                if (scope.getDepartmentId() != null && scope.getDepartmentId().equalsIgnoreCase(deptId)) {
+                    hodMatch = true;
+                } else if (scope.getEmail() != null && !scope.getEmail().isBlank()) {
+                    List<Department> hodDepts = departmentRepository.findByHodEmailIgnoreCase(scope.getEmail().trim());
+                    if (hodDepts != null && !hodDepts.isEmpty()) {
+                        hodMatch = hodDepts.stream().anyMatch(d -> deptId.equalsIgnoreCase(d.getId()));
+                    }
+                }
+                if (!hodMatch) {
+                    throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Batch outside your department.");
+                }
+            }
+            return;
+        }
+
+        if (scope.isProgrammeCoordinator()) {
+            boolean isAssigned = false;
+            // 1. Direct program match if user has masterProgrammeId
+            if (scope.getMasterProgrammeId() != null && scope.getMasterProgrammeId().equalsIgnoreCase(batch.getMasterProgrammeId())) {
+                isAssigned = true;
+            }
+            // 2. Direct coordinator ID match on batch
+            if (!isAssigned && scope.getUserId() != null && batch.getCoordinatorId() != null && Objects.equals(batch.getCoordinatorId(), scope.getUserId())) {
+                isAssigned = true;
+            }
+            // 3. Coordinator email match on batch
+            if (!isAssigned && scope.getEmail() != null && !scope.getEmail().isBlank() && batch.getCoordinatorEmail() != null && !batch.getCoordinatorEmail().isBlank()) {
+                isAssigned = batch.getCoordinatorEmail().trim().equalsIgnoreCase(scope.getEmail().trim());
+            }
+            // 4. Coordinator name match on batch
+            if (!isAssigned && scope.getName() != null && !scope.getName().isBlank() && batch.getCoordinatorName() != null && !batch.getCoordinatorName().isBlank()) {
+                isAssigned = batch.getCoordinatorName().trim().equalsIgnoreCase(scope.getName().trim());
+            }
+            // 5. Check if coordinator coordinates this batch or this programme
+            if (!isAssigned && scope.getEmail() != null && !scope.getEmail().isBlank()) {
+                List<ProgrammeBatch> coordBatches = programmeBatchRepository.findByCoordinatorEmailIgnoreCase(scope.getEmail().trim());
+                if (coordBatches != null && !coordBatches.isEmpty()) {
+                    isAssigned = coordBatches.stream().anyMatch(b -> b.getId().equals(batch.getId()) || (batch.getMasterProgrammeId() != null && batch.getMasterProgrammeId().equalsIgnoreCase(b.getMasterProgrammeId())));
+                }
+            }
+
+            if (!isAssigned) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Batch outside your assigned programme.");
+            }
+            return;
+        }
+
+        if (scope.isFaculty()) {
+            List<ProgrammeBatchCourse> offerings = programmeBatchCourseRepository.findByProgrammeBatchId(batch.getId());
+            boolean hasAssigned = offerings.stream().anyMatch(o -> {
+                boolean isCoord = (o.getCourseCoordinatorId() != null && Objects.equals(o.getCourseCoordinatorId(), scope.getUserId()));
+                return isCoord || (o.getAssignedFaculty() != null && (o.getAssignedFaculty().contains(scope.getEmail()) || o.getAssignedFaculty().contains(scope.getName())));
+            });
+            if (!hasAssigned) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: You are not assigned to any Course in this Programme Batch.");
+            }
         }
     }
 
     private void enforceCourseScope(String masterCourseId) {
         CurrentUserScope scope = currentUserScopeService.getCurrentUserScope();
-        if (scope.isAdmin() || scope.isIqac()) return;
+        if (scope == null || scope.isAdmin() || scope.isIqac()) return;
 
         MasterCourse course = masterCourseRepository.findById(masterCourseId)
                 .orElseThrow(() -> new ResourceNotFoundException("Master Course not found: " + masterCourseId));
         if (course.getMasterProgrammeId() != null) {
             MasterProgramme prog = masterProgrammeRepository.findById(course.getMasterProgrammeId()).orElse(null);
             if (prog != null && prog.getDepartmentId() != null) {
-                if (scope.isHod() && !prog.getDepartmentId().equals(scope.getDepartmentId())) {
-                    throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Course outside your department.");
+                String deptId = prog.getDepartmentId();
+                if (scope.isHod()) {
+                    boolean hodMatch = false;
+                    if (scope.getDepartmentId() != null && scope.getDepartmentId().equalsIgnoreCase(deptId)) {
+                        hodMatch = true;
+                    } else if (scope.getEmail() != null && !scope.getEmail().isBlank()) {
+                        List<Department> hodDepts = departmentRepository.findByHodEmailIgnoreCase(scope.getEmail().trim());
+                        if (hodDepts != null && !hodDepts.isEmpty()) {
+                            hodMatch = hodDepts.stream().anyMatch(d -> deptId.equalsIgnoreCase(d.getId()));
+                        }
+                    }
+                    if (!hodMatch) {
+                        throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Course outside your department.");
+                    }
                 }
             }
         }
@@ -731,15 +809,55 @@ public class AttainmentReportService {
 
     private void enforceProgrammeScope(String masterProgrammeId) {
         CurrentUserScope scope = currentUserScopeService.getCurrentUserScope();
-        if (scope.isAdmin() || scope.isIqac()) return;
+        if (scope == null || scope.isAdmin() || scope.isIqac()) return;
+        if (masterProgrammeId == null || masterProgrammeId.isBlank()) return;
 
         MasterProgramme prog = masterProgrammeRepository.findById(masterProgrammeId)
                 .orElseThrow(() -> new ResourceNotFoundException("Master Programme not found: " + masterProgrammeId));
-        if (prog.getDepartmentId() != null && scope.isHod() && !prog.getDepartmentId().equals(scope.getDepartmentId())) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Programme outside your department.");
+        String deptId = prog.getDepartmentId();
+
+        if (scope.isDirector()) {
+            if (deptId != null) {
+                Department dept = departmentRepository.findById(deptId).orElse(null);
+                if (dept != null && dept.getSchoolId() != null && scope.getSchoolId() != null) {
+                    if (!scope.getSchoolId().equalsIgnoreCase(dept.getSchoolId())) {
+                        throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Programme outside your school.");
+                    }
+                }
+            }
+            return;
         }
-        if (scope.isProgrammeCoordinator() && !masterProgrammeId.equals(scope.getMasterProgrammeId())) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Programme outside your assigned programme.");
+
+        if (scope.isHod()) {
+            if (deptId != null) {
+                boolean hodMatch = false;
+                if (scope.getDepartmentId() != null && scope.getDepartmentId().equalsIgnoreCase(deptId)) {
+                    hodMatch = true;
+                } else if (scope.getEmail() != null && !scope.getEmail().isBlank()) {
+                    List<Department> hodDepts = departmentRepository.findByHodEmailIgnoreCase(scope.getEmail().trim());
+                    if (hodDepts != null && !hodDepts.isEmpty()) {
+                        hodMatch = hodDepts.stream().anyMatch(d -> deptId.equalsIgnoreCase(d.getId()));
+                    }
+                }
+                if (!hodMatch) {
+                    throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Programme outside your department.");
+                }
+            }
+            return;
+        }
+
+        if (scope.isProgrammeCoordinator()) {
+            boolean matchesDirect = scope.getMasterProgrammeId() != null && scope.getMasterProgrammeId().equalsIgnoreCase(masterProgrammeId.trim());
+            boolean matchesBatch = false;
+            if (!matchesDirect && scope.getEmail() != null && !scope.getEmail().isBlank()) {
+                List<ProgrammeBatch> batches = programmeBatchRepository.findByCoordinatorEmailIgnoreCase(scope.getEmail().trim());
+                if (batches != null) {
+                    matchesBatch = batches.stream().anyMatch(b -> masterProgrammeId.trim().equalsIgnoreCase(b.getMasterProgrammeId()));
+                }
+            }
+            if (!matchesDirect && !matchesBatch) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Programme outside your assigned programme.");
+            }
         }
     }
 
