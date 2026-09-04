@@ -60,7 +60,7 @@ public class ProgrammeCoordinatorBatchFilteringIntegrationTest {
 
     private User pcAlice;
     private User pcBob;
-    private User adminUser;
+    private User iqacUser;
 
     @BeforeEach
     void setUpTestData() {
@@ -148,11 +148,11 @@ public class ProgrammeCoordinatorBatchFilteringIntegrationTest {
                 .masterProgrammeId(progA2.getId())
                 .build());
 
-        adminUser = userRepository.save(User.builder()
-                .username("admin.flt." + nano + "@dypiu.ac.in")
-                .email("admin.flt." + nano + "@dypiu.ac.in")
-                .name("Institution Admin")
-                .role(UserRole.ADMIN)
+        iqacUser = userRepository.save(User.builder()
+                .username("iqac.flt." + nano + "@dypiu.ac.in")
+                .email("iqac.flt." + nano + "@dypiu.ac.in")
+                .name("Institution IQAC")
+                .role(UserRole.IQAC)
                 .passwordHash("dummyHash")
                 .build());
 
@@ -249,7 +249,7 @@ public class ProgrammeCoordinatorBatchFilteringIntegrationTest {
     @Test
     @DisplayName("Req 1: coordinatorEmail + masterProgrammeId uses AND filtering in single query")
     void testCoordinatorEmailAndMasterProgrammeIdUsesAndFiltering() {
-        authenticate(adminUser);
+        authenticate(iqacUser);
 
         // Filter by Alice's email + progA1
         List<ProgrammeBatch> batches = academicService.getBatchesFiltered(
@@ -268,7 +268,7 @@ public class ProgrammeCoordinatorBatchFilteringIntegrationTest {
     @Test
     @DisplayName("Req 1: Soft-deleted and inactive batches are excluded by default")
     void testSoftDeletedAndInactiveBatchesAreExcluded() {
-        authenticate(adminUser);
+        authenticate(iqacUser);
 
         List<ProgrammeBatch> activeBatches = academicService.getBatchesFiltered(
                 progA1.getId(), null, null, null, null, null, null, null);
@@ -321,7 +321,7 @@ public class ProgrammeCoordinatorBatchFilteringIntegrationTest {
     @Test
     @DisplayName("Req 4 & 7: Canonical response contract and zero N+1 metadata enrichment")
     void testCanonicalContractAndMetadataEnrichment() {
-        authenticate(adminUser);
+        authenticate(iqacUser);
 
         List<ProgrammeBatch> batches = academicService.getBatchesFiltered(
                 progA1.getId(), null, null, null, null, null, null, null);

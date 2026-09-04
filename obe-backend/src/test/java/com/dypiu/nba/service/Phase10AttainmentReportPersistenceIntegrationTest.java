@@ -228,10 +228,10 @@ public class Phase10AttainmentReportPersistenceIntegrationTest {
     @Test
     @DisplayName("Phase 10: Course Attainment Report generation persists Table 1, Table 2, Table 3")
     void testCourseAttainmentReportGenerationAndPersistence() {
-        CurrentUserScope adminScope = CurrentUserScope.builder()
-                .role(UserRole.ADMIN)
+        CurrentUserScope iqacScope = CurrentUserScope.builder()
+                .role(UserRole.IQAC)
                 .build();
-        when(currentUserScopeService.getCurrentUserScope()).thenReturn(adminScope);
+        when(currentUserScopeService.getCurrentUserScope()).thenReturn(iqacScope);
 
         CourseAttainmentReportDto report = attainmentReportService.getOrCreateCourseAttainmentReport(offering2024.getId());
 
@@ -291,10 +291,10 @@ public class Phase10AttainmentReportPersistenceIntegrationTest {
     @Test
     @DisplayName("Phase 10: Programme Batch Attainment Reports 1, 2, 3, 4 generation and persistence")
     void testProgrammeBatchAttainmentReportGeneration() {
-        CurrentUserScope adminScope = CurrentUserScope.builder()
-                .role(UserRole.ADMIN)
+        CurrentUserScope iqacScope = CurrentUserScope.builder()
+                .role(UserRole.IQAC)
                 .build();
-        when(currentUserScopeService.getCurrentUserScope()).thenReturn(adminScope);
+        when(currentUserScopeService.getCurrentUserScope()).thenReturn(iqacScope);
 
         ProgrammeBatchAttainmentReportDto report = attainmentReportService.getOrCreateProgrammeAttainmentReport(prog.getId(), batch2024.getId());
 
@@ -325,10 +325,10 @@ public class Phase10AttainmentReportPersistenceIntegrationTest {
     @Test
     @DisplayName("Phase 10: Historical Course Reports lookup across batches for same MasterCourse")
     void testHistoricalCourseReportsDiscovery() {
-        CurrentUserScope adminScope = CurrentUserScope.builder()
-                .role(UserRole.ADMIN)
+        CurrentUserScope iqacScope = CurrentUserScope.builder()
+                .role(UserRole.IQAC)
                 .build();
-        when(currentUserScopeService.getCurrentUserScope()).thenReturn(adminScope);
+        when(currentUserScopeService.getCurrentUserScope()).thenReturn(iqacScope);
 
         // Pre-create reports for both 2024 and 2028 offerings of courseCN
         attainmentReportService.getOrCreateCourseAttainmentReport(offering2024.getId());

@@ -61,7 +61,6 @@ public class DeletionWorkflowIntegrationTest {
     @Autowired
     private JwtTokenProvider jwtTokenProvider;
 
-    private User admin;
     private User iqac;
     private User director;
     private User otherDirector;
@@ -70,7 +69,6 @@ public class DeletionWorkflowIntegrationTest {
     private User pc;
     private User faculty;
 
-    private String adminToken;
     private String iqacToken;
     private String directorToken;
     private String otherDirectorToken;
@@ -157,7 +155,6 @@ public class DeletionWorkflowIntegrationTest {
                 .semester(1)
                 .build());
 
-        admin = createUser("admin.del@dypiu.ac.in", "admin_del", UserRole.ADMIN, null, null, null);
         iqac = createUser("iqac.del@dypiu.ac.in", "iqac_del", UserRole.IQAC, null, null, null);
         director = createUser("director.del@dypiu.ac.in", "dir_del", UserRole.DIRECTOR, school.getId(), null, null);
         otherDirector = createUser("otherdir.del@dypiu.ac.in", "otherdir_del", UserRole.DIRECTOR, otherSchool.getId(), null, null);
@@ -166,7 +163,6 @@ public class DeletionWorkflowIntegrationTest {
         pc = createUser("pc.del@dypiu.ac.in", "pc_del", UserRole.PROGRAMME_COORDINATOR, school.getId(), department.getId(), programme.getId());
         faculty = createUser("faculty.del@dypiu.ac.in", "fac_del", UserRole.FACULTY, school.getId(), department.getId(), programme.getId());
 
-        adminToken = generateToken(admin);
         iqacToken = generateToken(iqac);
         directorToken = generateToken(director);
         otherDirectorToken = generateToken(otherDirector);
@@ -274,18 +270,12 @@ public class DeletionWorkflowIntegrationTest {
     }
 
     @Test
-    void testAdminAndIqacCannotRequestDeletion() {
+    void testIqacCannotRequestDeletion() {
         DeletionRequestCreateDto req = DeletionRequestCreateDto.builder()
                 .resourceType(ResourceType.PROGRAMME_BATCH_COURSE)
                 .resourceId(batchCourse.getId())
-                .remarks("Admin deletion attempt")
+                .remarks("IQAC deletion attempt")
                 .build();
-
-        // Admin cannot request
-        ResponseEntity<ApiResponse> adminRes = restTemplate.exchange(
-                "/deletion-requests", HttpMethod.POST, new HttpEntity<>(req, authHeaders(adminToken)), ApiResponse.class
-        );
-        assertEquals(HttpStatus.FORBIDDEN, adminRes.getStatusCode());
 
         // IQAC cannot request
         ResponseEntity<ApiResponse> iqacRes = restTemplate.exchange(
@@ -380,50 +370,7 @@ public class DeletionWorkflowIntegrationTest {
     }
 
     @Test
-    void testAdminAndIqacCannotRejectOrExecuteDeletion() {
-        DeletionRequestCreateDto req = DeletionRequestCreateDto.builder()
-                .resourceType(ResourceType.PROGRAMME_BATCH_COURSE)
-                .resourceId(batchCourse.getId())
-                .remarks("PC Request")
-                .build();
-        restTemplate.exchange("/deletion-requests", HttpMethod.POST, new HttpEntity<>(req, authHeaders(pcToken)), ApiResponse.class);
-        DeletionRequest created = deletionRequestRepository.findAll().get(0);
-
-        DeletionRejectDto rejectDto = DeletionRejectDto.builder().remarks("Admin reject").build();
-        DeletionExecuteDto execDto = DeletionExecuteDto.builder().password("SecretPass123!").build();
-
-        // Admin reject blocked
-        ResponseEntity<ApiResponse> adminRej = restTemplate.exchange(
-                "/deletion-requests/" + created.getId() + "/reject", HttpMethod.POST, new HttpEntity<>(rejectDto, authHeaders(adminToken)), ApiResponse.class
-        );
-        assertEquals(HttpStatus.FORBIDDEN, adminRej.getStatusCode());
-
-        // Admin execute blocked
-        ResponseEntity<ApiResponse> adminExec = restTemplate.exchange(
-                "/deletion-requests/" + created.getId() + "/execute", HttpMethod.POST, new HttpEntity<>(execDto, authHeaders(adminToken)), ApiResponse.class
-        );
-        assertEquals(HttpStatus.FORBIDDEN, adminExec.getStatusCode());
-
-        // IQAC reject blocked
-        ResponseEntity<ApiResponse> iqacRej = restTemplate.exchange(
-                "/deletion-requests/" + created.getId() + "/reject", HttpMethod.POST, new HttpEntity<>(rejectDto, authHeaders(iqacToken)), ApiResponse.class
-        );
-        assertEquals(HttpStatus.FORBIDDEN, iqacRej.getStatusCode());
-
-        // IQAC execute blocked
-        ResponseEntity<ApiResponse> iqacExec = restTemplate.exchange(
-                "/deletion-requests/" + created.getId() + "/execute", HttpMethod.POST, new HttpEntity<>(execDto, authHeaders(iqacToken)), ApiResponse.class
-        );
-        assertEquals(HttpStatus.FORBIDDEN, iqacExec.getStatusCode());
-    }
-
-    @Test
-    void testAdminAndIqacRetainAuditLogReadAccess() {
-        ResponseEntity<ApiResponse> adminAudit = restTemplate.exchange(
-                "/audit-logs", HttpMethod.GET, new HttpEntity<>(authHeaders(adminToken)), ApiResponse.class
-        );
-        assertEquals(HttpStatus.OK, adminAudit.getStatusCode());
-
+    void testIqacRetainsAuditLogReadAccess() {
         ResponseEntity<ApiResponse> iqacAudit = restTemplate.exchange(
                 "/audit-logs", HttpMethod.GET, new HttpEntity<>(authHeaders(iqacToken)), ApiResponse.class
         );

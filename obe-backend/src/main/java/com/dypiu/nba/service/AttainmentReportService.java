@@ -676,7 +676,7 @@ public class AttainmentReportService {
 
     private void enforceOfferingScope(ProgrammeBatchCourse offering) {
         CurrentUserScope scope = currentUserScopeService.getCurrentUserScope();
-        if (scope.isAdmin() || scope.isIqac()) return;
+        if (scope != null && scope.isIqac()) return;
 
         MasterCourse course = masterCourseRepository.findById(offering.getMasterCourseId()).orElse(null);
         if (course != null && course.getMasterProgrammeId() != null) {
@@ -700,7 +700,7 @@ public class AttainmentReportService {
 
     private void enforceProgrammeBatchScope(ProgrammeBatch batch) {
         CurrentUserScope scope = currentUserScopeService.getCurrentUserScope();
-        if (scope == null || scope.isAdmin() || scope.isIqac()) return;
+        if (scope == null || scope.isIqac()) return;
 
         MasterProgramme prog = masterProgrammeRepository.findById(batch.getMasterProgrammeId()).orElse(null);
         String deptId = prog != null ? prog.getDepartmentId() : null;
@@ -781,7 +781,7 @@ public class AttainmentReportService {
 
     private void enforceCourseScope(String masterCourseId) {
         CurrentUserScope scope = currentUserScopeService.getCurrentUserScope();
-        if (scope == null || scope.isAdmin() || scope.isIqac()) return;
+        if (scope == null || scope.isIqac()) return;
 
         MasterCourse course = masterCourseRepository.findById(masterCourseId)
                 .orElseThrow(() -> new ResourceNotFoundException("Master Course not found: " + masterCourseId));
@@ -809,7 +809,7 @@ public class AttainmentReportService {
 
     private void enforceProgrammeScope(String masterProgrammeId) {
         CurrentUserScope scope = currentUserScopeService.getCurrentUserScope();
-        if (scope == null || scope.isAdmin() || scope.isIqac()) return;
+        if (scope == null || scope.isIqac()) return;
         if (masterProgrammeId == null || masterProgrammeId.isBlank()) return;
 
         MasterProgramme prog = masterProgrammeRepository.findById(masterProgrammeId)

@@ -58,8 +58,8 @@ public class SecurityConfig {
                 // guards are UX only; authorization is derived from the verified JWT here.
                 .requestMatchers("/auth/**", "/api/v1/auth/**").permitAll()
                 .requestMatchers(HttpMethod.GET, "/health", "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
-                .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                .requestMatchers("/users/**", "/admin/**").hasRole("ADMIN")
+                .requestMatchers("/admin/**").hasRole("IQAC")
+                .requestMatchers("/users/**").authenticated()
                 .anyRequest().authenticated()
             );
 

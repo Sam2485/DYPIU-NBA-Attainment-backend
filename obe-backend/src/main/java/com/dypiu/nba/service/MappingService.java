@@ -40,7 +40,7 @@ public class MappingService {
     private void enforceOutcomeScope(String courseOutcomeId) {
         if (courseOutcomeId == null || courseOutcomeId.isBlank()) return;
         CurrentUserScope scope = getScope();
-        if (scope == null || scope.isAdmin() || scope.isIqac()) return;
+        if (scope == null || scope.isIqac()) return;
 
         CourseOutcome co = courseOutcomeRepository.findById(courseOutcomeId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Course Outcome not found: " + courseOutcomeId));

@@ -42,7 +42,6 @@ public class AuditLogSecurityTest {
     @Autowired
     private JwtTokenProvider jwtTokenProvider;
 
-    private String adminToken;
     private String iqacToken;
     private String directorToken;
     private String hodToken;
@@ -57,14 +56,12 @@ public class AuditLogSecurityTest {
         auditLogRepository.deleteAll();
         userRepository.deleteAll();
 
-        User admin = createUser("admin.sec@dypiu.ac.in", "admin_sec", UserRole.ADMIN);
         User iqac = createUser("iqac.sec@dypiu.ac.in", "iqac_sec", UserRole.IQAC);
         User director = createUser("director.sec@dypiu.ac.in", "dir_sec", UserRole.DIRECTOR);
         User hod = createUser("hod.sec@dypiu.ac.in", "hod_sec", UserRole.HOD);
         User pc = createUser("pc.sec@dypiu.ac.in", "pc_sec", UserRole.PROGRAMME_COORDINATOR);
         User faculty = createUser("faculty.sec@dypiu.ac.in", "faculty_sec", UserRole.FACULTY);
 
-        adminToken = generateToken(admin);
         iqacToken = generateToken(iqac);
         directorToken = generateToken(director);
         hodToken = generateToken(hod);
@@ -112,22 +109,13 @@ public class AuditLogSecurityTest {
     }
 
     @Test
-    void testNonAdminNonIqacRolesReturn403() {
+    void testNonIqacRolesReturn403() {
         for (String token : List.of(directorToken, hodToken, pcToken, facultyToken)) {
             ResponseEntity<String> response = restTemplate.exchange(
                     "/audit-logs", HttpMethod.GET, new HttpEntity<>(authHeaders(token)), String.class
             );
-            assertEquals(HttpStatus.FORBIDDEN, response.getStatusCode(), "Expected 403 Forbidden for non-admin/IQAC user");
+            assertEquals(HttpStatus.FORBIDDEN, response.getStatusCode(), "Expected 403 Forbidden for non-IQAC user");
         }
-    }
-
-    @Test
-    void testAdminAccessAllowed() {
-        ResponseEntity<ApiResponse> response = restTemplate.exchange(
-                "/audit-logs", HttpMethod.GET, new HttpEntity<>(authHeaders(adminToken)), ApiResponse.class
-        );
-        assertEquals(HttpStatus.OK, response.getStatusCode());
-        assertTrue(response.getBody().isSuccess());
     }
 
     @Test
@@ -140,32 +128,32 @@ public class AuditLogSecurityTest {
     }
 
     @Test
-    void testAuditLogByIdRestrictedToAdminAndIqac() {
+    void testAuditLogByIdRestrictedToIqac() {
         // Director forbidden
         ResponseEntity<String> dirRes = restTemplate.exchange(
                 "/audit-logs/" + sampleAuditLogId, HttpMethod.GET, new HttpEntity<>(authHeaders(directorToken)), String.class
         );
         assertEquals(HttpStatus.FORBIDDEN, dirRes.getStatusCode());
 
-        // Admin allowed
-        ResponseEntity<ApiResponse> adminRes = restTemplate.exchange(
-                "/audit-logs/" + sampleAuditLogId, HttpMethod.GET, new HttpEntity<>(authHeaders(adminToken)), ApiResponse.class
+        // IQAC allowed
+        ResponseEntity<ApiResponse> iqacRes = restTemplate.exchange(
+                "/audit-logs/" + sampleAuditLogId, HttpMethod.GET, new HttpEntity<>(authHeaders(iqacToken)), ApiResponse.class
         );
-        assertEquals(HttpStatus.OK, adminRes.getStatusCode());
-        assertTrue(adminRes.getBody().isSuccess());
+        assertEquals(HttpStatus.OK, iqacRes.getStatusCode());
+        assertTrue(iqacRes.getBody().isSuccess());
     }
 
     @Test
     void testAuditLogImmutabilityNoMutationEndpointsExist() {
         // Test PUT on audit log
         ResponseEntity<String> putRes = restTemplate.exchange(
-                "/audit-logs/" + sampleAuditLogId, HttpMethod.PUT, new HttpEntity<>(Map.of("remarks", "tampered"), authHeaders(adminToken)), String.class
+                "/audit-logs/" + sampleAuditLogId, HttpMethod.PUT, new HttpEntity<>(Map.of("remarks", "tampered"), authHeaders(iqacToken)), String.class
         );
         assertTrue(putRes.getStatusCode() == HttpStatus.METHOD_NOT_ALLOWED || putRes.getStatusCode() == HttpStatus.NOT_FOUND || putRes.getStatusCode() == HttpStatus.FORBIDDEN);
 
         // Test DELETE on audit log
         ResponseEntity<String> delRes = restTemplate.exchange(
-                "/audit-logs/" + sampleAuditLogId, HttpMethod.DELETE, new HttpEntity<>(authHeaders(adminToken)), String.class
+                "/audit-logs/" + sampleAuditLogId, HttpMethod.DELETE, new HttpEntity<>(authHeaders(iqacToken)), String.class
         );
         assertTrue(delRes.getStatusCode() == HttpStatus.METHOD_NOT_ALLOWED || delRes.getStatusCode() == HttpStatus.NOT_FOUND || delRes.getStatusCode() == HttpStatus.FORBIDDEN);
     }

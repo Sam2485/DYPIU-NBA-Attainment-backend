@@ -156,10 +156,10 @@ public class Phase91RemediationIntegrationTest {
     @Test
     @DisplayName("Historical Snapshot Test: Approved Course ATR remains completely unchanged after current CO & target modifications")
     void testApprovedCourseAtrHistoricalSnapshotImmutability() {
-        CurrentUserScope adminScope = CurrentUserScope.builder()
-                .role(UserRole.ADMIN)
+        CurrentUserScope iqacScope = CurrentUserScope.builder()
+                .role(UserRole.IQAC)
                 .build();
-        when(currentUserScopeService.getCurrentUserScope()).thenReturn(adminScope);
+        when(currentUserScopeService.getCurrentUserScope()).thenReturn(iqacScope);
 
         CourseOutcome co1 = courseOutcomeRepository.save(CourseOutcome.builder()
                 .id("co-cn-1")

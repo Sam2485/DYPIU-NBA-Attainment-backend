@@ -53,6 +53,9 @@ app:
     refresh-expiration-ms: 604800000 # 7 days (Refresh Token)
   storage:
     local-dir: ${LOCAL_STORAGE_PATH:./storage}
+  reports:
+    storage:
+      dir: ${REPORTS_STORAGE_PATH:${LOCAL_STORAGE_PATH:./storage}/reports}
   upload-dir: ${APP_UPLOAD_DIR:${UPLOAD_STORAGE_PATH:./uploads}}
   upload:
     dir: ${UPLOAD_STORAGE_PATH:${APP_UPLOAD_DIR:./uploads}}

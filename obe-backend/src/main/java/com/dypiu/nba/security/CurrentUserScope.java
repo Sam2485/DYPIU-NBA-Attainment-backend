@@ -16,8 +16,7 @@ import java.util.Objects;
  * Immutable value object representing the authenticated user's identity and organizational scope.
  *
  * Scope Hierarchy:
- * - ADMIN: Global access (schoolId may be optional/null)
- * - IQAC: Institution-wide quality assurance (schoolId may be optional/null)
+ * - IQAC: Institution-wide administrative & quality assurance authority (can manage users, schools, report headers/logos, and access all reports across all schools)
  * - DIRECTOR: Scoped to schoolId
  * - HOD: Scoped to schoolId + departmentId
  * - PROGRAMME_COORDINATOR: Scoped to schoolId + departmentId + masterProgrammeId
@@ -50,10 +49,6 @@ public final class CurrentUserScope implements Serializable {
 
     public boolean hasProgrammeScope() {
         return masterProgrammeId != null && !masterProgrammeId.isBlank();
-    }
-
-    public boolean isAdmin() {
-        return role == UserRole.ADMIN;
     }
 
     public boolean isDirector() {

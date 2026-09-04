@@ -276,7 +276,6 @@ public class ProgrammeBatchAtrIntegrationTest {
         for (ProgrammeAtrReportDto.OutcomeRow po : data.getPoOutcomes()) {
             assertEquals(0, po.getAttainmentLevel().compareTo(BigDecimal.ZERO));
             assertEquals(0, po.getAchievementPercentage().compareTo(BigDecimal.ZERO));
-            assertEquals("", po.getObservation());
             assertNotNull(po.getActions());
             assertTrue(po.getActions().isEmpty());
             assertNotNull(po.getTargetLevel());
@@ -291,7 +290,6 @@ public class ProgrammeBatchAtrIntegrationTest {
         for (ProgrammeAtrReportDto.OutcomeRow pso : data.getPsoOutcomes()) {
             assertEquals(0, pso.getAttainmentLevel().compareTo(BigDecimal.ZERO));
             assertEquals(0, pso.getAchievementPercentage().compareTo(BigDecimal.ZERO));
-            assertEquals("", pso.getObservation());
             assertNotNull(pso.getActions());
             assertTrue(pso.getActions().isEmpty());
             assertNotNull(pso.getTargetLevel());
@@ -299,7 +297,7 @@ public class ProgrammeBatchAtrIntegrationTest {
     }
 
     @Test
-    @DisplayName("2. POST saves Programme ATR draft with observations, actions, and targets")
+    @DisplayName("2. POST saves Programme ATR draft with actions and targets")
     void testSaveProgrammeBatchAtr() {
         authenticateAs(pcAlice);
 
@@ -307,7 +305,6 @@ public class ProgrammeBatchAtrIntegrationTest {
                 academicController.getProgrammeBatchAtr(batchA2.getId());
         ProgrammeAtrReportDto draft = getInitial.getBody().getData();
 
-        draft.getPoOutcomes().get(0).setObservation("Strong engineering foundation observed.");
         draft.getPoOutcomes().get(0).setActions(List.of("Continue standard lab assignments", "Add advanced problem sets"));
 
         ResponseEntity<ApiResponse<ProgrammeAtrReportDto>> saveResponse =
@@ -320,14 +317,13 @@ public class ProgrammeBatchAtrIntegrationTest {
         ProgrammeAtrReportDto saved = saveResponse.getBody().getData();
         assertNotNull(saved);
         assertNotNull(saved.getProgrammeAtrId(), "Saved ATR must have generated ID");
-        assertEquals("Strong engineering foundation observed.", saved.getPoOutcomes().get(0).getObservation());
         assertEquals(2, saved.getPoOutcomes().get(0).getActions().size());
 
         // Verify fetching again returns the saved draft
         ResponseEntity<ApiResponse<ProgrammeAtrReportDto>> getSaved =
                 academicController.getProgrammeBatchAtr(batchA2.getId());
         assertEquals(saved.getProgrammeAtrId(), getSaved.getBody().getData().getProgrammeAtrId());
-        assertEquals("Strong engineering foundation observed.", getSaved.getBody().getData().getPoOutcomes().get(0).getObservation());
+        assertEquals(2, getSaved.getBody().getData().getPoOutcomes().get(0).getActions().size());
     }
 
     @Test
@@ -355,7 +351,7 @@ public class ProgrammeBatchAtrIntegrationTest {
 
         // Attempting to modify submitted ATR returns 409 Conflict
         ProgrammeAtrReportDto modifyAttempt = getResponse.getBody().getData();
-        modifyAttempt.getPoOutcomes().get(0).setObservation("Hacked observation while locked");
+        modifyAttempt.getPoOutcomes().get(0).setActions(List.of("Hacked action while locked"));
         ResponseStatusException lockEx = assertThrows(ResponseStatusException.class, () ->
                 academicController.saveProgrammeBatchAtr(batchA2.getId(), modifyAttempt)
         );
@@ -371,7 +367,7 @@ public class ProgrammeBatchAtrIntegrationTest {
         ResponseEntity<ApiResponse<ProgrammeAtrReportDto>> initialGet =
                 academicController.getProgrammeBatchAtr(batchA1.getId());
         ProgrammeAtrReportDto draft = initialGet.getBody().getData();
-        draft.getPoOutcomes().get(0).setObservation("Draft observation for PO1");
+        draft.getPoOutcomes().get(0).setActions(List.of("Draft action for PO1"));
         academicController.saveProgrammeBatchAtr(batchA1.getId(), draft);
 
         // 2. Update PO1 statement and target in DB table
@@ -382,14 +378,14 @@ public class ProgrammeBatchAtrIntegrationTest {
         po1Db.setTarget(new BigDecimal("2.95"));
         programmeOutcomeRepository.save(po1Db);
 
-        // 3. GET should dynamically reflect updated statement & target from DB while preserving observation
+        // 3. GET should dynamically reflect updated statement & target from DB while preserving actions
         ResponseEntity<ApiResponse<ProgrammeAtrReportDto>> refreshedGet =
                 academicController.getProgrammeBatchAtr(batchA1.getId());
         ProgrammeAtrReportDto refreshedDto = refreshedGet.getBody().getData();
         assertEquals("DRAFT", refreshedDto.getStatus());
         assertEquals("Updated Engineering Fundamentals Statement", refreshedDto.getPoOutcomes().get(0).getOutcomeStatement());
         assertEquals(0, new BigDecimal("2.95").compareTo(refreshedDto.getPoOutcomes().get(0).getTargetLevel()));
-        assertEquals("Draft observation for PO1", refreshedDto.getPoOutcomes().get(0).getObservation());
+        assertTrue(refreshedDto.getPoOutcomes().get(0).getActions().contains("Draft action for PO1"));
     }
 
     @Test
@@ -401,7 +397,7 @@ public class ProgrammeBatchAtrIntegrationTest {
         ResponseEntity<ApiResponse<ProgrammeAtrReportDto>> getInitialA1 =
                 academicController.getProgrammeBatchAtr(batchA1.getId());
         ProgrammeAtrReportDto draftA1 = getInitialA1.getBody().getData();
-        draftA1.getPoOutcomes().get(0).setObservation("Historical 2022 batch observation");
+        draftA1.getPoOutcomes().get(0).setActions(List.of("Historical 2022 batch action"));
         academicController.saveProgrammeBatchAtr(batchA1.getId(), draftA1);
 
         // Fetch previous year from current batch A2 (2023-2027)
@@ -415,7 +411,7 @@ public class ProgrammeBatchAtrIntegrationTest {
         ProgrammeAtrReportDto prevDto = prevYearResponse.getBody().getData();
         assertNotNull(prevDto);
         assertEquals(batchA1.getId(), prevDto.getBatch().getId());
-        assertEquals("Historical 2022 batch observation", prevDto.getPoOutcomes().get(0).getObservation());
+        assertTrue(prevDto.getPoOutcomes().get(0).getActions().contains("Historical 2022 batch action"));
     }
 
     @Test

@@ -27,7 +27,7 @@ import com.dypiu.nba.repository.DepartmentRepository;
 import com.dypiu.nba.repository.MasterProgrammeRepository;
 
 @ExtendWith(MockitoExtension.class)
-@WithMockUser(roles = "ADMIN")
+@WithMockUser(roles = "IQAC")
 public class SchoolDirectorMappingTest {
 
     @Mock

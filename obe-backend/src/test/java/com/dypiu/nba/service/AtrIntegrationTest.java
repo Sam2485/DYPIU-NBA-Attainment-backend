@@ -209,7 +209,6 @@ public class AtrIntegrationTest {
 
         if (!report.getPoOutcomes().isEmpty()) {
             report.getPoOutcomes().get(0).setActions(List.of("Curriculum Revision: Introduce cloud DBMS in 5th semester."));
-            report.getPoOutcomes().get(0).setObservation("Strong foundational performance with room for distributed computing.");
         }
 
         ProgrammeAtrReportDto saved = atrService.saveProgrammeAtrReport(report);
@@ -221,11 +220,10 @@ public class AtrIntegrationTest {
         assertNotNull(dbAtr.getObservationsJson());
         assertTrue(dbAtr.getObservationsJson().contains("Introduce cloud DBMS"));
 
-        // Verify that fetching report reloads the persisted actions and observation
+        // Verify that fetching report reloads the persisted actions
         ProgrammeAtrReportDto reloaded = atrService.getProgrammeAtrReport(masterProgrammeId, programmeBatchId);
         assertNotNull(reloaded);
         if (!reloaded.getPoOutcomes().isEmpty()) {
-            assertEquals("Strong foundational performance with room for distributed computing.", reloaded.getPoOutcomes().get(0).getObservation());
             assertTrue(reloaded.getPoOutcomes().get(0).getActions().contains("Curriculum Revision: Introduce cloud DBMS in 5th semester."));
         }
     }

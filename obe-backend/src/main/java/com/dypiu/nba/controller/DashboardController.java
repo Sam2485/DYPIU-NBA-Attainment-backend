@@ -53,7 +53,7 @@ public class DashboardController {
 
         if (scope.isDirector()) {
             targetSchoolId = scope.getRequiredSchoolId();
-        } else if (scope.isAdmin() || scope.isIqac()) {
+        } else if (scope.isIqac()) {
             requestScopeAuthorizer.assertRequestedDirectorEmail(directorEmail);
             requestScopeAuthorizer.assertRequestedSchool(schoolId);
             if (schoolId != null && !schoolId.isBlank()) {
@@ -139,7 +139,7 @@ public class DashboardController {
         if (scope.isHod()) {
             targetSchoolId = scope.getRequiredSchoolId();
             targetDeptId = scope.getRequiredDepartmentId();
-        } else if (scope.isAdmin() || scope.isIqac()) {
+        } else if (scope.isIqac()) {
             requestScopeAuthorizer.assertRequestedHodEmail(hodEmail);
             requestScopeAuthorizer.assertRequestedDepartment(departmentId);
             if (departmentId != null && !departmentId.isBlank()) {
@@ -263,7 +263,7 @@ public class DashboardController {
                     List<ProgrammeBatch> batches = programmeBatchRepository.findByCoordinatorEmailIgnoreCase(effectiveEmail);
                     matchesBatch = batches.stream().anyMatch(b -> effectiveProgId.trim().equals(b.getMasterProgrammeId()));
                 }
-                if (!matchesDirect && !matchesBatch && (scope.isAdmin() || scope.isIqac())) {
+                if (!matchesDirect && !matchesBatch && scope.isIqac()) {
                     // allow
                 } else if (!matchesDirect && !matchesBatch) {
                     throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: MasterProgramme is outside your assigned scope.");
@@ -277,7 +277,7 @@ public class DashboardController {
             } else if (scope.getMasterProgrammeId() != null && !scope.getMasterProgrammeId().isBlank()) {
                 targetProgId = scope.getMasterProgrammeId().trim();
             }
-        } else if (scope.isAdmin() || scope.isIqac()) {
+        } else if (scope.isIqac()) {
             if (effectiveProgId != null && !effectiveProgId.isBlank()) {
                 targetProgId = effectiveProgId.trim();
             } else if (effectiveEmail != null && !effectiveEmail.isBlank()) {

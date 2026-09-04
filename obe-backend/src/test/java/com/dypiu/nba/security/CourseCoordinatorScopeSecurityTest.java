@@ -114,7 +114,6 @@ public class CourseCoordinatorScopeSecurityTest {
     private User facultyUserA1;
     private User ccUserB1;
     private User unassignedFaculty;
-    private User adminUser;
     private User iqacUser;
     private User directorUserA;
     private User hodUserA1;
@@ -291,15 +290,6 @@ public class CourseCoordinatorScopeSecurityTest {
                 .schoolId(schoolA.getId())
                 .departmentId(deptA1.getId())
                 .masterProgrammeId(progA1.getId())
-                .isActive(true)
-                .build());
-
-        adminUser = userRepository.save(User.builder()
-                .username("admin_user_" + System.nanoTime())
-                .email("admin." + System.nanoTime() + "@dypiu.ac.in")
-                .passwordHash("test_hash")
-                .name("Global Admin")
-                .role(UserRole.ADMIN)
                 .isActive(true)
                 .build());
 
@@ -686,20 +676,7 @@ public class CourseCoordinatorScopeSecurityTest {
     }
 
     @Test
-    @DisplayName("Scenario 26: ADMIN behavior unchanged (unrestricted access) -> Success")
-    void testScenario26_AdminUnrestrictedAccess() {
-        authenticateUser(adminUser);
-        Principal principal = createPrincipal(adminUser);
-        assertDoesNotThrow(() -> {
-            reportAccessService.validateCourseOfferingAccess(adminUser, offeringA1.getId());
-            reportAccessService.validateCourseOfferingAccess(adminUser, offeringA2.getId());
-            reportAccessService.validateCourseOfferingAccess(adminUser, offeringB1.getId());
-            attainmentController.getConfig(courseB1.getId(), null, principal);
-        });
-    }
-
-    @Test
-    @DisplayName("Scenario 27: IQAC behavior unchanged (unrestricted access) -> Success")
+    @DisplayName("Scenario 27: IQAC behavior (unrestricted access) -> Success")
     void testScenario27_IqacUnrestrictedAccess() {
         authenticateUser(iqacUser);
         Principal principal = createPrincipal(iqacUser);

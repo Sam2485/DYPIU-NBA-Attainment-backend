@@ -52,7 +52,7 @@ public class UserController {
 
     private void enforceUserScope(User targetUser) {
         CurrentUserScope scope = getScope();
-        if (scope == null || scope.isAdmin() || scope.isIqac()) return;
+        if (scope == null || scope.isIqac()) return;
         if (scope.isDirector()) {
             String dirSchoolId = scope.getRequiredSchoolId();
             if (targetUser.getSchoolId() != null && !targetUser.getSchoolId().equals(dirSchoolId)) {

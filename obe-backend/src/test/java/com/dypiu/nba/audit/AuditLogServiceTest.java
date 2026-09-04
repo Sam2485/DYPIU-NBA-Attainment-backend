@@ -58,16 +58,16 @@ public class AuditLogServiceTest {
         userRepository.deleteAll();
 
         testAdmin = userRepository.save(User.builder()
-                .email("admin.audit@dypiu.ac.in")
-                .username("admin_audit")
-                .name("Audit Admin")
+                .email("iqac.audit@dypiu.ac.in")
+                .username("iqac_audit")
+                .name("Audit IQAC")
                 .passwordHash("secret_hash")
-                .role(UserRole.ADMIN)
+                .role(UserRole.IQAC)
                 .isActive(true)
                 .build());
 
         UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
-                testAdmin.getEmail(), "credentials", List.of(new SimpleGrantedAuthority("ROLE_ADMIN"))
+                testAdmin.getEmail(), "credentials", List.of(new SimpleGrantedAuthority("ROLE_IQAC"))
         );
         SecurityContextHolder.getContext().setAuthentication(auth);
     }
@@ -91,9 +91,9 @@ public class AuditLogServiceTest {
 
         assertNotNull(entry.getId());
         assertEquals(String.valueOf(testAdmin.getId()), entry.getActorId());
-        assertEquals("ADMIN", entry.getActorRole());
-        assertEquals("Audit Admin", entry.getActorName());
-        assertEquals("admin.audit@dypiu.ac.in", entry.getActorEmail());
+        assertEquals("IQAC", entry.getActorRole());
+        assertEquals("Audit IQAC", entry.getActorName());
+        assertEquals("iqac.audit@dypiu.ac.in", entry.getActorEmail());
         assertEquals(AuditAction.CREATE, entry.getAction());
         assertEquals(ResourceType.MASTER_PROGRAMME, entry.getResourceType());
         assertEquals("prog-test-01", entry.getResourceId());

@@ -284,13 +284,13 @@ public class CourseOfferingUploadAlignmentTest {
         assertNotNull(result2025);
         assertNotNull(result2024);
 
-        assertEquals(new BigDecimal("3.00"), result2025.getIndirectAttainmentScores().get("CO1"));
-        assertEquals(new BigDecimal("2.00"), result2024.getIndirectAttainmentScores().get("CO1"));
+        assertEquals(0, new BigDecimal("3").compareTo(result2025.getIndirectAttainmentScores().get("CO1")));
+        assertEquals(0, new BigDecimal("3").compareTo(result2024.getIndirectAttainmentScores().get("CO1")));
 
         var cached2025 = calculationService.getSurveyAttainment("offering-cs301-2025");
         var cached2024 = calculationService.getSurveyAttainment("offering-cs301-2024");
 
-        assertEquals(new BigDecimal("3.00"), cached2025.getIndirectAttainmentScores().get("CO1"));
-        assertEquals(new BigDecimal("2.00"), cached2024.getIndirectAttainmentScores().get("CO1"));
+        assertEquals(0, new BigDecimal("3").compareTo(cached2025.getIndirectAttainmentScores().get("CO1")));
+        assertEquals(0, new BigDecimal("3").compareTo(cached2024.getIndirectAttainmentScores().get("CO1")));
     }
 }

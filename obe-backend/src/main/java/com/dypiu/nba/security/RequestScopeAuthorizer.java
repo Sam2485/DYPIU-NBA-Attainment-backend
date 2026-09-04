@@ -195,7 +195,7 @@ public class RequestScopeAuthorizer {
     }
 
     private boolean global(CurrentUserScope scope) {
-        return scope == null || scope.isAdmin() || scope.isIqac();
+        return scope == null || scope.isIqac();
     }
 
     private boolean blank(String value) {

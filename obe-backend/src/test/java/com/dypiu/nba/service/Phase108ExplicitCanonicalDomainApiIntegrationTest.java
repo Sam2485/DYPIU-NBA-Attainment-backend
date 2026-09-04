@@ -162,8 +162,8 @@ public class Phase108ExplicitCanonicalDomainApiIntegrationTest {
     @Test
     @DisplayName("Phase 10.8: Canonical MasterProgramme & MasterCourse endpoints work correctly")
     void testMasterProgrammeAndCourseCanonicalEndpoints() {
-        CurrentUserScope adminScope = CurrentUserScope.builder().role(UserRole.ADMIN).build();
-        when(currentUserScopeService.getCurrentUserScope()).thenReturn(adminScope);
+        CurrentUserScope iqacScope = CurrentUserScope.builder().role(UserRole.IQAC).build();
+        when(currentUserScopeService.getCurrentUserScope()).thenReturn(iqacScope);
 
         // MasterProgramme
         ResponseEntity<ApiResponse<MasterProgramme>> progRes = masterProgrammeController.getMasterProgrammeById(prog.getId());
@@ -179,8 +179,8 @@ public class Phase108ExplicitCanonicalDomainApiIntegrationTest {
     @Test
     @DisplayName("Phase 10.8: Canonical ProgrammeBatch reports & ATR endpoints work correctly")
     void testProgrammeBatchCanonicalEndpoints() {
-        CurrentUserScope adminScope = CurrentUserScope.builder().role(UserRole.ADMIN).build();
-        when(currentUserScopeService.getCurrentUserScope()).thenReturn(adminScope);
+        CurrentUserScope iqacScope = CurrentUserScope.builder().role(UserRole.IQAC).build();
+        when(currentUserScopeService.getCurrentUserScope()).thenReturn(iqacScope);
 
         // Programme Batch Report 1 (Avg Mapping)
         ResponseEntity<ApiResponse<Object>> r1Res = programmeBatchController.getAverageMappingReport(batch.getId());
@@ -201,8 +201,8 @@ public class Phase108ExplicitCanonicalDomainApiIntegrationTest {
     @Test
     @DisplayName("Phase 10.8: Canonical ProgrammeBatchCourse COs, Mappings, Main Attainment Report & Finalize work correctly")
     void testProgrammeBatchCourseCanonicalEndpoints() {
-        CurrentUserScope adminScope = CurrentUserScope.builder().role(UserRole.ADMIN).build();
-        when(currentUserScopeService.getCurrentUserScope()).thenReturn(adminScope);
+        CurrentUserScope iqacScope = CurrentUserScope.builder().role(UserRole.IQAC).build();
+        when(currentUserScopeService.getCurrentUserScope()).thenReturn(iqacScope);
 
         // COs
         ResponseEntity<ApiResponse<List<CourseOutcome>>> cosRes = programmeBatchCourseController.getCourseOutcomes(pbc.getId());
