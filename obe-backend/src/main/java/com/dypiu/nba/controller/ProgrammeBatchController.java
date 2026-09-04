@@ -209,6 +209,27 @@ public class ProgrammeBatchController {
                 .build());
     }
 
+    // --- Atomic Outcomes Bundle Endpoint (POs, PSOs, PEOs, Targets) ---
+    @GetMapping({"/{programmeBatchId}/outcomes-bundle", "/{programmeBatchId}/bundle", "/{programmeBatchId}/outcomes"})
+    public ResponseEntity<ApiResponse<com.dypiu.nba.dto.ProgrammeBatchOutcomeBundleDto>> getProgrammeBatchOutcomeBundle(
+            @PathVariable String programmeBatchId) {
+        return ResponseEntity.ok(ApiResponse.<com.dypiu.nba.dto.ProgrammeBatchOutcomeBundleDto>builder()
+                .success(true)
+                .data(outcomeService.getProgrammeBatchOutcomeBundle(programmeBatchId))
+                .build());
+    }
+
+    @RequestMapping(value = {"/{programmeBatchId}/outcomes-bundle", "/{programmeBatchId}/bundle", "/{programmeBatchId}/outcomes"}, method = {RequestMethod.POST, RequestMethod.PUT})
+    public ResponseEntity<ApiResponse<com.dypiu.nba.dto.ProgrammeBatchOutcomeBundleDto>> saveProgrammeBatchOutcomeBundle(
+            @PathVariable String programmeBatchId,
+            @RequestBody com.dypiu.nba.dto.ProgrammeBatchOutcomeBundleDto dto) {
+        return ResponseEntity.ok(ApiResponse.<com.dypiu.nba.dto.ProgrammeBatchOutcomeBundleDto>builder()
+                .success(true)
+                .message("Programme batch outcomes and targets saved successfully")
+                .data(outcomeService.saveProgrammeBatchOutcomeBundle(programmeBatchId, dto))
+                .build());
+    }
+
     // --- Report 1: Average Mapping Report ---
     @GetMapping("/{programmeBatchId}/reports/average-mapping")
     public ResponseEntity<ApiResponse<Object>> getAverageMappingReport(

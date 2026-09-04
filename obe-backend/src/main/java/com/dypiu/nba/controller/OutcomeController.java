@@ -120,4 +120,44 @@ public class OutcomeController {
                 .data(outcomeService.saveCourseMappings(masterCourseId, dto))
                 .build());
     }
+
+    // --- Atomic Bundle Endpoints (POs, PSOs, PEOs, and Targets in single atomic request) ---
+    @GetMapping({
+            "/programme-batches/{programmeBatchId}",
+            "/programme-batches/{programmeBatchId}/bundle",
+            "/programme-batches/{programmeBatchId}/outcomes",
+            "/master-programmes/{programmeBatchId}/bundle",
+            "/master-programmes/{programmeBatchId}/outcomes",
+            "/batches/{programmeBatchId}/bundle",
+            "/batches/{programmeBatchId}/outcomes"
+    })
+    public ResponseEntity<ApiResponse<com.dypiu.nba.dto.ProgrammeBatchOutcomeBundleDto>> getProgrammeBatchOutcomeBundle(
+            @PathVariable String programmeBatchId) {
+        return ResponseEntity.ok(ApiResponse.<com.dypiu.nba.dto.ProgrammeBatchOutcomeBundleDto>builder()
+                .success(true)
+                .data(outcomeService.getProgrammeBatchOutcomeBundle(programmeBatchId))
+                .build());
+    }
+
+    @RequestMapping(
+            value = {
+                    "/programme-batches/{programmeBatchId}",
+                    "/programme-batches/{programmeBatchId}/bundle",
+                    "/programme-batches/{programmeBatchId}/outcomes",
+                    "/master-programmes/{programmeBatchId}/bundle",
+                    "/master-programmes/{programmeBatchId}/outcomes",
+                    "/batches/{programmeBatchId}/bundle",
+                    "/batches/{programmeBatchId}/outcomes"
+            },
+            method = {RequestMethod.POST, RequestMethod.PUT}
+    )
+    public ResponseEntity<ApiResponse<com.dypiu.nba.dto.ProgrammeBatchOutcomeBundleDto>> saveProgrammeBatchOutcomeBundle(
+            @PathVariable String programmeBatchId,
+            @RequestBody com.dypiu.nba.dto.ProgrammeBatchOutcomeBundleDto bundle) {
+        return ResponseEntity.ok(ApiResponse.<com.dypiu.nba.dto.ProgrammeBatchOutcomeBundleDto>builder()
+                .success(true)
+                .message("Programme batch outcomes and targets saved successfully")
+                .data(outcomeService.saveProgrammeBatchOutcomeBundle(programmeBatchId, bundle))
+                .build());
+    }
 }
