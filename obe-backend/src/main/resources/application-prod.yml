@@ -38,6 +38,9 @@ app:
     refresh-expiration-ms: ${JWT_REFRESH_EXPIRATION_MS:604800000}
   storage:
     local-dir: ${LOCAL_STORAGE_PATH:/app/storage}
+  reports:
+    storage:
+      dir: ${REPORTS_STORAGE_PATH:${LOCAL_STORAGE_PATH:/app/storage}/reports}
   upload-dir: ${APP_UPLOAD_DIR:${UPLOAD_STORAGE_PATH:/app/uploads}}
   upload:
     dir: ${UPLOAD_STORAGE_PATH:${APP_UPLOAD_DIR:/app/uploads}}

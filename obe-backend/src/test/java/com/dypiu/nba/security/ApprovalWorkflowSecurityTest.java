@@ -643,7 +643,7 @@ public class ApprovalWorkflowSecurityTest {
 
         Map<String, String> body = Map.of(
                 "actorName", "Anonymous Actor",
-                "actorRole", "SUPER_ADMIN",
+                "actorRole", "ATTEMPTED_SPOOF_ROLE",
                 "remarks", "Needs changes"
         );
 

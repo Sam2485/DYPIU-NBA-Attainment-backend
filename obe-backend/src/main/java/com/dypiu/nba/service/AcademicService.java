@@ -83,7 +83,7 @@ public class AcademicService {
 
     private void enforceSchoolScope(String schoolId) {
         CurrentUserScope scope = getScope();
-        if (scope == null || scope.isAdmin() || scope.isIqac()) return;
+        if (scope == null || scope.isIqac()) return;
         if (scope.isDirector() || scope.isHod() || scope.isProgrammeCoordinator()) {
             String requiredSchoolId = scope.getRequiredSchoolId();
             if (schoolId != null && !schoolId.equals(requiredSchoolId)) {
@@ -94,7 +94,7 @@ public class AcademicService {
 
     private void enforceDepartmentScope(String departmentId) {
         CurrentUserScope scope = getScope();
-        if (scope == null || scope.isAdmin() || scope.isIqac()) return;
+        if (scope == null || scope.isIqac()) return;
         if (scope.isHod()) {
             if (departmentId != null && scope.getEmail() != null && !scope.getEmail().isBlank()) {
                 List<Department> hodDepts = departmentRepository.findByHodEmailIgnoreCase(scope.getEmail().trim());
@@ -132,7 +132,7 @@ public class AcademicService {
 
     private void enforceProgrammeScope(String masterProgrammeId) {
         CurrentUserScope scope = getScope();
-        if (scope == null || scope.isAdmin() || scope.isIqac()) return;
+        if (scope == null || scope.isIqac()) return;
         if (masterProgrammeId == null || masterProgrammeId.isBlank()) return;
 
         if (scope.isProgrammeCoordinator()) {
@@ -172,7 +172,7 @@ public class AcademicService {
 
     private void enforceBatchScope(String programmeBatchId) {
         CurrentUserScope scope = getScope();
-        if (scope == null || scope.isAdmin() || scope.isIqac()) return;
+        if (scope == null || scope.isIqac()) return;
         if (programmeBatchId == null || programmeBatchId.isBlank()) return;
         ProgrammeBatch batch = programmeBatchRepository.findById(programmeBatchId)
                 .orElseThrow(() -> new ResourceNotFoundException("ProgrammeBatch not found: " + programmeBatchId));
@@ -195,7 +195,7 @@ public class AcademicService {
 
     private void enforceCourseScope(String masterCourseId) {
         CurrentUserScope scope = getScope();
-        if (scope == null || scope.isAdmin() || scope.isIqac()) return;
+        if (scope == null || scope.isIqac()) return;
         if (masterCourseId == null || masterCourseId.isBlank()) return;
         MasterCourse course = masterCourseRepository.findById(masterCourseId)
                 .orElseThrow(() -> new ResourceNotFoundException("MasterCourse not found: " + masterCourseId));
@@ -218,7 +218,7 @@ public class AcademicService {
 
     private void enforceProgrammeBatchCourseScope(String offeringId) {
         CurrentUserScope scope = getScope();
-        if (scope == null || scope.isAdmin() || scope.isIqac()) return;
+        if (scope == null || scope.isIqac()) return;
         if (offeringId == null || offeringId.isBlank()) return;
 
         ProgrammeBatchCourse offering = programmeBatchCourseRepository.findById(offeringId)
@@ -240,7 +240,7 @@ public class AcademicService {
 
     private void enforceCourseCoordinatorScope(String offeringOrMasterCourseId) {
         CurrentUserScope scope = getScope();
-        if (scope == null || scope.isAdmin() || scope.isIqac() || scope.isDirector() || scope.isHod() || scope.isProgrammeCoordinator()) {
+        if (scope == null || scope.isIqac() || scope.isDirector() || scope.isHod() || scope.isProgrammeCoordinator()) {
             return;
         }
         if (offeringOrMasterCourseId == null || offeringOrMasterCourseId.isBlank()) return;
@@ -431,7 +431,7 @@ public class AcademicService {
             List<ProgrammeBatch> batches = pIds.isEmpty() ? Collections.emptyList() : programmeBatchRepository.findByMasterProgrammeIdIn(pIds);
             Set<String> bIds = batches.stream().map(ProgrammeBatch::getId).collect(Collectors.toSet());
             offerings = bIds.isEmpty() ? Collections.emptyList() : programmeBatchCourseRepository.findByProgrammeBatchIdIn(bIds);
-        } else if (scope != null && (scope.isAdmin() || scope.isIqac())) {
+        } else if (scope != null && scope.isIqac()) {
             offerings = programmeBatchCourseRepository.findAll();
         } else {
             offerings = (programmeBatchId != null && !programmeBatchId.isBlank()) ? programmeBatchCourseRepository.findByProgrammeBatchId(programmeBatchId) : programmeBatchCourseRepository.findAll();
@@ -1047,7 +1047,7 @@ public class AcademicService {
     @Transactional(readOnly = true)
     public List<School> getAllSchools() {
         CurrentUserScope scope = getScope();
-        if (scope == null || scope.isAdmin() || scope.isIqac()) {
+        if (scope == null || scope.isIqac()) {
             return schoolRepository.findAll();
         }
         if (scope.hasSchoolScope()) {
@@ -1098,7 +1098,7 @@ public class AcademicService {
                 School existing = existingByEmail.get();
                 if (school.getId() == null || !existing.getId().equalsIgnoreCase(school.getId())) {
                     throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                            "Director with email '" + cleanEmail + "' is already assigned to School: " + existing.getName() + " (" + existing.getCode() + "). A Director can only manage one school.");
+                            "Director Email '" + cleanEmail + "' is already assigned to School: " + existing.getName() + " (" + existing.getCode() + "). A Director can only manage one school.");
                 }
             }
 
@@ -1113,98 +1113,103 @@ public class AcademicService {
             });
         }
 
+        // Auto-generate school ID if missing
         if (school.getId() == null || school.getId().isBlank()) {
-            school.setId("sch-" + UUID.randomUUID().toString().substring(0, 8));
+            school.setId(UUID.randomUUID().toString());
         }
 
-        boolean isNewSchool = (school.getId() == null || !schoolRepository.existsById(school.getId()));
+        boolean isNewSchool = !schoolRepository.existsById(school.getId());
         School saved = schoolRepository.save(school);
-        if (auditLogService != null) {
-            auditLogService.recordSuccess(isNewSchool ? com.dypiu.nba.audit.AuditAction.CREATE : com.dypiu.nba.audit.AuditAction.UPDATE, com.dypiu.nba.audit.ResourceType.SCHOOL, saved.getId(), null, "ACTIVE", isNewSchool ? "Created School" : "Updated School", java.util.Map.of("code", saved.getCode() != null ? saved.getCode() : "", "name", saved.getName() != null ? saved.getName() : ""));
-        }
 
-        // Sync schoolId to the Director user in userRepository
         if (saved.getDirectorEmail() != null && !saved.getDirectorEmail().isBlank()) {
-            userRepository.findByEmail(saved.getDirectorEmail().trim()).ifPresent(u -> {
+            String cleanEmail = saved.getDirectorEmail().trim();
+            userRepository.findByEmail(cleanEmail).ifPresent(u -> {
                 u.setSchoolId(saved.getId());
                 userRepository.save(u);
-                System.out.println("[AcademicService] Associated director user (" + u.getEmail() + ") with school: " + saved.getId());
             });
         }
 
-        System.out.println("[AcademicService] Saved school with id: " + saved.getId());
+        if (auditLogService != null) {
+            auditLogService.recordSuccess(
+                    isNewSchool ? com.dypiu.nba.audit.AuditAction.CREATE : com.dypiu.nba.audit.AuditAction.UPDATE,
+                    com.dypiu.nba.audit.ResourceType.SCHOOL,
+                    saved.getId(),
+                    null,
+                    "ACTIVE",
+                    isNewSchool ? "Created School" : "Updated School",
+                    java.util.Map.of("code", saved.getCode() != null ? saved.getCode() : "", "name", saved.getName() != null ? saved.getName() : "")
+            );
+        }
+
+        System.out.println("[AcademicService] School saved successfully with id: " + saved.getId());
         return saved;
     }
 
     @Transactional
-    public School updateSchool(String id, School schoolDetails) {
-        System.out.println("[AcademicService] updateSchool called | id: " + id + " | name: " + (schoolDetails != null ? schoolDetails.getName() : "null"));
+    public School updateSchool(String id, School school) {
+        System.out.println("[AcademicService] updateSchool called | id: " + id + " | school: " + (school != null ? school.getName() : "null"));
         enforceSchoolScope(id);
-        School school = schoolRepository.findById(id)
+        School existing = schoolRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("School not found with id: " + id));
 
-        // 1. Validate Director ID Uniqueness
-        if (schoolDetails.getDirectorId() != null) {
-            Optional<School> existingByDirectorId = schoolRepository.findByDirectorId(schoolDetails.getDirectorId());
-            if (existingByDirectorId.isPresent() && !existingByDirectorId.get().getId().equalsIgnoreCase(id)) {
-                School existing = existingByDirectorId.get();
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                        "Director is already assigned to School: " + existing.getName() + " (" + existing.getCode() + "). A Director can only manage one school.");
+        // 1. Check if directorId is already mapped to another school
+        if (school.getDirectorId() != null) {
+            Optional<School> existingByDirectorId = schoolRepository.findByDirectorId(school.getDirectorId());
+            if (existingByDirectorId.isPresent()) {
+                School mappedSchool = existingByDirectorId.get();
+                if (!mappedSchool.getId().equalsIgnoreCase(id)) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                            "Director is already assigned to School: " + mappedSchool.getName() + " (" + mappedSchool.getCode() + "). A Director can only manage one school.");
+                }
             }
-            school.setDirectorId(schoolDetails.getDirectorId());
         }
 
-        // 2. Validate Director Email Uniqueness
-        if (schoolDetails.getDirectorEmail() != null && !schoolDetails.getDirectorEmail().isBlank()) {
-            String cleanEmail = schoolDetails.getDirectorEmail().trim();
+        // 2. Check if directorEmail is already mapped to another school
+        if (school.getDirectorEmail() != null && !school.getDirectorEmail().isBlank()) {
+            String cleanEmail = school.getDirectorEmail().trim();
             Optional<School> existingByEmail = schoolRepository.findByDirectorEmailIgnoreCase(cleanEmail);
-            if (existingByEmail.isPresent() && !existingByEmail.get().getId().equalsIgnoreCase(id)) {
-                School existing = existingByEmail.get();
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                        "Director with email '" + cleanEmail + "' is already assigned to School: " + existing.getName() + " (" + existing.getCode() + "). A Director can only manage one school.");
+            if (existingByEmail.isPresent()) {
+                School mappedSchool = existingByEmail.get();
+                if (!mappedSchool.getId().equalsIgnoreCase(id)) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                            "Director Email '" + cleanEmail + "' is already assigned to School: " + mappedSchool.getName() + " (" + mappedSchool.getCode() + "). A Director can only manage one school.");
+                }
             }
-            school.setDirectorEmail(cleanEmail);
-
-            // Sync directorId and directorName from User entity if available
-            userRepository.findByEmail(cleanEmail).ifPresent(u -> {
-                if (school.getDirectorId() == null) {
-                    school.setDirectorId(u.getId());
-                }
-                if (schoolDetails.getDirectorName() == null || schoolDetails.getDirectorName().isBlank()) {
-                    school.setDirectorName(u.getName());
-                }
-            });
         }
 
-        if (schoolDetails.getName() != null && !schoolDetails.getName().isBlank()) {
-            school.setName(schoolDetails.getName());
-        }
-        if (schoolDetails.getCode() != null && !schoolDetails.getCode().isBlank()) {
-            school.setCode(schoolDetails.getCode());
-        }
-        if (schoolDetails.getDirectorName() != null) {
-            school.setDirectorName(schoolDetails.getDirectorName());
-        } else if (schoolDetails.getDirector() != null) {
-            school.setDirector(schoolDetails.getDirector());
-        }
-        if (schoolDetails.getEstYear() != null) {
-            school.setEstYear(schoolDetails.getEstYear());
-        }
+        existing.setCode(school.getCode());
+        existing.setName(school.getName());
+        existing.setDirector(school.getDirector());
+        existing.setDirectorEmail(school.getDirectorEmail());
+        existing.setDirectorId(school.getDirectorId());
+        existing.setDirectorName(school.getDirectorName());
+        existing.setDean(school.getDean());
+        existing.setDeanEmail(school.getDeanEmail());
+        existing.setEstYear(school.getEstYear());
 
-        School updated = schoolRepository.save(school);
-        if (auditLogService != null) {
-            auditLogService.recordSuccess(com.dypiu.nba.audit.AuditAction.UPDATE, com.dypiu.nba.audit.ResourceType.SCHOOL, updated.getId(), null, "ACTIVE", "Updated School Details", java.util.Map.of("code", updated.getCode() != null ? updated.getCode() : "", "name", updated.getName() != null ? updated.getName() : ""));
-        }
+        School updated = schoolRepository.save(existing);
 
-        // Sync schoolId to the Director user in userRepository
         if (updated.getDirectorEmail() != null && !updated.getDirectorEmail().isBlank()) {
-            userRepository.findByEmail(updated.getDirectorEmail().trim()).ifPresent(u -> {
+            String cleanEmail = updated.getDirectorEmail().trim();
+            userRepository.findByEmail(cleanEmail).ifPresent(u -> {
                 u.setSchoolId(updated.getId());
                 userRepository.save(u);
             });
         }
 
-        System.out.println("[AcademicService] Updated school info for id: " + updated.getId());
+        if (auditLogService != null) {
+            auditLogService.recordSuccess(
+                    com.dypiu.nba.audit.AuditAction.UPDATE,
+                    com.dypiu.nba.audit.ResourceType.SCHOOL,
+                    updated.getId(),
+                    null,
+                    "ACTIVE",
+                    "Updated School",
+                    java.util.Map.of("code", updated.getCode() != null ? updated.getCode() : "", "name", updated.getName() != null ? updated.getName() : "")
+            );
+        }
+
+        System.out.println("[AcademicService] School updated successfully for id: " + updated.getId());
         return updated;
     }
 
@@ -1212,7 +1217,7 @@ public class AcademicService {
     @Transactional(readOnly = true)
     public List<Department> getAllDepartments() {
         CurrentUserScope scope = getScope();
-        if (scope == null || scope.isAdmin() || scope.isIqac()) {
+        if (scope == null || scope.isIqac()) {
             return departmentRepository.findAll();
         }
         if (scope.isDirector()) {
@@ -1232,8 +1237,8 @@ public class AcademicService {
         if (scope.isProgrammeCoordinator() || scope.isFaculty()) {
             if (scope.hasDepartmentScope()) {
                 return departmentRepository.findById(scope.getDepartmentId())
-                        .map(List::of)
-                        .orElse(Collections.emptyList());
+                    .map(List::of)
+                    .orElse(Collections.emptyList());
             }
         }
         return Collections.emptyList();
@@ -1242,7 +1247,7 @@ public class AcademicService {
     @Transactional(readOnly = true)
     public List<Department> getDepartmentsBySchool(String schoolId) {
         CurrentUserScope scope = getScope();
-        if (scope != null && !scope.isAdmin() && !scope.isIqac()) {
+        if (scope != null && !scope.isIqac()) {
             enforceSchoolScope(schoolId);
             if (scope.isDirector()) {
                 return departmentRepository.findBySchoolId(scope.getRequiredSchoolId());
@@ -2230,7 +2235,7 @@ public class AcademicService {
         CurrentUserScope scope = getScope();
 
         // 1. Validate requested filters against the user's scope
-        if (scope != null && !scope.isAdmin() && !scope.isIqac()) {
+        if (scope != null && !scope.isIqac()) {
             if (departmentId != null && !departmentId.isBlank()) {
                 requestScopeAuthorizer.assertRequestedDepartment(departmentId);
             }
@@ -3154,7 +3159,7 @@ public class AcademicService {
 
         List<MasterProgramme> assignedProgrammes = List.of(prog);
         CurrentUserScope scope = getScope();
-        if (scope != null && (scope.isAdmin() || scope.isIqac())) {
+        if (scope != null && scope.isIqac()) {
             assignedProgrammes = masterProgrammeRepository.findByDeletedAtIsNull();
             assignedProgrammes.forEach(this::enrichProgrammeCoordinator);
         } else if (scope != null && scope.isHod()) {

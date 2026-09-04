@@ -26,10 +26,10 @@ public class AuditLogController {
     private final AuditLogService auditLogService;
     private final CurrentUserScopeService currentUserScopeService;
 
-    private void enforceAdminOrIqac(Principal principal) {
+    private void enforceIqac(Principal principal) {
         CurrentUserScope scope = currentUserScopeService.getCurrentUserScope(principal);
-        if (scope == null || (!scope.isAdmin() && !scope.isIqac())) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Audit logs can only be viewed by ADMIN and IQAC.");
+        if (scope == null || !scope.isIqac()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Audit logs can only be viewed by IQAC.");
         }
     }
 
@@ -47,7 +47,7 @@ public class AuditLogController {
             @RequestParam(defaultValue = "20") int size,
             Principal principal) {
 
-        enforceAdminOrIqac(principal);
+        enforceIqac(principal);
 
         AuditLogPageResponseDto result = auditLogService.getAuditLogs(
                 actorId, actorRole, action, resourceType, resourceId, success, from, to, page, size
@@ -64,7 +64,7 @@ public class AuditLogController {
             @PathVariable Long id,
             Principal principal) {
 
-        enforceAdminOrIqac(principal);
+        enforceIqac(principal);
 
         AuditLogResponseDto logDto = auditLogService.getAuditLogById(id);
         if (logDto == null) {

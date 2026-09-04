@@ -45,7 +45,6 @@ public class CourseAtrReportDto {
         private BigDecimal targetLevel;
         private BigDecimal attainmentLevel;
         private BigDecimal achievementPercentage;
-        private String observation;
         private List<String> actions;
     }
 }

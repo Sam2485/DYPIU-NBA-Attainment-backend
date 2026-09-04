@@ -195,7 +195,7 @@ public class AttainmentCalculationService {
     private void enforceOfferingOrCourseScope(String courseOfferingOrMasterCourseId) {
         if (courseOfferingOrMasterCourseId == null || courseOfferingOrMasterCourseId.isBlank()) return;
         com.dypiu.nba.security.CurrentUserScope scope = getScope();
-        if (scope == null || scope.isAdmin() || scope.isIqac()) return;
+        if (scope == null || scope.isIqac()) return;
 
         String offeringId = resolveOfferingId(courseOfferingOrMasterCourseId);
         if (offeringId != null && programmeBatchCourseRepository.existsById(offeringId)) {

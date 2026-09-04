@@ -27,7 +27,7 @@ public class BatchLifecycleService {
     private final AuditLogService auditLogService;
 
     private void enforceBatchScope(ProgrammeBatch batch, CurrentUserScope scope) {
-        if (scope == null || scope.isAdmin() || scope.isIqac()) return;
+        if (scope == null || scope.isIqac()) return;
         if (batch == null || batch.getMasterProgrammeId() == null) return;
 
         MasterProgramme prog = masterProgrammeRepository.findById(batch.getMasterProgrammeId()).orElse(null);
@@ -93,7 +93,7 @@ public class BatchLifecycleService {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Not authenticated.");
         }
         
-        if (scope == null || (!scope.isHod() && !scope.isDirector() && !scope.isAdmin())) {
+        if (scope == null || (!scope.isHod() && !scope.isDirector() && !scope.isIqac())) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Only authorized HOD or higher authority can reopen a graduated batch.");
         }
         enforceBatchScope(batch, scope);
@@ -129,7 +129,7 @@ public class BatchLifecycleService {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Not authenticated.");
         }
 
-        if (scope == null || (!scope.isHod() && !scope.isDirector() && !scope.isAdmin())) {
+        if (scope == null || (!scope.isHod() && !scope.isDirector() && !scope.isIqac())) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Only authorized HOD or higher authority can close a reopening window.");
         }
         enforceBatchScope(batch, scope);
@@ -171,7 +171,7 @@ public class BatchLifecycleService {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Not authenticated.");
         }
 
-        if (scope == null || (!scope.isHod() && !scope.isDirector() && !scope.isAdmin())) {
+        if (scope == null || (!scope.isHod() && !scope.isDirector() && !scope.isIqac())) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Only authorized HOD or higher authority can change batch status.");
         }
         enforceBatchScope(batch, scope);

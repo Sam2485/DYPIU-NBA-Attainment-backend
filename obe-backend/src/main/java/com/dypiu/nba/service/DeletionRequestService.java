@@ -61,8 +61,8 @@ public class DeletionRequestService {
         User user = resolveAuthenticatedUser();
         CurrentUserScope scope = getScope();
 
-        if (scope != null && (scope.isAdmin() || scope.isIqac())) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: ADMIN and IQAC roles do not have academic deletion authority. Deletion must follow the academic hierarchy.");
+        if (scope != null && scope.isIqac()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: IQAC role does not have academic deletion authority. Deletion must follow the academic hierarchy.");
         }
 
         if (dto.getResourceType() == null || dto.getResourceId() == null || dto.getResourceId().isBlank()) {
@@ -195,8 +195,8 @@ public class DeletionRequestService {
         User reviewer = resolveAuthenticatedUser();
         CurrentUserScope scope = getScope();
 
-        if (scope != null && (scope.isAdmin() || scope.isIqac())) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: ADMIN and IQAC roles cannot review or reject deletion requests.");
+        if (scope != null && scope.isIqac()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: IQAC role cannot review or reject deletion requests.");
         }
 
         DeletionRequest req = deletionRequestRepository.findById(id)
@@ -257,8 +257,8 @@ public class DeletionRequestService {
         User reviewer = resolveAuthenticatedUser();
         CurrentUserScope scope = getScope();
 
-        if (scope != null && (scope.isAdmin() || scope.isIqac())) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: ADMIN and IQAC roles cannot execute academic deletion requests.");
+        if (scope != null && scope.isIqac()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: IQAC role cannot execute academic deletion requests.");
         }
 
         if (dto == null || dto.getPassword() == null || dto.getPassword().isBlank()) {
@@ -363,7 +363,7 @@ public class DeletionRequestService {
         CurrentUserScope scope = getScope();
 
         List<DeletionRequest> list;
-        if (scope == null || scope.isAdmin() || scope.isIqac()) {
+        if (scope == null || scope.isIqac()) {
             list = deletionRequestRepository.findAll();
         } else if (scope.isDirector()) {
             list = deletionRequestRepository.findBySchoolIdAndStatusOrderByCreatedAtDesc(scope.getRequiredSchoolId(), status != null ? status : DeletionRequestStatus.PENDING);

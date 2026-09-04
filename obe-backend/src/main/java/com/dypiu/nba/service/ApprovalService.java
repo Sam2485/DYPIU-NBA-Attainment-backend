@@ -120,7 +120,7 @@ public class ApprovalService {
     public void enforceApprovalScope(ApprovalRequest req) {
         if (req == null) return;
         CurrentUserScope scope = getScope();
-        if (scope == null || scope.isAdmin() || scope.isIqac()) return;
+        if (scope == null || scope.isIqac()) return;
 
         resolveMissingScopeFields(req);
 
@@ -173,7 +173,7 @@ public class ApprovalService {
 
     private void enforceRoleApprovalAuthority(ApprovalType type) {
         CurrentUserScope scope = getScope();
-        if (scope == null || scope.isAdmin() || scope.isIqac()) return;
+        if (scope == null || scope.isIqac()) return;
 
         if (scope.isFaculty()) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Faculty members do not have approval or revision authority.");
@@ -212,7 +212,7 @@ public class ApprovalService {
     private void preventSelfApproval(ApprovalRequest req) {
         if (req == null || req.getSubmittedBy() == null || req.getSubmittedBy().isBlank()) return;
         CurrentUserScope scope = getScope();
-        if (scope == null || scope.isAdmin()) return;
+        if (scope == null || scope.isIqac()) return;
 
         String submitter = req.getSubmittedBy().trim().toLowerCase();
         String userEmail = scope.getEmail() != null ? scope.getEmail().trim().toLowerCase() : "";
@@ -251,7 +251,7 @@ public class ApprovalService {
         List<ApprovalRequest> list = approvalRequestRepository.findAll();
         list.forEach(this::resolveMissingScopeFields);
 
-        if (scope != null && !scope.isAdmin() && !scope.isIqac()) {
+        if (scope != null && !scope.isIqac()) {
             if (scope.isDirector()) {
                 String reqSchool = scope.getRequiredSchoolId();
                 list = list.stream().filter(a -> reqSchool.equalsIgnoreCase(a.getSchoolId())).toList();
@@ -337,8 +337,8 @@ public class ApprovalService {
             if (schoolId != null && !schoolId.isBlank() && !schoolId.equalsIgnoreCase(targetSchool)) {
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: You cannot view approvals of a different school.");
             }
-        } else if (scope != null && !scope.isAdmin() && !scope.isIqac()) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Only Director, IQAC, or Admin can access director approvals.");
+        } else if (scope != null && !scope.isIqac()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Only Director or IQAC can access director approvals.");
         }
 
         List<ApprovalRequest> list = targetSchool != null
@@ -394,7 +394,7 @@ public class ApprovalService {
                     .filter(a -> hodTypes.contains(a.getType())
                             && progId.equalsIgnoreCase(a.getMasterProgrammeId()))
                     .toList();
-        } else if (scope != null && !scope.isAdmin() && !scope.isIqac() && !scope.isDirector()) {
+        } else if (scope != null && !scope.isIqac() && !scope.isDirector()) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Role is not authorized for HOD approvals.");
         } else {
             if (masterProgrammeId != null && !masterProgrammeId.isBlank()) {
@@ -463,7 +463,7 @@ public class ApprovalService {
 
         resolveMissingScopeFields(request);
         CurrentUserScope scope = getScope();
-        if (scope != null && !scope.isAdmin() && !scope.isIqac()) {
+        if (scope != null && !scope.isIqac()) {
             if (request.getSchoolId() == null && scope.hasSchoolScope()) {
                 request.setSchoolId(scope.getSchoolId());
             }
@@ -652,7 +652,7 @@ public class ApprovalService {
     public void enforceProgrammeBatchScope(ProgrammeBatch batch) {
         if (batch == null) return;
         CurrentUserScope scope = getScope();
-        if (scope == null || scope.isAdmin() || scope.isIqac()) return;
+        if (scope == null || scope.isIqac()) return;
 
         if (scope.isProgrammeCoordinator()) {
             if (!isProgrammeCoordinatorAssignedToBatch(batch, scope)) {

@@ -213,10 +213,10 @@ public class Phase102CoPoMappingArchitectureIntegrationTest {
     @Test
     @DisplayName("Phase 10.2: CO mappings and keywords are batch-specific and independent across offerings of same MasterCourse")
     void testBatchSpecificCoMappingIndependence() {
-        CurrentUserScope adminScope = CurrentUserScope.builder()
-                .role(UserRole.ADMIN)
+        CurrentUserScope iqacScope = CurrentUserScope.builder()
+                .role(UserRole.IQAC)
                 .build();
-        when(currentUserScopeService.getCurrentUserScope()).thenReturn(adminScope);
+        when(currentUserScopeService.getCurrentUserScope()).thenReturn(iqacScope);
 
         // Map 2024 offering COs: CO1 -> PO1:3, PO2:2, PSO1:3; CO2 -> PO1:2, PO2:3, PSO1:1
         CourseMappingMatrixDto dto2024 = CourseMappingMatrixDto.builder()
@@ -278,10 +278,10 @@ public class Phase102CoPoMappingArchitectureIntegrationTest {
     @Test
     @DisplayName("Phase 10.2: Course Attainment Report Table 1, Table 2 & Programme Reports correctly consume authoritative mappings")
     void testAttainmentReportsConsumeAuthoritativeMappings() {
-        CurrentUserScope adminScope = CurrentUserScope.builder()
-                .role(UserRole.ADMIN)
+        CurrentUserScope iqacScope = CurrentUserScope.builder()
+                .role(UserRole.IQAC)
                 .build();
-        when(currentUserScopeService.getCurrentUserScope()).thenReturn(adminScope);
+        when(currentUserScopeService.getCurrentUserScope()).thenReturn(iqacScope);
 
         // Save mappings for 2024 offering
         CourseMappingMatrixDto dto = CourseMappingMatrixDto.builder()

@@ -75,7 +75,7 @@ public class OutcomeService {
      */
     private void enforceCourseCoordinatorMutation(String courseIdOrOfferingId) {
         CurrentUserScope scope = getScope();
-        if (scope.isAdmin() || scope.isIqac()) return;
+        if (scope != null && scope.isIqac()) return;
         String offeringId = resolveOfferingId(courseIdOrOfferingId);
         ProgrammeBatchCourse offering = programmeBatchCourseRepository.findById(offeringId)
                 .orElseThrow(() -> new ResourceNotFoundException("Course offering not found: " + offeringId));
@@ -112,7 +112,7 @@ public class OutcomeService {
 
     private void enforceProgrammeCoordinatorMutation(String programmeOrProgrammeBatchId) {
         CurrentUserScope scope = getScope();
-        if (scope == null || scope.isAdmin() || scope.isIqac()) return;
+        if (scope == null || scope.isIqac()) return;
         if (scope.isDirector() || scope.isHod()) {
             enforceBatchOrProgrammeScope(programmeOrProgrammeBatchId);
             return;
@@ -135,7 +135,7 @@ public class OutcomeService {
 
     private void enforceSchoolScope(String schoolId) {
         CurrentUserScope scope = getScope();
-        if (scope == null || scope.isAdmin() || scope.isIqac()) return;
+        if (scope == null || scope.isIqac()) return;
         if (scope.isDirector() || scope.isHod() || scope.isProgrammeCoordinator()) {
             String requiredSchoolId = scope.getRequiredSchoolId();
             if (schoolId != null && !schoolId.equals(requiredSchoolId)) {
@@ -146,7 +146,7 @@ public class OutcomeService {
 
     private void enforceDepartmentScope(String departmentId) {
         CurrentUserScope scope = getScope();
-        if (scope == null || scope.isAdmin() || scope.isIqac()) return;
+        if (scope == null || scope.isIqac()) return;
         if (scope.isHod()) {
             String requiredDeptId = scope.getRequiredDepartmentId();
             if (departmentId != null && !departmentId.equals(requiredDeptId)) {
@@ -183,7 +183,7 @@ public class OutcomeService {
 
     private void enforceProgrammeScope(String masterProgrammeId) {
         CurrentUserScope scope = getScope();
-        if (scope == null || scope.isAdmin() || scope.isIqac()) return;
+        if (scope == null || scope.isIqac()) return;
         if (masterProgrammeId == null || masterProgrammeId.isBlank()) return;
 
         if (scope.isProgrammeCoordinator()) {
@@ -212,7 +212,7 @@ public class OutcomeService {
 
     private void enforceBatchScope(String programmeBatchId) {
         CurrentUserScope scope = getScope();
-        if (scope == null || scope.isAdmin() || scope.isIqac()) return;
+        if (scope == null || scope.isIqac()) return;
         if (programmeBatchId == null || programmeBatchId.isBlank()) return;
         ProgrammeBatch batch = programmeBatchRepository.findById(programmeBatchId)
                 .orElseThrow(() -> new ResourceNotFoundException("Batch not found: " + programmeBatchId));
@@ -243,7 +243,7 @@ public class OutcomeService {
 
     private void enforceCourseScope(String masterCourseId) {
         CurrentUserScope scope = getScope();
-        if (scope == null || scope.isAdmin() || scope.isIqac()) return;
+        if (scope == null || scope.isIqac()) return;
         if (masterCourseId == null || masterCourseId.isBlank()) return;
         MasterCourse course = masterCourseRepository.findById(masterCourseId)
                 .orElseThrow(() -> new ResourceNotFoundException("Course not found: " + masterCourseId));
@@ -265,7 +265,7 @@ public class OutcomeService {
 
     private void enforceOfferingScope(String offeringId) {
         CurrentUserScope scope = getScope();
-        if (scope == null || scope.isAdmin() || scope.isIqac()) return;
+        if (scope == null || scope.isIqac()) return;
         if (offeringId == null || offeringId.isBlank()) return;
         ProgrammeBatchCourse offering = programmeBatchCourseRepository.findById(offeringId)
                 .orElseThrow(() -> new ResourceNotFoundException("Course offering not found: " + offeringId));
@@ -299,7 +299,7 @@ public class OutcomeService {
 
     private void enforceCourseOrOfferingScope(String masterCourseIdOrOfferingId) {
         CurrentUserScope scope = getScope();
-        if (scope == null || scope.isAdmin() || scope.isIqac()) return;
+        if (scope == null || scope.isIqac()) return;
         if (masterCourseIdOrOfferingId == null || masterCourseIdOrOfferingId.isBlank()) return;
         if (programmeBatchCourseRepository.existsById(masterCourseIdOrOfferingId)) {
             enforceOfferingScope(masterCourseIdOrOfferingId);

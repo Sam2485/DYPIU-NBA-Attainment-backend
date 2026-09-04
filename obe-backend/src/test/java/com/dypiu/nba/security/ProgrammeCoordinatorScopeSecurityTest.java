@@ -80,7 +80,6 @@ public class ProgrammeCoordinatorScopeSecurityTest {
 
     private User pcA1;
     private User pcB1;
-    private User adminUser;
 
     @BeforeEach
     void setUpTestData() {
@@ -234,14 +233,6 @@ public class ProgrammeCoordinatorScopeSecurityTest {
                 .isActive(true)
                 .build());
 
-        adminUser = userRepository.save(User.builder()
-                .username("admin_user_pc")
-                .email("admin.pc@dypiu.ac.in")
-                .passwordHash("test_hash")
-                .name("Global Admin")
-                .role(UserRole.ADMIN)
-                .isActive(true)
-                .build());
     }
 
     @AfterEach

@@ -163,17 +163,17 @@ public class CurrentUserScopeServiceTest {
     }
 
     @Test
-    @DisplayName("4. Successfully resolve Admin user scope (global access)")
-    void testResolveAdminScope_Success() {
-        String username = "admin";
-        setSecurityContextUser(username, "ADMIN");
+    @DisplayName("4. Successfully resolve IQAC user scope (global institutional access)")
+    void testResolveIqacScope_Success() {
+        String username = "iqac_officer";
+        setSecurityContextUser(username, "IQAC");
 
         User user = User.builder()
                 .id(99L)
                 .username(username)
-                .email("admin@dypiu.ac.in")
-                .name("Administrator")
-                .role(UserRole.ADMIN)
+                .email("iqac@dypiu.ac.in")
+                .name("IQAC Head")
+                .role(UserRole.IQAC)
                 .schoolId(null)
                 .departmentId(null)
                 .masterProgrammeId(null)
@@ -187,7 +187,7 @@ public class CurrentUserScopeServiceTest {
 
         assertNotNull(scope);
         assertEquals(99L, scope.getUserId());
-        assertTrue(scope.isAdmin());
+        assertTrue(scope.isIqac());
         assertFalse(scope.hasSchoolScope());
     }
 

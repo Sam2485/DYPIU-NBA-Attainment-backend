@@ -10,7 +10,7 @@ VALUES (
     'sunil.dambhare@dypiu.ac.in',
     '$2a$12$fSqLVm2Hhc12iCPcphiOyegDu0reQDr2f1QID23fHhIY6biNXHyfi',
     'Sunil Dambhare',
-    'ADMIN',
+    'IQAC',
     TRUE,
     CURRENT_TIMESTAMP,
     CURRENT_TIMESTAMP

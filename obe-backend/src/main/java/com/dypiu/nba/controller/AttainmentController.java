@@ -365,8 +365,6 @@ public class AttainmentController {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("averageIndirectAttainment", avgIndirectAttainment);
         result.put("overallIndirectAttainment", overallIndirect);
-        result.put("poIndirectAttainment", report.getReport3IndirectAttainmentPO() != null ? report.getReport3IndirectAttainmentPO() : Collections.emptyList());
-        result.put("psoIndirectAttainment", report.getReport3IndirectAttainmentPSO() != null ? report.getReport3IndirectAttainmentPSO() : Collections.emptyList());
         result.put("studentResponses", report.getStudentSurveyRows() != null ? report.getStudentSurveyRows() : Collections.emptyList());
 
         return ResponseEntity.ok(ApiResponse.builder()
@@ -457,8 +455,6 @@ public class AttainmentController {
         result.put("averageIndirectAttainment", avgIndirectAttainment);
         result.put("finalAttainments", finalAttainments);
         result.put("overallProgrammeAttainment", report.getOverallProgrammeAttainment());
-        result.put("poOverallAttainment", report.getReport4OverallAttainmentPO() != null ? report.getReport4OverallAttainmentPO() : Collections.emptyList());
-        result.put("psoOverallAttainment", report.getReport4OverallAttainmentPSO() != null ? report.getReport4OverallAttainmentPSO() : Collections.emptyList());
 
         return ResponseEntity.ok(ApiResponse.builder()
                 .success(true)

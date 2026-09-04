@@ -138,8 +138,8 @@ public class ExcelMarksParserIntegrationTest {
                 .status("ACTIVE")
                 .build());
 
-        // Create Course Outcomes CO1-CO6
-        for (int i = 1; i <= 6; i++) {
+        // Create Course Outcomes CO1-CO5 (matching test excel sheets)
+        for (int i = 1; i <= 5; i++) {
             courseOutcomeRepository.save(CourseOutcome.builder()
                     .id("co-parse-" + uid + "-co" + i)
                     .programmeBatchCourseId(offering.getId())
@@ -246,7 +246,7 @@ public class ExcelMarksParserIntegrationTest {
                 .status("ACTIVE")
                 .build());
 
-        for (int i = 1; i <= 6; i++) {
+        for (int i = 1; i <= 5; i++) {
             courseOutcomeRepository.save(CourseOutcome.builder()
                     .id("co-srv-" + uid + "-co" + i)
                     .programmeBatchCourseId(offering.getId())

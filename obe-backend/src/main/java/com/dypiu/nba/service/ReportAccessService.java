@@ -107,7 +107,7 @@ public class ReportAccessService {
     public void validateProgrammeAccess(User user, String masterProgrammeId) {
         System.out.println("[ReportAccessService] validateProgrammeAccess called | user: " + (user != null ? user.getEmail() : "null") + " | masterProgrammeId: " + masterProgrammeId);
         if (user == null || masterProgrammeId == null) return;
-        if (user.getRole() == UserRole.IQAC || user.getRole() == UserRole.ADMIN) return;
+        if (user.getRole() == UserRole.IQAC) return;
 
         MasterProgramme prog = masterProgrammeRepository.findById(masterProgrammeId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Programme not found: " + masterProgrammeId));
@@ -155,7 +155,7 @@ public class ReportAccessService {
     public void validateBatchAccess(User user, String programmeBatchId) {
         System.out.println("[ReportAccessService] validateBatchAccess called | user: " + (user != null ? user.getEmail() : "null") + " | programmeBatchId: " + programmeBatchId);
         if (user == null || programmeBatchId == null) return;
-        if (user.getRole() == UserRole.IQAC || user.getRole() == UserRole.ADMIN) return;
+        if (user.getRole() == UserRole.IQAC) return;
 
         ProgrammeBatch batch = programmeBatchRepository.findById(programmeBatchId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Batch not found: " + programmeBatchId));
@@ -184,7 +184,7 @@ public class ReportAccessService {
     public void validateCourseOfferingAccess(User user, String programmeBatchCourseId) {
         System.out.println("[ReportAccessService] validateCourseOfferingAccess called | user: " + (user != null ? user.getEmail() : "null") + " | programmeBatchCourseId: " + programmeBatchCourseId);
         if (user == null || programmeBatchCourseId == null) return;
-        if (user.getRole() == UserRole.ADMIN || user.getRole() == UserRole.IQAC) return;
+        if (user.getRole() == UserRole.IQAC) return;
 
         ProgrammeBatchCourse offering = programmeBatchCourseRepository.findById(programmeBatchCourseId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Course Offering not found: " + programmeBatchCourseId));
@@ -243,7 +243,7 @@ public class ReportAccessService {
     public void validateCourseCoordinatorAccess(User user, String programmeBatchCourseId) {
         System.out.println("[ReportAccessService] validateCourseCoordinatorAccess called | user: " + (user != null ? user.getEmail() : "null") + " | programmeBatchCourseId: " + programmeBatchCourseId);
         if (user == null || programmeBatchCourseId == null) return;
-        if (user.getRole() == UserRole.ADMIN || user.getRole() == UserRole.IQAC || user.getRole() == UserRole.DIRECTOR || user.getRole() == UserRole.HOD || user.getRole() == UserRole.PROGRAMME_COORDINATOR) {
+        if (user.getRole() == UserRole.IQAC || user.getRole() == UserRole.DIRECTOR || user.getRole() == UserRole.HOD || user.getRole() == UserRole.PROGRAMME_COORDINATOR) {
             validateCourseOfferingAccess(user, programmeBatchCourseId);
             return;
         }
@@ -264,7 +264,7 @@ public class ReportAccessService {
     public void validateCourseAccess(User user, String masterCourseId) {
         System.out.println("[ReportAccessService] validateCourseAccess called | user: " + (user != null ? user.getEmail() : "null") + " | masterCourseId: " + masterCourseId);
         if (user == null || masterCourseId == null) return;
-        if (user.getRole() == UserRole.ADMIN || user.getRole() == UserRole.IQAC) return;
+        if (user.getRole() == UserRole.IQAC) return;
 
         MasterCourse course = masterCourseRepository.findById(masterCourseId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Course not found: " + masterCourseId));

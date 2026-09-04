@@ -74,7 +74,7 @@ public class DirectorAndHodScopeSecurityTest {
     private User directorB;
     private User hodA1;
     private User hodA2;
-    private User adminUser;
+    private User iqacUser;
 
     @BeforeEach
     void setUpTestData() {
@@ -220,12 +220,12 @@ public class DirectorAndHodScopeSecurityTest {
                 .isActive(true)
                 .build());
 
-        adminUser = userRepository.save(User.builder()
-                .username("admin_user_dh")
-                .email("admin.dh@dypiu.ac.in")
+        iqacUser = userRepository.save(User.builder()
+                .username("iqac_user_dh")
+                .email("iqac.dh@dypiu.ac.in")
                 .passwordHash("test_hash")
-                .name("Global Admin")
-                .role(UserRole.ADMIN)
+                .name("Global IQAC")
+                .role(UserRole.IQAC)
                 .isActive(true)
                 .build());
     }
@@ -484,37 +484,37 @@ public class DirectorAndHodScopeSecurityTest {
     }
 
     // =========================================================================
-    // SCENARIO 23: GLOBAL ADMIN / IQAC UNRESTRICTED ACCESS
+    // SCENARIO 23: IQAC UNRESTRICTED ACCESS
     // =========================================================================
 
     @Test
-    @DisplayName("Scenario 23: Admin has unrestricted access across all schools and departments")
-    void testAdminUnrestrictedAccess() {
-        authenticateUser(adminUser);
+    @DisplayName("Scenario 23: IQAC has unrestricted access across all schools and departments")
+    void testIqacUnrestrictedAccess() {
+        authenticateUser(iqacUser);
 
-        // Admin can access all schools
+        // IQAC can access all schools
         List<School> schools = academicService.getAllSchools();
         assertTrue(schools.size() >= 2);
 
-        // Admin can access departments across schools
+        // IQAC can access departments across schools
         Department fetchedDeptA = academicService.getDepartmentById(deptA1.getId());
         Department fetchedDeptB = academicService.getDepartmentById(deptB1.getId());
         assertNotNull(fetchedDeptA);
         assertNotNull(fetchedDeptB);
 
-        // Admin can access programmes across schools
+        // IQAC can access programmes across schools
         MasterProgramme fetchedProgA = academicService.getProgrammeById(progA1.getId());
         MasterProgramme fetchedProgB = academicService.getProgrammeById(progB1.getId());
         assertNotNull(fetchedProgA);
         assertNotNull(fetchedProgB);
 
-        // Admin can access batches across schools
+        // IQAC can access batches across schools
         ProgrammeBatch fetchedBatchA = academicService.getBatchById(batchA1.getId());
         ProgrammeBatch fetchedBatchB = academicService.getBatchById(batchB1.getId());
         assertNotNull(fetchedBatchA);
         assertNotNull(fetchedBatchB);
 
-        // Admin can access courses across schools
+        // IQAC can access courses across schools
         MasterCourse fetchedCourseA = academicService.getCourseById(courseA1.getId());
         MasterCourse fetchedCourseB = academicService.getCourseById(courseB1.getId());
         assertNotNull(fetchedCourseA);

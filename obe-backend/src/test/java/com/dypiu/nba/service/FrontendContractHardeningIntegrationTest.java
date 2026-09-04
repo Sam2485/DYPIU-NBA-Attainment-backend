@@ -17,7 +17,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 @SpringBootTest
 @Transactional
-@WithMockUser(roles = "ADMIN")
+@WithMockUser(roles = "IQAC")
 public class FrontendContractHardeningIntegrationTest {
 
     @Autowired
@@ -78,7 +78,7 @@ public class FrontendContractHardeningIntegrationTest {
                 .username("user")
                 .email("user@dypiu.ac.in")
                 .name("Test User")
-                .role(com.dypiu.nba.entity.UserRole.ADMIN)
+                .role(com.dypiu.nba.entity.UserRole.IQAC)
                 .passwordHash("dummy")
                 .build());
         }
