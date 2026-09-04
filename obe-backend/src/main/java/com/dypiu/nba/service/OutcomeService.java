@@ -1166,4 +1166,99 @@ public class OutcomeService {
                 .orElseThrow(() -> new ResourceNotFoundException("Course Offering not found: " + offeringId));
         return saveCourseMappings(offering.getId(), dto);
     }
+
+    // --- Atomic Programme Batch Outcome Bundle (POs, PSOs, PEOs, Targets in single transaction) ---
+
+    @Transactional(readOnly = true)
+    public com.dypiu.nba.dto.ProgrammeBatchOutcomeBundleDto getProgrammeBatchOutcomeBundle(String programmeOrProgrammeBatchId) {
+        System.out.println("[OutcomeService] getProgrammeBatchOutcomeBundle called | programmeOrProgrammeBatchId: " + programmeOrProgrammeBatchId);
+        enforceBatchOrProgrammeScope(programmeOrProgrammeBatchId);
+        String batchId = resolveProgrammeBatchId(programmeOrProgrammeBatchId);
+        ProgrammeBatch batch = (batchId != null) ? programmeBatchRepository.findById(batchId).orElse(null) : null;
+        String masterProgId = (batch != null) ? batch.getMasterProgrammeId() : programmeOrProgrammeBatchId;
+
+        List<ProgrammeOutcome> pos = getPOsByProgramme(programmeOrProgrammeBatchId);
+        List<ProgrammeSpecificOutcome> psos = getPSOsByProgramme(programmeOrProgrammeBatchId);
+        List<PeoOutcome> peos = getPEOsByProgramme(programmeOrProgrammeBatchId);
+        ProgrammeTargetDto targets = getProgrammeTargets(programmeOrProgrammeBatchId);
+
+        return com.dypiu.nba.dto.ProgrammeBatchOutcomeBundleDto.builder()
+                .programmeBatchId(batchId)
+                .masterProgrammeId(masterProgId)
+                .pos(pos)
+                .psos(psos)
+                .peos(peos)
+                .poTargets(targets != null ? targets.getPoTargets() : null)
+                .psoTargets(targets != null ? targets.getPsoTargets() : null)
+                .build();
+    }
+
+    @Transactional
+    public com.dypiu.nba.dto.ProgrammeBatchOutcomeBundleDto saveProgrammeBatchOutcomeBundle(String programmeOrProgrammeBatchId, com.dypiu.nba.dto.ProgrammeBatchOutcomeBundleDto bundle) {
+        System.out.println("[OutcomeService] saveProgrammeBatchOutcomeBundle called | programmeOrProgrammeBatchId: " + programmeOrProgrammeBatchId);
+        enforceBatchOrProgrammeScope(programmeOrProgrammeBatchId);
+        enforceProgrammeCoordinatorMutation(programmeOrProgrammeBatchId);
+        String batchId = (bundle != null && bundle.getProgrammeBatchId() != null && !bundle.getProgrammeBatchId().isBlank())
+                ? bundle.getProgrammeBatchId()
+                : resolveProgrammeBatchId(programmeOrProgrammeBatchId);
+
+        if (batchId == null || batchId.isBlank()) {
+            throw new ResourceNotFoundException("Programme Batch not found: " + programmeOrProgrammeBatchId);
+        }
+        batchLifecycleService.enforceBatchEditability(batchId);
+
+        if (bundle == null) {
+            return getProgrammeBatchOutcomeBundle(programmeOrProgrammeBatchId);
+        }
+
+        // 1. Save POs (with competencies and targets if provided)
+        List<ProgrammeOutcome> savedPos = null;
+        if (bundle.getPos() != null) {
+            savedPos = savePOs(batchId, bundle.getPos());
+        } else {
+            savedPos = getPOsByProgramme(batchId);
+        }
+
+        // 2. Save PSOs (with competencies and targets if provided)
+        List<ProgrammeSpecificOutcome> savedPsos = null;
+        if (bundle.getPsos() != null) {
+            savedPsos = savePSOs(batchId, bundle.getPsos());
+        } else {
+            savedPsos = getPSOsByProgramme(batchId);
+        }
+
+        // 3. Save PEOs
+        List<PeoOutcome> savedPeos = null;
+        if (bundle.getPeos() != null) {
+            savedPeos = savePEOs(batchId, bundle.getPeos());
+        } else {
+            savedPeos = getPEOsByProgramme(batchId);
+        }
+
+        // 4. Save Targets if provided in the bundle
+        ProgrammeTargetDto targetDto = null;
+        if (bundle.getPoTargets() != null || bundle.getPsoTargets() != null) {
+            ProgrammeTargetDto tDto = ProgrammeTargetDto.builder()
+                    .programmeBatchId(batchId)
+                    .poTargets(bundle.getPoTargets())
+                    .psoTargets(bundle.getPsoTargets())
+                    .build();
+            targetDto = saveProgrammeTargets(batchId, tDto);
+        } else {
+            targetDto = getProgrammeTargets(batchId);
+        }
+
+        ProgrammeBatch batch = programmeBatchRepository.findById(batchId).orElse(null);
+        String masterProgId = (batch != null) ? batch.getMasterProgrammeId() : (bundle.getMasterProgrammeId() != null ? bundle.getMasterProgrammeId() : programmeOrProgrammeBatchId);
+
+        return com.dypiu.nba.dto.ProgrammeBatchOutcomeBundleDto.builder()
+                .programmeBatchId(batchId)
+                .masterProgrammeId(masterProgId)
+                .pos(savedPos)
+                .psos(savedPsos)
+                .peos(savedPeos)
+                .poTargets(targetDto != null ? targetDto.getPoTargets() : null)
+                .psoTargets(targetDto != null ? targetDto.getPsoTargets() : null)
+                .build();
+    }
 }
