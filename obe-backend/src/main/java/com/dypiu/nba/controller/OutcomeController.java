@@ -25,7 +25,7 @@ public class OutcomeController {
                 .build());
     }
 
-    @PostMapping({"/master-programmes/{masterProgrammeId}/pos", "/programme-batches/{masterProgrammeId}/pos", "/batches/{masterProgrammeId}/pos"})
+    @RequestMapping(value = {"/master-programmes/{masterProgrammeId}/pos", "/programme-batches/{masterProgrammeId}/pos", "/batches/{masterProgrammeId}/pos"}, method = {RequestMethod.POST, RequestMethod.PUT})
     public ResponseEntity<ApiResponse<List<ProgrammeOutcome>>> savePOs(@PathVariable String masterProgrammeId, @RequestBody List<ProgrammeOutcome> pos) {
         return ResponseEntity.ok(ApiResponse.<List<ProgrammeOutcome>>builder()
                 .success(true)
@@ -42,7 +42,7 @@ public class OutcomeController {
                 .build());
     }
 
-    @PostMapping({"/master-programmes/{masterProgrammeId}/psos", "/programme-batches/{masterProgrammeId}/psos", "/batches/{masterProgrammeId}/psos"})
+    @RequestMapping(value = {"/master-programmes/{masterProgrammeId}/psos", "/programme-batches/{masterProgrammeId}/psos", "/batches/{masterProgrammeId}/psos"}, method = {RequestMethod.POST, RequestMethod.PUT})
     public ResponseEntity<ApiResponse<List<ProgrammeSpecificOutcome>>> savePSOs(@PathVariable String masterProgrammeId, @RequestBody List<ProgrammeSpecificOutcome> psos) {
         return ResponseEntity.ok(ApiResponse.<List<ProgrammeSpecificOutcome>>builder()
                 .success(true)
@@ -59,7 +59,7 @@ public class OutcomeController {
                 .build());
     }
 
-    @PostMapping({"/master-programmes/{masterProgrammeId}/peos", "/programme-batches/{masterProgrammeId}/peos", "/batches/{masterProgrammeId}/peos"})
+    @RequestMapping(value = {"/master-programmes/{masterProgrammeId}/peos", "/programme-batches/{masterProgrammeId}/peos", "/batches/{masterProgrammeId}/peos"}, method = {RequestMethod.POST, RequestMethod.PUT})
     public ResponseEntity<ApiResponse<List<PeoOutcome>>> savePEOs(@PathVariable String masterProgrammeId, @RequestBody List<PeoOutcome> peos) {
         return ResponseEntity.ok(ApiResponse.<List<PeoOutcome>>builder()
                 .success(true)
@@ -76,7 +76,7 @@ public class OutcomeController {
                 .build());
     }
 
-    @PostMapping("/master-courses/{masterCourseId}/cos")
+    @RequestMapping(value = "/master-courses/{masterCourseId}/cos", method = {RequestMethod.POST, RequestMethod.PUT})
     public ResponseEntity<ApiResponse<List<CourseOutcome>>> saveCOs(@PathVariable String masterCourseId, @RequestBody List<CourseOutcome> cos) {
         return ResponseEntity.ok(ApiResponse.<List<CourseOutcome>>builder()
                 .success(true)
@@ -94,7 +94,7 @@ public class OutcomeController {
                 .build());
     }
 
-    @PostMapping({"/master-programmes/{masterProgrammeId}/targets", "/programme-batches/{masterProgrammeId}/targets", "/batches/{masterProgrammeId}/targets"})
+    @RequestMapping(value = {"/master-programmes/{masterProgrammeId}/targets", "/programme-batches/{masterProgrammeId}/targets", "/batches/{masterProgrammeId}/targets"}, method = {RequestMethod.POST, RequestMethod.PUT})
     public ResponseEntity<ApiResponse<ProgrammeTargetDto>> saveProgrammeTargets(@PathVariable String masterProgrammeId, @RequestBody ProgrammeTargetDto targets) {
         return ResponseEntity.ok(ApiResponse.<ProgrammeTargetDto>builder()
                 .success(true)

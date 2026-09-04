@@ -198,7 +198,7 @@ public class ProgrammeBatchController {
                 .build());
     }
 
-    @PostMapping("/{programmeBatchId}/targets")
+    @RequestMapping(value = "/{programmeBatchId}/targets", method = {RequestMethod.POST, RequestMethod.PUT})
     public ResponseEntity<ApiResponse<ProgrammeTargetDto>> saveProgrammeTargets(
             @PathVariable String programmeBatchId,
             @RequestBody ProgrammeTargetDto dto) {
