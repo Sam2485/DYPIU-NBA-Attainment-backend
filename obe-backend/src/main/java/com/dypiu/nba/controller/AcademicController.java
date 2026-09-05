@@ -587,7 +587,7 @@ public class AcademicController {
         System.out.println("\n>>> [CONTROLLER] PUT /api/v1/academic/master-programmes/" + id + "/coordinator | coordinator: " + coordinator + " | email: " + coordinatorEmail);
         MasterProgramme prog = academicService.getProgrammeById(id);
         if (prog == null) {
-            prog = MasterProgramme.builder().id(id).name("MasterProgramme " + id).code(id).build();
+            prog = MasterProgramme.builder().id(id).name("MasterProgramme " + id).degreeAwarded(id).build();
         }
         if (coordinator != null) prog.setCoordinator(coordinator);
         if (coordinatorEmail != null) prog.setCoordinatorEmail(coordinatorEmail);

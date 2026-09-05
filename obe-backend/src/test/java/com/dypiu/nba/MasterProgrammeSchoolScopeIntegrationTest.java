@@ -105,22 +105,23 @@ public class MasterProgrammeSchoolScopeIntegrationTest {
     }
 
     @Test
-    void testSameCodeSameSchoolRejected() {
+    void testSameDegreeAwardedSameSchoolAllowed() {
         MasterProgramme p1 = new MasterProgramme();
         p1.setDepartmentId(d1Id);
-        p1.setCode("BTECH");
-        p1.setName("Bachelor of Tech 1");
-        academicService.saveProgramme(p1);
+        p1.setDegreeAwarded("B.Tech");
+        p1.setName("Bachelor of Tech in Computer Science");
+        MasterProgramme saved1 = academicService.saveProgramme(p1);
 
         MasterProgramme p2 = new MasterProgramme();
         p2.setDepartmentId(d2Id); // different department, same school
-        p2.setCode("btech");
-        p2.setName("Bachelor of Tech 2");
+        p2.setDegreeAwarded("B.Tech"); // multiple programmes in same school award B.Tech
+        p2.setName("Bachelor of Tech in Mechanical");
+        MasterProgramme saved2 = academicService.saveProgramme(p2);
 
-        ResponseStatusException ex = assertThrows(ResponseStatusException.class, () -> {
-            academicService.saveProgramme(p2);
-        });
-        assertThat(ex.getReason()).contains("Programme code already exists in this school");
+        assertThat(saved1.getId()).isNotNull();
+        assertThat(saved2.getId()).isNotNull();
+        assertThat(saved1.getDegreeAwarded()).isEqualTo("B.Tech");
+        assertThat(saved2.getDegreeAwarded()).isEqualTo("B.Tech");
     }
 
     @Test
