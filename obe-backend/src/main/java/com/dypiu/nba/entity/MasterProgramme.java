@@ -28,8 +28,10 @@ public class MasterProgramme {
     @Column(name = "department_id", nullable = false)
     private String departmentId;
 
-    @Column(nullable = false, length = 20)
-    private String code;
+    @Column(name = "degree_awarded", nullable = false, length = 100)
+    @JsonProperty("degreeAwarded")
+    @com.fasterxml.jackson.annotation.JsonAlias({"code", "degree_awarded", "degreeAwarded"})
+    private String degreeAwarded;
 
     @Column(nullable = false, length = 255)
     private String name;
@@ -67,10 +69,10 @@ public class MasterProgramme {
     @Transient
     private String coordinatorEmail;
 
-    public MasterProgramme(String id, String departmentId, String code, String name, Integer durationYears, String status, String level, String departmentName, ZonedDateTime createdAt, ZonedDateTime updatedAt, ZonedDateTime deletedAt, String deletedBy, String coordinator, String coordinatorEmail) {
+    public MasterProgramme(String id, String departmentId, String degreeAwarded, String name, Integer durationYears, String status, String level, String departmentName, ZonedDateTime createdAt, ZonedDateTime updatedAt, ZonedDateTime deletedAt, String deletedBy, String coordinator, String coordinatorEmail) {
         this.id = id;
         this.departmentId = departmentId;
-        this.code = code;
+        this.degreeAwarded = degreeAwarded;
         this.name = name;
         this.durationYears = durationYears != null ? durationYears : 4;
         this.status = status != null ? status : "ACTIVE";
@@ -87,8 +89,17 @@ public class MasterProgramme {
         }
     }
 
-    public MasterProgramme(String id, String departmentId, String code, String name, Integer durationYears, String status, String departmentName, ZonedDateTime createdAt, ZonedDateTime updatedAt, ZonedDateTime deletedAt, String deletedBy, String coordinator, String coordinatorEmail) {
-        this(id, departmentId, code, name, durationYears, status, "UG", departmentName, createdAt, updatedAt, deletedAt, deletedBy, coordinator, coordinatorEmail);
+    public MasterProgramme(String id, String departmentId, String degreeAwarded, String name, Integer durationYears, String status, String departmentName, ZonedDateTime createdAt, ZonedDateTime updatedAt, ZonedDateTime deletedAt, String deletedBy, String coordinator, String coordinatorEmail) {
+        this(id, departmentId, degreeAwarded, name, durationYears, status, "UG", departmentName, createdAt, updatedAt, deletedAt, deletedBy, coordinator, coordinatorEmail);
+    }
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public String getCode() {
+        return this.degreeAwarded;
+    }
+
+    public void setCode(String code) {
+        this.degreeAwarded = code;
     }
 
     public String getCoordinator() {
@@ -137,4 +148,12 @@ public class MasterProgramme {
             COORDINATOR_CACHE.put(this.id, new String[]{c, coordinatorEmail});
         }
     }
+
+    public static class MasterProgrammeBuilder {
+        public MasterProgrammeBuilder code(String code) {
+            this.degreeAwarded = code;
+            return this;
+        }
+    }
 }
+

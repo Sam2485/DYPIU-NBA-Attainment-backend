@@ -2104,7 +2104,7 @@ public class AcademicService {
                 existing.setDeletedAt(null);
                 existing.setDeletedBy(null);
                 if (programme.getName() != null) existing.setName(programme.getName());
-                if (programme.getCode() != null) existing.setCode(programme.getCode());
+                if (programme.getDegreeAwarded() != null) existing.setDegreeAwarded(programme.getDegreeAwarded());
                 if (programme.getDepartmentId() != null) existing.setDepartmentId(programme.getDepartmentId());
                 if (programme.getDurationYears() != null) existing.setDurationYears(programme.getDurationYears());
                 if (programme.getStatus() != null) existing.setStatus(programme.getStatus());
@@ -2132,13 +2132,6 @@ public class AcademicService {
         String schoolId = dept.getSchoolId();
         
         String excludeId = targetProg.getId();
-        
-        if (targetProg.getCode() != null) {
-            boolean codeExists = masterProgrammeRepository.existsByCodeInSchoolExcludeId(schoolId, targetProg.getCode(), excludeId);
-            if (codeExists) {
-                throw new ResponseStatusException(HttpStatus.CONFLICT, "Programme code already exists in this school.");
-            }
-        }
         
         if (targetProg.getName() != null) {
             boolean nameExists = masterProgrammeRepository.existsByNameInSchoolExcludeId(schoolId, targetProg.getName(), excludeId);
@@ -2187,7 +2180,7 @@ public class AcademicService {
         boolean isNewProg = (finalProg.getId() == null || !masterProgrammeRepository.existsByIdAndDeletedAtIsNull(finalProg.getId()));
         MasterProgramme saved = masterProgrammeRepository.save(finalProg);
         if (auditLogService != null) {
-            auditLogService.recordSuccess(isNewProg ? com.dypiu.nba.audit.AuditAction.CREATE : com.dypiu.nba.audit.AuditAction.UPDATE, com.dypiu.nba.audit.ResourceType.MASTER_PROGRAMME, saved.getId(), null, "ACTIVE", isNewProg ? "Created MasterProgramme" : "Updated MasterProgramme", java.util.Map.of("code", saved.getCode() != null ? saved.getCode() : "", "name", saved.getName() != null ? saved.getName() : ""));
+            auditLogService.recordSuccess(isNewProg ? com.dypiu.nba.audit.AuditAction.CREATE : com.dypiu.nba.audit.AuditAction.UPDATE, com.dypiu.nba.audit.ResourceType.MASTER_PROGRAMME, saved.getId(), null, "ACTIVE", isNewProg ? "Created MasterProgramme" : "Updated MasterProgramme", java.util.Map.of("degreeAwarded", saved.getDegreeAwarded() != null ? saved.getDegreeAwarded() : "", "name", saved.getName() != null ? saved.getName() : ""));
         }
         System.out.println("[AcademicService] Saved programme with id: " + saved.getId() + ", coordinator: " + saved.getCoordinator() + ", coordinatorEmail: " + saved.getCoordinatorEmail());
         return saved;
@@ -2238,7 +2231,7 @@ public class AcademicService {
                     null,
                     "DELETED",
                     "Soft-deleted MasterProgramme and its active batches/courses",
-                    java.util.Map.of("code", existing.getCode() != null ? existing.getCode() : "")
+                    java.util.Map.of("degreeAwarded", existing.getDegreeAwarded() != null ? existing.getDegreeAwarded() : "")
             );
         }
         System.out.println("[AcademicService] Soft-deleted programme with id: " + id);

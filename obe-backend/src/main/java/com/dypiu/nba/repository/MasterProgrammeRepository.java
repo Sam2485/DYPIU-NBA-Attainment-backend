@@ -11,21 +11,37 @@ import java.util.Optional;
 public interface MasterProgrammeRepository extends JpaRepository<MasterProgramme, String> {
     List<MasterProgramme> findByDepartmentId(String departmentId);
     List<MasterProgramme> findByDepartmentIdIn(List<String> departmentIds);
-    Optional<MasterProgramme> findByCode(String code);
+    Optional<MasterProgramme> findByDegreeAwarded(String degreeAwarded);
 
     List<MasterProgramme> findByDeletedAtIsNull();
     List<MasterProgramme> findByDepartmentIdAndDeletedAtIsNull(String departmentId);
     List<MasterProgramme> findByDepartmentIdInAndDeletedAtIsNull(List<String> departmentIds);
     List<MasterProgramme> findByLevelAndDeletedAtIsNull(String level);
     List<MasterProgramme> findByDepartmentIdAndLevelAndDeletedAtIsNull(String departmentId, String level);
-    Optional<MasterProgramme> findByCodeAndDeletedAtIsNull(String code);
+    Optional<MasterProgramme> findByDegreeAwardedAndDeletedAtIsNull(String degreeAwarded);
     Optional<MasterProgramme> findByIdAndDeletedAtIsNull(String id);
     List<MasterProgramme> findByIdInAndDeletedAtIsNull(Iterable<String> ids);
-    boolean existsByCodeAndDeletedAtIsNull(String code);
+    boolean existsByDegreeAwardedAndDeletedAtIsNull(String degreeAwarded);
     boolean existsByIdAndDeletedAtIsNull(String id);
 
-    @org.springframework.data.jpa.repository.Query("SELECT COUNT(mp) > 0 FROM MasterProgramme mp JOIN Department d ON mp.departmentId = d.id WHERE d.schoolId = :schoolId AND LOWER(TRIM(mp.code)) = LOWER(TRIM(:code)) AND mp.deletedAt IS NULL AND mp.id != :excludeId")
-    boolean existsByCodeInSchoolExcludeId(@org.springframework.data.repository.query.Param("schoolId") String schoolId, @org.springframework.data.repository.query.Param("code") String code, @org.springframework.data.repository.query.Param("excludeId") String excludeId);
+    default Optional<MasterProgramme> findByCode(String code) {
+        return findByDegreeAwarded(code);
+    }
+
+    default Optional<MasterProgramme> findByCodeAndDeletedAtIsNull(String code) {
+        return findByDegreeAwardedAndDeletedAtIsNull(code);
+    }
+
+    default boolean existsByCodeAndDeletedAtIsNull(String code) {
+        return existsByDegreeAwardedAndDeletedAtIsNull(code);
+    }
+
+    @org.springframework.data.jpa.repository.Query("SELECT COUNT(mp) > 0 FROM MasterProgramme mp JOIN Department d ON mp.departmentId = d.id WHERE d.schoolId = :schoolId AND LOWER(TRIM(mp.degreeAwarded)) = LOWER(TRIM(:degreeAwarded)) AND mp.deletedAt IS NULL AND mp.id != :excludeId")
+    boolean existsByDegreeAwardedInSchoolExcludeId(@org.springframework.data.repository.query.Param("schoolId") String schoolId, @org.springframework.data.repository.query.Param("degreeAwarded") String degreeAwarded, @org.springframework.data.repository.query.Param("excludeId") String excludeId);
+
+    default boolean existsByCodeInSchoolExcludeId(String schoolId, String code, String excludeId) {
+        return existsByDegreeAwardedInSchoolExcludeId(schoolId, code, excludeId);
+    }
 
     @org.springframework.data.jpa.repository.Query("SELECT COUNT(mp) > 0 FROM MasterProgramme mp JOIN Department d ON mp.departmentId = d.id WHERE d.schoolId = :schoolId AND LOWER(TRIM(mp.name)) = LOWER(TRIM(:name)) AND mp.deletedAt IS NULL AND mp.id != :excludeId")
     boolean existsByNameInSchoolExcludeId(@org.springframework.data.repository.query.Param("schoolId") String schoolId, @org.springframework.data.repository.query.Param("name") String name, @org.springframework.data.repository.query.Param("excludeId") String excludeId);
