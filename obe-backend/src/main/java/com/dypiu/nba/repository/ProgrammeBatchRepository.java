@@ -105,4 +105,12 @@ public interface ProgrammeBatchRepository extends JpaRepository<ProgrammeBatch, 
     default List<ProgrammeBatch> findByMasterProgrammeIdAndStatus(String masterProgrammeId, String status) {
         return findByMasterProgrammeIdAndStatusAndDeletedAtIsNull(masterProgrammeId, status);
     }
+
+    Optional<ProgrammeBatch> findFirstByMasterProgrammeIdAndStartYear(String masterProgrammeId, Integer startYear);
+
+    Optional<ProgrammeBatch> findFirstByMasterProgrammeIdAndNameIgnoreCase(String masterProgrammeId, String name);
+
+    boolean existsByMasterProgrammeIdAndStartYearAndIdNotAndDeletedAtIsNull(String masterProgrammeId, Integer startYear, String id);
+
+    boolean existsByMasterProgrammeIdAndStartYearAndDeletedAtIsNull(String masterProgrammeId, Integer startYear);
 }

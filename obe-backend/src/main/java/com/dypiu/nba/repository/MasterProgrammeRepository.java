@@ -16,6 +16,8 @@ public interface MasterProgrammeRepository extends JpaRepository<MasterProgramme
     List<MasterProgramme> findByDeletedAtIsNull();
     List<MasterProgramme> findByDepartmentIdAndDeletedAtIsNull(String departmentId);
     List<MasterProgramme> findByDepartmentIdInAndDeletedAtIsNull(List<String> departmentIds);
+    List<MasterProgramme> findByLevelAndDeletedAtIsNull(String level);
+    List<MasterProgramme> findByDepartmentIdAndLevelAndDeletedAtIsNull(String departmentId, String level);
     Optional<MasterProgramme> findByCodeAndDeletedAtIsNull(String code);
     Optional<MasterProgramme> findByIdAndDeletedAtIsNull(String id);
     List<MasterProgramme> findByIdInAndDeletedAtIsNull(Iterable<String> ids);

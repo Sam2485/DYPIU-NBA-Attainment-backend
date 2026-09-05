@@ -14,9 +14,20 @@ public interface ProgrammeBatchCourseRepository extends JpaRepository<ProgrammeB
     List<ProgrammeBatchCourse> findByProgrammeBatchIdIn(Collection<String> programmeBatchIds);
     List<ProgrammeBatchCourse> findByMasterCourseId(String masterCourseId);
     List<ProgrammeBatchCourse> findByProgrammeBatchIdAndMasterCourseId(String programmeBatchId, String masterCourseId);
-    boolean existsByProgrammeBatchIdAndMasterCourseId(String programmeBatchId, String masterCourseId);
-    boolean existsByProgrammeBatchIdAndMasterCourseIdAndIdNot(String programmeBatchId, String masterCourseId, String id);
-    Optional<ProgrammeBatchCourse> findByProgrammeBatchIdAndMasterCourseIdAndSemester(String programmeBatchId, String masterCourseId, Integer semester);
+    Optional<ProgrammeBatchCourse> findByIdAndDeletedAtIsNull(String id);
+    List<ProgrammeBatchCourse> findByProgrammeBatchIdAndDeletedAtIsNull(String programmeBatchId);
+    List<ProgrammeBatchCourse> findByProgrammeBatchIdInAndDeletedAtIsNull(Collection<String> programmeBatchIds);
+    List<ProgrammeBatchCourse> findByMasterCourseIdAndDeletedAtIsNull(String masterCourseId);
+    List<ProgrammeBatchCourse> findByProgrammeBatchIdAndMasterCourseIdAndDeletedAtIsNull(String programmeBatchId, String masterCourseId);
+    Optional<ProgrammeBatchCourse> findFirstByProgrammeBatchIdAndMasterCourseId(String programmeBatchId, String masterCourseId);
+    boolean existsByProgrammeBatchIdAndMasterCourseIdAndDeletedAtIsNull(String programmeBatchId, String masterCourseId);
+    boolean existsByProgrammeBatchIdAndMasterCourseIdAndIdNotAndDeletedAtIsNull(String programmeBatchId, String masterCourseId, String id);
+    default boolean existsByProgrammeBatchIdAndMasterCourseId(String programmeBatchId, String masterCourseId) {
+        return existsByProgrammeBatchIdAndMasterCourseIdAndDeletedAtIsNull(programmeBatchId, masterCourseId);
+    }
+    default boolean existsByProgrammeBatchIdAndMasterCourseIdAndIdNot(String programmeBatchId, String masterCourseId, String id) {
+        return existsByProgrammeBatchIdAndMasterCourseIdAndIdNotAndDeletedAtIsNull(programmeBatchId, masterCourseId, id);
+    }
     List<ProgrammeBatchCourse> findByCourseCoordinatorId(Long courseCoordinatorId);
     List<ProgrammeBatchCourse> findByCourseCoordinatorNameContainingIgnoreCaseOrAssignedFacultyContainingIgnoreCase(String name, String faculty);
     List<ProgrammeBatchCourse> findByProgrammeBatchIdAndStatus(String programmeBatchId, String status);
