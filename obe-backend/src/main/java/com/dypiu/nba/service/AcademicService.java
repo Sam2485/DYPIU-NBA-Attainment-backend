@@ -203,17 +203,42 @@ public class AcademicService {
         if (scope.isFaculty()) {
             List<ProgrammeBatchCourse> offerings = programmeBatchCourseRepository.findByMasterCourseId(masterCourseId);
             boolean hasAssigned = offerings.stream().anyMatch(o -> {
-                boolean isCoord = (o.getCourseCoordinatorId() != null && Objects.equals(o.getCourseCoordinatorId(), scope.getUserId()))
-                        ;
+                boolean isCoord = (o.getCourseCoordinatorId() != null && Objects.equals(o.getCourseCoordinatorId(), scope.getUserId()));
                 return isCoord || (o.getAssignedFaculty() != null && (o.getAssignedFaculty().contains(scope.getEmail()) || o.getAssignedFaculty().contains(scope.getName())));
             });
             if (!hasAssigned) {
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: You are not assigned to this MasterCourse.");
             }
+            boolean hasApproved = offerings.stream().anyMatch(o -> {
+                boolean isCoord = (o.getCourseCoordinatorId() != null && Objects.equals(o.getCourseCoordinatorId(), scope.getUserId()));
+                boolean isFacultyAssigned = isCoord || (o.getAssignedFaculty() != null && (o.getAssignedFaculty().contains(scope.getEmail()) || o.getAssignedFaculty().contains(scope.getName())));
+                return isFacultyAssigned && isCourseAllocationApproved(o);
+            });
+            if (!hasApproved) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Course allocation for this course has not been approved by the HOD yet.");
+            }
             return;
         }
 
         enforceProgrammeScope(course.getMasterProgrammeId());
+    }
+
+    public boolean isCourseAllocationApproved(ProgrammeBatchCourse offering) {
+        if (offering == null) return false;
+        String progId = null;
+        if (offering.getMasterCourseId() != null) {
+            MasterCourse c = masterCourseRepository.findById(offering.getMasterCourseId()).orElse(null);
+            if (c != null && c.getMasterProgrammeId() != null) {
+                progId = c.getMasterProgrammeId();
+            }
+        }
+        if (progId == null && offering.getProgrammeBatchId() != null) {
+            ProgrammeBatch b = programmeBatchRepository.findById(offering.getProgrammeBatchId()).orElse(null);
+            if (b != null && b.getMasterProgrammeId() != null) {
+                progId = b.getMasterProgrammeId();
+            }
+        }
+        return isAllocationApproved(progId);
     }
 
     private void enforceProgrammeBatchCourseScope(String offeringId) {
@@ -230,6 +255,9 @@ public class AcademicService {
             boolean isFacultyAssigned = isCoordinator || (offering.getAssignedFaculty() != null && (offering.getAssignedFaculty().contains(scope.getEmail()) || offering.getAssignedFaculty().contains(scope.getName())));
             if (!isFacultyAssigned) {
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: You are not assigned to this MasterCourse Offering.");
+            }
+            if (!isCourseAllocationApproved(offering)) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Course allocation for this course has not been approved by the HOD yet.");
             }
             return;
         }
@@ -256,6 +284,9 @@ public class AcademicService {
                 ;
         if (!isCoordinator) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Only the assigned MasterCourse Coordinator can perform this action.");
+        }
+        if (!isCourseAllocationApproved(offering)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Course allocation for this course has not been approved by the HOD yet.");
         }
     }
 
@@ -347,13 +378,17 @@ public class AcademicService {
                 ? masterCourseRepository.findById(offering.getMasterCourseId()).orElse(null)
                 : null;
 
-        if (codeOverride != null) {
+        if (offering.getCode() != null && !offering.getCode().isBlank()) {
+            offering.setCourseCode(offering.getCode());
+        } else if (codeOverride != null) {
             offering.setCourseCode(codeOverride);
         } else if (masterCourse != null) {
             offering.setCourseCode(masterCourse.getCode());
         }
 
-        if (nameOverride != null) {
+        if (offering.getName() != null && !offering.getName().isBlank()) {
+            offering.setCourseName(offering.getName());
+        } else if (nameOverride != null) {
             offering.setCourseName(nameOverride);
         } else if (masterCourse != null) {
             offering.setCourseName(masterCourse.getName());
@@ -407,7 +442,8 @@ public class AcademicService {
             offerings = list.stream()
                     .filter(o -> {
                         boolean isCoord = (o.getCourseCoordinatorId() != null && Objects.equals(o.getCourseCoordinatorId(), scope.getUserId()));
-                        return isCoord || (o.getAssignedFaculty() != null && (o.getAssignedFaculty().contains(scope.getEmail()) || o.getAssignedFaculty().contains(scope.getName())));
+                        boolean isAssigned = isCoord || (o.getAssignedFaculty() != null && (o.getAssignedFaculty().contains(scope.getEmail()) || o.getAssignedFaculty().contains(scope.getName())));
+                        return isAssigned && isCourseAllocationApproved(o);
                     })
                     .collect(Collectors.toList());
         } else if (programmeBatchId != null && !programmeBatchId.isBlank()) {
@@ -553,6 +589,22 @@ public class AcademicService {
         offering.setCourseCodeOverride(codeOverride);
         offering.setCourseNameOverride(nameOverride);
 
+        MasterCourse mc = (masterCourseId != null) ? masterCourseRepository.findById(masterCourseId).orElse(null) : null;
+        if (codeOverride != null) {
+            offering.setCode(codeOverride);
+        } else if (mc != null) {
+            offering.setCode(mc.getCode());
+        }
+        if (nameOverride != null) {
+            offering.setName(nameOverride);
+        } else if (mc != null) {
+            offering.setName(mc.getName());
+        }
+        if (mc != null) {
+            if (mc.getCredits() != null) offering.setCredits(mc.getCredits());
+            if (mc.getCourseType() != null) offering.setCourseType(mc.getCourseType());
+        }
+
         ProgrammeBatchCourse saved = programmeBatchCourseRepository.save(offering);
         if (auditLogService != null) {
             auditLogService.recordSuccess(
@@ -608,10 +660,14 @@ public class AcademicService {
         }
 
         if (requestDto.getCourseCodeOverride() != null) {
-            existing.setCourseCodeOverride(cleanOverride(requestDto.getCourseCodeOverride()));
+            String cleanCode = cleanOverride(requestDto.getCourseCodeOverride());
+            existing.setCourseCodeOverride(cleanCode);
+            existing.setCode(cleanCode);
         }
         if (requestDto.getCourseNameOverride() != null) {
-            existing.setCourseNameOverride(cleanOverride(requestDto.getCourseNameOverride()));
+            String cleanName = cleanOverride(requestDto.getCourseNameOverride());
+            existing.setCourseNameOverride(cleanName);
+            existing.setName(cleanName);
         }
         if (requestDto.getSemester() != null) {
             if (requestDto.getSemester() < 1) {
@@ -700,9 +756,37 @@ public class AcademicService {
         }
         offering.setCourseCodeOverride(cleanOverride(offering.getCourseCodeOverride()));
         offering.setCourseNameOverride(cleanOverride(offering.getCourseNameOverride()));
+
+        if (offering.getCode() != null && !offering.getCode().isBlank()) {
+            offering.setCode(cleanOverride(offering.getCode()));
+        } else if (offering.getCourseCodeOverride() != null) {
+            offering.setCode(offering.getCourseCodeOverride());
+        }
+
+        if (offering.getName() != null && !offering.getName().isBlank()) {
+            offering.setName(cleanOverride(offering.getName()));
+        } else if (offering.getCourseNameOverride() != null) {
+            offering.setName(offering.getCourseNameOverride());
+        }
+
+        if (offering.getCredits() == null) {
+            offering.setCredits(3);
+        }
+        if (offering.getCourseType() == null || offering.getCourseType().isBlank()) {
+            offering.setCourseType("THEORY");
+        }
+
+        if (offering.getProgrammeBatchId() != null && offering.getCode() != null && !offering.getCode().isBlank()) {
+            boolean exists = programmeBatchCourseRepository.existsByProgrammeBatchIdAndCodeIgnoreCaseAndIdNotAndDeletedAtIsNull(
+                    offering.getProgrammeBatchId(), offering.getCode().trim(), offering.getId());
+            if (exists) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Course code '" + offering.getCode() + "' already exists in this batch.");
+            }
+        }
+
         ProgrammeBatchCourse saved = programmeBatchCourseRepository.save(offering);
         if (auditLogService != null) {
-            auditLogService.recordSuccess(isNew ? com.dypiu.nba.audit.AuditAction.CREATE : com.dypiu.nba.audit.AuditAction.UPDATE, com.dypiu.nba.audit.ResourceType.PROGRAMME_BATCH_COURSE, saved.getId(), null, saved.getStatus(), isNew ? "Created ProgrammeBatchCourse" : "Updated ProgrammeBatchCourse", java.util.Map.of("masterCourseId", saved.getMasterCourseId() != null ? saved.getMasterCourseId() : ""));
+            auditLogService.recordSuccess(isNew ? com.dypiu.nba.audit.AuditAction.CREATE : com.dypiu.nba.audit.AuditAction.UPDATE, com.dypiu.nba.audit.ResourceType.PROGRAMME_BATCH_COURSE, saved.getId(), null, saved.getStatus(), isNew ? "Created ProgrammeBatchCourse" : "Updated ProgrammeBatchCourse", java.util.Map.of("code", saved.getCode() != null ? saved.getCode() : "", "programmeBatchId", saved.getProgrammeBatchId() != null ? saved.getProgrammeBatchId() : ""));
         }
         return enrichOffering(saved);
     }
@@ -1558,7 +1642,11 @@ public class AcademicService {
                         }
                     }
                     boolean matchFaculty = (o.getAssignedFaculty() != null && (o.getAssignedFaculty().toLowerCase().contains(searchEmail) || (!searchName.isBlank() && o.getAssignedFaculty().toLowerCase().contains(searchName))));
-                    return matches || matchFaculty;
+                    boolean assigned = matches || matchFaculty;
+                    if (scope != null && scope.isFaculty()) {
+                        return assigned && isCourseAllocationApproved(o);
+                    }
+                    return assigned;
                 })
                 .toList();
 
@@ -3667,12 +3755,22 @@ public class AcademicService {
                                     .id("off-" + UUID.randomUUID().toString().substring(0, 8))
                                     .masterCourseId(masterCourseId)
                                     .programmeBatchId(programmeBatchId)
+                                    .code(course != null ? course.getCode() : (item.get("code") != null ? item.get("code").toString() : (item.get("courseCode") != null ? item.get("courseCode").toString() : null)))
+                                    .name(course != null ? course.getName() : (item.get("name") != null ? item.get("name").toString() : (item.get("courseName") != null ? item.get("courseName").toString() : null)))
+                                    .credits(course != null && course.getCredits() != null ? course.getCredits() : (item.get("credits") != null ? Integer.parseInt(item.get("credits").toString()) : 3))
+                                    .courseType(course != null && course.getCourseType() != null ? course.getCourseType() : (item.get("courseType") != null ? item.get("courseType").toString() : "THEORY"))
                                     .semester(parsedSem)
                                     .courseCoordinatorName(name)
                                     .assignedFaculty(name + " (" + email + ")")
                                     .status("ACTIVE")
                                     .build();
                         } else {
+                            if (course != null) {
+                                if (targetOffering.getCode() == null) targetOffering.setCode(course.getCode());
+                                if (targetOffering.getName() == null) targetOffering.setName(course.getName());
+                                if (targetOffering.getCredits() == null) targetOffering.setCredits(course.getCredits());
+                                if (targetOffering.getCourseType() == null) targetOffering.setCourseType(course.getCourseType());
+                            }
                             if (item.get("semester") != null || course != null && course.getSemester() != null) {
                                 targetOffering.setSemester(parsedSem);
                             }

@@ -16,6 +16,9 @@ public class ProgrammeAtrReportDto {
     private List<OutcomeRow> poOutcomes;
     private List<OutcomeRow> psoOutcomes;
     private String status;
+    private Boolean isUnlocked;
+    private String unlockReason;
+    private String batchStatus;
 
     @Data @Builder @NoArgsConstructor @AllArgsConstructor
     public static class ProgrammeSummary {
@@ -30,6 +33,7 @@ public class ProgrammeAtrReportDto {
         private String name;
         private String startYear;
         private String endYear;
+        private String status;
     }
 
     @Data @Builder @NoArgsConstructor @AllArgsConstructor

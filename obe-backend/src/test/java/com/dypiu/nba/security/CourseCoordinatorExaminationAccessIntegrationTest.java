@@ -50,6 +50,9 @@ public class CourseCoordinatorExaminationAccessIntegrationTest {
     @Autowired
     private UserRepository userRepository;
 
+    @Autowired
+    private ApprovalRequestRepository approvalRequestRepository;
+
     private User coordinatorUser;
     private User otherCoordinatorUser;
     private ProgrammeBatchCourse offeringWithId;
@@ -81,6 +84,17 @@ public class CourseCoordinatorExaminationAccessIntegrationTest {
                 .departmentId(dept.getId())
                 .name("B.Tech CSE")
                 .code("BCSE-" + uid)
+                .build());
+
+        approvalRequestRepository.save(ApprovalRequest.builder()
+                .id("app-alloc-" + uid)
+                .type(ApprovalType.COURSE_ALLOCATION)
+                .title("Course Allocation for " + prog.getId())
+                .masterProgrammeId(prog.getId())
+                .resourceId("allocation-" + prog.getId())
+                .status(ApprovalStatus.APPROVED)
+                .submittedBy("admin")
+                .approvedBy("HOD")
                 .build());
 
         ProgrammeBatch batch = programmeBatchRepository.save(ProgrammeBatch.builder()

@@ -9,13 +9,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 
 @Entity
 @Table(
-        name = "programme_batch_courses",
-        uniqueConstraints = {
-                @UniqueConstraint(
-                        name = "uk_batch_course_sem",
-                        columnNames = {"programme_batch_id", "master_course_id", "semester"}
-                )
-        }
+        name = "programme_batch_courses"
 )
 @Getter
 @Setter
@@ -28,11 +22,25 @@ public class ProgrammeBatchCourse {
     @JsonProperty("programmeBatchCourseId")
     private String id;
 
-    @Column(name = "master_course_id", nullable = false)
+    @Column(name = "master_course_id")
     private String masterCourseId;
 
     @Column(name = "programme_batch_id", nullable = false)
     private String programmeBatchId;
+
+    @Column(name = "code", length = 50)
+    private String code;
+
+    @Column(name = "name", length = 255)
+    private String name;
+
+    @Column(name = "credits")
+    @Builder.Default
+    private Integer credits = 3;
+
+    @Column(name = "course_type", length = 50)
+    @Builder.Default
+    private String courseType = "THEORY";
 
     @Column(nullable = false)
     private Integer semester;
@@ -114,7 +122,50 @@ public class ProgrammeBatchCourse {
         this.programmeBatchId = programmeBatchId;
     }
 
+    @JsonProperty("courseCode")
+    public String getCourseCode() {
+        if (this.code != null && !this.code.isBlank()) return this.code;
+        if (this.courseCodeOverride != null && !this.courseCodeOverride.isBlank()) return this.courseCodeOverride;
+        return this.courseCode;
+    }
+
+    public void setCourseCode(String courseCode) {
+        this.code = courseCode;
+        this.courseCode = courseCode;
+    }
+
+    public String getCode() {
+        return getCourseCode();
+    }
+
+    public void setCode(String code) {
+        this.code = code;
+        this.courseCode = code;
+    }
+
+    @JsonProperty("courseName")
+    public String getCourseName() {
+        if (this.name != null && !this.name.isBlank()) return this.name;
+        if (this.courseNameOverride != null && !this.courseNameOverride.isBlank()) return this.courseNameOverride;
+        return this.courseName;
+    }
+
+    public void setCourseName(String courseName) {
+        this.name = courseName;
+        this.courseName = courseName;
+    }
+
+    public String getName() {
+        return getCourseName();
+    }
+
+    public void setName(String name) {
+        this.name = name;
+        this.courseName = name;
+    }
+
     public String getEffectiveCourseCode(MasterCourse masterCourse) {
+        if (this.code != null && !this.code.isBlank()) return this.code;
         if (courseCodeOverride != null && !courseCodeOverride.isBlank()) {
             return courseCodeOverride;
         }
@@ -122,6 +173,7 @@ public class ProgrammeBatchCourse {
     }
 
     public String getEffectiveCourseName(MasterCourse masterCourse) {
+        if (this.name != null && !this.name.isBlank()) return this.name;
         if (courseNameOverride != null && !courseNameOverride.isBlank()) {
             return courseNameOverride;
         }

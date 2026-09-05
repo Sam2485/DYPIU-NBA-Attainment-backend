@@ -28,6 +28,31 @@ public class ReportAccessService {
     private final ProgrammeBatchRepository programmeBatchRepository;
     private final MasterCourseRepository masterCourseRepository;
     private final ProgrammeBatchCourseRepository programmeBatchCourseRepository;
+    private final ApprovalRequestRepository approvalRequestRepository;
+
+    public boolean isCourseAllocationApproved(ProgrammeBatchCourse offering) {
+        if (offering == null) return false;
+        String progId = null;
+        if (offering.getMasterCourseId() != null) {
+            MasterCourse c = masterCourseRepository.findById(offering.getMasterCourseId()).orElse(null);
+            if (c != null && c.getMasterProgrammeId() != null) {
+                progId = c.getMasterProgrammeId();
+            }
+        }
+        if (progId == null && offering.getProgrammeBatchId() != null) {
+            ProgrammeBatch b = programmeBatchRepository.findById(offering.getProgrammeBatchId()).orElse(null);
+            if (b != null && b.getMasterProgrammeId() != null) {
+                progId = b.getMasterProgrammeId();
+            }
+        }
+        if (progId == null || progId.isBlank()) return false;
+        final String targetProgId = progId;
+        return approvalRequestRepository.findAll().stream()
+                .filter(a -> a.getType() == ApprovalType.COURSE_ALLOCATION && (targetProgId.equalsIgnoreCase(a.getMasterProgrammeId()) || ("allocation-" + targetProgId).equalsIgnoreCase(a.getResourceId())))
+                .max(java.util.Comparator.comparing(ApprovalRequest::getUpdatedAt, java.util.Comparator.nullsFirst(java.util.Comparator.naturalOrder())))
+                .map(a -> a.getStatus() == ApprovalStatus.APPROVED)
+                .orElse(false);
+    }
 
     public boolean isCourseCoordinatorAssigned(ProgrammeBatchCourse offering, User user) {
         if (offering == null || user == null) return false;
@@ -233,6 +258,9 @@ public class ReportAccessService {
                         idMatch, ccEmailMatch, cEmailMatch, nameMatch, usernameMatch, nameEmailMatch, assignedFacultyFallback);
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: You are not assigned to this Course Offering.");
             }
+            if (!isCourseAllocationApproved(offering)) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Course allocation for this course has not been approved by the HOD yet.");
+            }
             return;
         }
 
@@ -258,6 +286,9 @@ public class ReportAccessService {
                     offering.getCourseCoordinatorId(), offering.getCourseCoordinatorName(), offering.getCourseCoordinatorEmail(), offering.getCoordinatorEmail(), offering.getAssignedFaculty());
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Only the assigned Course Coordinator can perform this action.");
         }
+        if (!isCourseAllocationApproved(offering)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Course allocation for this course has not been approved by the HOD yet.");
+        }
     }
 
     @Transactional(readOnly = true)
@@ -276,6 +307,10 @@ public class ReportAccessService {
                 log.info("Course coordinator authorization failed for course {}: authenticated user [id={}, name={}, email={}]",
                         course.getId(), user.getId(), user.getName(), user.getEmail());
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: You are not assigned to any offering of this Course.");
+            }
+            boolean hasApprovedOffering = offerings.stream().anyMatch(o -> isCourseCoordinatorAssigned(o, user) && isCourseAllocationApproved(o));
+            if (!hasApprovedOffering) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Course allocation for this course has not been approved by the HOD yet.");
             }
             return;
         }

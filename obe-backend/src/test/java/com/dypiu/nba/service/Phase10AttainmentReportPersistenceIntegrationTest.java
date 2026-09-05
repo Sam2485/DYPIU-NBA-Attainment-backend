@@ -74,6 +74,9 @@ public class Phase10AttainmentReportPersistenceIntegrationTest {
     @Autowired
     private AuditLogRepository auditLogRepository;
 
+    @Autowired
+    private ApprovalRequestRepository approvalRequestRepository;
+
     @MockBean
     private CurrentUserScopeService currentUserScopeService;
 
@@ -119,6 +122,17 @@ public class Phase10AttainmentReportPersistenceIntegrationTest {
                 .code("BTCS-" + uid)
                 .departmentId(deptA.getId())
                 .durationYears(4)
+                .build());
+
+        approvalRequestRepository.save(ApprovalRequest.builder()
+                .id("appr-alloc-" + uid)
+                .type(ApprovalType.COURSE_ALLOCATION)
+                .title("Course Allocation for " + prog.getId())
+                .resourceId("allocation-" + prog.getId())
+                .masterProgrammeId(prog.getId())
+                .status(ApprovalStatus.APPROVED)
+                .submittedBy("pc@dypiu.ac.in")
+                .approvedBy("hod@dypiu.ac.in")
                 .build());
 
         batch2024 = programmeBatchRepository.save(ProgrammeBatch.builder()

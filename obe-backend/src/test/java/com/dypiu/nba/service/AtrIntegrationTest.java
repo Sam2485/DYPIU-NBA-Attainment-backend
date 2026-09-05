@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -79,7 +80,7 @@ public class AtrIntegrationTest {
         schoolRepository.save(School.builder().id(schoolId).name("School of Tech " + uid).code("ST" + uid).build());
         departmentRepository.save(Department.builder().id(deptId).schoolId(schoolId).name("Dept " + uid).code("D" + uid).build());
         masterProgrammeRepository.save(MasterProgramme.builder().id(masterProgrammeId).departmentId(deptId).name("B.Tech " + uid).code("BT" + uid).build());
-        programmeBatchRepository.save(ProgrammeBatch.builder().id(programmeBatchId).masterProgrammeId(masterProgrammeId).name("2022-2026").startYear(2022).endYear(2026).build());
+        programmeBatchRepository.save(ProgrammeBatch.builder().id(programmeBatchId).masterProgrammeId(masterProgrammeId).name("2022-2026").startYear(2022).endYear(2026).status("ACTIVE").build());
 
         masterCourseRepository.save(MasterCourse.builder().id(masterCourseId).masterProgrammeId(masterProgrammeId)
                 .code("CS" + uid)
@@ -194,17 +195,26 @@ public class AtrIntegrationTest {
 
     @Test
     void testGetProgrammeAtrReport_StructureAndOutcomes() {
+        ProgrammeBatch batch = programmeBatchRepository.findById(programmeBatchId).orElseThrow();
+        batch.setStatus("COMPLETED");
+        programmeBatchRepository.save(batch);
+
         ProgrammeAtrReportDto report = atrService.getProgrammeAtrReport(masterProgrammeId, programmeBatchId);
         assertNotNull(report);
         assertEquals("PROGRAMME_ATR", report.getReportType());
         assertEquals(masterProgrammeId, report.getProgramme().getId());
         assertEquals(programmeBatchId, report.getBatch().getId());
         assertEquals("DRAFT", report.getStatus());
+        assertTrue(report.getIsUnlocked());
         assertNotNull(report.getPoOutcomes());
     }
 
     @Test
     void testSaveProgrammeAtrReport_Persistence() {
+        ProgrammeBatch batch = programmeBatchRepository.findById(programmeBatchId).orElseThrow();
+        batch.setStatus("COMPLETED");
+        programmeBatchRepository.save(batch);
+
         ProgrammeAtrReportDto report = atrService.getProgrammeAtrReport(masterProgrammeId, programmeBatchId);
 
         if (!report.getPoOutcomes().isEmpty()) {
@@ -230,6 +240,10 @@ public class AtrIntegrationTest {
 
     @Test
     void testSubmitProgrammeAtr_StatusTransition() {
+        ProgrammeBatch batch = programmeBatchRepository.findById(programmeBatchId).orElseThrow();
+        batch.setStatus("COMPLETED");
+        programmeBatchRepository.save(batch);
+
         ProgrammeAtr submitted = atrService.submitProgrammeAtr(masterProgrammeId, programmeBatchId, "Dr. MasterProgramme Coordinator");
         assertNotNull(submitted);
         assertEquals(ProgrammeAtrStatus.SUBMITTED_FOR_VERIFICATION, submitted.getStatus());
@@ -245,5 +259,30 @@ public class AtrIntegrationTest {
     void testMasterProgrammeAtr_NotFound() {
         assertThrows(ResourceNotFoundException.class, () -> atrService.getProgrammeAtrReport("invalid-prog", programmeBatchId));
         assertThrows(ResourceNotFoundException.class, () -> atrService.getProgrammeAtrReport(masterProgrammeId, "invalid-batch"));
+    }
+
+    @Test
+    void testProgrammeAtr_LockedWhenBatchIsActive() {
+        ProgrammeBatch activeBatch = programmeBatchRepository.save(ProgrammeBatch.builder()
+                .id("batch-active-" + UUID.randomUUID().toString().substring(0, 5))
+                .masterProgrammeId(masterProgrammeId)
+                .name("2024-2028")
+                .startYear(2024)
+                .endYear(2028)
+                .status("ACTIVE")
+                .build());
+
+        // Report retrieval indicates locked
+        ProgrammeAtrReportDto report = atrService.getProgrammeAtrReport(masterProgrammeId, activeBatch.getId());
+        assertNotNull(report);
+        assertFalse(report.getIsUnlocked());
+        assertEquals("LOCKED_PENDING_COMPLETION", report.getStatus());
+        assertTrue(report.getUnlockReason().contains("HOD has not marked this programme batch as COMPLETED or GRADUATED"));
+
+        // Attempt to save -> 409 Conflict
+        assertThrows(ResponseStatusException.class, () -> atrService.saveProgrammeAtrReport(report));
+
+        // Attempt to submit -> 409 Conflict
+        assertThrows(ResponseStatusException.class, () -> atrService.submitProgrammeAtr(masterProgrammeId, activeBatch.getId(), "Dr. Coordinator"));
     }
 }

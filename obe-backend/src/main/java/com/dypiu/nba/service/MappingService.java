@@ -24,9 +24,11 @@ public class MappingService {
     private final ProgrammeBatchCourseRepository programmeBatchCourseRepository;
     private final MasterCourseRepository masterCourseRepository;
     private final MasterProgrammeRepository masterProgrammeRepository;
+    private final ProgrammeBatchRepository programmeBatchRepository;
     private final DepartmentRepository departmentRepository;
     private final CurrentUserScopeService currentUserScopeService;
     private final ApprovalService approvalService;
+    private final ApprovalRequestRepository approvalRequestRepository;
     private final BatchLifecycleService batchLifecycleService;
 
     private CurrentUserScope getScope() {
@@ -35,6 +37,30 @@ public class MappingService {
         } catch (Exception e) {
             return null;
         }
+    }
+
+    private boolean isCourseAllocationApproved(ProgrammeBatchCourse offering) {
+        if (offering == null) return false;
+        String progId = null;
+        if (offering.getMasterCourseId() != null) {
+            MasterCourse c = masterCourseRepository.findById(offering.getMasterCourseId()).orElse(null);
+            if (c != null && c.getMasterProgrammeId() != null) {
+                progId = c.getMasterProgrammeId();
+            }
+        }
+        if (progId == null && offering.getProgrammeBatchId() != null) {
+            ProgrammeBatch b = programmeBatchRepository.findById(offering.getProgrammeBatchId()).orElse(null);
+            if (b != null && b.getMasterProgrammeId() != null) {
+                progId = b.getMasterProgrammeId();
+            }
+        }
+        if (progId == null || progId.isBlank()) return false;
+        final String targetProgId = progId;
+        return approvalRequestRepository.findAll().stream()
+                .filter(a -> a.getType() == ApprovalType.COURSE_ALLOCATION && (targetProgId.equalsIgnoreCase(a.getMasterProgrammeId()) || ("allocation-" + targetProgId).equalsIgnoreCase(a.getResourceId())))
+                .max(java.util.Comparator.comparing(ApprovalRequest::getUpdatedAt, java.util.Comparator.nullsFirst(java.util.Comparator.naturalOrder())))
+                .map(a -> a.getStatus() == ApprovalStatus.APPROVED)
+                .orElse(false);
     }
 
     private void enforceOutcomeScope(String courseOutcomeId) {
@@ -55,6 +81,9 @@ public class MappingService {
                 boolean isAssigned = isCoord || (offering.getAssignedFaculty() != null && (offering.getAssignedFaculty().contains(scope.getEmail()) || offering.getAssignedFaculty().contains(scope.getName())));
                 if (!isAssigned) {
                     throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: You are not assigned to this Course Offering.");
+                }
+                if (!isCourseAllocationApproved(offering)) {
+                    throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Course allocation for this course has not been approved by the HOD yet.");
                 }
                 return;
             }

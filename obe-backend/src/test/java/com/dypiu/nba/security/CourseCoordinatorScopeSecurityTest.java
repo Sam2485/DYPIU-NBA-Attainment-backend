@@ -87,6 +87,9 @@ public class CourseCoordinatorScopeSecurityTest {
     @Autowired
     private AttainmentConfigurationRepository configRepository;
 
+    @Autowired
+    private ApprovalRequestRepository approvalRequestRepository;
+
     private School schoolA;
     private School schoolB;
     private Department deptA1;
@@ -416,6 +419,40 @@ public class CourseCoordinatorScopeSecurityTest {
                 .indirectThreshold(new BigDecimal("60.00"))
                 .status(AttainmentConfigStatus.DRAFT)
                 .build());
+
+        // 10. Approve Course Allocations for test programmes
+        approvalRequestRepository.save(ApprovalRequest.builder()
+                .id("appr-alloc-" + progA1.getId())
+                .type(ApprovalType.COURSE_ALLOCATION)
+                .title("Course Allocation for " + progA1.getId())
+                .resourceId("allocation-" + progA1.getId())
+                .masterProgrammeId(progA1.getId())
+                .status(ApprovalStatus.APPROVED)
+                .submittedBy("pc.a1@dypiu.ac.in")
+                .approvedBy("hod.a1@dypiu.ac.in")
+                .build());
+
+        approvalRequestRepository.save(ApprovalRequest.builder()
+                .id("appr-alloc-" + progA2.getId())
+                .type(ApprovalType.COURSE_ALLOCATION)
+                .title("Course Allocation for " + progA2.getId())
+                .resourceId("allocation-" + progA2.getId())
+                .masterProgrammeId(progA2.getId())
+                .status(ApprovalStatus.APPROVED)
+                .submittedBy("pc.a2@dypiu.ac.in")
+                .approvedBy("hod.a2@dypiu.ac.in")
+                .build());
+
+        approvalRequestRepository.save(ApprovalRequest.builder()
+                .id("appr-alloc-" + progB1.getId())
+                .type(ApprovalType.COURSE_ALLOCATION)
+                .title("Course Allocation for " + progB1.getId())
+                .resourceId("allocation-" + progB1.getId())
+                .masterProgrammeId(progB1.getId())
+                .status(ApprovalStatus.APPROVED)
+                .submittedBy("pc.b1@dypiu.ac.in")
+                .approvedBy("hod.b1@dypiu.ac.in")
+                .build());
     }
 
     @AfterEach
@@ -730,5 +767,126 @@ public class CourseCoordinatorScopeSecurityTest {
         assertEquals(2, dto.getCurrentStep());
         assertTrue(dto.getCompletedSteps().contains("1"));
         assertEquals(offeringA1.getId(), dto.getMasterCourseId());
+    }
+
+    @Test
+    @DisplayName("Scenario 32: Gatekeeper blocks Faculty/Course Coordinator when Course Allocation is unapproved")
+    void testScenario32_UnapprovedCourseAllocation_FacultyBlocked() {
+        // Create an unapproved offering under a new MasterProgramme
+        MasterProgramme unapprovedProg = masterProgrammeRepository.save(MasterProgramme.builder()
+                .id("prog-unapproved-" + System.nanoTime())
+                .departmentId(deptA1.getId())
+                .name("B.Tech AI")
+                .code("BT-AI")
+                .build());
+
+        ProgrammeBatch unapprovedBatch = programmeBatchRepository.save(ProgrammeBatch.builder()
+                .id("batch-unapproved-" + System.nanoTime())
+                .masterProgrammeId(unapprovedProg.getId())
+                .name("Batch AI 2024-2028")
+                .startYear(2024)
+                .endYear(2028)
+                .build());
+
+        MasterCourse unapprovedCourse = masterCourseRepository.save(MasterCourse.builder()
+                .id("crs-unapproved-" + System.nanoTime())
+                .masterProgrammeId(unapprovedProg.getId())
+                .name("Artificial Intelligence")
+                .code("AI101")
+                .credits(3)
+                .build());
+
+        ProgrammeBatchCourse unapprovedOffering = programmeBatchCourseRepository.save(ProgrammeBatchCourse.builder()
+                .id("off-unapproved-" + System.nanoTime())
+                .masterCourseId(unapprovedCourse.getId())
+                .programmeBatchId(unapprovedBatch.getId())
+                .semester(1)
+                .courseCoordinatorId(ccUserA1.getId())
+                .courseCoordinatorName(ccUserA1.getName())
+                .assignedFaculty(ccUserA1.getName() + " (" + ccUserA1.getEmail() + ")")
+                .build());
+
+        // Authenticate as assigned faculty (ccUserA1)
+        authenticateUser(ccUserA1);
+
+        // 1. AcademicService offering fetch blocked
+        ResponseStatusException ex1 = assertThrows(ResponseStatusException.class, () ->
+                academicService.getProgrammeBatchCourseById(unapprovedOffering.getId()));
+        assertEquals(403, ex1.getStatusCode().value());
+        assertTrue(ex1.getReason().contains("Course allocation for this course has not been approved by the HOD yet"));
+
+        // 2. ReportAccessService offering access blocked
+        ResponseStatusException ex2 = assertThrows(ResponseStatusException.class, () ->
+                reportAccessService.validateCourseOfferingAccess(ccUserA1, unapprovedOffering.getId()));
+        assertEquals(403, ex2.getStatusCode().value());
+        assertTrue(ex2.getReason().contains("Course allocation for this course has not been approved by the HOD yet"));
+
+        // 3. OutcomeService CO fetch blocked
+        ResponseStatusException ex3 = assertThrows(ResponseStatusException.class, () ->
+                outcomeService.getCOsByCourse(unapprovedOffering.getId()));
+        assertEquals(403, ex3.getStatusCode().value());
+
+        // 4. MappingService CO mapping fetch blocked
+        CourseOutcome dummyCo = courseOutcomeRepository.save(CourseOutcome.builder()
+                .id("co-dummy-" + System.nanoTime())
+                .programmeBatchCourseId(unapprovedOffering.getId())
+                .code("CO1")
+                .statement("Dummy statement")
+                .targetLevel(new BigDecimal("2.50"))
+                .build());
+        ResponseStatusException ex4 = assertThrows(ResponseStatusException.class, () ->
+                mappingService.getCoPoMappings(dummyCo.getId()));
+        assertEquals(403, ex4.getStatusCode().value());
+
+        // 5. AtrService Course ATR fetch blocked
+        ResponseStatusException ex5 = assertThrows(ResponseStatusException.class, () ->
+                atrService.getCourseAtrReport(unapprovedOffering.getId()));
+        assertEquals(403, ex5.getStatusCode().value());
+    }
+
+    @Test
+    @DisplayName("Scenario 33: Management (HOD, PC, IQAC) can access unapproved Course Allocation")
+    void testScenario33_UnapprovedCourseAllocation_ManagementAllowed() {
+        MasterProgramme unapprovedProg = masterProgrammeRepository.save(MasterProgramme.builder()
+                .id("prog-unapproved-mgmt-" + System.nanoTime())
+                .departmentId(deptA1.getId())
+                .name("B.Tech Robotics")
+                .code("BT-ROB")
+                .build());
+
+        ProgrammeBatch unapprovedBatch = programmeBatchRepository.save(ProgrammeBatch.builder()
+                .id("batch-unapproved-mgmt-" + System.nanoTime())
+                .masterProgrammeId(unapprovedProg.getId())
+                .name("Batch ROB 2024-2028")
+                .startYear(2024)
+                .endYear(2028)
+                .build());
+
+        MasterCourse unapprovedCourse = masterCourseRepository.save(MasterCourse.builder()
+                .id("crs-unapproved-mgmt-" + System.nanoTime())
+                .masterProgrammeId(unapprovedProg.getId())
+                .name("Robotics 101")
+                .code("ROB101")
+                .credits(3)
+                .build());
+
+        ProgrammeBatchCourse unapprovedOffering = programmeBatchCourseRepository.save(ProgrammeBatchCourse.builder()
+                .id("off-unapproved-mgmt-" + System.nanoTime())
+                .masterCourseId(unapprovedCourse.getId())
+                .programmeBatchId(unapprovedBatch.getId())
+                .semester(1)
+                .courseCoordinatorId(ccUserA1.getId())
+                .courseCoordinatorName(ccUserA1.getName())
+                .assignedFaculty(ccUserA1.getName() + " (" + ccUserA1.getEmail() + ")")
+                .build());
+
+        // HOD can access
+        authenticateUser(hodUserA1);
+        assertDoesNotThrow(() -> academicService.getProgrammeBatchCourseById(unapprovedOffering.getId()));
+        assertDoesNotThrow(() -> reportAccessService.validateCourseOfferingAccess(hodUserA1, unapprovedOffering.getId()));
+
+        // IQAC can access
+        authenticateUser(iqacUser);
+        assertDoesNotThrow(() -> academicService.getProgrammeBatchCourseById(unapprovedOffering.getId()));
     }
 }
