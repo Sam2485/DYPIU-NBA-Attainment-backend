@@ -57,9 +57,9 @@ public class BatchLifecycleService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Cannot modify data for an INACTIVE batch.");
         }
 
-        if ("GRADUATED".equalsIgnoreCase(batch.getStatus())) {
+        if ("GRADUATED".equalsIgnoreCase(batch.getStatus()) || "COMPLETED".equalsIgnoreCase(batch.getStatus())) {
             if (batch.getEditingWindowUntil() == null || batch.getEditingWindowUntil().isBefore(ZonedDateTime.now())) {
-                throw new ResponseStatusException(HttpStatus.CONFLICT, "Cannot modify data for a GRADUATED batch unless an authorized reopening window is currently active.");
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Cannot modify data for a " + batch.getStatus().toUpperCase() + " batch unless an authorized reopening window is currently active.");
             }
         }
     }
@@ -71,10 +71,24 @@ public class BatchLifecycleService {
         if (batch == null) return true;
 
         if ("INACTIVE".equalsIgnoreCase(batch.getStatus())) return false;
-        if ("GRADUATED".equalsIgnoreCase(batch.getStatus())) {
+        if ("GRADUATED".equalsIgnoreCase(batch.getStatus()) || "COMPLETED".equalsIgnoreCase(batch.getStatus())) {
             return batch.getEditingWindowUntil() != null && !batch.getEditingWindowUntil().isBefore(ZonedDateTime.now());
         }
         return true;
+    }
+
+    @Transactional(readOnly = true)
+    public boolean isBatchConcluded(ProgrammeBatch batch) {
+        if (batch == null) return false;
+        String status = batch.getStatus() != null ? batch.getStatus().trim().toUpperCase() : "";
+        return "COMPLETED".equals(status) || "GRADUATED".equals(status);
+    }
+
+    @Transactional(readOnly = true)
+    public boolean isBatchConcluded(String programmeBatchId) {
+        if (programmeBatchId == null || programmeBatchId.isBlank()) return false;
+        ProgrammeBatch batch = programmeBatchRepository.findById(programmeBatchId).orElse(null);
+        return isBatchConcluded(batch);
     }
 
     @Transactional
@@ -82,8 +96,8 @@ public class BatchLifecycleService {
         ProgrammeBatch batch = programmeBatchRepository.findById(programmeBatchId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Batch not found: " + programmeBatchId));
         
-        if (!"GRADUATED".equalsIgnoreCase(batch.getStatus())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Only GRADUATED batches can be reopened.");
+        if (!"GRADUATED".equalsIgnoreCase(batch.getStatus()) && !"COMPLETED".equalsIgnoreCase(batch.getStatus())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Only COMPLETED or GRADUATED batches can be reopened.");
         }
         
         CurrentUserScope scope;
@@ -160,8 +174,8 @@ public class BatchLifecycleService {
         ProgrammeBatch batch = programmeBatchRepository.findById(programmeBatchId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Batch not found: " + programmeBatchId));
 
-        if (!"ACTIVE".equalsIgnoreCase(newStatus) && !"INACTIVE".equalsIgnoreCase(newStatus) && !"GRADUATED".equalsIgnoreCase(newStatus)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid batch status.");
+        if (!"ACTIVE".equalsIgnoreCase(newStatus) && !"INACTIVE".equalsIgnoreCase(newStatus) && !"GRADUATED".equalsIgnoreCase(newStatus) && !"COMPLETED".equalsIgnoreCase(newStatus)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid batch status. Allowed values: ACTIVE, INACTIVE, COMPLETED, GRADUATED.");
         }
 
         CurrentUserScope scope;
@@ -178,8 +192,8 @@ public class BatchLifecycleService {
 
         String oldStatus = batch.getStatus();
         
-        // If changing to GRADUATED, clear any active editing window just in case
-        if ("GRADUATED".equalsIgnoreCase(newStatus)) {
+        // If changing to GRADUATED or COMPLETED, clear any active editing window just in case
+        if ("GRADUATED".equalsIgnoreCase(newStatus) || "COMPLETED".equalsIgnoreCase(newStatus)) {
             batch.setEditingWindowUntil(null);
             batch.setEditingWindowOpenedAt(null);
             batch.setEditingWindowOpenedBy(null);

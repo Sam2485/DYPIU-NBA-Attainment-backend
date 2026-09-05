@@ -469,9 +469,13 @@ public class Phase5RuntimeFalsificationTest {
                 .statement("Apply Engineering Mathematics")
                 .build());
 
+        batchA.setStatus("COMPLETED");
+        programmeBatchRepository.save(batchA);
+
         ProgrammeAtrReportDto initial = atrService.getProgrammeAtrReport(progId, bId);
         assertNotNull(initial);
         assertEquals("DRAFT", initial.getStatus());
+        assertTrue(initial.getIsUnlocked());
 
         if (initial.getPoOutcomes() != null && !initial.getPoOutcomes().isEmpty()) {
             initial.getPoOutcomes().get(0).setActions(List.of("Conduct hands-on coding workshops."));

@@ -31,4 +31,9 @@ public interface ProgrammeBatchCourseRepository extends JpaRepository<ProgrammeB
     List<ProgrammeBatchCourse> findByCourseCoordinatorId(Long courseCoordinatorId);
     List<ProgrammeBatchCourse> findByCourseCoordinatorNameContainingIgnoreCaseOrAssignedFacultyContainingIgnoreCase(String name, String faculty);
     List<ProgrammeBatchCourse> findByProgrammeBatchIdAndStatus(String programmeBatchId, String status);
+
+    Optional<ProgrammeBatchCourse> findByProgrammeBatchIdAndCodeAndDeletedAtIsNull(String programmeBatchId, String code);
+    Optional<ProgrammeBatchCourse> findFirstByProgrammeBatchIdAndCodeIgnoreCaseAndDeletedAtIsNull(String programmeBatchId, String code);
+    boolean existsByProgrammeBatchIdAndCodeIgnoreCaseAndDeletedAtIsNull(String programmeBatchId, String code);
+    boolean existsByProgrammeBatchIdAndCodeIgnoreCaseAndIdNotAndDeletedAtIsNull(String programmeBatchId, String code, String id);
 }

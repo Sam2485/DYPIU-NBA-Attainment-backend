@@ -658,6 +658,27 @@ public class AcademicController {
                 .build());
     }
 
+    @GetMapping("/programme-batches/{programmeBatchId}/courses")
+    public ResponseEntity<ApiResponse<List<com.dypiu.nba.entity.ProgrammeBatchCourse>>> getCoursesForBatch(@PathVariable String programmeBatchId) {
+        return ResponseEntity.ok(ApiResponse.<List<com.dypiu.nba.entity.ProgrammeBatchCourse>>builder()
+                .success(true)
+                .data(academicService.getProgrammeBatchCoursesByBatch(programmeBatchId))
+                .build());
+    }
+
+    @PostMapping("/programme-batches/{programmeBatchId}/courses")
+    public ResponseEntity<ApiResponse<com.dypiu.nba.entity.ProgrammeBatchCourse>> createCourseForBatch(
+            @PathVariable String programmeBatchId,
+            @RequestBody com.dypiu.nba.entity.ProgrammeBatchCourse course) {
+        course.setProgrammeBatchId(programmeBatchId);
+        com.dypiu.nba.entity.ProgrammeBatchCourse saved = academicService.saveProgrammeBatchCourse(course);
+        return ResponseEntity.ok(ApiResponse.<com.dypiu.nba.entity.ProgrammeBatchCourse>builder()
+                .success(true)
+                .message("Programme batch course created successfully")
+                .data(saved)
+                .build());
+    }
+
     @PostMapping("/programme-batches")
     public ResponseEntity<ApiResponse<ProgrammeBatch>> saveBatch(@RequestBody ProgrammeBatch batch) {
         return ResponseEntity.ok(ApiResponse.<ProgrammeBatch>builder()

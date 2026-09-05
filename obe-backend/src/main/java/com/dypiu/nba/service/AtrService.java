@@ -39,6 +39,7 @@ public class AtrService {
     private final CurrentUserScopeService currentUserScopeService;
     private final AuditLogService auditLogService;
     private final ApprovalService approvalService;
+    private final ApprovalRequestRepository approvalRequestRepository;
     private final ObjectMapper objectMapper;
     private final BatchLifecycleService batchLifecycleService;
 
@@ -161,6 +162,30 @@ public class AtrService {
         enforceProgrammeScope(batch.getMasterProgrammeId());
     }
 
+    private boolean isCourseAllocationApproved(ProgrammeBatchCourse offering) {
+        if (offering == null) return false;
+        String progId = null;
+        if (offering.getMasterCourseId() != null) {
+            MasterCourse c = masterCourseRepository.findById(offering.getMasterCourseId()).orElse(null);
+            if (c != null && c.getMasterProgrammeId() != null) {
+                progId = c.getMasterProgrammeId();
+            }
+        }
+        if (progId == null && offering.getProgrammeBatchId() != null) {
+            ProgrammeBatch b = programmeBatchRepository.findById(offering.getProgrammeBatchId()).orElse(null);
+            if (b != null && b.getMasterProgrammeId() != null) {
+                progId = b.getMasterProgrammeId();
+            }
+        }
+        if (progId == null || progId.isBlank()) return false;
+        final String targetProgId = progId;
+        return approvalRequestRepository.findAll().stream()
+                .filter(a -> a.getType() == ApprovalType.COURSE_ALLOCATION && (targetProgId.equalsIgnoreCase(a.getMasterProgrammeId()) || ("allocation-" + targetProgId).equalsIgnoreCase(a.getResourceId())))
+                .max(java.util.Comparator.comparing(ApprovalRequest::getUpdatedAt, java.util.Comparator.nullsFirst(java.util.Comparator.naturalOrder())))
+                .map(a -> a.getStatus() == ApprovalStatus.APPROVED)
+                .orElse(false);
+    }
+
     private void enforceCourseScope(String masterCourseId) {
         CurrentUserScope scope = getScope();
         if (scope == null || scope.isIqac()) return;
@@ -183,6 +208,19 @@ public class AtrService {
             if (!hasAssigned) {
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: You are not assigned to this Course.");
             }
+            boolean hasApproved = offerings.stream().anyMatch(o -> {
+                boolean isCoord = (o.getCourseCoordinatorId() != null && Objects.equals(o.getCourseCoordinatorId(), scope.getUserId()));
+                boolean nameMatch = (o.getCourseCoordinatorName() != null && (o.getCourseCoordinatorName().equalsIgnoreCase(scope.getName()) || o.getCourseCoordinatorName().equalsIgnoreCase(scope.getUsername()) || o.getCourseCoordinatorName().equalsIgnoreCase(scope.getEmail())));
+                boolean facultyMatch = (o.getAssignedFaculty() != null && (
+                        (scope.getEmail() != null && o.getAssignedFaculty().toLowerCase().contains(scope.getEmail().toLowerCase()))
+                        || (scope.getName() != null && o.getAssignedFaculty().toLowerCase().contains(scope.getName().toLowerCase()))
+                        || (scope.getUsername() != null && o.getAssignedFaculty().toLowerCase().contains(scope.getUsername().toLowerCase()))
+                ));
+                return (isCoord || nameMatch || facultyMatch) && isCourseAllocationApproved(o);
+            });
+            if (!hasApproved) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Course allocation for this course has not been approved by the HOD yet.");
+            }
             return;
         }
 
@@ -201,6 +239,9 @@ public class AtrService {
             boolean isAssigned = isCoordinator || (offering.getAssignedFaculty() != null && (offering.getAssignedFaculty().contains(scope.getEmail()) || offering.getAssignedFaculty().contains(scope.getName())));
             if (!isAssigned) {
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: You are not assigned to this Course Offering.");
+            }
+            if (!isCourseAllocationApproved(offering)) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Course allocation for this course has not been approved by the HOD yet.");
             }
             return;
         }
@@ -227,6 +268,9 @@ public class AtrService {
                 || (offering.getCourseCoordinatorName() != null && scope.getEmail() != null && !offering.getCourseCoordinatorName().isBlank() && !scope.getEmail().isBlank() && offering.getCourseCoordinatorName().trim().equalsIgnoreCase(scope.getEmail().trim()));
         if (!isCoordinator) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Only the assigned Course Coordinator can perform this action.");
+        }
+        if (!isCourseAllocationApproved(offering)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Course allocation for this course has not been approved by the HOD yet.");
         }
     }
 
@@ -448,7 +492,7 @@ public class AtrService {
     }
 
     private CourseAtrReportDto buildCourseAtrReport(ProgrammeBatchCourse offering) {
-        MasterCourse course = masterCourseRepository.findById(offering.getMasterCourseId()).orElse(null);
+        MasterCourse course = (offering.getMasterCourseId() != null) ? masterCourseRepository.findById(offering.getMasterCourseId()).orElse(null) : null;
         ProgrammeBatch batch = programmeBatchRepository.findById(offering.getProgrammeBatchId()).orElse(null);
 
         List<CourseOutcome> cos = courseOutcomeRepository.findByProgrammeBatchCourseId(offering.getId());
@@ -553,7 +597,11 @@ public class AtrService {
                         .programmeBatchId(offering.getProgrammeBatchId())
                         .semester(offering.getSemester())
                         .build())
-                .course(course != null ? CourseAtrReportDto.CourseSummary.builder().id(course.getId()).code(course.getCode()).name(course.getName()).build() : null)
+                .course(CourseAtrReportDto.CourseSummary.builder()
+                        .id(offering.getId())
+                        .code(offering.getCourseCode() != null ? offering.getCourseCode() : (course != null ? course.getCode() : ""))
+                        .name(offering.getCourseName() != null ? offering.getCourseName() : (course != null ? course.getName() : ""))
+                        .build())
                 .batch(batch != null ? CourseAtrReportDto.BatchSummary.builder().id(batch.getId()).name(batch.getName()).build() : null)
                 .outcomes(rows)
                 .status(atrStatus)
@@ -979,7 +1027,15 @@ public class AtrService {
             }
         }
 
-        String status = existingAtr.map(a -> a.getStatus() != null ? a.getStatus().name() : "DRAFT").orElse("DRAFT");
+        boolean isConcluded = batchLifecycleService.isBatchConcluded(batch);
+        String batchStatusStr = batch.getStatus() != null ? batch.getStatus() : "ACTIVE";
+        boolean isUnlocked = isConcluded;
+        String unlockReason = isConcluded
+                ? "Programme batch has been completed/graduated by HOD. Programme ATR is unlocked for editing and submission."
+                : "Programme ATR is locked. The HOD has not marked this programme batch as COMPLETED or GRADUATED yet. (Current Batch Status: " + batchStatusStr + ")";
+
+        String status = existingAtr.map(a -> a.getStatus() != null ? a.getStatus().name() : (isConcluded ? "DRAFT" : "LOCKED_PENDING_COMPLETION"))
+                .orElse(isConcluded ? "DRAFT" : "LOCKED_PENDING_COMPLETION");
         String patrId = existingAtr.map(ProgrammeAtr::getId).orElse(null);
 
         return ProgrammeAtrReportDto.builder()
@@ -991,10 +1047,14 @@ public class AtrService {
                         .name(batch.getName())
                         .startYear(batch.getStartYear() != null ? String.valueOf(batch.getStartYear()) : "")
                         .endYear(batch.getEndYear() != null ? String.valueOf(batch.getEndYear()) : "")
+                        .status(batchStatusStr)
                         .build())
                 .poOutcomes(poRows)
                 .psoOutcomes(psoRows)
                 .status(status)
+                .isUnlocked(isUnlocked)
+                .unlockReason(unlockReason)
+                .batchStatus(batchStatusStr)
                 .build();
     }
 
@@ -1011,7 +1071,13 @@ public class AtrService {
         String progId = batch.getMasterProgrammeId();
         enforceProgrammeScope(progId);
         enforceBatchScope(programmeBatchId);
-        batchLifecycleService.enforceBatchEditability(programmeBatchId);
+
+        if (!batchLifecycleService.isBatchConcluded(batch)) {
+            String bStatus = batch.getStatus() != null ? batch.getStatus() : "ACTIVE";
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Programme ATR is locked. Programme batch '" + batch.getName() + "' has not been completed by the HOD yet. (Current status: " + bStatus + ")");
+        }
+
         if (approvalService != null && approvalService.isProgrammeAtrApproved(programmeBatchId)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Cannot modify approved Programme ATR. A revision must be requested first.");
         }
@@ -1073,7 +1139,12 @@ public class AtrService {
         
         enforceProgrammeScope(progId);
         enforceBatchScope(programmeBatchId);
-        batchLifecycleService.enforceBatchEditability(programmeBatchId);
+
+        if (!batchLifecycleService.isBatchConcluded(batch)) {
+            String bStatus = batch.getStatus() != null ? batch.getStatus() : "ACTIVE";
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Programme ATR is locked. Programme batch '" + batch.getName() + "' has not been completed by the HOD yet. (Current status: " + bStatus + ")");
+        }
 
         ProgrammeAtr atr = programmeAtrRepository.findByProgrammeBatchId(programmeBatchId)
                 .orElseGet(() -> {
@@ -1182,15 +1253,38 @@ public class AtrService {
                 .build();
     }
     @Transactional(readOnly = true)
-    public List<CourseAtrReportDto> getHistoricalCourseAtrs(String masterCourseId) {
-        System.out.println("[AtrService] getHistoricalCourseAtrs called | masterCourseId: " + masterCourseId);
-        enforceCourseScope(masterCourseId);
-        List<ProgrammeBatchCourse> offerings = programmeBatchCourseRepository.findByMasterCourseId(masterCourseId);
+    public List<CourseAtrReportDto> getHistoricalCourseAtrs(String courseOrOfferingId) {
+        System.out.println("[AtrService] getHistoricalCourseAtrs called | courseOrOfferingId: " + courseOrOfferingId);
         List<CourseAtrReportDto> historicalReports = new ArrayList<>();
-        for (ProgrammeBatchCourse offering : offerings) {
-            List<CourseAtr> atrs = courseAtrRepository.findByProgrammeBatchCourseId(offering.getId());
+
+        ProgrammeBatchCourse offering = programmeBatchCourseRepository.findById(courseOrOfferingId).orElse(null);
+        if (offering != null) {
+            String courseCode = offering.getCourseCode();
+            ProgrammeBatch batch = programmeBatchRepository.findById(offering.getProgrammeBatchId()).orElse(null);
+            if (batch != null && batch.getMasterProgrammeId() != null && courseCode != null) {
+                List<ProgrammeBatch> allBatches = programmeBatchRepository.findByMasterProgrammeIdOrderByStartYearDesc(batch.getMasterProgrammeId());
+                for (ProgrammeBatch b : allBatches) {
+                    List<ProgrammeBatchCourse> pbcList = programmeBatchCourseRepository.findByProgrammeBatchIdAndDeletedAtIsNull(b.getId());
+                    for (ProgrammeBatchCourse pbc : pbcList) {
+                        if (courseCode.equalsIgnoreCase(pbc.getCourseCode())) {
+                            List<CourseAtr> atrs = courseAtrRepository.findByProgrammeBatchCourseId(pbc.getId());
+                            if (!atrs.isEmpty()) {
+                                CourseAtrReportDto report = buildCourseAtrReport(pbc);
+                                if (report != null) historicalReports.add(report);
+                            }
+                        }
+                    }
+                }
+                return historicalReports;
+            }
+        }
+
+        // Fallback for legacy masterCourseId
+        List<ProgrammeBatchCourse> offerings = programmeBatchCourseRepository.findByMasterCourseId(courseOrOfferingId);
+        for (ProgrammeBatchCourse off : offerings) {
+            List<CourseAtr> atrs = courseAtrRepository.findByProgrammeBatchCourseId(off.getId());
             if (!atrs.isEmpty()) {
-                CourseAtrReportDto report = buildCourseAtrReport(offering);
+                CourseAtrReportDto report = buildCourseAtrReport(off);
                 if (report != null) {
                     historicalReports.add(report);
                 }
@@ -1209,16 +1303,43 @@ public class AtrService {
         ProgrammeBatchCourse currentOffering = programmeBatchCourseRepository.findById(offeringId).orElse(null);
         if (currentOffering == null || currentOffering.getProgrammeBatchId() == null) return null;
 
+        String currentCode = currentOffering.getCourseCode();
+        if (currentCode == null || currentCode.isBlank()) {
+            currentCode = currentOffering.getCode();
+        }
+
         ProgrammeBatch currentBatch = programmeBatchRepository.findById(currentOffering.getProgrammeBatchId()).orElse(null);
-        if (currentBatch == null || currentBatch.getMasterProgrammeId() == null) return null;
+        if (currentBatch == null || currentBatch.getMasterProgrammeId() == null || currentBatch.getStartYear() == null) return null;
+
+        int targetStartYear = currentBatch.getStartYear() - 1;
 
         List<ProgrammeBatch> batches = programmeBatchRepository.findByMasterProgrammeIdOrderByStartYearDesc(currentBatch.getMasterProgrammeId());
 
+        // 1. Try to find exact previous batch with (startYear - 1)
+        ProgrammeBatch prevBatch = batches.stream()
+                .filter(b -> b.getStartYear() != null && b.getStartYear() == targetStartYear)
+                .findFirst()
+                .orElse(null);
+
+        if (prevBatch != null && currentCode != null) {
+            final String codeToMatch = currentCode.trim();
+            List<ProgrammeBatchCourse> prevOfferings = programmeBatchCourseRepository.findByProgrammeBatchIdAndDeletedAtIsNull(prevBatch.getId());
+            for (ProgrammeBatchCourse prevOffering : prevOfferings) {
+                if (codeToMatch.equalsIgnoreCase(prevOffering.getCourseCode()) || (prevOffering.getMasterCourseId() != null && prevOffering.getMasterCourseId().equals(currentOffering.getMasterCourseId()))) {
+                    List<CourseAtr> atrs = courseAtrRepository.findByProgrammeBatchCourseId(prevOffering.getId());
+                    if (!atrs.isEmpty()) {
+                        return buildCourseAtrReport(prevOffering);
+                    }
+                }
+            }
+        }
+
+        // 2. Fallback to nearest previous batch if exact startYear - 1 had no ATR
         for (ProgrammeBatch b : batches) {
-            if (b.getStartYear() != null && currentBatch.getStartYear() != null && b.getStartYear() < currentBatch.getStartYear()) {
-                List<ProgrammeBatchCourse> prevOfferings = programmeBatchCourseRepository.findByProgrammeBatchId(b.getId());
+            if (b.getStartYear() != null && b.getStartYear() < currentBatch.getStartYear()) {
+                List<ProgrammeBatchCourse> prevOfferings = programmeBatchCourseRepository.findByProgrammeBatchIdAndDeletedAtIsNull(b.getId());
                 for (ProgrammeBatchCourse prevOffering : prevOfferings) {
-                    if (Objects.equals(prevOffering.getMasterCourseId(), currentOffering.getMasterCourseId())) {
+                    if (currentCode != null && (currentCode.trim().equalsIgnoreCase(prevOffering.getCourseCode()) || (prevOffering.getMasterCourseId() != null && prevOffering.getMasterCourseId().equals(currentOffering.getMasterCourseId())))) {
                         List<CourseAtr> atrs = courseAtrRepository.findByProgrammeBatchCourseId(prevOffering.getId());
                         if (!atrs.isEmpty()) {
                             return buildCourseAtrReport(prevOffering);

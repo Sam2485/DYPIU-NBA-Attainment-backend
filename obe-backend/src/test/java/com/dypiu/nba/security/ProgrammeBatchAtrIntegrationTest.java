@@ -149,7 +149,7 @@ public class ProgrammeBatchAtrIntegrationTest {
                 .isActive(true)
                 .build());
 
-        // Previous batch (2022-2026)
+        // Previous batch (2022-2026) - COMPLETED
         batchA1 = programmeBatchRepository.save(ProgrammeBatch.builder()
                 .id("batch-a1-" + uid)
                 .masterProgrammeId(progA.getId())
@@ -159,10 +159,10 @@ public class ProgrammeBatchAtrIntegrationTest {
                 .name("2022-2026")
                 .startYear(2022)
                 .endYear(2026)
-                .status("ACTIVE")
+                .status("COMPLETED")
                 .build());
 
-        // Current batch (2023-2027)
+        // Current batch (2023-2027) - COMPLETED
         batchA2 = programmeBatchRepository.save(ProgrammeBatch.builder()
                 .id("batch-a2-" + uid)
                 .masterProgrammeId(progA.getId())
@@ -172,7 +172,7 @@ public class ProgrammeBatchAtrIntegrationTest {
                 .name("2023-2027")
                 .startYear(2023)
                 .endYear(2027)
-                .status("ACTIVE")
+                .status("COMPLETED")
                 .build());
 
         batchB1 = programmeBatchRepository.save(ProgrammeBatch.builder()
@@ -184,7 +184,7 @@ public class ProgrammeBatchAtrIntegrationTest {
                 .name("2023-2027")
                 .startYear(2023)
                 .endYear(2027)
-                .status("ACTIVE")
+                .status("COMPLETED")
                 .build());
 
         batchDeleted = programmeBatchRepository.save(ProgrammeBatch.builder()
@@ -444,5 +444,45 @@ public class ProgrammeBatchAtrIntegrationTest {
         assertThrows(ResourceNotFoundException.class, () ->
                 academicController.getProgrammeBatchAtr(batchDeleted.getId())
         );
+    }
+
+    @Test
+    @DisplayName("7. Active batch has locked Programme ATR with HTTP 409 on save/submit")
+    void testActiveBatchHasLockedProgrammeAtr() {
+        authenticateAs(pcAlice);
+
+        String uid = UUID.randomUUID().toString().substring(0, 6);
+        ProgrammeBatch activeBatch = programmeBatchRepository.save(ProgrammeBatch.builder()
+                .id("batch-active-" + uid)
+                .masterProgrammeId(progA.getId())
+                .coordinatorId(pcAlice.getId())
+                .coordinatorName(pcAlice.getName())
+                .coordinatorEmail(pcAlice.getEmail())
+                .name("2024-2028")
+                .startYear(2024)
+                .endYear(2028)
+                .status("ACTIVE")
+                .build());
+
+        // GET report
+        ResponseEntity<ApiResponse<ProgrammeAtrReportDto>> resp = academicController.getProgrammeBatchAtr(activeBatch.getId());
+        assertNotNull(resp);
+        ProgrammeAtrReportDto dto = resp.getBody().getData();
+        assertFalse(dto.getIsUnlocked());
+        assertEquals("LOCKED_PENDING_COMPLETION", dto.getStatus());
+        assertEquals("ACTIVE", dto.getBatchStatus());
+        assertTrue(dto.getUnlockReason().contains("HOD has not marked this programme batch as COMPLETED or GRADUATED"));
+
+        // Save attempt throws 409 Conflict
+        ResponseStatusException saveEx = assertThrows(ResponseStatusException.class, () ->
+                academicController.saveProgrammeBatchAtr(activeBatch.getId(), dto)
+        );
+        assertEquals(409, saveEx.getStatusCode().value());
+
+        // Submit attempt throws 409 Conflict
+        ResponseStatusException submitEx = assertThrows(ResponseStatusException.class, () ->
+                academicController.submitProgrammeBatchAtr(activeBatch.getId(), () -> pcAlice.getUsername())
+        );
+        assertEquals(409, submitEx.getStatusCode().value());
     }
 }

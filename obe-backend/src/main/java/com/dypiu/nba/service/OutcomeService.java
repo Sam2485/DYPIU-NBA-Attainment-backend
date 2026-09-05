@@ -241,6 +241,30 @@ public class OutcomeService {
         enforceProgrammeScope(batch.getMasterProgrammeId());
     }
 
+    private boolean isCourseAllocationApproved(ProgrammeBatchCourse offering) {
+        if (offering == null) return false;
+        String progId = null;
+        if (offering.getMasterCourseId() != null) {
+            MasterCourse c = masterCourseRepository.findById(offering.getMasterCourseId()).orElse(null);
+            if (c != null && c.getMasterProgrammeId() != null) {
+                progId = c.getMasterProgrammeId();
+            }
+        }
+        if (progId == null && offering.getProgrammeBatchId() != null) {
+            ProgrammeBatch b = programmeBatchRepository.findById(offering.getProgrammeBatchId()).orElse(null);
+            if (b != null && b.getMasterProgrammeId() != null) {
+                progId = b.getMasterProgrammeId();
+            }
+        }
+        if (progId == null || progId.isBlank()) return false;
+        final String targetProgId = progId;
+        return approvalRequestRepository.findAll().stream()
+                .filter(a -> a.getType() == ApprovalType.COURSE_ALLOCATION && (targetProgId.equalsIgnoreCase(a.getMasterProgrammeId()) || ("allocation-" + targetProgId).equalsIgnoreCase(a.getResourceId())))
+                .max(java.util.Comparator.comparing(ApprovalRequest::getUpdatedAt, java.util.Comparator.nullsFirst(java.util.Comparator.naturalOrder())))
+                .map(a -> a.getStatus() == ApprovalStatus.APPROVED)
+                .orElse(false);
+    }
+
     private void enforceCourseScope(String masterCourseId) {
         CurrentUserScope scope = getScope();
         if (scope == null || scope.isIqac()) return;
@@ -256,6 +280,14 @@ public class OutcomeService {
             });
             if (!hasAssigned) {
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: You are not assigned to this Course.");
+            }
+            boolean hasApproved = offerings.stream().anyMatch(o -> {
+                boolean isCoord = (o.getCourseCoordinatorId() != null && Objects.equals(o.getCourseCoordinatorId(), scope.getUserId()));
+                boolean isFacultyAssigned = isCoord || (o.getAssignedFaculty() != null && (o.getAssignedFaculty().contains(scope.getEmail()) || o.getAssignedFaculty().contains(scope.getName())));
+                return isFacultyAssigned && isCourseAllocationApproved(o);
+            });
+            if (!hasApproved) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Course allocation for this course has not been approved by the HOD yet.");
             }
             return;
         }
@@ -275,6 +307,9 @@ public class OutcomeService {
             boolean isAssigned = isCoordinator || (offering.getAssignedFaculty() != null && (offering.getAssignedFaculty().contains(scope.getEmail()) || offering.getAssignedFaculty().contains(scope.getName())));
             if (!isAssigned) {
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: You are not assigned to this Course Offering.");
+            }
+            if (!isCourseAllocationApproved(offering)) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Course allocation for this course has not been approved by the HOD yet.");
             }
             return;
         }

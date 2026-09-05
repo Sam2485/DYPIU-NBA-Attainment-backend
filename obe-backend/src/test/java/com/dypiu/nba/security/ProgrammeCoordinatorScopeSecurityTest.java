@@ -626,6 +626,10 @@ public class ProgrammeCoordinatorScopeSecurityTest {
     void testCase25_PCProgrammeAtrScopeEnforcement() {
         authenticateUser(pcA1);
 
+        // Ensure batch is completed for ATR modification
+        batchA1.setStatus("COMPLETED");
+        programmeBatchRepository.save(batchA1);
+
         // Own programme ATR report -> 200 OK
         ProgrammeAtrReportDto report = atrService.getProgrammeAtrReport(progA1.getId(), batchA1.getId());
         assertNotNull(report);

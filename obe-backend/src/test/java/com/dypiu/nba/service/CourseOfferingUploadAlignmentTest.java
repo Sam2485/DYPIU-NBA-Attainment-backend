@@ -66,6 +66,9 @@ public class CourseOfferingUploadAlignmentTest {
     @Mock
     private BatchLifecycleService batchLifecycleService;
 
+    @Mock
+    private ApprovalRequestRepository approvalRequestRepository;
+
     @InjectMocks
     private AttainmentCalculationService calculationService;
 
@@ -85,7 +88,8 @@ public class CourseOfferingUploadAlignmentTest {
                 masterProgrammeRepository,
                 programmeBatchRepository,
                 masterCourseRepository,
-                programmeBatchCourseRepository
+                programmeBatchCourseRepository,
+                approvalRequestRepository
         );
 
         offering2025 = ProgrammeBatchCourse.builder()
