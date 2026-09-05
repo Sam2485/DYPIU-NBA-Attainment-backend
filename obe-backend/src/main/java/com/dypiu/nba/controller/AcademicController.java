@@ -506,7 +506,8 @@ public class AcademicController {
     public ResponseEntity<ApiResponse<List<MasterProgramme>>> getProgrammes(
             @RequestParam(required = false) String schoolId,
             @RequestParam(required = false) String departmentId,
-            @RequestParam(required = false) String coordinatorEmail) {
+            @RequestParam(required = false) String coordinatorEmail,
+            @RequestParam(required = false) String level) {
         requestScopeAuthorizer.assertRequestedSchool(schoolId);
         requestScopeAuthorizer.assertRequestedDepartment(departmentId);
         List<MasterProgramme> list = (coordinatorEmail != null && !coordinatorEmail.isBlank())
@@ -516,6 +517,12 @@ public class AcademicController {
                 : (schoolId != null && !schoolId.isBlank())
                 ? academicService.getProgrammesBySchool(schoolId)
                 : academicService.getAllProgrammes();
+        if (level != null && !level.isBlank()) {
+            String normLevel = level.trim().toUpperCase();
+            list = list.stream()
+                    .filter(p -> normLevel.equalsIgnoreCase(p.getLevel()))
+                    .toList();
+        }
         return ResponseEntity.ok(ApiResponse.<List<MasterProgramme>>builder()
                 .success(true)
                 .data(list)

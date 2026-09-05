@@ -42,6 +42,10 @@ public class MasterProgramme {
     @Column(nullable = false, length = 30)
     private String status = "ACTIVE";
 
+    @Builder.Default
+    @Column(name = "level", length = 20)
+    private String level = "UG";
+
     @Column(name = "department_name", length = 255)
     private String departmentName;
 
@@ -63,13 +67,14 @@ public class MasterProgramme {
     @Transient
     private String coordinatorEmail;
 
-    public MasterProgramme(String id, String departmentId, String code, String name, Integer durationYears, String status, String departmentName, ZonedDateTime createdAt, ZonedDateTime updatedAt, ZonedDateTime deletedAt, String deletedBy, String coordinator, String coordinatorEmail) {
+    public MasterProgramme(String id, String departmentId, String code, String name, Integer durationYears, String status, String level, String departmentName, ZonedDateTime createdAt, ZonedDateTime updatedAt, ZonedDateTime deletedAt, String deletedBy, String coordinator, String coordinatorEmail) {
         this.id = id;
         this.departmentId = departmentId;
         this.code = code;
         this.name = name;
         this.durationYears = durationYears != null ? durationYears : 4;
         this.status = status != null ? status : "ACTIVE";
+        this.level = (level != null && !level.isBlank()) ? level : "UG";
         this.departmentName = departmentName;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
@@ -80,6 +85,10 @@ public class MasterProgramme {
         if (id != null && coordinator != null && !coordinator.isBlank()) {
             COORDINATOR_CACHE.put(id, new String[]{coordinator, coordinatorEmail != null ? coordinatorEmail : ""});
         }
+    }
+
+    public MasterProgramme(String id, String departmentId, String code, String name, Integer durationYears, String status, String departmentName, ZonedDateTime createdAt, ZonedDateTime updatedAt, ZonedDateTime deletedAt, String deletedBy, String coordinator, String coordinatorEmail) {
+        this(id, departmentId, code, name, durationYears, status, "UG", departmentName, createdAt, updatedAt, deletedAt, deletedBy, coordinator, coordinatorEmail);
     }
 
     public String getCoordinator() {

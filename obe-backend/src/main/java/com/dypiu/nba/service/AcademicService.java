@@ -483,8 +483,8 @@ public class AcademicService {
         ProgrammeBatch batch = programmeBatchRepository.findById(programmeBatchId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Programme Batch not found: " + programmeBatchId));
 
-        // Check duplicate offering for same (programmeBatchId, masterCourseId)
-        if (programmeBatchCourseRepository.existsByProgrammeBatchIdAndMasterCourseId(programmeBatchId, masterCourseId)) {
+        // Check duplicate offering for active ones
+        if (programmeBatchCourseRepository.existsByProgrammeBatchIdAndMasterCourseIdAndDeletedAtIsNull(programmeBatchId, masterCourseId)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Course offering already exists for batch '" + programmeBatchId + "' and master course '" + masterCourseId + "'.");
         }
 
@@ -527,28 +527,41 @@ public class AcademicService {
             }
         }
 
-        ProgrammeBatchCourse offering = ProgrammeBatchCourse.builder()
-                .id("offering-" + UUID.randomUUID().toString().substring(0, 8))
-                .programmeBatchId(programmeBatchId)
-                .masterCourseId(masterCourseId)
-                .semester(requestDto.getSemester())
-                .courseCoordinatorId(coordinatorId)
-                .courseCoordinatorName(coordinatorName)
-                .assignedFaculty(assignedFacultyStr)
-                .courseCodeOverride(codeOverride)
-                .courseNameOverride(nameOverride)
-                .status("ACTIVE")
-                .build();
+        Optional<ProgrammeBatchCourse> softDeletedOfferingOpt = programmeBatchCourseRepository.findFirstByProgrammeBatchIdAndMasterCourseId(programmeBatchId, masterCourseId);
+        ProgrammeBatchCourse offering;
+        boolean isNew = true;
+        if (softDeletedOfferingOpt.isPresent() && softDeletedOfferingOpt.get().getDeletedAt() != null) {
+            offering = softDeletedOfferingOpt.get();
+            offering.setDeletedAt(null);
+            offering.setDeletedBy(null);
+            offering.setStatus("ACTIVE");
+            isNew = false;
+        } else {
+            offering = ProgrammeBatchCourse.builder()
+                    .id("offering-" + UUID.randomUUID().toString().substring(0, 8))
+                    .programmeBatchId(programmeBatchId)
+                    .masterCourseId(masterCourseId)
+                    .status("ACTIVE")
+                    .build();
+        }
+
+        offering.setSemester(requestDto.getSemester());
+        offering.setCourseCoordinatorId(coordinatorId);
+        offering.setCourseCoordinatorName(coordinatorName);
+        offering.setCourseCoordinatorEmail(coordEmail);
+        offering.setAssignedFaculty(assignedFacultyStr);
+        offering.setCourseCodeOverride(codeOverride);
+        offering.setCourseNameOverride(nameOverride);
 
         ProgrammeBatchCourse saved = programmeBatchCourseRepository.save(offering);
         if (auditLogService != null) {
             auditLogService.recordSuccess(
-                    com.dypiu.nba.audit.AuditAction.CREATE,
+                    isNew ? com.dypiu.nba.audit.AuditAction.CREATE : com.dypiu.nba.audit.AuditAction.UPDATE,
                     com.dypiu.nba.audit.ResourceType.PROGRAMME_BATCH_COURSE,
                     saved.getId(),
                     null,
                     "ACTIVE",
-                    "Created ProgrammeBatchCourse offering with overrides",
+                    isNew ? "Created ProgrammeBatchCourse offering with overrides" : "Reactivated ProgrammeBatchCourse offering with overrides",
                     java.util.Map.of("masterCourseId", saved.getMasterCourseId(), "programmeBatchId", saved.getProgrammeBatchId())
             );
         }
@@ -701,7 +714,10 @@ public class AcademicService {
                 .orElseThrow(() -> new ResourceNotFoundException("MasterCourse offering not found: " + id));
         if (offering.getProgrammeBatchId() != null) enforceBatchScope(offering.getProgrammeBatchId());
         if (offering.getMasterCourseId() != null) enforceCourseScope(offering.getMasterCourseId());
-        programmeBatchCourseRepository.deleteById(id);
+        CurrentUserScope scope = getScope();
+        offering.setDeletedAt(ZonedDateTime.now());
+        offering.setDeletedBy(scope != null ? (scope.getEmail() != null ? scope.getEmail() : scope.getUsername()) : "SYSTEM");
+        programmeBatchCourseRepository.save(offering);
     }
 
     // --- Director School Summary ---
@@ -2082,14 +2098,17 @@ public class AcademicService {
 
         MasterProgramme targetProg = programme;
         if (programme.getId() != null) {
-            Optional<MasterProgramme> existingOpt = masterProgrammeRepository.findByIdAndDeletedAtIsNull(programme.getId());
+            Optional<MasterProgramme> existingOpt = masterProgrammeRepository.findById(programme.getId());
             if (existingOpt.isPresent()) {
                 MasterProgramme existing = existingOpt.get();
+                existing.setDeletedAt(null);
+                existing.setDeletedBy(null);
                 if (programme.getName() != null) existing.setName(programme.getName());
                 if (programme.getCode() != null) existing.setCode(programme.getCode());
                 if (programme.getDepartmentId() != null) existing.setDepartmentId(programme.getDepartmentId());
                 if (programme.getDurationYears() != null) existing.setDurationYears(programme.getDurationYears());
                 if (programme.getStatus() != null) existing.setStatus(programme.getStatus());
+                if (programme.getLevel() != null && !programme.getLevel().isBlank()) existing.setLevel(programme.getLevel().trim().toUpperCase());
                 if (programme.getDepartmentName() != null) existing.setDepartmentName(programme.getDepartmentName());
                 if (programme.getCoordinator() != null) existing.setCoordinator(programme.getCoordinator());
                 if (programme.getCoordinatorEmail() != null) existing.setCoordinatorEmail(programme.getCoordinatorEmail());
@@ -2097,6 +2116,11 @@ public class AcademicService {
             }
         } else {
             targetProg.setId("prog-" + UUID.randomUUID().toString().substring(0, 8));
+        }
+        if (targetProg.getLevel() == null || targetProg.getLevel().isBlank()) {
+            targetProg.setLevel("UG");
+        } else {
+            targetProg.setLevel(targetProg.getLevel().trim().toUpperCase());
         }
         
         // Ensure department is loaded to get schoolId
@@ -2550,8 +2574,8 @@ public class AcademicService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "ProgrammeBatch details cannot be null.");
         }
         if (batch.getId() != null) {
-            ProgrammeBatch existing = programmeBatchRepository.findByIdAndDeletedAtIsNull(batch.getId()).orElse(null);
-            if (existing != null) {
+            ProgrammeBatch existing = programmeBatchRepository.findById(batch.getId()).orElse(null);
+            if (existing != null && existing.getDeletedAt() == null) {
                 enforceProgrammeScope(existing.getMasterProgrammeId());
                 batchLifecycleService.enforceBatchEditability(batch.getId());
             }
@@ -2565,11 +2589,55 @@ public class AcademicService {
             }
             batch.setDurationYears(batch.getEndYear() - batch.getStartYear());
         }
-        if (batch.getId() == null || batch.getId().isBlank()) {
-            batch.setId("batch-" + UUID.randomUUID().toString().substring(0, 8));
+
+        // Active start_year uniqueness check
+        if (batch.getMasterProgrammeId() != null && batch.getStartYear() != null) {
+            String currentId = batch.getId();
+            boolean conflictExists = (currentId != null && !currentId.isBlank())
+                    ? programmeBatchRepository.existsByMasterProgrammeIdAndStartYearAndIdNotAndDeletedAtIsNull(batch.getMasterProgrammeId(), batch.getStartYear(), currentId)
+                    : programmeBatchRepository.existsByMasterProgrammeIdAndStartYearAndDeletedAtIsNull(batch.getMasterProgrammeId(), batch.getStartYear());
+            if (conflictExists) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "A batch for start year " + batch.getStartYear() + " already exists in this programme.");
+            }
         }
-        boolean isNewBatch = (batch.getId() == null || !programmeBatchRepository.existsById(batch.getId()));
-        ProgrammeBatch saved = programmeBatchRepository.save(batch);
+
+        ProgrammeBatch targetBatch = batch;
+        boolean isNewBatch = true;
+
+        if (batch.getId() != null && !batch.getId().isBlank()) {
+            Optional<ProgrammeBatch> byIdOpt = programmeBatchRepository.findById(batch.getId());
+            if (byIdOpt.isPresent()) {
+                targetBatch = byIdOpt.get();
+                isNewBatch = false;
+            }
+        } else if (batch.getMasterProgrammeId() != null && batch.getStartYear() != null) {
+            Optional<ProgrammeBatch> softDeletedOpt = programmeBatchRepository.findFirstByMasterProgrammeIdAndStartYear(batch.getMasterProgrammeId(), batch.getStartYear());
+            if (softDeletedOpt.isPresent() && softDeletedOpt.get().getDeletedAt() != null) {
+                targetBatch = softDeletedOpt.get();
+                isNewBatch = false;
+            }
+        }
+
+        if (isNewBatch && (targetBatch.getId() == null || targetBatch.getId().isBlank())) {
+            targetBatch.setId("batch-" + UUID.randomUUID().toString().substring(0, 8));
+        }
+
+        targetBatch.setDeletedAt(null);
+        targetBatch.setDeletedBy(null);
+        targetBatch.setStatus(batch.getStatus() != null ? batch.getStatus() : "ACTIVE");
+        if (batch.getMasterProgrammeId() != null) targetBatch.setMasterProgrammeId(batch.getMasterProgrammeId());
+        if (batch.getName() != null) targetBatch.setName(batch.getName());
+        if (batch.getStartYear() != null) targetBatch.setStartYear(batch.getStartYear());
+        if (batch.getEndYear() != null) targetBatch.setEndYear(batch.getEndYear());
+        if (batch.getDurationYears() != null) targetBatch.setDurationYears(batch.getDurationYears());
+        if (batch.getCoordinatorId() != null) targetBatch.setCoordinatorId(batch.getCoordinatorId());
+        if (batch.getCoordinatorName() != null) targetBatch.setCoordinatorName(batch.getCoordinatorName());
+        if (batch.getCoordinatorEmail() != null) targetBatch.setCoordinatorEmail(batch.getCoordinatorEmail());
+        if (batch.getYearLevel() != null) targetBatch.setYearLevel(batch.getYearLevel());
+        if (batch.getProgrammeName() != null) targetBatch.setProgrammeName(batch.getProgrammeName());
+        if (batch.getProgrammeCode() != null) targetBatch.setProgrammeCode(batch.getProgrammeCode());
+
+        ProgrammeBatch saved = programmeBatchRepository.save(targetBatch);
         if (auditLogService != null) {
             auditLogService.recordSuccess(isNewBatch ? com.dypiu.nba.audit.AuditAction.CREATE : com.dypiu.nba.audit.AuditAction.UPDATE, com.dypiu.nba.audit.ResourceType.PROGRAMME_BATCH, saved.getId(), null, "ACTIVE", isNewBatch ? "Created ProgrammeBatch" : "Updated ProgrammeBatch", java.util.Map.of("name", saved.getName() != null ? saved.getName() : ""));
         }
