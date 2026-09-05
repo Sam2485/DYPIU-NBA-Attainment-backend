@@ -1,4 +1,4 @@
--- Migration V9: Add level column (UG/PG) to master_programmes for degree level filtering
+-- Migration V13: Add level column (UG/PG) to master_programmes for degree level filtering
 
 ALTER TABLE master_programmes ADD COLUMN IF NOT EXISTS level VARCHAR(20) DEFAULT 'UG';
 

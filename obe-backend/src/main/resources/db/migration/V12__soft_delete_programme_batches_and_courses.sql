@@ -1,4 +1,4 @@
--- Migration V8: Fix unique constraints on programme_batches and programme_batch_courses for soft delete support
+-- Migration V12: Fix unique constraints on programme_batches and programme_batch_courses for soft delete support
 
 -- 1. Programme Batches: Drop global unique constraint on start_year and replace with partial unique index (active only)
 ALTER TABLE programme_batches DROP CONSTRAINT IF EXISTS uk_programme_batch_start_year;
