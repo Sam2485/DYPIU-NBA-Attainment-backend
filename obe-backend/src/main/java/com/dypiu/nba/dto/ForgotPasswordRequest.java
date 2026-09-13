@@ -9,4 +9,9 @@ public class ForgotPasswordRequest {
     @NotBlank(message = "Email is required")
     @Email(message = "Invalid email format")
     private String email;
+
+    private Double latitude;
+    private Double longitude;
+    private Double accuracy;
+    private String location;
 }

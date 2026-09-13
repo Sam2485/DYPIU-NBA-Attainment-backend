@@ -18,5 +18,7 @@ public enum AuditAction {
     DELETE_EXECUTED,
     RESTORE,
     LOGIN,
-    LOGOUT
+    LOGOUT,
+    PASSWORD_RESET_REQUEST,
+    PASSWORD_RESET
 }

@@ -10,4 +10,9 @@ public class ResetPasswordRequest {
 
     @NotBlank(message = "New password is required")
     private String newPassword;
+
+    private Double latitude;
+    private Double longitude;
+    private Double accuracy;
+    private String location;
 }

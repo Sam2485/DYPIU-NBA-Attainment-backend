@@ -57,7 +57,7 @@ public class AuthController {
     @PostMapping("/forgot-password")
     public ResponseEntity<ApiResponse<String>> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request, jakarta.servlet.http.HttpServletRequest servletRequest) {
         rateLimiterService.checkRateLimit(servletRequest, "forgot-password", 5);
-        String msg = authService.requestPasswordReset(request.getEmail());
+        String msg = authService.requestPasswordReset(request, servletRequest);
         return ResponseEntity.ok(ApiResponse.<String>builder()
                 .success(true)
                 .message(msg)
@@ -68,7 +68,7 @@ public class AuthController {
     @PostMapping("/reset-password")
     public ResponseEntity<ApiResponse<String>> resetPassword(@Valid @RequestBody ResetPasswordRequest request, jakarta.servlet.http.HttpServletRequest servletRequest) {
         rateLimiterService.checkRateLimit(servletRequest, "reset-password", 5);
-        String msg = authService.resetPassword(request.getToken(), request.getNewPassword());
+        String msg = authService.resetPassword(request, servletRequest);
         return ResponseEntity.ok(ApiResponse.<String>builder()
                 .success(true)
                 .message(msg)

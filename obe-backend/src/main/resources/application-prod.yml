@@ -48,7 +48,27 @@ spring:
     baseline-on-migrate: true
     baseline-version: 0
 
+  mail:
+    host: ${SPRING_MAIL_HOST:smtp.gmail.com}
+    port: ${SPRING_MAIL_PORT:587}
+    username: ${SPRING_MAIL_USERNAME:raj.shaikh.7709@gmail.com}
+    password: ${SPRING_MAIL_PASSWORD:gnuuyamgjuiwlrxk}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
+          connectiontimeout: 5000
+          timeout: 5000
+          writetimeout: 5000
+
 app:
+  mail:
+    from: ${APP_MAIL_FROM:DYPIU OBE System <raj.shaikh.7709@gmail.com>}
+  frontend:
+    url: ${APP_FRONTEND_URL:https://pbas.dypiu.ac.in}
   jwt:
     secret: ${JWT_SECRET} # Fail-fast: required in production
     expiration-ms: ${JWT_EXPIRATION_MS:86400000}
