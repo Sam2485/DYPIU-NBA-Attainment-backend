@@ -426,10 +426,19 @@ public class AcademicService {
             List<ProgrammeBatchCourse> list = (targetBatchId != null && !targetBatchId.isBlank())
                     ? programmeBatchCourseRepository.findByProgrammeBatchIdAndDeletedAtIsNull(targetBatchId)
                     : programmeBatchCourseRepository.findByDeletedAtIsNull();
+            String scopeEmail = scope.getEmail() != null ? scope.getEmail().trim().toLowerCase() : "";
+            String scopeName = scope.getName() != null ? scope.getName().trim().toLowerCase() : "";
+            Long scopeUserId = scope.getUserId();
             offerings = list.stream()
                     .filter(o -> {
-                        boolean isCoord = (o.getCourseCoordinatorId() != null && Objects.equals(o.getCourseCoordinatorId(), scope.getUserId()));
-                        boolean isAssigned = isCoord || (o.getAssignedFaculty() != null && (o.getAssignedFaculty().contains(scope.getEmail()) || o.getAssignedFaculty().contains(scope.getName())));
+                        boolean isCoord = (scopeUserId != null && o.getCourseCoordinatorId() != null && Objects.equals(o.getCourseCoordinatorId(), scopeUserId));
+                        if (!isCoord && !scopeName.isEmpty() && o.getCourseCoordinatorName() != null && o.getCourseCoordinatorName().equalsIgnoreCase(scope.getName())) {
+                            isCoord = true;
+                        }
+                        boolean isAssigned = isCoord || (o.getAssignedFaculty() != null && (
+                                (!scopeEmail.isEmpty() && o.getAssignedFaculty().toLowerCase().contains(scopeEmail)) ||
+                                (!scopeName.isEmpty() && o.getAssignedFaculty().toLowerCase().contains(scopeName))
+                        ));
                         return isAssigned && isCourseAllocationApproved(o);
                     })
                     .collect(Collectors.toList());
@@ -802,8 +811,24 @@ public class AcademicService {
         if (offering.getMasterCourseId() != null) enforceCourseScope(offering.getMasterCourseId());
         CurrentUserScope scope = getScope();
         offering.setDeletedAt(ZonedDateTime.now());
-        offering.setDeletedBy(scope != null ? (scope.getEmail() != null ? scope.getEmail() : scope.getUsername()) : "SYSTEM");
+        String deletedBy = scope != null ? (scope.getEmail() != null ? scope.getEmail() : scope.getUsername()) : "SYSTEM";
+        offering.setDeletedBy(deletedBy);
+        offering.setStatus("DELETED");
         programmeBatchCourseRepository.save(offering);
+        if (academicLookupCacheService != null) {
+            academicLookupCacheService.evictCourseCache();
+        }
+        if (auditLogService != null) {
+            auditLogService.recordSuccess(
+                    com.dypiu.nba.audit.AuditAction.DELETE,
+                    com.dypiu.nba.audit.ResourceType.PROGRAMME_BATCH_COURSE,
+                    offering.getId(),
+                    "ACTIVE",
+                    "DELETED",
+                    "Soft-deleted course offering " + (offering.getCode() != null ? offering.getCode() : offering.getId()),
+                    java.util.Map.of("code", offering.getCode() != null ? offering.getCode() : "", "name", offering.getName() != null ? offering.getName() : "", "programmeBatchId", offering.getProgrammeBatchId() != null ? offering.getProgrammeBatchId() : "")
+            );
+        }
     }
 
     // --- Director School Summary ---
@@ -1424,6 +1449,17 @@ public class AcademicService {
         if (academicLookupCacheService != null) {
             academicLookupCacheService.evictDepartmentCache();
         }
+        if (auditLogService != null) {
+            auditLogService.recordSuccess(
+                    com.dypiu.nba.audit.AuditAction.DELETE,
+                    com.dypiu.nba.audit.ResourceType.DEPARTMENT,
+                    id,
+                    "ACTIVE",
+                    "DELETED",
+                    "Deleted Department " + dept.getName() + " (" + dept.getCode() + ")",
+                    java.util.Map.of("code", dept.getCode() != null ? dept.getCode() : "", "name", dept.getName() != null ? dept.getName() : "", "schoolId", dept.getSchoolId() != null ? dept.getSchoolId() : "")
+            );
+        }
         log.debug("[AcademicService] Deleted department with id: " + id);
     }
 
@@ -1446,7 +1482,7 @@ public class AcademicService {
             users = userRepository.findAll().stream().filter(u -> {
                 if (u.getRole() != null && (
                         u.getRole().name().equalsIgnoreCase(searchRole)
-                        || (u.getRole() == UserRole.FACULTY && (searchRole.equals("COURSE_COORDINATOR") || searchRole.equals("CC") || searchRole.equals("FACULTY")))
+                        || ((u.getRole() == UserRole.FACULTY || u.getRole() == UserRole.PROGRAMME_COORDINATOR || u.getRole() == UserRole.HOD) && (searchRole.equals("COURSE_COORDINATOR") || searchRole.equals("CC") || searchRole.equals("FACULTY")))
                         || (u.getRole() == UserRole.PROGRAMME_COORDINATOR && (searchRole.equals("COORDINATOR") || searchRole.equals("PC") || searchRole.equals("PROGRAMME_COORDINATOR")))
                 )) {
                     return true;
@@ -1456,7 +1492,8 @@ public class AcademicService {
                     return clean.equalsIgnoreCase(searchRole)
                             || (clean.equals("FACULTY") && (searchRole.equals("COURSE_COORDINATOR") || searchRole.equals("CC")))
                             || (clean.equals("COURSE_COORDINATOR") && searchRole.equals("FACULTY"))
-                            || (clean.equals("PROGRAMME_COORDINATOR") && (searchRole.equals("COORDINATOR") || searchRole.equals("PC")));
+                            || (clean.equals("PROGRAMME_COORDINATOR") && (searchRole.equals("COORDINATOR") || searchRole.equals("PC") || searchRole.equals("COURSE_COORDINATOR") || searchRole.equals("FACULTY")))
+                            || (clean.equals("HOD") && (searchRole.equals("COURSE_COORDINATOR") || searchRole.equals("FACULTY")));
                 });
             }).collect(Collectors.toList());
         }
@@ -1471,23 +1508,23 @@ public class AcademicService {
         if (scope != null && scope.isDirector()) {
             String schoolId = scope.getRequiredSchoolId();
             users = users.stream()
-                    .filter(u -> u.getSchoolId() != null && u.getSchoolId().equals(schoolId))
+                    .filter(u -> u.getSchoolId() != null && u.getSchoolId().equalsIgnoreCase(schoolId))
                     .collect(Collectors.toList());
         } else if (scope != null && scope.isHod()) {
             String schoolId = scope.getRequiredSchoolId();
             String deptId = scope.getRequiredDepartmentId();
             users = users.stream()
-                    .filter(u -> (u.getSchoolId() == null || u.getSchoolId().equals(schoolId))
-                            && (u.getDepartmentId() == null || u.getDepartmentId().equals(deptId)))
+                    .filter(u -> (u.getSchoolId() == null || u.getSchoolId().equalsIgnoreCase(schoolId))
+                            && (u.getDepartmentId() == null || u.getDepartmentId().equalsIgnoreCase(deptId)))
                     .collect(Collectors.toList());
         } else if (scope != null && scope.isProgrammeCoordinator()) {
             if (scope.hasSchoolScope()) {
                 String schoolId = scope.getSchoolId();
-                users = users.stream().filter(u -> u.getSchoolId() == null || u.getSchoolId().equals(schoolId)).collect(Collectors.toList());
+                users = users.stream().filter(u -> u.getSchoolId() == null || u.getSchoolId().equalsIgnoreCase(schoolId)).collect(Collectors.toList());
             }
             if (scope.hasDepartmentScope()) {
                 String deptId = scope.getDepartmentId();
-                users = users.stream().filter(u -> u.getDepartmentId() == null || u.getDepartmentId().equals(deptId)).collect(Collectors.toList());
+                users = users.stream().filter(u -> u.getDepartmentId() == null || u.getDepartmentId().equalsIgnoreCase(deptId)).collect(Collectors.toList());
             }
         }
 
@@ -2557,14 +2594,47 @@ public class AcademicService {
 
     private List<ProgrammeBatch> getBatchesByCourseCoordinatorEmailAndFilters(
             String courseCoordinatorEmail, String masterProgrammeId, String departmentId, String status) {
-        List<ProgrammeBatchCourse> assignedCourses = getProgrammeBatchCoursesByCoordinatorEmail(courseCoordinatorEmail, null);
-        if (assignedCourses.isEmpty()) {
-            return Collections.emptyList();
+        Set<String> programmeBatchIds = new LinkedHashSet<>();
+
+        if (courseCoordinatorEmail != null && !courseCoordinatorEmail.isBlank()) {
+            String cleanEmail = courseCoordinatorEmail.trim().toLowerCase();
+
+            // 1. Batches where user is course coordinator / faculty on allocated courses
+            List<ProgrammeBatchCourse> assignedCourses = getProgrammeBatchCoursesByCoordinatorEmail(cleanEmail, null);
+            if (assignedCourses != null) {
+                assignedCourses.stream()
+                        .map(ProgrammeBatchCourse::getProgrammeBatchId)
+                        .filter(id -> id != null && !id.isBlank())
+                        .forEach(programmeBatchIds::add);
+            }
+
+            // 2. Batches where user is directly assigned as the Programme Batch Coordinator
+            List<ProgrammeBatch> directBatches = programmeBatchRepository.findByCoordinatorEmailIgnoreCaseAndDeletedAtIsNull(cleanEmail);
+            if (directBatches != null) {
+                directBatches.stream()
+                        .map(ProgrammeBatch::getId)
+                        .filter(id -> id != null && !id.isBlank())
+                        .forEach(programmeBatchIds::add);
+            }
+
+            // 3. Batches linked via User ID or Master Programme assignment
+            userRepository.findByEmailIgnoreCase(cleanEmail)
+                    .or(() -> userRepository.findByUsernameIgnoreCase(cleanEmail))
+                    .ifPresent(u -> {
+                        if (u.getId() != null) {
+                            List<ProgrammeBatch> byId = programmeBatchRepository.findByCoordinatorIdAndDeletedAtIsNull(u.getId());
+                            if (byId != null) {
+                                byId.stream().map(ProgrammeBatch::getId).filter(Objects::nonNull).forEach(programmeBatchIds::add);
+                            }
+                        }
+                        if (u.getMasterProgrammeId() != null && !u.getMasterProgrammeId().isBlank()) {
+                            List<ProgrammeBatch> byProg = programmeBatchRepository.findByMasterProgrammeIdAndDeletedAtIsNull(u.getMasterProgrammeId());
+                            if (byProg != null) {
+                                byProg.stream().map(ProgrammeBatch::getId).filter(Objects::nonNull).forEach(programmeBatchIds::add);
+                            }
+                        }
+                    });
         }
-        Set<String> programmeBatchIds = assignedCourses.stream()
-                .map(ProgrammeBatchCourse::getProgrammeBatchId)
-                .filter(id -> id != null && !id.isBlank())
-                .collect(Collectors.toCollection(LinkedHashSet::new));
 
         if (programmeBatchIds.isEmpty()) {
             return Collections.emptyList();
@@ -2572,8 +2642,13 @@ public class AcademicService {
 
         List<ProgrammeBatch> batches = programmeBatchRepository.findAllById(programmeBatchIds).stream()
                 .filter(b -> b.getDeletedAt() == null)
-                .filter(b -> status == null || (b.getStatus() != null && b.getStatus().equalsIgnoreCase(status)))
-                .filter(b -> masterProgrammeId == null || masterProgrammeId.equals(b.getMasterProgrammeId()))
+                .filter(b -> {
+                    if (status == null || "ALL".equalsIgnoreCase(status) || "ANY".equalsIgnoreCase(status)) {
+                        return b.getStatus() == null || !"INACTIVE".equalsIgnoreCase(b.getStatus()) || "ALL".equalsIgnoreCase(status);
+                    }
+                    return b.getStatus() != null && b.getStatus().equalsIgnoreCase(status);
+                })
+                .filter(b -> masterProgrammeId == null || masterProgrammeId.isBlank() || masterProgrammeId.equalsIgnoreCase(b.getMasterProgrammeId()))
                 .collect(Collectors.toList());
 
         if (departmentId != null && !departmentId.isBlank()) {
@@ -2584,12 +2659,13 @@ public class AcademicService {
                 batches = batches.stream()
                         .filter(b -> {
                             MasterProgramme mp = progMap.get(b.getMasterProgrammeId());
-                            return mp != null && departmentId.equals(mp.getDepartmentId());
+                            return mp != null && departmentId.equalsIgnoreCase(mp.getDepartmentId());
                         })
                         .collect(Collectors.toList());
             }
         }
 
+        batches.sort(Comparator.comparing(ProgrammeBatch::getStartYear, Comparator.nullsLast(Comparator.reverseOrder())));
         enrichBatchMetadata(batches);
         return batches;
     }
@@ -2726,10 +2802,23 @@ public class AcademicService {
         enforceProgrammeScope(batch.getMasterProgrammeId());
         CurrentUserScope scope = getScope();
         batch.setDeletedAt(ZonedDateTime.now());
-        batch.setDeletedBy(scope != null ? (scope.getEmail() != null ? scope.getEmail() : scope.getUsername()) : "SYSTEM");
+        String deletedBy = scope != null ? (scope.getEmail() != null ? scope.getEmail() : scope.getUsername()) : "SYSTEM";
+        batch.setDeletedBy(deletedBy);
+        batch.setStatus("DELETED");
         programmeBatchRepository.save(batch);
         if (academicLookupCacheService != null) {
             academicLookupCacheService.evictProgrammeBatchCache();
+        }
+        if (auditLogService != null) {
+            auditLogService.recordSuccess(
+                    com.dypiu.nba.audit.AuditAction.DELETE,
+                    com.dypiu.nba.audit.ResourceType.PROGRAMME_BATCH,
+                    batch.getId(),
+                    "ACTIVE",
+                    "DELETED",
+                    "Soft-deleted ProgrammeBatch " + batch.getName(),
+                    java.util.Map.of("batchName", batch.getName() != null ? batch.getName() : "", "masterProgrammeId", batch.getMasterProgrammeId() != null ? batch.getMasterProgrammeId() : "")
+            );
         }
     }
 

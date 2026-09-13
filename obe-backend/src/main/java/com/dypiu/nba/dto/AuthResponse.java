@@ -31,6 +31,7 @@ public class AuthResponse {
         private String schoolId;
         private String departmentId;
         private String masterProgrammeId;
+        private String programmeBatchId;
         private String department;
         private String programme;
     }

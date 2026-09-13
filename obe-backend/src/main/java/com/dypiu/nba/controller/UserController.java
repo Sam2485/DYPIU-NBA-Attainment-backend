@@ -341,15 +341,16 @@ public class UserController {
 
         enforceUserScope(user);
 
-        userRepository.delete(user);
+        user.setIsActive(false);
+        userRepository.save(user);
 
         if (auditLogService != null) {
-            auditLogService.recordSuccess(com.dypiu.nba.audit.AuditAction.DELETE, com.dypiu.nba.audit.ResourceType.USER, String.valueOf(user.getId()), null, "DELETED", "Deleted User " + user.getName(), java.util.Map.of("username", user.getUsername(), "role", user.getRole() != null ? user.getRole().name() : ""));
+            auditLogService.recordSuccess(com.dypiu.nba.audit.AuditAction.DELETE, com.dypiu.nba.audit.ResourceType.USER, String.valueOf(user.getId()), "ACTIVE", "INACTIVE", "Deactivated/Deleted User " + user.getName(), java.util.Map.of("username", user.getUsername(), "role", user.getRole() != null ? user.getRole().name() : ""));
         }
 
         return ResponseEntity.ok(ApiResponse.<Void>builder()
                 .success(true)
-                .message("User deleted successfully.")
+                .message("User deactivated/deleted successfully.")
                 .build());
     }
 
