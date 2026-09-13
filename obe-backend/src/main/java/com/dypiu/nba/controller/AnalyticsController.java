@@ -15,9 +15,9 @@ import java.util.List;
 
 @Slf4j
 @RestController
-@RequestMapping("/api/v1/analytics")
+@RequestMapping({"/analytics", "/api/v1/analytics"})
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyRole('ROLE_IQAC', 'ROLE_SUPER_ADMIN', 'ROLE_DIRECTOR', 'ROLE_HOD', 'ROLE_PROGRAMME_COORDINATOR', 'ROLE_FACULTY')")
+@PreAuthorize("hasAnyRole('IQAC', 'SUPER_ADMIN', 'DIRECTOR', 'HOD', 'PROGRAMME_COORDINATOR', 'FACULTY', 'COURSE_COORDINATOR', 'ADMIN')")
 public class AnalyticsController {
 
     private final AnalyticsService analyticsService;
@@ -205,7 +205,7 @@ public class AnalyticsController {
     }
 
     @PutMapping("/config/student-evidence-threshold")
-    @PreAuthorize("hasAnyRole('ROLE_IQAC', 'ROLE_SUPER_ADMIN', 'ROLE_ADMIN')")
+    @PreAuthorize("hasAnyRole('IQAC', 'SUPER_ADMIN', 'ADMIN')")
     public ResponseEntity<ApiResponse<StudentEvidenceThresholdConfigDto>> updateStudentEvidenceThresholdConfig(
             @Valid @RequestBody UpdateStudentEvidenceThresholdRequest request,
             Principal principal) {
