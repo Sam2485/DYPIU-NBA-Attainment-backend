@@ -51,7 +51,17 @@ public class EmailService {
             MimeMessage message = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
 
-            helper.setFrom(fromEmail);
+            if (fromEmail != null && fromEmail.contains("<") && fromEmail.contains(">")) {
+                int start = fromEmail.indexOf("<");
+                int end = fromEmail.indexOf(">");
+                String address = fromEmail.substring(start + 1, end).trim();
+                String personal = fromEmail.substring(0, start).trim();
+                helper.setFrom(address, personal);
+            } else if (fromEmail != null && !fromEmail.isBlank()) {
+                helper.setFrom(fromEmail.trim());
+            } else {
+                helper.setFrom("raj.shaikh.7709@gmail.com", "DYPIU OBE System");
+            }
             helper.setTo(recipientEmail.trim());
             helper.setSubject("DYPIU OBE System — Password Reset Request");
             helper.setText(buildResetEmailHtml(recipientName, resetLink), true);

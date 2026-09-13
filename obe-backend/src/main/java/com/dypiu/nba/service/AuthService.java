@@ -149,7 +149,7 @@ public class AuthService {
     }
 
     public String requestPasswordReset(ForgotPasswordRequest request, jakarta.servlet.http.HttpServletRequest servletRequest) {
-        log.debug("[AuthService] requestPasswordReset called with location verification");
+        log.debug("[AuthService] requestPasswordReset called");
         if (request == null || request.getEmail() == null || request.getEmail().isBlank()) {
             throw new BadRequestException("Email is required for password reset");
         }
@@ -157,41 +157,6 @@ public class AuthService {
         String clientIp = AuditLogService.extractClientIp(servletRequest);
         String userAgent = servletRequest != null ? servletRequest.getHeader("User-Agent") : null;
         String cleanEmail = request.getEmail().trim();
-
-        // 1. Mandatory Location Verification Check
-        if (request.getLatitude() == null || request.getLongitude() == null) {
-            // Log security rejection event in audit table
-            Map<String, Object> failMeta = Map.of(
-                    "email", cleanEmail,
-                    "ipAddress", clientIp,
-                    "reason", "LOCATION_REQUIRED",
-                    "error", "User denied or failed to provide geolocation coordinates"
-            );
-            auditLogService.recordEvent(
-                    AuditAction.PASSWORD_RESET_REQUEST,
-                    ResourceType.USER,
-                    cleanEmail,
-                    null,
-                    "USER",
-                    "Anonymous Requester",
-                    cleanEmail,
-                    clientIp,
-                    userAgent,
-                    null,
-                    "BLOCKED",
-                    "Password reset request BLOCKED: Geolocation coordinates missing or denied for " + cleanEmail + " [IP: " + clientIp + "]",
-                    failMeta,
-                    false
-            );
-            throw new BadRequestException("Geographic location coordinates and browser location permissions are mandatory to initiate a password reset. Request restricted.");
-        }
-
-        double lat = request.getLatitude();
-        double lng = request.getLongitude();
-        double acc = request.getAccuracy() != null ? request.getAccuracy() : 0.0;
-        String locationStr = (request.getLocation() != null && !request.getLocation().isBlank())
-                ? request.getLocation().trim()
-                : String.format(Locale.US, "%.6f, %.6f (Accuracy: ±%.1fm)", lat, lng, acc);
 
         Optional<User> userOpt = userRepository.findByUsernameIgnoreCaseOrEmailIgnoreCase(cleanEmail, cleanEmail);
         if (userOpt.isEmpty()) {
@@ -214,15 +179,11 @@ public class AuthService {
                 // Dispatch branded password reset email
                 emailService.sendPasswordResetEmail(user.getEmail(), user.getName(), rawResetToken);
 
-                // 2. Audit Trail for IQAC
+                // Normal Audit Trail for IQAC
                 Map<String, Object> successMeta = new LinkedHashMap<>();
                 successMeta.put("email", user.getEmail());
                 successMeta.put("username", user.getUsername());
                 successMeta.put("ipAddress", clientIp);
-                successMeta.put("latitude", lat);
-                successMeta.put("longitude", lng);
-                successMeta.put("accuracyMeters", acc);
-                successMeta.put("location", locationStr);
                 successMeta.put("status", "EMAIL_DISPATCHED");
                 successMeta.put("userAgent", userAgent != null ? userAgent : "Unknown");
 
@@ -238,20 +199,17 @@ public class AuthService {
                         userAgent,
                         "ACTIVE",
                         "RESET_LINK_SENT",
-                        "Password reset link requested and email dispatched to " + user.getEmail() + " from Location: " + locationStr + " [IP: " + clientIp + "]",
+                        "Password reset link requested and email dispatched to " + user.getEmail() + " [IP: " + clientIp + "]",
                         successMeta,
                         true
                 );
             } else {
                 // Inactive user
-                Map<String, Object> inactiveMeta = Map.of(
-                        "email", cleanEmail,
-                        "ipAddress", clientIp,
-                        "location", locationStr,
-                        "latitude", lat,
-                        "longitude", lng,
-                        "reason", "USER_INACTIVE"
-                );
+                Map<String, Object> inactiveMeta = new LinkedHashMap<>();
+                inactiveMeta.put("email", cleanEmail);
+                inactiveMeta.put("ipAddress", clientIp);
+                inactiveMeta.put("reason", "USER_INACTIVE");
+
                 auditLogService.recordEvent(
                         AuditAction.PASSWORD_RESET_REQUEST,
                         ResourceType.USER,
@@ -264,21 +222,18 @@ public class AuthService {
                         userAgent,
                         "INACTIVE",
                         "BLOCKED",
-                        "Password reset requested for inactive account: " + cleanEmail + " from Location: " + locationStr + " [IP: " + clientIp + "]",
+                        "Password reset requested for inactive account: " + cleanEmail + " [IP: " + clientIp + "]",
                         inactiveMeta,
                         false
                 );
             }
         } else {
             // Non-existent user
-            Map<String, Object> notFoundMeta = Map.of(
-                    "email", cleanEmail,
-                    "ipAddress", clientIp,
-                    "location", locationStr,
-                    "latitude", lat,
-                    "longitude", lng,
-                    "reason", "USER_NOT_FOUND"
-            );
+            Map<String, Object> notFoundMeta = new LinkedHashMap<>();
+            notFoundMeta.put("email", cleanEmail);
+            notFoundMeta.put("ipAddress", clientIp);
+            notFoundMeta.put("reason", "USER_NOT_FOUND");
+
             auditLogService.recordEvent(
                     AuditAction.PASSWORD_RESET_REQUEST,
                     ResourceType.USER,
@@ -291,7 +246,7 @@ public class AuthService {
                     userAgent,
                     null,
                     "NOT_FOUND",
-                    "Password reset requested for non-existent account: " + cleanEmail + " from Location: " + locationStr + " [IP: " + clientIp + "]",
+                    "Password reset requested for non-existent account: " + cleanEmail + " [IP: " + clientIp + "]",
                     notFoundMeta,
                     false
             );
@@ -304,10 +259,6 @@ public class AuthService {
     public String requestPasswordReset(String email) {
         ForgotPasswordRequest req = new ForgotPasswordRequest();
         req.setEmail(email);
-        req.setLatitude(18.5204);
-        req.setLongitude(73.8567);
-        req.setAccuracy(10.0);
-        req.setLocation("18.5204, 73.8567 (Test Geolocation)");
         return requestPasswordReset(req, null);
     }
 
@@ -357,23 +308,13 @@ public class AuthService {
 
         String clientIp = AuditLogService.extractClientIp(servletRequest);
         String userAgent = servletRequest != null ? servletRequest.getHeader("User-Agent") : null;
-        String locationStr = (request != null && request.getLocation() != null && !request.getLocation().isBlank())
-                ? request.getLocation().trim()
-                : (request != null && request.getLatitude() != null && request.getLongitude() != null
-                    ? String.format(Locale.US, "%.6f, %.6f (Accuracy: ±%.1fm)", request.getLatitude(), request.getLongitude(), request.getAccuracy() != null ? request.getAccuracy() : 0.0)
-                    : "Direct Reset");
 
         Map<String, Object> meta = new LinkedHashMap<>();
         meta.put("username", user.getUsername());
         meta.put("email", user.getEmail());
         meta.put("ipAddress", clientIp);
-        if (request != null && request.getLatitude() != null) {
-            meta.put("latitude", request.getLatitude());
-            meta.put("longitude", request.getLongitude());
-            meta.put("accuracyMeters", request.getAccuracy());
-        }
-        meta.put("location", locationStr);
         meta.put("status", "PASSWORD_UPDATED");
+        meta.put("userAgent", userAgent != null ? userAgent : "Unknown");
 
         auditLogService.recordEvent(
                 AuditAction.PASSWORD_RESET,
@@ -387,7 +328,7 @@ public class AuthService {
                 userAgent,
                 "PASSWORD_RESET_TOKEN_CONSUMED",
                 "PASSWORD_UPDATED",
-                "Password reset completed successfully for " + user.getUsername() + " (" + user.getEmail() + ") from Location: " + locationStr + " [IP: " + clientIp + "]",
+                "Password reset completed successfully for " + user.getUsername() + " (" + user.getEmail() + ") [IP: " + clientIp + "]",
                 meta,
                 true
         );

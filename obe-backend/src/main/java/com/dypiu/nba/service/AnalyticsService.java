@@ -1,6 +1,7 @@
 package com.dypiu.nba.service;
 
 import com.dypiu.nba.dto.CourseAttainmentReportDto;
+import com.dypiu.nba.dto.ProgrammeAtrReportDto;
 import com.dypiu.nba.dto.ProgrammeBatchAttainmentReportDto;
 import com.dypiu.nba.dto.analytics.*;
 import com.dypiu.nba.entity.*;
@@ -36,6 +37,8 @@ public class AnalyticsService {
     private final ProgrammeBatchCourseRepository programmeBatchCourseRepository;
     private final ProgrammeBatchAttainmentReportRepository programmeBatchAttainmentReportRepository;
     private final CourseAttainmentReportRepository courseAttainmentReportRepository;
+    private final StudentCoMarkRepository studentCoMarkRepository;
+    private final IqacAnalyticsConfigurationRepository iqacAnalyticsConfigurationRepository;
     private final ProgrammeAtrRepository programmeAtrRepository;
     private final ProgrammeOutcomeRepository programmeOutcomeRepository;
     private final ProgrammeSpecificOutcomeRepository programmeSpecificOutcomeRepository;
@@ -742,10 +745,220 @@ public class AnalyticsService {
         return evidenceList;
     }
 
+    public List<CourseAssessmentEvidenceDto> getCourseEvidence(String programmeBatchId, String outcomeCode, String outcomeType) {
+        if (programmeBatchId == null || outcomeCode == null) return Collections.emptyList();
+        validateAndResolveScope(null, null, null, programmeBatchId);
+        return findContributingCourseEvidence(programmeBatchId, outcomeCode, outcomeType != null ? outcomeType : "PO");
+    }
+
+    // ==========================================
+    // 8. STUDENT CO EVIDENCE ENDPOINT (PHASE 9)
+    // ==========================================
+    public StudentCoEvidenceResponseDto getStudentCoEvidence(String programmeBatchCourseId, String coCode) {
+        if (programmeBatchCourseId == null || coCode == null) {
+            throw new BadRequestException("programmeBatchCourseId and coCode are required");
+        }
+
+        ProgrammeBatchCourse course = programmeBatchCourseRepository.findById(programmeBatchCourseId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Course offering not found: " + programmeBatchCourseId));
+
+        // Enforce role and hierarchy scope authorization
+        validateAndResolveScope(null, null, null, course.getProgrammeBatchId());
+
+        String targetCo = coCode.toUpperCase().trim();
+
+        // 1. Fetch Course Attainment Report for Table 3 metadata
+        CourseAttainmentReport cReport = courseAttainmentReportRepository.findByProgrammeBatchCourseId(programmeBatchCourseId).orElse(null);
+        String coStatement = null;
+        BigDecimal coTargetLevel = BigDecimal.valueOf(2.00);
+        BigDecimal coDirectAttainment = BigDecimal.ZERO;
+        BigDecimal coIndirectAttainment = BigDecimal.ZERO;
+        BigDecimal coOverallAttainment = BigDecimal.ZERO;
+        Boolean coTargetMet = false;
+
+        if (cReport != null) {
+            coDirectAttainment = cReport.getDirectAttainment() != null ? cReport.getDirectAttainment() : BigDecimal.ZERO;
+            coIndirectAttainment = cReport.getIndirectAttainment() != null ? cReport.getIndirectAttainment() : BigDecimal.ZERO;
+            coOverallAttainment = cReport.getOverallCoAttainment() != null ? cReport.getOverallCoAttainment() : BigDecimal.ZERO;
+
+            List<CourseAttainmentReportDto.Table3Row> table3 = parseTable3CoAttainments(cReport.getTable3CoAttainmentJson());
+            for (CourseAttainmentReportDto.Table3Row t3 : table3) {
+                if (t3.getCoCode() != null && t3.getCoCode().equalsIgnoreCase(targetCo)) {
+                    coStatement = t3.getStatement();
+                    if (t3.getTargetLevel() != null) coTargetLevel = t3.getTargetLevel();
+                    if (t3.getFinalAttainment() != null) coOverallAttainment = t3.getFinalAttainment();
+                    if (t3.getDirectLevel() != null) coDirectAttainment = BigDecimal.valueOf(t3.getDirectLevel());
+                    if (t3.getIndirectLevel() != null) coIndirectAttainment = BigDecimal.valueOf(t3.getIndirectLevel());
+                    coTargetMet = t3.getTargetMet();
+                    break;
+                }
+            }
+        }
+
+        // 2. Fetch Student CO Marks
+        List<StudentCoMark> marks = studentCoMarkRepository.findByProgrammeBatchCourseIdAndCoCode(programmeBatchCourseId, targetCo);
+        if (marks.isEmpty()) {
+            List<StudentCoMark> allMarks = studentCoMarkRepository.findByProgrammeBatchCourseId(programmeBatchCourseId);
+            marks = allMarks.stream()
+                    .filter(m -> m.getCoCode() != null && m.getCoCode().equalsIgnoreCase(targetCo))
+                    .toList();
+        }
+
+        int totalStudents = marks.size();
+        int studentsAbove = 0;
+        int studentsBelow = 0;
+        BigDecimal sumPct = BigDecimal.ZERO;
+        BigDecimal highestPct = BigDecimal.ZERO;
+        BigDecimal lowestPct = totalStudents > 0 ? BigDecimal.valueOf(100) : BigDecimal.ZERO;
+
+        Map<String, Integer> scoreDistribution = new LinkedHashMap<>();
+        scoreDistribution.put("90-100%", 0);
+        scoreDistribution.put("80-89%", 0);
+        scoreDistribution.put("70-79%", 0);
+        scoreDistribution.put("60-69%", 0);
+        scoreDistribution.put("50-59%", 0);
+        scoreDistribution.put("<50%", 0);
+
+        List<StudentEvidenceRowDto> studentRows = new ArrayList<>();
+
+        BigDecimal activeThreshold = getStudentEvidenceThreshold();
+
+        for (int i = 0; i < marks.size(); i++) {
+            StudentCoMark m = marks.get(i);
+            BigDecimal marksObtained = m.getMarksObtained() != null ? m.getMarksObtained() : BigDecimal.ZERO;
+            BigDecimal maxMarks = m.getMaxMarks() != null && m.getMaxMarks().compareTo(BigDecimal.ZERO) > 0 ? m.getMaxMarks() : BigDecimal.valueOf(100.00);
+
+            BigDecimal pct = marksObtained.divide(maxMarks, 4, RoundingMode.HALF_UP).multiply(BigDecimal.valueOf(100)).setScale(2, RoundingMode.HALF_UP);
+
+            sumPct = sumPct.add(pct);
+            if (pct.compareTo(highestPct) > 0) highestPct = pct;
+            if (pct.compareTo(lowestPct) < 0) lowestPct = pct;
+
+            // Student Performance Evidence Threshold (Authoritative IQAC Configured)
+            boolean met = pct.compareTo(activeThreshold) >= 0;
+            if (met) {
+                studentsAbove++;
+            } else {
+                studentsBelow++;
+            }
+
+            // Bucketing
+            if (pct.compareTo(BigDecimal.valueOf(90.00)) >= 0) {
+                scoreDistribution.put("90-100%", scoreDistribution.get("90-100%") + 1);
+            } else if (pct.compareTo(BigDecimal.valueOf(80.00)) >= 0) {
+                scoreDistribution.put("80-89%", scoreDistribution.get("80-89%") + 1);
+            } else if (pct.compareTo(BigDecimal.valueOf(70.00)) >= 0) {
+                scoreDistribution.put("70-79%", scoreDistribution.get("70-79%") + 1);
+            } else if (pct.compareTo(BigDecimal.valueOf(60.00)) >= 0) {
+                scoreDistribution.put("60-69%", scoreDistribution.get("60-69%") + 1);
+            } else if (pct.compareTo(BigDecimal.valueOf(50.00)) >= 0) {
+                scoreDistribution.put("50-59%", scoreDistribution.get("50-59%") + 1);
+            } else {
+                scoreDistribution.put("<50%", scoreDistribution.get("<50%") + 1);
+            }
+
+            studentRows.add(StudentEvidenceRowDto.builder()
+                    .studentIdentifier("Student " + (i + 1))
+                    .maskedPrn(maskPrn(m.getPrn()))
+                    .marksObtained(marksObtained.setScale(2, RoundingMode.HALF_UP))
+                    .maxMarks(maxMarks.setScale(2, RoundingMode.HALF_UP))
+                    .percentage(pct)
+                    .thresholdMet(met)
+                    .build());
+        }
+
+        BigDecimal avgPct = totalStudents > 0
+                ? sumPct.divide(BigDecimal.valueOf(totalStudents), 2, RoundingMode.HALF_UP)
+                : BigDecimal.ZERO;
+
+        BigDecimal attainmentRate = totalStudents > 0
+                ? BigDecimal.valueOf(studentsAbove).multiply(BigDecimal.valueOf(100.00)).divide(BigDecimal.valueOf(totalStudents), 2, RoundingMode.HALF_UP)
+                : BigDecimal.ZERO;
+
+        return StudentCoEvidenceResponseDto.builder()
+                .programmeBatchCourseId(programmeBatchCourseId)
+                .courseCode(course.getEffectiveCourseCode() != null ? course.getEffectiveCourseCode() : course.getCode())
+                .courseName(course.getEffectiveCourseName() != null ? course.getEffectiveCourseName() : course.getName())
+                .semester(course.getSemester())
+                .courseCoordinatorName(course.getCourseCoordinatorName() != null ? course.getCourseCoordinatorName() : course.getAssignedFaculty())
+                .coCode(targetCo)
+                .coStatement(coStatement)
+                .coTargetLevel(coTargetLevel)
+                .coDirectAttainment(coDirectAttainment)
+                .coIndirectAttainment(coIndirectAttainment)
+                .coOverallAttainment(coOverallAttainment)
+                .coTargetMet(coTargetMet)
+                .configuredThresholdPercentage(activeThreshold)
+                .totalStudentsEvaluated(totalStudents)
+                .studentsMeetingThreshold(studentsAbove)
+                .studentsBelowThreshold(studentsBelow)
+                .attainmentRatePercentage(attainmentRate)
+                .classAveragePercentage(avgPct)
+                .highestPercentage(highestPct)
+                .lowestPercentage(totalStudents > 0 ? lowestPct : BigDecimal.ZERO)
+                .scoreDistribution(scoreDistribution)
+                .studentRecords(studentRows)
+                .build();
+    }
+
+    // ==========================================
+    // IQAC ANALYTICS CONFIGURATION METHODS
+    // ==========================================
+    public StudentEvidenceThresholdConfigDto getStudentEvidenceThresholdConfig() {
+        IqacAnalyticsConfiguration config = iqacAnalyticsConfigurationRepository.findById("GLOBAL")
+                .orElseGet(() -> iqacAnalyticsConfigurationRepository.save(
+                        IqacAnalyticsConfiguration.builder()
+                                .id("GLOBAL")
+                                .studentEvidenceThreshold(new BigDecimal("50.00"))
+                                .updatedBy("SYSTEM")
+                                .build()
+                ));
+        return StudentEvidenceThresholdConfigDto.builder()
+                .thresholdPercentage(config.getStudentEvidenceThreshold().setScale(2, RoundingMode.HALF_UP))
+                .updatedBy(config.getUpdatedBy())
+                .updatedAt(config.getUpdatedAt())
+                .build();
+    }
+
+    public BigDecimal getStudentEvidenceThreshold() {
+        return getStudentEvidenceThresholdConfig().getThresholdPercentage();
+    }
+
+    @Transactional
+    public StudentEvidenceThresholdConfigDto updateStudentEvidenceThreshold(BigDecimal threshold, String updatedBy) {
+        if (threshold == null || threshold.compareTo(BigDecimal.ZERO) < 0 || threshold.compareTo(BigDecimal.valueOf(100.00)) > 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Student Performance Evidence Threshold must be between 0.00% and 100.00%");
+        }
+        BigDecimal normalized = threshold.setScale(2, RoundingMode.HALF_UP);
+        IqacAnalyticsConfiguration config = iqacAnalyticsConfigurationRepository.findById("GLOBAL")
+                .orElse(IqacAnalyticsConfiguration.builder().id("GLOBAL").build());
+
+        config.setStudentEvidenceThreshold(normalized);
+        config.setUpdatedBy(updatedBy != null && !updatedBy.isBlank() ? updatedBy : "IQAC Admin");
+        config.setUpdatedAt(ZonedDateTime.now());
+
+        IqacAnalyticsConfiguration saved = iqacAnalyticsConfigurationRepository.save(config);
+        return StudentEvidenceThresholdConfigDto.builder()
+                .thresholdPercentage(saved.getStudentEvidenceThreshold().setScale(2, RoundingMode.HALF_UP))
+                .updatedBy(saved.getUpdatedBy())
+                .updatedAt(saved.getUpdatedAt())
+                .build();
+    }
+
+    private String maskPrn(String prn) {
+        if (prn == null || prn.isBlank()) return "—";
+        String trimmed = prn.trim();
+        if (trimmed.length() <= 4) return trimmed;
+        if (trimmed.length() <= 8) {
+            return trimmed.substring(0, 2) + "***" + trimmed.substring(trimmed.length() - 2);
+        }
+        return trimmed.substring(0, 4) + "***" + trimmed.substring(trimmed.length() - 4);
+    }
+
     // ==========================================
     // 6. HISTORICAL TRENDS ENDPOINT
     // ==========================================
-    public List<ScopedTrendSeriesDto> getTrends(String schoolId, String departmentId, String masterProgrammeId, int numCohorts) {
+    public List<ScopedTrendSeriesDto> getTrends(String schoolId, String departmentId, String masterProgrammeId, Integer numCohorts) {
         ResolvedScope scope = validateAndResolveScope(schoolId, departmentId, masterProgrammeId, null);
         List<ProgrammeBatch> batchesInScope = getBatchesInScope(scope);
 
@@ -760,7 +973,6 @@ public class AnalyticsService {
         Map<String, ProgrammeBatchAttainmentReport> reportMap = getFinalizedReports(batchIds).stream()
                 .collect(Collectors.toMap(ProgrammeBatchAttainmentReport::getProgrammeBatchId, r -> r, (a, b) -> a));
 
-        int safeCohorts = Math.max(2, Math.min(10, numCohorts));
         List<ScopedTrendSeriesDto> seriesList = new ArrayList<>();
 
         for (Map.Entry<String, List<ProgrammeBatch>> entry : batchesByProg.entrySet()) {
@@ -773,8 +985,9 @@ public class AnalyticsService {
                     .sorted(Comparator.comparing((ProgrammeBatch b) -> b.getStartYear() != null ? b.getStartYear() : 0))
                     .collect(Collectors.toList());
 
-            if (pBatches.size() > safeCohorts) {
-                pBatches = pBatches.subList(pBatches.size() - safeCohorts, pBatches.size());
+            // If numCohorts is explicitly requested, slice to the last numCohorts; otherwise return all available finalized cohorts
+            if (numCohorts != null && numCohorts > 0 && pBatches.size() > numCohorts) {
+                pBatches = pBatches.subList(pBatches.size() - numCohorts, pBatches.size());
             }
 
             List<CohortOutcomeDataPointDto> points = new ArrayList<>();
@@ -833,6 +1046,216 @@ public class AnalyticsService {
         }
 
         return seriesList;
+    }
+
+    // ==========================================
+    // 7. ATR INTELLIGENCE ENDPOINT
+    // ==========================================
+    public AtrIntelligenceResponseDto getAtrIntelligence(
+            String schoolId, String departmentId, String masterProgrammeId, String programmeBatchId) {
+
+        ResolvedScope scope = validateAndResolveScope(schoolId, departmentId, masterProgrammeId, programmeBatchId);
+        List<ProgrammeBatch> batchesInScope = getBatchesInScope(scope);
+        List<String> batchIds = batchesInScope.stream().map(ProgrammeBatch::getId).toList();
+        List<ProgrammeBatchAttainmentReport> finalizedReports = getFinalizedReports(batchIds);
+
+        List<ProgrammeAtr> atrsInScope = programmeAtrRepository.findByProgrammeBatchIdIn(batchIds);
+        Map<String, ProgrammeAtr> atrMap = atrsInScope.stream()
+                .collect(Collectors.toMap(ProgrammeAtr::getProgrammeBatchId, a -> a, (a, b) -> a));
+
+        Map<String, MasterProgramme> progMap = masterProgrammeRepository.findAll().stream()
+                .collect(Collectors.toMap(MasterProgramme::getId, p -> p, (a, b) -> a));
+        Map<String, Department> deptMap = departmentRepository.findAll().stream()
+                .collect(Collectors.toMap(Department::getId, d -> d, (a, b) -> a));
+        Map<String, ProgrammeBatch> batchMap = batchesInScope.stream()
+                .collect(Collectors.toMap(ProgrammeBatch::getId, b -> b, (a, b) -> a));
+
+        // Count status distributions
+        Map<String, Integer> statusCounts = new HashMap<>();
+        int approvedAtrs = 0;
+        int pendingAtrs = 0;
+        int needsRevisionAtrs = 0;
+        int draftAtrs = 0;
+
+        for (ProgrammeAtr atr : atrsInScope) {
+            String s = atr.getStatus() != null ? atr.getStatus().name() : "DRAFT";
+            statusCounts.put(s, statusCounts.getOrDefault(s, 0) + 1);
+            if (atr.getStatus() == ProgrammeAtrStatus.APPROVED) {
+                approvedAtrs++;
+            } else if (atr.getStatus() == ProgrammeAtrStatus.SUBMITTED ||
+                       atr.getStatus() == ProgrammeAtrStatus.SUBMITTED_FOR_VERIFICATION ||
+                       atr.getStatus() == ProgrammeAtrStatus.PENDING_APPROVAL ||
+                       atr.getStatus() == ProgrammeAtrStatus.VERIFIED) {
+                pendingAtrs++;
+            } else if (atr.getStatus() == ProgrammeAtrStatus.NEEDS_REVISION ||
+                       atr.getStatus() == ProgrammeAtrStatus.REVISION_REQUESTED ||
+                       atr.getStatus() == ProgrammeAtrStatus.REJECTED) {
+                needsRevisionAtrs++;
+            } else if (atr.getStatus() == ProgrammeAtrStatus.DRAFT) {
+                draftAtrs++;
+            }
+        }
+
+        List<AtrGapDetailDto> gapRecords = new ArrayList<>();
+
+        for (ProgrammeBatchAttainmentReport report : finalizedReports) {
+            ParsedReport parsed = parseReport(report);
+            ProgrammeBatch batch = batchMap.get(report.getProgrammeBatchId());
+            MasterProgramme prog = batch != null ? progMap.get(batch.getMasterProgrammeId()) : null;
+            Department dept = prog != null && prog.getDepartmentId() != null ? deptMap.get(prog.getDepartmentId()) : null;
+            ProgrammeAtr atr = atrMap.get(report.getProgrammeBatchId());
+
+            // Process PO gaps
+            for (ProgrammeBatchAttainmentReportDto.Report4PoRow po : parsed.pos) {
+                if (po.getFinalAttainment() != null && po.getTargetLevel() != null) {
+                    BigDecimal gap = po.getFinalAttainment().subtract(po.getTargetLevel()).setScale(2, RoundingMode.HALF_UP);
+                    if (gap.compareTo(BigDecimal.ZERO) < 0) {
+                        BigDecimal pct = po.getTargetLevel().compareTo(BigDecimal.ZERO) > 0
+                                ? po.getFinalAttainment().divide(po.getTargetLevel(), 4, RoundingMode.HALF_UP).multiply(BigDecimal.valueOf(100)).setScale(2, RoundingMode.HALF_UP)
+                                : BigDecimal.ZERO;
+
+                        List<String> actions = atr != null ? parseAtrActions(atr.getObservationsJson(), po.getPoCode(), "PO") : Collections.emptyList();
+
+                        gapRecords.add(AtrGapDetailDto.builder()
+                                .id(report.getProgrammeBatchId() + "_" + po.getPoCode())
+                                .masterProgrammeId(prog != null ? prog.getId() : "")
+                                .programmeName(prog != null ? prog.getName() : "")
+                                .programmeCode(prog != null ? prog.getCode() : "")
+                                .programmeBatchId(report.getProgrammeBatchId())
+                                .batchName(batch != null ? batch.getName() : "")
+                                .departmentName(dept != null ? dept.getName() : "")
+                                .outcomeCode(po.getPoCode())
+                                .outcomeType("PO")
+                                .outcomeStatement(po.getStatement() != null ? po.getStatement() : "Programme Outcome " + po.getPoCode())
+                                .configuredTarget(po.getTargetLevel())
+                                .attainedValue(po.getFinalAttainment())
+                                .gap(gap)
+                                .achievementPercentage(pct)
+                                .hasRecordedAtr(atr != null)
+                                .atrStatus(atr != null && atr.getStatus() != null ? atr.getStatus().name() : null)
+                                .recordedObservations(extractObservationsText(atr))
+                                .recordedActions(actions)
+                                .submittedBy(atr != null ? atr.getSubmittedBy() : null)
+                                .submittedAt(atr != null ? atr.getSubmittedAt() : null)
+                                .verifiedBy(atr != null ? atr.getVerifiedBy() : null)
+                                .verifiedAt(atr != null ? atr.getVerifiedAt() : null)
+                                .approvedBy(atr != null ? atr.getApprovedBy() : null)
+                                .approvedAt(atr != null ? atr.getApprovedAt() : null)
+                                .verificationComments(atr != null ? atr.getVerificationComments() : null)
+                                .build());
+                    }
+                }
+            }
+
+            // Process PSO gaps
+            for (ProgrammeBatchAttainmentReportDto.Report4PsoRow pso : parsed.psos) {
+                if (pso.getFinalAttainment() != null && pso.getTargetLevel() != null) {
+                    BigDecimal gap = pso.getFinalAttainment().subtract(pso.getTargetLevel()).setScale(2, RoundingMode.HALF_UP);
+                    if (gap.compareTo(BigDecimal.ZERO) < 0) {
+                        BigDecimal pct = pso.getTargetLevel().compareTo(BigDecimal.ZERO) > 0
+                                ? pso.getFinalAttainment().divide(pso.getTargetLevel(), 4, RoundingMode.HALF_UP).multiply(BigDecimal.valueOf(100)).setScale(2, RoundingMode.HALF_UP)
+                                : BigDecimal.ZERO;
+
+                        List<String> actions = atr != null ? parseAtrActions(atr.getObservationsJson(), pso.getPsoCode(), "PSO") : Collections.emptyList();
+
+                        gapRecords.add(AtrGapDetailDto.builder()
+                                .id(report.getProgrammeBatchId() + "_" + pso.getPsoCode())
+                                .masterProgrammeId(prog != null ? prog.getId() : "")
+                                .programmeName(prog != null ? prog.getName() : "")
+                                .programmeCode(prog != null ? prog.getCode() : "")
+                                .programmeBatchId(report.getProgrammeBatchId())
+                                .batchName(batch != null ? batch.getName() : "")
+                                .departmentName(dept != null ? dept.getName() : "")
+                                .outcomeCode(pso.getPsoCode())
+                                .outcomeType("PSO")
+                                .outcomeStatement(pso.getStatement() != null ? pso.getStatement() : "Programme Specific Outcome " + pso.getPsoCode())
+                                .configuredTarget(pso.getTargetLevel())
+                                .attainedValue(pso.getFinalAttainment())
+                                .gap(gap)
+                                .achievementPercentage(pct)
+                                .hasRecordedAtr(atr != null)
+                                .atrStatus(atr != null && atr.getStatus() != null ? atr.getStatus().name() : null)
+                                .recordedObservations(extractObservationsText(atr))
+                                .recordedActions(actions)
+                                .submittedBy(atr != null ? atr.getSubmittedBy() : null)
+                                .submittedAt(atr != null ? atr.getSubmittedAt() : null)
+                                .verifiedBy(atr != null ? atr.getVerifiedBy() : null)
+                                .verifiedAt(atr != null ? atr.getVerifiedAt() : null)
+                                .approvedBy(atr != null ? atr.getApprovedBy() : null)
+                                .approvedAt(atr != null ? atr.getApprovedAt() : null)
+                                .verificationComments(atr != null ? atr.getVerificationComments() : null)
+                                .build());
+                    }
+                }
+            }
+        }
+
+        // Sort by gap ascending (most severe deficits first)
+        gapRecords.sort(Comparator.comparing(AtrGapDetailDto::getGap));
+
+        int totalGaps = gapRecords.size();
+        int gapsWithAtr = (int) gapRecords.stream().filter(AtrGapDetailDto::isHasRecordedAtr).count();
+        int gapsWithoutAtr = totalGaps - gapsWithAtr;
+
+        return AtrIntelligenceResponseDto.builder()
+                .totalAtrRecords(atrsInScope.size())
+                .approvedAtrs(approvedAtrs)
+                .pendingAtrs(pendingAtrs)
+                .needsRevisionAtrs(needsRevisionAtrs)
+                .draftAtrs(draftAtrs)
+                .totalGapsInScope(totalGaps)
+                .gapsWithAtr(gapsWithAtr)
+                .gapsWithoutAtr(gapsWithoutAtr)
+                .statusCounts(statusCounts)
+                .gapAtrRecords(gapRecords)
+                .build();
+    }
+
+    private List<String> parseAtrActions(String observationsJson, String outcomeCode, String outcomeType) {
+        if (observationsJson == null || observationsJson.isBlank() || outcomeCode == null) {
+            return Collections.emptyList();
+        }
+        try {
+            ProgrammeAtrReportDto reportDto = objectMapper.readValue(observationsJson, ProgrammeAtrReportDto.class);
+            List<ProgrammeAtrReportDto.OutcomeRow> rows = "PSO".equalsIgnoreCase(outcomeType) ? reportDto.getPsoOutcomes() : reportDto.getPoOutcomes();
+            if (rows != null) {
+                for (ProgrammeAtrReportDto.OutcomeRow row : rows) {
+                    if (row.getOutcomeCode() != null && row.getOutcomeCode().equalsIgnoreCase(outcomeCode)) {
+                        return row.getActions() != null ? row.getActions().stream().filter(a -> a != null && !a.isBlank()).toList() : Collections.emptyList();
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+            try {
+                Map<String, Object> map = objectMapper.readValue(observationsJson, new TypeReference<Map<String, Object>>() {});
+                String key = "PSO".equalsIgnoreCase(outcomeType) ? "psoOutcomes" : "poOutcomes";
+                if (map.containsKey(key)) {
+                    List<Map<String, Object>> outcomeList = objectMapper.convertValue(map.get(key), new TypeReference<List<Map<String, Object>>>() {});
+                    if (outcomeList != null) {
+                        for (Map<String, Object> row : outcomeList) {
+                            Object code = row.get("outcomeCode");
+                            if (code != null && code.toString().equalsIgnoreCase(outcomeCode)) {
+                                Object actionsObj = row.get("actions");
+                                if (actionsObj instanceof List<?> list) {
+                                    return list.stream().map(Object::toString).filter(s -> !s.isBlank()).toList();
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                // Not JSON, return empty
+            }
+        }
+        return Collections.emptyList();
+    }
+
+    private String extractObservationsText(ProgrammeAtr atr) {
+        if (atr == null) return null;
+        if (atr.getVerificationComments() != null && !atr.getVerificationComments().isBlank()) {
+            return atr.getVerificationComments();
+        }
+        return null;
     }
 
     // ==========================================

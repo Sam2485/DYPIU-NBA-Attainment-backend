@@ -56,6 +56,9 @@ public class IqacAnalyticsApiIntegrationTest {
     private CourseAttainmentReportRepository courseReportRepository;
 
     @Autowired
+    private StudentCoMarkRepository studentCoMarkRepository;
+
+    @Autowired
     private ProgrammeAtrRepository atrRepository;
 
     @Autowired
@@ -474,5 +477,230 @@ public class IqacAnalyticsApiIntegrationTest {
             assertThat(po.getAverageAttainment()).isNotNull();
             assertThat(po.getMeanDivergence()).isNotNull();
         }
+    }
+
+    @Test
+    @WithMockUser(username = "iqac_user", roles = {"IQAC"})
+    @DisplayName("Test 31: Availability-driven historical trends returns all available cohorts without 10-cohort truncation")
+    void testAvailabilityDrivenTrendsMoreThan10Cohorts() throws Exception {
+        // Create 11 additional finalized historical cohorts (total 13 cohorts for progBtech)
+        for (int yr = 2010; yr <= 2020; yr++) {
+            ProgrammeBatch extraBatch = programmeBatchRepository.save(ProgrammeBatch.builder()
+                    .id("batch-extra-" + yr)
+                    .masterProgrammeId(progBtech.getId())
+                    .name(yr + "-" + (yr + 4))
+                    .startYear(yr)
+                    .endYear(yr + 4)
+                    .build());
+
+            List<ProgrammeBatchAttainmentReportDto.Report4PoRow> pos = List.of(
+                    ProgrammeBatchAttainmentReportDto.Report4PoRow.builder()
+                            .poCode("PO1")
+                            .statement("Knowledge")
+                            .targetLevel(new BigDecimal("2.00"))
+                            .directAttainment(new BigDecimal("2.20"))
+                            .indirectAttainment(new BigDecimal("2.20"))
+                            .finalAttainment(new BigDecimal("2.20"))
+                            .targetMet(true)
+                            .build()
+            );
+            String json = objectMapper.writeValueAsString(Map.of("po", pos, "pso", List.of()));
+
+            reportRepository.save(ProgrammeBatchAttainmentReport.builder()
+                    .id("rep-extra-" + yr)
+                    .programmeBatchId(extraBatch.getId())
+                    .status(ReportStatus.FINALIZED)
+                    .overallAttainmentReportJson(json)
+                    .approvedAt(ZonedDateTime.now())
+                    .build());
+        }
+
+        // When numCohorts is omitted (null), all available finalized cohorts (13 cohorts > 10) must be returned without truncation
+        List<ScopedTrendSeriesDto> trends = analyticsService.getTrends(null, null, progBtech.getId(), null);
+        assertThat(trends).hasSize(1);
+        ScopedTrendSeriesDto series = trends.get(0);
+
+        List<CohortOutcomeDataPointDto> po1Points = series.getCohortDataPoints().stream()
+                .filter(p -> p.getOutcomeCode().equals("PO1"))
+                .toList();
+
+        // 11 extra + 2 base = 13 finalized cohorts
+        assertThat(po1Points).hasSize(13);
+        assertThat(po1Points.get(0).getStartYear()).isEqualTo(2010);
+        assertThat(po1Points.get(12).getStartYear()).isEqualTo(2023);
+    }
+
+    @Test
+    @DisplayName("Phase 7: ATR Intelligence returns correct status counts, gap records, and scoping")
+    @WithMockUser(username = "iqac_user", roles = {"IQAC"})
+    void testGetAtrIntelligence() {
+        AtrIntelligenceResponseDto response = analyticsService.getAtrIntelligence(
+                schoolSoet.getId(), deptCse.getId(), progBtech.getId(), null);
+
+        assertThat(response).isNotNull();
+        assertThat(response.getTotalAtrRecords()).isEqualTo(1);
+        assertThat(response.getPendingAtrs()).isEqualTo(1);
+        assertThat(response.getTotalGapsInScope()).isEqualTo(1);
+        assertThat(response.getGapsWithAtr()).isEqualTo(1);
+        assertThat(response.getGapsWithoutAtr()).isEqualTo(0);
+
+        List<AtrGapDetailDto> records = response.getGapAtrRecords();
+        assertThat(records).hasSize(1);
+
+        AtrGapDetailDto po4Record = records.get(0);
+        assertThat(po4Record.getOutcomeCode()).isEqualTo("PO4");
+        assertThat(po4Record.getOutcomeType()).isEqualTo("PO");
+        assertThat(po4Record.getConfiguredTarget()).isEqualByComparingTo(new BigDecimal("2.00"));
+        assertThat(po4Record.getAttainedValue()).isEqualByComparingTo(new BigDecimal("1.50"));
+        assertThat(po4Record.getGap()).isEqualByComparingTo(new BigDecimal("-0.50"));
+        assertThat(po4Record.isHasRecordedAtr()).isTrue();
+        assertThat(po4Record.getAtrStatus()).isEqualTo("SUBMITTED");
+    }
+
+    @Test
+    @DisplayName("Phase 8: Programme Diagnostic - getCourseEvidence returns mapped CO and course evidence")
+    @WithMockUser(username = "iqac_user", roles = {"IQAC"})
+    void testPhase8GetCourseEvidence() {
+        List<CourseAssessmentEvidenceDto> evidence = analyticsService.getCourseEvidence(
+                batch2022.getId(), "PO4", "PO");
+
+        assertThat(evidence).hasSize(1);
+        CourseAssessmentEvidenceDto item = evidence.get(0);
+        assertThat(item.getCourseOfferingId()).isEqualTo("pbc-101");
+        assertThat(item.getCourseCode()).isEqualTo("CSE201");
+        assertThat(item.getCourseName()).isEqualTo("Data Structures");
+        assertThat(item.getCoCode()).isEqualTo("CO3");
+        assertThat(item.getMappingStrength()).isEqualTo(3);
+        assertThat(item.getCoTarget()).isEqualByComparingTo(new BigDecimal("2.00"));
+        assertThat(item.getCoOverallAttainment()).isEqualByComparingTo(new BigDecimal("1.45"));
+        assertThat(item.getCoTargetMet()).isFalse();
+    }
+
+    @Test
+    @DisplayName("Phase 9: Student Evidence - getStudentCoEvidence returns aggregated distribution and masked records")
+    @WithMockUser(username = "iqac_user", roles = {"IQAC"})
+    void testPhase9GetStudentCoEvidence() {
+        studentCoMarkRepository.save(StudentCoMark.builder()
+                .id("scm-1")
+                .programmeBatchCourseId("pbc-101")
+                .studentId("std-1")
+                .prn("202201040001")
+                .studentName("Student One")
+                .coCode("CO3")
+                .marksObtained(new BigDecimal("85.00"))
+                .maxMarks(new BigDecimal("100.00"))
+                .build());
+
+        studentCoMarkRepository.save(StudentCoMark.builder()
+                .id("scm-2")
+                .programmeBatchCourseId("pbc-101")
+                .studentId("std-2")
+                .prn("202201040002")
+                .studentName("Student Two")
+                .coCode("CO3")
+                .marksObtained(new BigDecimal("40.00"))
+                .maxMarks(new BigDecimal("100.00"))
+                .build());
+
+        studentCoMarkRepository.save(StudentCoMark.builder()
+                .id("scm-3")
+                .programmeBatchCourseId("pbc-101")
+                .studentId("std-3")
+                .prn("202201040003")
+                .studentName("Student Three")
+                .coCode("CO3")
+                .marksObtained(new BigDecimal("65.00"))
+                .maxMarks(new BigDecimal("100.00"))
+                .build());
+
+        StudentCoEvidenceResponseDto response = analyticsService.getStudentCoEvidence("pbc-101", "CO3");
+
+        assertThat(response).isNotNull();
+        assertThat(response.getCourseCode()).isEqualTo("CSE201");
+        assertThat(response.getCoCode()).isEqualTo("CO3");
+        assertThat(response.getTotalStudentsEvaluated()).isEqualTo(3);
+        assertThat(response.getStudentsMeetingThreshold()).isEqualTo(2);
+        assertThat(response.getStudentsBelowThreshold()).isEqualTo(1);
+        assertThat(response.getHighestPercentage()).isEqualByComparingTo(new BigDecimal("85.00"));
+        assertThat(response.getLowestPercentage()).isEqualByComparingTo(new BigDecimal("40.00"));
+
+        assertThat(response.getScoreDistribution().get("80-89%")).isEqualTo(1);
+        assertThat(response.getScoreDistribution().get("60-69%")).isEqualTo(1);
+        assertThat(response.getScoreDistribution().get("<50%")).isEqualTo(1);
+
+        List<StudentEvidenceRowDto> rows = response.getStudentRecords();
+        assertThat(rows).hasSize(3);
+        assertThat(rows.get(0).getMaskedPrn()).isEqualTo("2022***0001");
+        assertThat(rows.get(0).getStudentIdentifier()).isEqualTo("Student 1");
+        assertThat(rows.get(0).isThresholdMet()).isTrue();
+    }
+
+    @Test
+    @DisplayName("Phase 9: Configurable Threshold - IQAC can retrieve and update student evidence threshold")
+    @WithMockUser(username = "iqac_user", roles = {"IQAC"})
+    void testPhase9ConfigurableThreshold() {
+        // 1. Initial Default is 50.00%
+        StudentEvidenceThresholdConfigDto initial = analyticsService.getStudentEvidenceThresholdConfig();
+        assertThat(initial.getThresholdPercentage()).isEqualByComparingTo(new BigDecimal("50.00"));
+
+        // 2. Update to 70.00%
+        StudentEvidenceThresholdConfigDto updated = analyticsService.updateStudentEvidenceThreshold(
+                new BigDecimal("70.00"), "iqac_user");
+        assertThat(updated.getThresholdPercentage()).isEqualByComparingTo(new BigDecimal("70.00"));
+
+        // 3. Verify updated value persists in configuration lookup
+        StudentEvidenceThresholdConfigDto retrieved = analyticsService.getStudentEvidenceThresholdConfig();
+        assertThat(retrieved.getThresholdPercentage()).isEqualByComparingTo(new BigDecimal("70.00"));
+        assertThat(retrieved.getUpdatedBy()).isEqualTo("iqac_user");
+
+        // 4. Verify Student Evidence uses 70.00% threshold
+        studentCoMarkRepository.save(StudentCoMark.builder()
+                .id("scm-101")
+                .programmeBatchCourseId("pbc-101")
+                .studentId("std-101")
+                .prn("202201040001")
+                .studentName("Student One")
+                .coCode("CO3")
+                .marksObtained(new BigDecimal("85.00"))
+                .maxMarks(new BigDecimal("100.00"))
+                .build());
+
+        studentCoMarkRepository.save(StudentCoMark.builder()
+                .id("scm-102")
+                .programmeBatchCourseId("pbc-101")
+                .studentId("std-102")
+                .prn("202201040002")
+                .studentName("Student Two")
+                .coCode("CO3")
+                .marksObtained(new BigDecimal("65.00")) // 65% is < 70% threshold!
+                .maxMarks(new BigDecimal("100.00"))
+                .build());
+
+        StudentCoEvidenceResponseDto response = analyticsService.getStudentCoEvidence("pbc-101", "CO3");
+        assertThat(response.getConfiguredThresholdPercentage()).isEqualByComparingTo(new BigDecimal("70.00"));
+        assertThat(response.getStudentsMeetingThreshold()).isEqualTo(1); // Only 85% meets >= 70%
+        assertThat(response.getStudentsBelowThreshold()).isEqualTo(1);  // 65% is below 70%
+
+        // 5. Reset back to 50.00%
+        analyticsService.updateStudentEvidenceThreshold(new BigDecimal("50.00"), "SYSTEM");
+    }
+
+    @Test
+    @DisplayName("Phase 9: Configurable Threshold Validation - Rejects negative values and > 100")
+    @WithMockUser(username = "iqac_user", roles = {"IQAC"})
+    void testPhase9ConfigurableThresholdValidation() {
+        // Reject negative
+        org.springframework.web.server.ResponseStatusException ex1 = assertThrows(
+                org.springframework.web.server.ResponseStatusException.class,
+                () -> analyticsService.updateStudentEvidenceThreshold(new BigDecimal("-10.00"), "iqac_user")
+        );
+        assertThat(ex1.getStatusCode()).isEqualTo(org.springframework.http.HttpStatus.BAD_REQUEST);
+
+        // Reject > 100
+        org.springframework.web.server.ResponseStatusException ex2 = assertThrows(
+                org.springframework.web.server.ResponseStatusException.class,
+                () -> analyticsService.updateStudentEvidenceThreshold(new BigDecimal("105.00"), "iqac_user")
+        );
+        assertThat(ex2.getStatusCode()).isEqualTo(org.springframework.http.HttpStatus.BAD_REQUEST);
     }
 }

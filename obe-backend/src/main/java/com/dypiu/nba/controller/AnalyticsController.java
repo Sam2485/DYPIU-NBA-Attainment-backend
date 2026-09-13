@@ -5,10 +5,12 @@ import com.dypiu.nba.dto.analytics.*;
 import com.dypiu.nba.service.AnalyticsService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.security.Principal;
 import java.util.List;
 
 @Slf4j
@@ -125,7 +127,7 @@ public class AnalyticsController {
             @RequestParam(required = false) String schoolId,
             @RequestParam(required = false) String departmentId,
             @RequestParam(required = false) String masterProgrammeId,
-            @RequestParam(defaultValue = "4") int numCohorts) {
+            @RequestParam(required = false) Integer numCohorts) {
 
         log.debug("[AnalyticsController] getTrends: schoolId={}, departmentId={}, masterProgrammeId={}, numCohorts={}",
                 schoolId, departmentId, masterProgrammeId, numCohorts);
@@ -135,6 +137,85 @@ public class AnalyticsController {
                 .success(true)
                 .message("Historical trends retrieved successfully")
                 .data(data)
+                .build());
+    }
+
+    @GetMapping("/atr-intelligence")
+    public ResponseEntity<ApiResponse<AtrIntelligenceResponseDto>> getAtrIntelligence(
+            @RequestParam(required = false) String schoolId,
+            @RequestParam(required = false) String departmentId,
+            @RequestParam(required = false) String masterProgrammeId,
+            @RequestParam(required = false) String programmeBatchId) {
+
+        log.debug("[AnalyticsController] getAtrIntelligence: schoolId={}, departmentId={}, masterProgrammeId={}, programmeBatchId={}",
+                schoolId, departmentId, masterProgrammeId, programmeBatchId);
+
+        AtrIntelligenceResponseDto data = analyticsService.getAtrIntelligence(
+                schoolId, departmentId, masterProgrammeId, programmeBatchId);
+        return ResponseEntity.ok(ApiResponse.<AtrIntelligenceResponseDto>builder()
+                .success(true)
+                .message("ATR intelligence retrieved successfully")
+                .data(data)
+                .build());
+    }
+
+    @GetMapping("/course-evidence")
+    public ResponseEntity<ApiResponse<List<CourseAssessmentEvidenceDto>>> getCourseEvidence(
+            @RequestParam String programmeBatchId,
+            @RequestParam String outcomeCode,
+            @RequestParam(defaultValue = "PO") String outcomeType) {
+
+        log.debug("[AnalyticsController] getCourseEvidence: programmeBatchId={}, outcomeCode={}, outcomeType={}",
+                programmeBatchId, outcomeCode, outcomeType);
+
+        List<CourseAssessmentEvidenceDto> data = analyticsService.getCourseEvidence(
+                programmeBatchId, outcomeCode, outcomeType);
+        return ResponseEntity.ok(ApiResponse.<List<CourseAssessmentEvidenceDto>>builder()
+                .success(true)
+                .message("Course assessment evidence retrieved successfully")
+                .data(data)
+                .build());
+    }
+
+    @GetMapping("/student-evidence")
+    public ResponseEntity<ApiResponse<StudentCoEvidenceResponseDto>> getStudentCoEvidence(
+            @RequestParam String programmeBatchCourseId,
+            @RequestParam String coCode) {
+
+        log.debug("[AnalyticsController] getStudentCoEvidence: programmeBatchCourseId={}, coCode={}",
+                programmeBatchCourseId, coCode);
+
+        StudentCoEvidenceResponseDto data = analyticsService.getStudentCoEvidence(
+                programmeBatchCourseId, coCode);
+        return ResponseEntity.ok(ApiResponse.<StudentCoEvidenceResponseDto>builder()
+                .success(true)
+                .message("Student CO evidence retrieved successfully")
+                .data(data)
+                .build());
+    }
+
+    @GetMapping("/config/student-evidence-threshold")
+    public ResponseEntity<ApiResponse<StudentEvidenceThresholdConfigDto>> getStudentEvidenceThresholdConfig() {
+        StudentEvidenceThresholdConfigDto config = analyticsService.getStudentEvidenceThresholdConfig();
+        return ResponseEntity.ok(ApiResponse.<StudentEvidenceThresholdConfigDto>builder()
+                .success(true)
+                .message("Student evidence threshold configuration retrieved successfully")
+                .data(config)
+                .build());
+    }
+
+    @PutMapping("/config/student-evidence-threshold")
+    @PreAuthorize("hasAnyRole('ROLE_IQAC', 'ROLE_SUPER_ADMIN', 'ROLE_ADMIN')")
+    public ResponseEntity<ApiResponse<StudentEvidenceThresholdConfigDto>> updateStudentEvidenceThresholdConfig(
+            @Valid @RequestBody UpdateStudentEvidenceThresholdRequest request,
+            Principal principal) {
+        String user = principal != null ? principal.getName() : "IQAC Admin";
+        StudentEvidenceThresholdConfigDto updated = analyticsService.updateStudentEvidenceThreshold(
+                request.getThresholdPercentage(), user);
+        return ResponseEntity.ok(ApiResponse.<StudentEvidenceThresholdConfigDto>builder()
+                .success(true)
+                .message("Student evidence threshold configuration updated successfully")
+                .data(updated)
                 .build());
     }
 }
