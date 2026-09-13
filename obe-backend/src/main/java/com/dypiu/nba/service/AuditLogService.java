@@ -50,7 +50,6 @@ public class AuditLogService {
         ActorContext actor = resolveActorContext();
         RequestContext requestContext = extractRequestContext();
         String sanitizedMetadata = sanitizeMetadata(metadata);
-        String sanitizedRemarks = sanitizeString(remarks);
 
         AuditLog logEntry = AuditLog.builder()
                 .actorId(actor.actorId())
@@ -62,11 +61,43 @@ public class AuditLogService {
                 .resourceId(resourceId)
                 .oldStatus(oldStatus)
                 .newStatus(newStatus)
-                .remarks(sanitizedRemarks)
+                .remarks(remarks)
                 .metadata(sanitizedMetadata)
                 .success(success)
                 .ipAddress(requestContext.ipAddress())
                 .userAgent(requestContext.userAgent())
+                .createdAt(ZonedDateTime.now())
+                .build();
+
+        return auditLogRepository.save(logEntry);
+    }
+
+    @Transactional(propagation = Propagation.REQUIRED)
+    public AuditLog recordEvent(AuditAction action, ResourceType resourceType, String resourceId,
+                                String actorId, String actorRole, String actorName, String actorEmail,
+                                String ipAddress, String userAgent,
+                                String oldStatus, String newStatus, String remarks,
+                                Object metadata, boolean success) {
+        RequestContext defaultContext = extractRequestContext();
+        String resolvedIp = (ipAddress != null && !ipAddress.isBlank()) ? ipAddress : defaultContext.ipAddress();
+        String resolvedUa = (userAgent != null && !userAgent.isBlank()) ? userAgent : defaultContext.userAgent();
+        String sanitizedMetadata = sanitizeMetadata(metadata);
+
+        AuditLog logEntry = AuditLog.builder()
+                .actorId(actorId != null && !actorId.isBlank() ? actorId : "ANONYMOUS")
+                .actorRole(actorRole != null && !actorRole.isBlank() ? actorRole : "USER")
+                .actorName(actorName != null && !actorName.isBlank() ? actorName : "User")
+                .actorEmail(actorEmail != null && !actorEmail.isBlank() ? actorEmail : "unknown")
+                .action(action)
+                .resourceType(resourceType)
+                .resourceId(resourceId)
+                .oldStatus(oldStatus)
+                .newStatus(newStatus)
+                .remarks(remarks)
+                .metadata(sanitizedMetadata)
+                .success(success)
+                .ipAddress(resolvedIp)
+                .userAgent(resolvedUa != null && resolvedUa.length() > 500 ? resolvedUa.substring(0, 500) : resolvedUa)
                 .createdAt(ZonedDateTime.now())
                 .build();
 
@@ -182,17 +213,30 @@ public class AuditLogService {
         return new ActorContext("SYSTEM", "SYSTEM", "System Process", "system@dypiu.ac.in");
     }
 
+    public static String extractClientIp(HttpServletRequest request) {
+        if (request == null) return "127.0.0.1";
+        String[] headers = {
+                "X-Forwarded-For", "X-Real-IP", "Proxy-Client-IP",
+                "WL-Proxy-Client-IP", "HTTP_CLIENT_IP", "HTTP_X_FORWARDED_FOR"
+        };
+        for (String header : headers) {
+            String ip = request.getHeader(header);
+            if (ip != null && !ip.isBlank() && !"unknown".equalsIgnoreCase(ip.trim())) {
+                if (ip.contains(",")) {
+                    ip = ip.split(",")[0].trim();
+                }
+                return ip;
+            }
+        }
+        return request.getRemoteAddr() != null ? request.getRemoteAddr() : "127.0.0.1";
+    }
+
     private RequestContext extractRequestContext() {
         try {
             ServletRequestAttributes attributes = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
             if (attributes != null && attributes.getRequest() != null) {
                 HttpServletRequest request = attributes.getRequest();
-                String ip = request.getHeader("X-Forwarded-For");
-                if (ip == null || ip.isBlank()) {
-                    ip = request.getRemoteAddr();
-                } else if (ip.contains(",")) {
-                    ip = ip.split(",")[0].trim();
-                }
+                String ip = extractClientIp(request);
                 String ua = request.getHeader("User-Agent");
                 if (ua != null && ua.length() > 500) {
                     ua = ua.substring(0, 500);

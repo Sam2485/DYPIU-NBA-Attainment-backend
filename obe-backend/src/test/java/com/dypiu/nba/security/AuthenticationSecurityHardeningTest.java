@@ -1,6 +1,7 @@
 package com.dypiu.nba.security;
 
 import com.dypiu.nba.dto.AuthResponse;
+import com.dypiu.nba.dto.ForgotPasswordRequest;
 import com.dypiu.nba.dto.RefreshTokenRequest;
 import com.dypiu.nba.dto.ResetPasswordRequest;
 import com.dypiu.nba.entity.User;
@@ -44,6 +45,9 @@ public class AuthenticationSecurityHardeningTest {
 
     @Autowired
     private AuthRateLimiterService authRateLimiterService;
+
+    @Autowired
+    private com.dypiu.nba.repository.AuditLogRepository auditLogRepository;
 
     private User testUser;
 
@@ -179,5 +183,58 @@ public class AuthenticationSecurityHardeningTest {
         // 6th attempt exceeds limit
         assertThrows(ResponseStatusException.class, () -> 
                 authRateLimiterService.checkRateLimit(request, "test-action", 5));
+    }
+
+    @Test
+    @DisplayName("Password reset strictly requires geolocation and logs IP/location to IQAC audit trail")
+    void testPasswordResetLocationEnforcementAndAuditLogging() {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setRemoteAddr("103.21.12.88");
+        request.addHeader("User-Agent", "Mozilla/5.0 Chrome/120.0 Safari/537.36");
+
+        // 1. Missing location must be strictly restricted
+        ForgotPasswordRequest reqNoLocation = new ForgotPasswordRequest();
+        reqNoLocation.setEmail(testUser.getEmail());
+        assertThrows(BadRequestException.class, () -> authService.requestPasswordReset(reqNoLocation, request));
+
+        // 2. Request with location succeeds and creates audit log
+        ForgotPasswordRequest validReq = new ForgotPasswordRequest();
+        validReq.setEmail(testUser.getEmail());
+        validReq.setLatitude(18.651234);
+        validReq.setLongitude(73.761234);
+        validReq.setAccuracy(15.0);
+        validReq.setLocation("18.651234, 73.761234 (Accuracy: ±15m)");
+
+        String msg = authService.requestPasswordReset(validReq, request);
+        assertTrue(msg.contains("If an account with that email exists"));
+
+        // Verify audit log recorded for password reset request
+        var logs = auditLogRepository.findAll().stream()
+                .filter(l -> l.getAction() == com.dypiu.nba.audit.AuditAction.PASSWORD_RESET_REQUEST)
+                .toList();
+        assertFalse(logs.isEmpty());
+        var latestRequestLog = logs.get(logs.size() - 1);
+        assertEquals("103.21.12.88", latestRequestLog.getIpAddress());
+        assertTrue(latestRequestLog.getRemarks().contains("18.651234, 73.761234"));
+        assertTrue(latestRequestLog.getMetadata().contains("accuracyMeters"));
+
+        // 3. Reset password execution logs audit trail with location and IP
+        String resetToken = authService.createTestPasswordResetToken(testUser.getUsername());
+        ResetPasswordRequest resetReq = new ResetPasswordRequest();
+        resetReq.setToken(resetToken);
+        resetReq.setNewPassword("NewSecurePass888");
+        resetReq.setLatitude(18.651234);
+        resetReq.setLongitude(73.761234);
+
+        String resetMsg = authService.resetPassword(resetReq, request);
+        assertTrue(resetMsg.contains("Password reset successfully"));
+
+        var resetLogs = auditLogRepository.findAll().stream()
+                .filter(l -> l.getAction() == com.dypiu.nba.audit.AuditAction.PASSWORD_RESET)
+                .toList();
+        assertFalse(resetLogs.isEmpty());
+        var latestResetLog = resetLogs.get(resetLogs.size() - 1);
+        assertEquals("103.21.12.88", latestResetLog.getIpAddress());
+        assertTrue(latestResetLog.getRemarks().contains("Password reset completed successfully"));
     }
 }

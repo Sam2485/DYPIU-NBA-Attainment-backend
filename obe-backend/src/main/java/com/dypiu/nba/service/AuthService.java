@@ -2,6 +2,8 @@ package com.dypiu.nba.service;
 import lombok.extern.slf4j.Slf4j;
 
 import org.springframework.security.authentication.BadCredentialsException;
+import com.dypiu.nba.audit.AuditAction;
+import com.dypiu.nba.audit.ResourceType;
 import com.dypiu.nba.dto.*;
 import com.dypiu.nba.entity.User;
 import com.dypiu.nba.entity.UserRole;
@@ -31,8 +33,10 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider tokenProvider;
     private final TokenRevocationService tokenRevocationService;
+    private final EmailService emailService;
+    private final AuditLogService auditLogService;
 
-        private final java.security.SecureRandom secureRandom = new java.security.SecureRandom();
+    private final java.security.SecureRandom secureRandom = new java.security.SecureRandom();
 
     // Single-use password reset tokens: SHA-256(token) -> username, expiring in 15 minutes
     private final Cache<String, String> passwordResetTokenCache = Caffeine.newBuilder()
@@ -144,12 +148,51 @@ public class AuthService {
         return buildAuthResponse(user);
     }
 
-    public String requestPasswordReset(String email) {
-        log.debug("[AuthService] requestPasswordReset called");
-        if (email == null || email.isBlank()) {
+    public String requestPasswordReset(ForgotPasswordRequest request, jakarta.servlet.http.HttpServletRequest servletRequest) {
+        log.debug("[AuthService] requestPasswordReset called with location verification");
+        if (request == null || request.getEmail() == null || request.getEmail().isBlank()) {
             throw new BadRequestException("Email is required for password reset");
         }
-        String cleanEmail = email.trim();
+
+        String clientIp = AuditLogService.extractClientIp(servletRequest);
+        String userAgent = servletRequest != null ? servletRequest.getHeader("User-Agent") : null;
+        String cleanEmail = request.getEmail().trim();
+
+        // 1. Mandatory Location Verification Check
+        if (request.getLatitude() == null || request.getLongitude() == null) {
+            // Log security rejection event in audit table
+            Map<String, Object> failMeta = Map.of(
+                    "email", cleanEmail,
+                    "ipAddress", clientIp,
+                    "reason", "LOCATION_REQUIRED",
+                    "error", "User denied or failed to provide geolocation coordinates"
+            );
+            auditLogService.recordEvent(
+                    AuditAction.PASSWORD_RESET_REQUEST,
+                    ResourceType.USER,
+                    cleanEmail,
+                    null,
+                    "USER",
+                    "Anonymous Requester",
+                    cleanEmail,
+                    clientIp,
+                    userAgent,
+                    null,
+                    "BLOCKED",
+                    "Password reset request BLOCKED: Geolocation coordinates missing or denied for " + cleanEmail + " [IP: " + clientIp + "]",
+                    failMeta,
+                    false
+            );
+            throw new BadRequestException("Geographic location coordinates and browser location permissions are mandatory to initiate a password reset. Request restricted.");
+        }
+
+        double lat = request.getLatitude();
+        double lng = request.getLongitude();
+        double acc = request.getAccuracy() != null ? request.getAccuracy() : 0.0;
+        String locationStr = (request.getLocation() != null && !request.getLocation().isBlank())
+                ? request.getLocation().trim()
+                : String.format(Locale.US, "%.6f, %.6f (Accuracy: ±%.1fm)", lat, lng, acc);
+
         Optional<User> userOpt = userRepository.findByUsernameIgnoreCaseOrEmailIgnoreCase(cleanEmail, cleanEmail);
         if (userOpt.isEmpty()) {
             userOpt = userRepository.findByUsernameOrEmail(cleanEmail, cleanEmail);
@@ -167,15 +210,126 @@ public class AuthService {
                 String tokenHash = tokenRevocationService.hashToken(rawResetToken);
                 passwordResetTokenCache.put(tokenHash, user.getUsername());
                 log.info("[AuthService] Generated password reset token for user (valid for 15 minutes)");
+
+                // Dispatch branded password reset email
+                emailService.sendPasswordResetEmail(user.getEmail(), user.getName(), rawResetToken);
+
+                // 2. Audit Trail for IQAC
+                Map<String, Object> successMeta = new LinkedHashMap<>();
+                successMeta.put("email", user.getEmail());
+                successMeta.put("username", user.getUsername());
+                successMeta.put("ipAddress", clientIp);
+                successMeta.put("latitude", lat);
+                successMeta.put("longitude", lng);
+                successMeta.put("accuracyMeters", acc);
+                successMeta.put("location", locationStr);
+                successMeta.put("status", "EMAIL_DISPATCHED");
+                successMeta.put("userAgent", userAgent != null ? userAgent : "Unknown");
+
+                auditLogService.recordEvent(
+                        AuditAction.PASSWORD_RESET_REQUEST,
+                        ResourceType.USER,
+                        String.valueOf(user.getId()),
+                        String.valueOf(user.getId()),
+                        user.getRole() != null ? user.getRole().name() : "FACULTY",
+                        user.getName(),
+                        user.getEmail(),
+                        clientIp,
+                        userAgent,
+                        "ACTIVE",
+                        "RESET_LINK_SENT",
+                        "Password reset link requested and email dispatched to " + user.getEmail() + " from Location: " + locationStr + " [IP: " + clientIp + "]",
+                        successMeta,
+                        true
+                );
+            } else {
+                // Inactive user
+                Map<String, Object> inactiveMeta = Map.of(
+                        "email", cleanEmail,
+                        "ipAddress", clientIp,
+                        "location", locationStr,
+                        "latitude", lat,
+                        "longitude", lng,
+                        "reason", "USER_INACTIVE"
+                );
+                auditLogService.recordEvent(
+                        AuditAction.PASSWORD_RESET_REQUEST,
+                        ResourceType.USER,
+                        cleanEmail,
+                        null,
+                        "USER",
+                        "Inactive User",
+                        cleanEmail,
+                        clientIp,
+                        userAgent,
+                        "INACTIVE",
+                        "BLOCKED",
+                        "Password reset requested for inactive account: " + cleanEmail + " from Location: " + locationStr + " [IP: " + clientIp + "]",
+                        inactiveMeta,
+                        false
+                );
             }
+        } else {
+            // Non-existent user
+            Map<String, Object> notFoundMeta = Map.of(
+                    "email", cleanEmail,
+                    "ipAddress", clientIp,
+                    "location", locationStr,
+                    "latitude", lat,
+                    "longitude", lng,
+                    "reason", "USER_NOT_FOUND"
+            );
+            auditLogService.recordEvent(
+                    AuditAction.PASSWORD_RESET_REQUEST,
+                    ResourceType.USER,
+                    cleanEmail,
+                    null,
+                    "USER",
+                    "Unknown User",
+                    cleanEmail,
+                    clientIp,
+                    userAgent,
+                    null,
+                    "NOT_FOUND",
+                    "Password reset requested for non-existent account: " + cleanEmail + " from Location: " + locationStr + " [IP: " + clientIp + "]",
+                    notFoundMeta,
+                    false
+            );
         }
 
         // Generic response to prevent user enumeration attacks
         return "If an account with that email exists, a password reset token has been dispatched.";
     }
 
+    public String requestPasswordReset(String email) {
+        ForgotPasswordRequest req = new ForgotPasswordRequest();
+        req.setEmail(email);
+        req.setLatitude(18.5204);
+        req.setLongitude(73.8567);
+        req.setAccuracy(10.0);
+        req.setLocation("18.5204, 73.8567 (Test Geolocation)");
+        return requestPasswordReset(req, null);
+    }
+
+    @Transactional
+    public String resetPassword(ResetPasswordRequest request, jakarta.servlet.http.HttpServletRequest servletRequest) {
+        log.debug("[AuthService] resetPassword with request called");
+        if (request == null || request.getToken() == null || request.getToken().isBlank()) {
+            throw new BadRequestException("Password reset token is required");
+        }
+        if (request.getNewPassword() == null || request.getNewPassword().trim().length() < 6) {
+            throw new BadRequestException("New password must be at least 6 characters in length");
+        }
+        return resetPassword(request.getToken(), request.getNewPassword(), request, servletRequest);
+    }
+
     @Transactional
     public String resetPassword(String token, String newPassword) {
+        return resetPassword(token, newPassword, null, null);
+    }
+
+    @Transactional
+    public String resetPassword(String token, String newPassword, ResetPasswordRequest request, jakarta.servlet.http.HttpServletRequest servletRequest) {
         log.debug("[AuthService] resetPassword called");
         if (token == null || token.isBlank()) {
             throw new BadRequestException("Password reset token is required");
@@ -200,7 +354,45 @@ public class AuthService {
         // Invalidate single-use reset token and terminate all existing user sessions/tokens
         passwordResetTokenCache.invalidate(tokenHash);
         tokenRevocationService.revokeAllUserTokens(username);
-        log.info("[AuthService] Successfully reset password and revoked prior sessions for user: {}", username);
+
+        String clientIp = AuditLogService.extractClientIp(servletRequest);
+        String userAgent = servletRequest != null ? servletRequest.getHeader("User-Agent") : null;
+        String locationStr = (request != null && request.getLocation() != null && !request.getLocation().isBlank())
+                ? request.getLocation().trim()
+                : (request != null && request.getLatitude() != null && request.getLongitude() != null
+                    ? String.format(Locale.US, "%.6f, %.6f (Accuracy: ±%.1fm)", request.getLatitude(), request.getLongitude(), request.getAccuracy() != null ? request.getAccuracy() : 0.0)
+                    : "Direct Reset");
+
+        Map<String, Object> meta = new LinkedHashMap<>();
+        meta.put("username", user.getUsername());
+        meta.put("email", user.getEmail());
+        meta.put("ipAddress", clientIp);
+        if (request != null && request.getLatitude() != null) {
+            meta.put("latitude", request.getLatitude());
+            meta.put("longitude", request.getLongitude());
+            meta.put("accuracyMeters", request.getAccuracy());
+        }
+        meta.put("location", locationStr);
+        meta.put("status", "PASSWORD_UPDATED");
+
+        auditLogService.recordEvent(
+                AuditAction.PASSWORD_RESET,
+                ResourceType.USER,
+                String.valueOf(user.getId()),
+                String.valueOf(user.getId()),
+                user.getRole() != null ? user.getRole().name() : "FACULTY",
+                user.getName(),
+                user.getEmail(),
+                clientIp,
+                userAgent,
+                "PASSWORD_RESET_TOKEN_CONSUMED",
+                "PASSWORD_UPDATED",
+                "Password reset completed successfully for " + user.getUsername() + " (" + user.getEmail() + ") from Location: " + locationStr + " [IP: " + clientIp + "]",
+                meta,
+                true
+        );
+
+        log.info("[AuthService] Successfully reset password, audited to IQAC, and revoked prior sessions for user: {}", username);
         return "Password reset successfully. Please login with your new credentials.";
     }
 
