@@ -48,7 +48,7 @@ public interface ProgrammeBatchRepository extends JpaRepository<ProgrammeBatch, 
           AND (cast(:masterProgrammeId as String) IS NULL OR b.masterProgrammeId = cast(:masterProgrammeId as String))
           AND (cast(:departmentId as String) IS NULL OR mp.departmentId = cast(:departmentId as String))
           AND (cast(:coordinatorEmail as String) IS NULL 
-               OR (b.coordinatorEmail IS NOT NULL AND b.coordinatorEmail = cast(:coordinatorEmail as String))
+               OR (b.coordinatorEmail IS NOT NULL AND LOWER(TRIM(b.coordinatorEmail)) = LOWER(TRIM(cast(:coordinatorEmail as String))))
                OR (b.coordinatorEmail IS NULL AND cast(:masterProgrammeId as String) IS NOT NULL AND b.masterProgrammeId = cast(:masterProgrammeId as String))
               )
         ORDER BY b.startYear DESC
@@ -72,7 +72,7 @@ public interface ProgrammeBatchRepository extends JpaRepository<ProgrammeBatch, 
               )
           AND (mp.departmentId IN :departmentIds)
           AND (cast(:coordinatorEmail as String) IS NULL 
-               OR (b.coordinatorEmail IS NOT NULL AND b.coordinatorEmail = cast(:coordinatorEmail as String))
+               OR (b.coordinatorEmail IS NOT NULL AND LOWER(TRIM(b.coordinatorEmail)) = LOWER(TRIM(cast(:coordinatorEmail as String))))
                OR (b.coordinatorEmail IS NULL AND cast(:masterProgrammeId as String) IS NOT NULL AND b.masterProgrammeId = cast(:masterProgrammeId as String))
               )
         ORDER BY b.startYear DESC

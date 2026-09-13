@@ -299,6 +299,15 @@ public class AuthService {
                 .orElseGet(() -> userRepository.findByUsernameOrEmail(identifier, identifier)
                 .orElseThrow(() -> new BadRequestException("User not found: " + identifier)));
 
+        return getUserRolesAndProfiles(user);
+    }
+
+    @Transactional(readOnly = true)
+    public UserRolesResponseDto getUserRolesAndProfiles(User user) {
+        if (user == null) {
+            return null;
+        }
+
         String activeRole = resolveActiveRole(user);
 
         List<String> rawRoles = user.getExplicitAssignedRoles();
@@ -529,6 +538,7 @@ public class AuthService {
                         .schoolId(schoolId)
                         .departmentId(departmentId)
                         .masterProgrammeId(masterProgrammeId)
+                        .programmeBatchId(request.getProgrammeBatchId())
                         .department(user.getDepartment())
                         .programme(user.getProgramme())
                         .build())
@@ -543,12 +553,31 @@ public class AuthService {
                 return activeRole.replace("ROLE_", "");
             }
         }
+        org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.getAuthorities() != null && !auth.getAuthorities().isEmpty()) {
+            for (org.springframework.security.core.GrantedAuthority ga : auth.getAuthorities()) {
+                String authStr = ga.getAuthority();
+                if (authStr != null && authStr.startsWith("ROLE_")) {
+                    return authStr.substring(5);
+                }
+            }
+        }
         return user.getRole() != null ? user.getRole().name() : "FACULTY";
     }
 
     private AuthResponse buildAuthResponse(User user) {
-        String activeRole = user.getRole() != null ? user.getRole().name() : "FACULTY";
-        String accessToken = tokenProvider.generateTokenForUser(user.getUsername(), activeRole, user.getSchoolId(), user.getDepartmentId(), user.getMasterProgrammeId());
+        UserRolesResponseDto rolesDto = getUserRolesAndProfiles(user);
+        UserProfileRoleDto highestProfile = (rolesDto != null && rolesDto.getProfiles() != null && !rolesDto.getProfiles().isEmpty())
+                ? rolesDto.getProfiles().get(0)
+                : null;
+
+        String activeRole = highestProfile != null ? highestProfile.getRole() : (user.getRole() != null ? user.getRole().name() : "FACULTY");
+        String schoolId = (highestProfile != null && highestProfile.getSchoolId() != null) ? highestProfile.getSchoolId() : user.getSchoolId();
+        String departmentId = (highestProfile != null && highestProfile.getDepartmentId() != null) ? highestProfile.getDepartmentId() : user.getDepartmentId();
+        String masterProgrammeId = (highestProfile != null && highestProfile.getMasterProgrammeId() != null) ? highestProfile.getMasterProgrammeId() : user.getMasterProgrammeId();
+        String programmeBatchId = highestProfile != null ? highestProfile.getProgrammeBatchId() : null;
+
+        String accessToken = tokenProvider.generateTokenForUser(user.getUsername(), activeRole, schoolId, departmentId, masterProgrammeId);
         String refreshToken = tokenProvider.generateRefreshToken(user.getUsername());
 
         return AuthResponse.builder()
@@ -563,9 +592,10 @@ public class AuthService {
                         .email(user.getEmail())
                         .username(user.getUsername())
                         .role(activeRole)
-                        .schoolId(user.getSchoolId())
-                        .departmentId(user.getDepartmentId())
-                        .masterProgrammeId(user.getMasterProgrammeId())
+                        .schoolId(schoolId)
+                        .departmentId(departmentId)
+                        .masterProgrammeId(masterProgrammeId)
+                        .programmeBatchId(programmeBatchId)
                         .department(user.getDepartment())
                         .programme(user.getProgramme())
                         .build())

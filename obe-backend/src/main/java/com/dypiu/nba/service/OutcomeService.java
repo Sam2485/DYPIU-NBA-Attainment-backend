@@ -863,6 +863,17 @@ public class OutcomeService {
         coPoMappingRepository.deleteByCourseOutcomeIdIn(List.of(co.getId()));
         coPsoMappingRepository.deleteByCourseOutcomeIdIn(List.of(co.getId()));
         coRepository.delete(co);
+        if (auditLogService != null) {
+            auditLogService.recordSuccess(
+                    com.dypiu.nba.audit.AuditAction.DELETE,
+                    com.dypiu.nba.audit.ResourceType.COURSE_OUTCOME,
+                    co.getId(),
+                    "ACTIVE",
+                    "DELETED",
+                    "Deleted Course Outcome " + co.getCode(),
+                    java.util.Map.of("code", co.getCode() != null ? co.getCode() : "", "offeringId", targetOfferingId != null ? targetOfferingId : "")
+            );
+        }
     }
 
     // --- Programme Target Benchmark Levels ---
