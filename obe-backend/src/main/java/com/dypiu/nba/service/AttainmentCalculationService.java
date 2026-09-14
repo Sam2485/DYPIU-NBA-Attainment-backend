@@ -281,7 +281,7 @@ public class AttainmentCalculationService {
         }
     }
 
-    @Transactional(readOnly = true)
+    @Transactional(readOnly = true, noRollbackFor = Exception.class)
     public AttainmentConfiguration getAttainmentConfig(String courseOfferingOrMasterCourseId) {
         log.debug("[AttainmentCalculationService] getAttainmentConfig called | courseOfferingOrMasterCourseId: " + courseOfferingOrMasterCourseId);
         enforceOfferingOrCourseScope(courseOfferingOrMasterCourseId);
@@ -312,7 +312,7 @@ public class AttainmentCalculationService {
         return cfg;
     }
 
-    @Transactional(readOnly = true)
+    @Transactional(readOnly = true, noRollbackFor = Exception.class)
     public AttainmentConfiguration getApprovedAttainmentConfig(String courseOfferingOrMasterCourseId) {
         log.debug("[AttainmentCalculationService] getApprovedAttainmentConfig called | courseOfferingOrMasterCourseId: " + courseOfferingOrMasterCourseId);
         enforceOfferingOrCourseScope(courseOfferingOrMasterCourseId);
@@ -1172,7 +1172,7 @@ public class AttainmentCalculationService {
         return calculateExaminationAttainment(offeringId, payload);
     }
 
-    @Transactional(readOnly = true)
+    @Transactional(readOnly = true, noRollbackFor = Exception.class)
     public ExaminationAttainmentResultDto getExaminationAttainment(String courseOfferingOrMasterCourseId) {
         log.debug("[AttainmentCalculationService] getExaminationAttainment called | courseOfferingOrMasterCourseId: " + courseOfferingOrMasterCourseId);
         String offeringId = resolveOfferingId(courseOfferingOrMasterCourseId);
@@ -1635,7 +1635,7 @@ public class AttainmentCalculationService {
         return responses;
     }
 
-    @Transactional(readOnly = true)
+    @Transactional(readOnly = true, noRollbackFor = Exception.class)
     public SurveyAttainmentResultDto getSurveyAttainment(String courseOfferingOrMasterCourseId) {
         log.debug("[AttainmentCalculationService] getSurveyAttainment called | courseOfferingOrMasterCourseId: " + courseOfferingOrMasterCourseId);
         String offeringId = resolveOfferingId(courseOfferingOrMasterCourseId);
@@ -1677,7 +1677,7 @@ public class AttainmentCalculationService {
     //  COMBINED CO ATTAINMENT CALCULATION
     // =========================================================================
 
-    @Transactional(readOnly = true)
+    @Transactional(readOnly = true, noRollbackFor = Exception.class)
     public Map<String, Object> calculateCourseCoAttainment(String courseOfferingOrMasterCourseId) {
         log.debug("[AttainmentCalculationService] calculateCourseCoAttainment called | courseOfferingOrMasterCourseId: " + courseOfferingOrMasterCourseId);
         enforceOfferingOrCourseScope(courseOfferingOrMasterCourseId);
@@ -1884,15 +1884,9 @@ public class AttainmentCalculationService {
         return null;
     }
 
-    @Transactional
-    public ProgrammeSurveyResultDto processAndSaveProgrammeSurveyFile(String masterProgrammeId, String programmeBatchId, MultipartFile file, String uploadedBy) {
-        log.debug("[AttainmentCalculationService] processAndSaveProgrammeSurveyFile called | masterProgrammeId: " + masterProgrammeId + " | programmeBatchId: " + programmeBatchId);
-        if (programmeBatchId != null) {
-            batchLifecycleService.enforceBatchEditability(programmeBatchId);
-        }
-        String key = masterProgrammeId + "::" + programmeBatchId;
+    private record OutcomeConfigPair(Set<String> configuredPOCodes, Set<String> configuredPSOCodes) {}
 
-        // Load authoritative configured POs and PSOs for the programme/batch
+    private OutcomeConfigPair resolveConfiguredOutcomes(String masterProgrammeId, String programmeBatchId) {
         List<ProgrammeOutcome> pos = programmeOutcomeRepository.findByProgrammeBatchIdOrderByCodeAsc(programmeBatchId);
         if (pos == null || pos.isEmpty()) {
             if (masterProgrammeId != null && !masterProgrammeId.isBlank()) {
@@ -1953,357 +1947,402 @@ public class AttainmentCalculationService {
                 .filter(Objects::nonNull)
                 .collect(Collectors.toCollection(LinkedHashSet::new));
 
+        return new OutcomeConfigPair(configuredPOCodes, configuredPSOCodes);
+    }
+
+    private ProgrammeSurveyResultDto parseProgrammeSurveyInputStream(
+            InputStream is, String masterProgrammeId, String programmeBatchId,
+            Set<String> configuredPOCodes, Set<String> configuredPSOCodes, String uploadId) throws Exception {
+
+        try (Workbook workbook = WorkbookFactory.create(is)) {
+            FormulaEvaluator evaluator = workbook.getCreationHelper().createFormulaEvaluator();
+            Sheet sheet = findProgrammeSurveySheet(workbook);
+
+            // 1. Locate PO/PSO header row
+            int headerRowNum = -1;
+            Map<Integer, String> poColMap = new LinkedHashMap<>();
+            Map<Integer, String> psoColMap = new LinkedHashMap<>();
+            Set<String> duplicateCodes = new LinkedHashSet<>();
+            Set<String> unknownCodes = new LinkedHashSet<>();
+
+            for (Row row : sheet) {
+                Map<Integer, String> rowPoCols = new LinkedHashMap<>();
+                Map<Integer, String> rowPsoCols = new LinkedHashMap<>();
+                Set<String> rowSeen = new HashSet<>();
+                Set<String> rowDups = new LinkedHashSet<>();
+                Set<String> rowUnk = new LinkedHashSet<>();
+
+                for (Cell cell : row) {
+                    String text = getStringCellValue(cell, evaluator);
+                    if (text == null || text.isBlank()) continue;
+                    String clean = normalizeOutcomeCode(text);
+                    if (clean == null) continue;
+
+                    if (clean.matches("^PO\\d+$")) {
+                        if (!rowSeen.add(clean)) rowDups.add(clean);
+                        if (!configuredPOCodes.contains(clean)) rowUnk.add(clean);
+                        rowPoCols.put(cell.getColumnIndex(), clean);
+                    } else if (clean.matches("^PSO\\d+$")) {
+                        if (!rowSeen.add(clean)) rowDups.add(clean);
+                        if (!configuredPSOCodes.contains(clean)) rowUnk.add(clean);
+                        rowPsoCols.put(cell.getColumnIndex(), clean);
+                    }
+                }
+
+                if ((rowPoCols.size() + rowPsoCols.size()) > (poColMap.size() + psoColMap.size())) {
+                    poColMap = rowPoCols;
+                    psoColMap = rowPsoCols;
+                    duplicateCodes = rowDups;
+                    unknownCodes = rowUnk;
+                    headerRowNum = row.getRowNum();
+                }
+            }
+
+            if (headerRowNum == -1 || (poColMap.isEmpty() && psoColMap.isEmpty())) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "No Program Outcome (PO/PSO) headers found in Programme End Survey sheet.");
+            }
+
+            // 2. Strict Exact Outcome Validation Rules
+            if (!duplicateCodes.isEmpty()) {
+                String dup = duplicateCodes.iterator().next();
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Programme End Survey contains duplicate outcome " + dup + ".");
+            }
+
+            if (!unknownCodes.isEmpty()) {
+                String unk = unknownCodes.iterator().next();
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Programme End Survey contains unconfigured outcome " + unk + ".");
+            }
+
+            for (String cfgPo : configuredPOCodes) {
+                if (!poColMap.containsValue(cfgPo)) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Programme End Survey is missing configured outcome " + cfgPo + ".");
+                }
+            }
+
+            for (String cfgPso : configuredPSOCodes) {
+                if (!psoColMap.containsValue(cfgPso)) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Programme End Survey is missing configured outcome " + cfgPso + ".");
+                }
+            }
+
+            // 3. Dynamic Student Response Rows Processing
+            int prnColIdx = -1;
+            int nameColIdx = -1;
+            int srNoColIdx = -1;
+            Row headerRow = sheet.getRow(headerRowNum);
+            if (headerRow != null) {
+                for (Cell cell : headerRow) {
+                    String hText = getStringCellValue(cell, evaluator);
+                    if (hText != null) {
+                        String clean = hText.toLowerCase().replaceAll("[^a-z]", "");
+                        if (clean.contains("prn") || clean.contains("rollno") || clean.contains("studentid")) {
+                            prnColIdx = cell.getColumnIndex();
+                        } else if (clean.contains("name") || clean.contains("studentname")) {
+                            nameColIdx = cell.getColumnIndex();
+                        } else if (clean.contains("srno") || clean.contains("sno")) {
+                            srNoColIdx = cell.getColumnIndex();
+                        }
+                    }
+                }
+            }
+
+            Map<String, List<Double>> poRatingsMap = new LinkedHashMap<>();
+            Map<String, List<Double>> psoRatingsMap = new LinkedHashMap<>();
+            for (String po : configuredPOCodes) poRatingsMap.put(po, new ArrayList<>());
+            for (String pso : configuredPSOCodes) psoRatingsMap.put(pso, new ArrayList<>());
+
+            List<ProgrammeSurveyResultDto.StudentSurveyResponseRow> studentResponses = new ArrayList<>();
+            int rowsProcessed = 0;
+
+            for (int r = headerRowNum + 1; r <= sheet.getLastRowNum(); r++) {
+                Row row = sheet.getRow(r);
+                if (row == null) continue;
+
+                boolean hasData = false;
+                Map<String, Double> rowPoVals = new HashMap<>();
+                Map<String, Double> rowPsoVals = new HashMap<>();
+                Map<String, String> rowPoFeedbacks = new LinkedHashMap<>();
+                Map<String, String> rowPsoFeedbacks = new LinkedHashMap<>();
+
+                for (Map.Entry<Integer, String> entry : poColMap.entrySet()) {
+                    Cell c = row.getCell(entry.getKey());
+                    Double num = getNumericCellValue(c, evaluator);
+                    String feedback = "Substantial";
+                    if (num == null) {
+                        String s = getStringCellValue(c, evaluator);
+                        if (s != null && !s.isBlank()) {
+                            String tr = s.trim().toLowerCase();
+                            if (tr.contains("substantial") || tr.equals("3") || tr.equals("3.0")) {
+                                num = 3.0; feedback = "Substantial";
+                            } else if (tr.contains("moderate") || tr.equals("2") || tr.equals("2.0")) {
+                                num = 2.0; feedback = "Moderate";
+                            } else if (tr.contains("slight") || tr.equals("1") || tr.equals("1.0")) {
+                                num = 1.0; feedback = "Slight";
+                            }
+                        }
+                    } else {
+                        int v = (int) Math.round(num);
+                        feedback = v == 3 ? "Substantial" : (v == 2 ? "Moderate" : "Slight");
+                    }
+                    if (num != null && num >= 0) {
+                        rowPoVals.put(entry.getValue(), Math.min(3.0, num));
+                        rowPoFeedbacks.put(entry.getValue(), feedback);
+                        hasData = true;
+                    }
+                }
+
+                for (Map.Entry<Integer, String> entry : psoColMap.entrySet()) {
+                    Cell c = row.getCell(entry.getKey());
+                    Double num = getNumericCellValue(c, evaluator);
+                    String feedback = "Substantial";
+                    if (num == null) {
+                        String s = getStringCellValue(c, evaluator);
+                        if (s != null && !s.isBlank()) {
+                            String tr = s.trim().toLowerCase();
+                            if (tr.contains("substantial") || tr.equals("3") || tr.equals("3.0")) {
+                                num = 3.0; feedback = "Substantial";
+                            } else if (tr.contains("moderate") || tr.equals("2") || tr.equals("2.0")) {
+                                num = 2.0; feedback = "Moderate";
+                            } else if (tr.contains("slight") || tr.equals("1") || tr.equals("1.0")) {
+                                num = 1.0; feedback = "Slight";
+                            }
+                        }
+                    } else {
+                        int v = (int) Math.round(num);
+                        feedback = v == 3 ? "Substantial" : (v == 2 ? "Moderate" : "Slight");
+                    }
+                    if (num != null && num >= 0) {
+                        rowPsoVals.put(entry.getValue(), Math.min(3.0, num));
+                        rowPsoFeedbacks.put(entry.getValue(), feedback);
+                        hasData = true;
+                    }
+                }
+
+                if (hasData) {
+                    rowsProcessed++;
+                    for (Map.Entry<String, Double> e : rowPoVals.entrySet()) {
+                        poRatingsMap.get(e.getKey()).add(e.getValue());
+                    }
+                    for (Map.Entry<String, Double> e : rowPsoVals.entrySet()) {
+                        psoRatingsMap.get(e.getKey()).add(e.getValue());
+                    }
+
+                    String prn = null;
+                    if (prnColIdx != -1) {
+                        String p = getStringCellValue(row.getCell(prnColIdx), evaluator);
+                        if (p != null && !p.isBlank()) prn = p.trim();
+                    }
+                    String sName = null;
+                    if (nameColIdx != -1) {
+                        String n = getStringCellValue(row.getCell(nameColIdx), evaluator);
+                        if (n != null && !n.isBlank()) sName = n.trim();
+                    }
+                    if (prn == null || prn.isBlank()) {
+                        prn = "PRN-" + (studentResponses.size() + 1);
+                    }
+                    if (sName == null || sName.isBlank()) {
+                        sName = "Student " + prn;
+                    }
+                    studentResponses.add(ProgrammeSurveyResultDto.StudentSurveyResponseRow.builder()
+                            .srNo(studentResponses.size() + 1)
+                            .prn(prn)
+                            .studentName(sName)
+                            .poRatings(rowPoFeedbacks)
+                            .psoRatings(rowPsoFeedbacks)
+                            .build());
+                }
+            }
+
+            if (rowsProcessed == 0) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "No valid survey response rows found in the Programme End Survey sheet.");
+            }
+
+            List<ProgrammeSurveyResultDto.PoIndirectItem> poItems = new ArrayList<>();
+            for (String poCode : configuredPOCodes) {
+                List<Double> ratings = poRatingsMap.get(poCode);
+                BigDecimal attainmentVal;
+                if (ratings != null && !ratings.isEmpty()) {
+                    int count1 = 0, count2 = 0, count3 = 0;
+                    for (Double r : ratings) {
+                        if (r == null) continue;
+                        long rounded = Math.round(r);
+                        if (rounded <= 1) count1++;
+                        else if (rounded == 2) count2++;
+                        else count3++;
+                    }
+                    int total = count1 + count2 + count3;
+                    double pct1 = total > 0 ? ((double) count1 * 100.0 / total) : 0.0;
+                    double pct2 = total > 0 ? ((double) count2 * 100.0 / total) : 0.0;
+                    double pct3 = total > 0 ? ((double) count3 * 100.0 / total) : 0.0;
+
+                    double totalPct = (pct1 * 0.33) + (pct2 * 0.67) + (pct3 * 1.0);
+
+                    int level;
+                    if (totalPct > 70.0) {
+                        level = 3;
+                    } else if (totalPct > 40.0) {
+                        level = 2;
+                    } else if (totalPct > 0.0) {
+                        level = 1;
+                    } else {
+                        level = 0;
+                    }
+                    attainmentVal = BigDecimal.valueOf(level).setScale(2, RoundingMode.HALF_UP);
+                } else {
+                    attainmentVal = BigDecimal.ZERO;
+                }
+                poItems.add(ProgrammeSurveyResultDto.PoIndirectItem.builder()
+                        .poCode(poCode)
+                        .indirectAttainment(attainmentVal)
+                        .build());
+            }
+
+            List<ProgrammeSurveyResultDto.PsoIndirectItem> psoItems = new ArrayList<>();
+            for (String psoCode : configuredPSOCodes) {
+                List<Double> ratings = psoRatingsMap.get(psoCode);
+                BigDecimal attainmentVal;
+                if (ratings != null && !ratings.isEmpty()) {
+                    int count1 = 0, count2 = 0, count3 = 0;
+                    for (Double r : ratings) {
+                        if (r == null) continue;
+                        long rounded = Math.round(r);
+                        if (rounded <= 1) count1++;
+                        else if (rounded == 2) count2++;
+                        else count3++;
+                    }
+                    int total = count1 + count2 + count3;
+                    double pct1 = total > 0 ? ((double) count1 * 100.0 / total) : 0.0;
+                    double pct2 = total > 0 ? ((double) count2 * 100.0 / total) : 0.0;
+                    double pct3 = total > 0 ? ((double) count3 * 100.0 / total) : 0.0;
+
+                    double totalPct = (pct1 * 0.33) + (pct2 * 0.67) + (pct3 * 1.0);
+
+                    int level;
+                    if (totalPct > 70.0) {
+                        level = 3;
+                    } else if (totalPct > 40.0) {
+                        level = 2;
+                    } else if (totalPct > 0.0) {
+                        level = 1;
+                    } else {
+                        level = 0;
+                    }
+                    attainmentVal = BigDecimal.valueOf(level).setScale(2, RoundingMode.HALF_UP);
+                } else {
+                    attainmentVal = BigDecimal.ZERO;
+                }
+                psoItems.add(ProgrammeSurveyResultDto.PsoIndirectItem.builder()
+                        .psoCode(psoCode)
+                        .indirectAttainment(attainmentVal)
+                        .build());
+            }
+
+            return ProgrammeSurveyResultDto.builder()
+                    .uploadId(uploadId != null ? uploadId : "psurvey-" + UUID.randomUUID().toString().substring(0, 8))
+                    .masterProgrammeId(masterProgrammeId)
+                    .programmeBatchId(programmeBatchId)
+                    .surveyType("PROGRAMME_INDIRECT")
+                    .recordsProcessed(rowsProcessed)
+                    .poIndirectAttainment(poItems)
+                    .psoIndirectAttainment(psoItems)
+                    .studentSurveyResponses(studentResponses)
+                    .status("PROCESSED")
+                    .build();
+        }
+    }
+
+    private ProgrammeSurveyResultDto buildDefaultProgrammeSurveyResult(
+            String masterProgrammeId, String programmeBatchId,
+            Set<String> configuredPOCodes, Set<String> configuredPSOCodes) {
         List<ProgrammeSurveyResultDto.PoIndirectItem> poItems = new ArrayList<>();
         List<ProgrammeSurveyResultDto.PsoIndirectItem> psoItems = new ArrayList<>();
-        List<ProgrammeSurveyResultDto.StudentSurveyResponseRow> studentResponses = new ArrayList<>();
-        int rowsProcessed = 0;
 
-        if (file != null && !file.isEmpty()) {
-            Path targetFilePath = null;
-            try {
-                targetFilePath = saveProgrammeSurveyUploadedFile(file, masterProgrammeId, programmeBatchId);
-                String originalFileName = file.getOriginalFilename() != null ? file.getOriginalFilename() : "programme_survey.xlsx";
-                String savedFileName = targetFilePath.getFileName().toString();
-                String savedPath = targetFilePath.toAbsolutePath().toString();
-                try (InputStream is = Files.newInputStream(targetFilePath);
-                     Workbook workbook = WorkbookFactory.create(is)) {
-                    FormulaEvaluator evaluator = workbook.getCreationHelper().createFormulaEvaluator();
-                    Sheet sheet = findProgrammeSurveySheet(workbook);
-
-                    // 1. Locate PO/PSO header row
-                    int headerRowNum = -1;
-                    Map<Integer, String> poColMap = new LinkedHashMap<>();
-                    Map<Integer, String> psoColMap = new LinkedHashMap<>();
-                    Set<String> duplicateCodes = new LinkedHashSet<>();
-                    Set<String> unknownCodes = new LinkedHashSet<>();
-
-                    for (Row row : sheet) {
-                        Map<Integer, String> rowPoCols = new LinkedHashMap<>();
-                        Map<Integer, String> rowPsoCols = new LinkedHashMap<>();
-                        Set<String> rowSeen = new HashSet<>();
-                        Set<String> rowDups = new LinkedHashSet<>();
-                        Set<String> rowUnk = new LinkedHashSet<>();
-
-                        for (Cell cell : row) {
-                            String text = getStringCellValue(cell, evaluator);
-                            if (text == null || text.isBlank()) continue;
-                            String clean = normalizeOutcomeCode(text);
-                            if (clean == null) continue;
-
-                            if (clean.matches("^PO\\d+$")) {
-                                if (!rowSeen.add(clean)) rowDups.add(clean);
-                                if (!configuredPOCodes.contains(clean)) rowUnk.add(clean);
-                                rowPoCols.put(cell.getColumnIndex(), clean);
-                            } else if (clean.matches("^PSO\\d+$")) {
-                                if (!rowSeen.add(clean)) rowDups.add(clean);
-                                if (!configuredPSOCodes.contains(clean)) rowUnk.add(clean);
-                                rowPsoCols.put(cell.getColumnIndex(), clean);
-                            }
-                        }
-
-                        if ((rowPoCols.size() + rowPsoCols.size()) > (poColMap.size() + psoColMap.size())) {
-                            poColMap = rowPoCols;
-                            psoColMap = rowPsoCols;
-                            duplicateCodes = rowDups;
-                            unknownCodes = rowUnk;
-                            headerRowNum = row.getRowNum();
-                        }
-                    }
-
-                    if (headerRowNum == -1 || (poColMap.isEmpty() && psoColMap.isEmpty())) {
-                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "No Program Outcome (PO/PSO) headers found in Programme End Survey sheet.");
-                    }
-
-                    // 2. Strict Exact Outcome Validation Rules
-                    // Duplicate Check (A6)
-                    if (!duplicateCodes.isEmpty()) {
-                        String dup = duplicateCodes.iterator().next();
-                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Programme End Survey contains duplicate outcome " + dup + ".");
-                    }
-
-                    // Extra / Unknown Outcome Check (A4 & A5)
-                    if (!unknownCodes.isEmpty()) {
-                        String unk = unknownCodes.iterator().next();
-                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Programme End Survey contains unconfigured outcome " + unk + ".");
-                    }
-
-                    // Missing PO Check (A3 & A7)
-                    for (String cfgPo : configuredPOCodes) {
-                        if (!poColMap.containsValue(cfgPo)) {
-                            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Programme End Survey is missing configured outcome " + cfgPo + ".");
-                        }
-                    }
-
-                    // Missing PSO Check (A3 & A7)
-                    for (String cfgPso : configuredPSOCodes) {
-                        if (!psoColMap.containsValue(cfgPso)) {
-                            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Programme End Survey is missing configured outcome " + cfgPso + ".");
-                        }
-                    }
-
-                    // 3. Dynamic Student Response Rows Processing (A9)
-                    int prnColIdx = -1;
-                    int nameColIdx = -1;
-                    int srNoColIdx = -1;
-                    Row headerRow = sheet.getRow(headerRowNum);
-                    if (headerRow != null) {
-                        for (Cell cell : headerRow) {
-                            String hText = getStringCellValue(cell, evaluator);
-                            if (hText != null) {
-                                String clean = hText.toLowerCase().replaceAll("[^a-z]", "");
-                                if (clean.contains("prn") || clean.contains("rollno") || clean.contains("studentid")) {
-                                    prnColIdx = cell.getColumnIndex();
-                                } else if (clean.contains("name") || clean.contains("studentname")) {
-                                    nameColIdx = cell.getColumnIndex();
-                                } else if (clean.contains("srno") || clean.contains("sno")) {
-                                    srNoColIdx = cell.getColumnIndex();
-                                }
-                            }
-                        }
-                    }
-
-                    Map<String, List<Double>> poRatingsMap = new LinkedHashMap<>();
-                    Map<String, List<Double>> psoRatingsMap = new LinkedHashMap<>();
-                    for (String po : configuredPOCodes) poRatingsMap.put(po, new ArrayList<>());
-                    for (String pso : configuredPSOCodes) psoRatingsMap.put(pso, new ArrayList<>());
-
-                    for (int r = headerRowNum + 1; r <= sheet.getLastRowNum(); r++) {
-                        Row row = sheet.getRow(r);
-                        if (row == null) continue;
-
-                        boolean hasData = false;
-                        Map<String, Double> rowPoVals = new HashMap<>();
-                        Map<String, Double> rowPsoVals = new HashMap<>();
-                        Map<String, String> rowPoFeedbacks = new LinkedHashMap<>();
-                        Map<String, String> rowPsoFeedbacks = new LinkedHashMap<>();
-
-                        for (Map.Entry<Integer, String> entry : poColMap.entrySet()) {
-                            Cell c = row.getCell(entry.getKey());
-                            Double num = getNumericCellValue(c, evaluator);
-                            String feedback = "Substantial";
-                            if (num == null) {
-                                String s = getStringCellValue(c, evaluator);
-                                if (s != null && !s.isBlank()) {
-                                    String tr = s.trim().toLowerCase();
-                                    if (tr.contains("substantial") || tr.equals("3") || tr.equals("3.0")) {
-                                        num = 3.0; feedback = "Substantial";
-                                    } else if (tr.contains("moderate") || tr.equals("2") || tr.equals("2.0")) {
-                                        num = 2.0; feedback = "Moderate";
-                                    } else if (tr.contains("slight") || tr.equals("1") || tr.equals("1.0")) {
-                                        num = 1.0; feedback = "Slight";
-                                    }
-                                }
-                            } else {
-                                int v = (int) Math.round(num);
-                                feedback = v == 3 ? "Substantial" : (v == 2 ? "Moderate" : "Slight");
-                            }
-                            if (num != null && num >= 0) {
-                                rowPoVals.put(entry.getValue(), Math.min(3.0, num));
-                                rowPoFeedbacks.put(entry.getValue(), feedback);
-                                hasData = true;
-                            }
-                        }
-
-                        for (Map.Entry<Integer, String> entry : psoColMap.entrySet()) {
-                            Cell c = row.getCell(entry.getKey());
-                            Double num = getNumericCellValue(c, evaluator);
-                            String feedback = "Substantial";
-                            if (num == null) {
-                                String s = getStringCellValue(c, evaluator);
-                                if (s != null && !s.isBlank()) {
-                                    String tr = s.trim().toLowerCase();
-                                    if (tr.contains("substantial") || tr.equals("3") || tr.equals("3.0")) {
-                                        num = 3.0; feedback = "Substantial";
-                                    } else if (tr.contains("moderate") || tr.equals("2") || tr.equals("2.0")) {
-                                        num = 2.0; feedback = "Moderate";
-                                    } else if (tr.contains("slight") || tr.equals("1") || tr.equals("1.0")) {
-                                        num = 1.0; feedback = "Slight";
-                                    }
-                                }
-                            } else {
-                                int v = (int) Math.round(num);
-                                feedback = v == 3 ? "Substantial" : (v == 2 ? "Moderate" : "Slight");
-                            }
-                            if (num != null && num >= 0) {
-                                rowPsoVals.put(entry.getValue(), Math.min(3.0, num));
-                                rowPsoFeedbacks.put(entry.getValue(), feedback);
-                                hasData = true;
-                            }
-                        }
-
-                        if (hasData) {
-                            rowsProcessed++;
-                            for (Map.Entry<String, Double> e : rowPoVals.entrySet()) {
-                                poRatingsMap.get(e.getKey()).add(e.getValue());
-                            }
-                            for (Map.Entry<String, Double> e : rowPsoVals.entrySet()) {
-                                psoRatingsMap.get(e.getKey()).add(e.getValue());
-                            }
-
-                            String prn = null;
-                            if (prnColIdx != -1) {
-                                String p = getStringCellValue(row.getCell(prnColIdx), evaluator);
-                                if (p != null && !p.isBlank()) prn = p.trim();
-                            }
-                            String sName = null;
-                            if (nameColIdx != -1) {
-                                String n = getStringCellValue(row.getCell(nameColIdx), evaluator);
-                                if (n != null && !n.isBlank()) sName = n.trim();
-                            }
-                            if (prn == null || prn.isBlank()) {
-                                prn = "PRN-" + (studentResponses.size() + 1);
-                            }
-                            if (sName == null || sName.isBlank()) {
-                                sName = "Student " + prn;
-                            }
-                            studentResponses.add(ProgrammeSurveyResultDto.StudentSurveyResponseRow.builder()
-                                    .srNo(studentResponses.size() + 1)
-                                    .prn(prn)
-                                    .studentName(sName)
-                                    .poRatings(rowPoFeedbacks)
-                                    .psoRatings(rowPsoFeedbacks)
-                                    .build());
-                        }
-                    }
-
-                    if (rowsProcessed == 0) {
-                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "No valid survey response rows found in the Programme End Survey sheet.");
-                    }
-
-                    // Compute weighted percentage and range-based indirect attainment (1-3) for each PO & PSO:
-                    // totalPct = (pct1 * 0.33) + (pct2 * 0.67) + (pct3 * 1.0)
-                    // Level bands: 0-40% -> 1.0, 40-70% -> 2.0, 70-100% -> 3.0
-                    for (String poCode : configuredPOCodes) {
-                        List<Double> ratings = poRatingsMap.get(poCode);
-                        BigDecimal attainmentVal;
-                        if (ratings != null && !ratings.isEmpty()) {
-                            int count1 = 0, count2 = 0, count3 = 0;
-                            for (Double r : ratings) {
-                                if (r == null) continue;
-                                long rounded = Math.round(r);
-                                if (rounded <= 1) count1++;
-                                else if (rounded == 2) count2++;
-                                else count3++;
-                            }
-                            int total = count1 + count2 + count3;
-                            double pct1 = total > 0 ? ((double) count1 * 100.0 / total) : 0.0;
-                            double pct2 = total > 0 ? ((double) count2 * 100.0 / total) : 0.0;
-                            double pct3 = total > 0 ? ((double) count3 * 100.0 / total) : 0.0;
-
-                            double totalPct = (pct1 * 0.33) + (pct2 * 0.67) + (pct3 * 1.0);
-
-                            int level;
-                            if (totalPct > 70.0) {
-                                level = 3;
-                            } else if (totalPct > 40.0) {
-                                level = 2;
-                            } else if (totalPct > 0.0) {
-                                level = 1;
-                            } else {
-                                level = 0;
-                            }
-                            attainmentVal = BigDecimal.valueOf(level).setScale(2, RoundingMode.HALF_UP);
-                        } else {
-                            attainmentVal = BigDecimal.ZERO;
-                        }
-                        poItems.add(ProgrammeSurveyResultDto.PoIndirectItem.builder()
-                                .poCode(poCode)
-                                .indirectAttainment(attainmentVal)
-                                .build());
-                    }
-
-                    for (String psoCode : configuredPSOCodes) {
-                        List<Double> ratings = psoRatingsMap.get(psoCode);
-                        BigDecimal attainmentVal;
-                        if (ratings != null && !ratings.isEmpty()) {
-                            int count1 = 0, count2 = 0, count3 = 0;
-                            for (Double r : ratings) {
-                                if (r == null) continue;
-                                long rounded = Math.round(r);
-                                if (rounded <= 1) count1++;
-                                else if (rounded == 2) count2++;
-                                else count3++;
-                            }
-                            int total = count1 + count2 + count3;
-                            double pct1 = total > 0 ? ((double) count1 * 100.0 / total) : 0.0;
-                            double pct2 = total > 0 ? ((double) count2 * 100.0 / total) : 0.0;
-                            double pct3 = total > 0 ? ((double) count3 * 100.0 / total) : 0.0;
-
-                            double totalPct = (pct1 * 0.33) + (pct2 * 0.67) + (pct3 * 1.0);
-
-                            int level;
-                            if (totalPct > 70.0) {
-                                level = 3;
-                            } else if (totalPct > 40.0) {
-                                level = 2;
-                            } else if (totalPct > 0.0) {
-                                level = 1;
-                            } else {
-                                level = 0;
-                            }
-                            attainmentVal = BigDecimal.valueOf(level).setScale(2, RoundingMode.HALF_UP);
-                        } else {
-                            attainmentVal = BigDecimal.ZERO;
-                        }
-                        psoItems.add(ProgrammeSurveyResultDto.PsoIndirectItem.builder()
-                                .psoCode(psoCode)
-                                .indirectAttainment(attainmentVal)
-                                .build());
-                    }
-
-                    // 4. Persist uploaded document record only after successful validation
-                    UploadedDocument doc = UploadedDocument.builder()
-                            .id("doc-" + UUID.randomUUID().toString().substring(0, 8))
-                            .programmeBatchId(programmeBatchId)
-                            .documentType(DocumentType.SURVEY)
-                            .fileName(originalFileName)
-                            .savedFileName(savedFileName)
-                            .savedPath(savedPath)
-                            .fileSize(file.getSize())
-                            .recordsProcessed(rowsProcessed)
-                            .uploadedBy(uploadedBy != null ? uploadedBy : "Programme Coordinator")
-                            .uploadedAt(ZonedDateTime.now())
-                            .build();
-                    uploadedDocumentRepository.save(doc);
-                }
-            } catch (ResponseStatusException rse) {
-                if (targetFilePath != null && Files.exists(targetFilePath)) {
-                    try { Files.deleteIfExists(targetFilePath); } catch (Exception ignored) {}
-                }
-                throw rse;
-            } catch (Exception e) {
-                if (targetFilePath != null && Files.exists(targetFilePath)) {
-                    try { Files.deleteIfExists(targetFilePath); } catch (Exception ignored) {}
-                }
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Failed to parse Programme End Survey file: " + e.getMessage());
-            }
-        } else {
-            // When no survey file is uploaded yet, initialize zero attainment for configured outcomes
-            for (String poCode : configuredPOCodes) {
-                poItems.add(ProgrammeSurveyResultDto.PoIndirectItem.builder().poCode(poCode).indirectAttainment(BigDecimal.ZERO).build());
-            }
-            for (String psoCode : configuredPSOCodes) {
-                psoItems.add(ProgrammeSurveyResultDto.PsoIndirectItem.builder().psoCode(psoCode).indirectAttainment(BigDecimal.ZERO).build());
-            }
+        for (String poCode : configuredPOCodes) {
+            poItems.add(ProgrammeSurveyResultDto.PoIndirectItem.builder()
+                    .poCode(poCode)
+                    .indirectAttainment(BigDecimal.ZERO)
+                    .build());
+        }
+        for (String psoCode : configuredPSOCodes) {
+            psoItems.add(ProgrammeSurveyResultDto.PsoIndirectItem.builder()
+                    .psoCode(psoCode)
+                    .indirectAttainment(BigDecimal.ZERO)
+                    .build());
         }
 
-        ProgrammeSurveyResultDto result = ProgrammeSurveyResultDto.builder()
+        return ProgrammeSurveyResultDto.builder()
                 .uploadId("psurvey-" + UUID.randomUUID().toString().substring(0, 8))
                 .masterProgrammeId(masterProgrammeId)
                 .programmeBatchId(programmeBatchId)
                 .surveyType("PROGRAMME_INDIRECT")
-                .recordsProcessed(rowsProcessed)
+                .recordsProcessed(0)
                 .poIndirectAttainment(poItems)
                 .psoIndirectAttainment(psoItems)
-                .studentSurveyResponses(studentResponses)
+                .studentSurveyResponses(Collections.emptyList())
                 .status("PROCESSED")
                 .build();
-
-        programmeSurveyStore.put(key, result);
-        return result;
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
+    public ProgrammeSurveyResultDto processAndSaveProgrammeSurveyFile(String masterProgrammeId, String programmeBatchId, MultipartFile file, String uploadedBy) {
+        log.debug("[AttainmentCalculationService] processAndSaveProgrammeSurveyFile called | masterProgrammeId: " + masterProgrammeId + " | programmeBatchId: " + programmeBatchId);
+        if (file == null || file.isEmpty()) {
+            return getProgrammeSurveyResult(masterProgrammeId, programmeBatchId);
+        }
+
+        if (programmeBatchId != null) {
+            batchLifecycleService.enforceBatchEditability(programmeBatchId);
+        }
+        String key = masterProgrammeId + "::" + programmeBatchId;
+        OutcomeConfigPair outcomes = resolveConfiguredOutcomes(masterProgrammeId, programmeBatchId);
+
+        Path targetFilePath = null;
+        try {
+            targetFilePath = saveProgrammeSurveyUploadedFile(file, masterProgrammeId, programmeBatchId);
+            String originalFileName = file.getOriginalFilename() != null ? file.getOriginalFilename() : "programme_survey.xlsx";
+            String savedFileName = targetFilePath.getFileName().toString();
+            String savedPath = targetFilePath.toAbsolutePath().toString();
+
+            ProgrammeSurveyResultDto result;
+            try (InputStream is = Files.newInputStream(targetFilePath)) {
+                result = parseProgrammeSurveyInputStream(
+                        is, masterProgrammeId, programmeBatchId,
+                        outcomes.configuredPOCodes, outcomes.configuredPSOCodes,
+                        "psurvey-" + UUID.randomUUID().toString().substring(0, 8)
+                );
+            }
+
+            // Persist uploaded document record only after successful validation & parse
+            UploadedDocument doc = UploadedDocument.builder()
+                    .id("doc-" + UUID.randomUUID().toString().substring(0, 8))
+                    .programmeBatchId(programmeBatchId)
+                    .documentType(DocumentType.SURVEY)
+                    .fileName(originalFileName)
+                    .savedFileName(savedFileName)
+                    .savedPath(savedPath)
+                    .fileSize(file.getSize())
+                    .recordsProcessed(result.getRecordsProcessed())
+                    .uploadedBy(uploadedBy != null ? uploadedBy : "Programme Coordinator")
+                    .uploadedAt(ZonedDateTime.now())
+                    .build();
+            uploadedDocumentRepository.save(doc);
+
+            programmeSurveyStore.put(key, result);
+            return result;
+        } catch (ResponseStatusException rse) {
+            if (targetFilePath != null && Files.exists(targetFilePath)) {
+                try { Files.deleteIfExists(targetFilePath); } catch (Exception ignored) {}
+            }
+            throw rse;
+        } catch (Exception e) {
+            if (targetFilePath != null && Files.exists(targetFilePath)) {
+                try { Files.deleteIfExists(targetFilePath); } catch (Exception ignored) {}
+            }
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Failed to parse Programme End Survey file: " + e.getMessage());
+        }
+    }
+
+    @Transactional(readOnly = true, noRollbackFor = Exception.class)
     public ProgrammeSurveyResultDto getProgrammeSurveyResult(String masterProgrammeId, String programmeBatchId) {
         log.debug("[AttainmentCalculationService] getProgrammeSurveyResult called | masterProgrammeId: " + masterProgrammeId + " | programmeBatchId: " + programmeBatchId);
         String key = masterProgrammeId + "::" + programmeBatchId;
@@ -2311,52 +2350,35 @@ public class AttainmentCalculationService {
             return programmeSurveyStore.get(key);
         }
 
-        // Check if there is an existing uploaded document on disk
-        List<UploadedDocument> docs = uploadedDocumentRepository.findAll().stream()
-                .filter(d -> programmeBatchId.equalsIgnoreCase(d.getProgrammeBatchId()) && d.getDocumentType() == DocumentType.SURVEY)
-                .sorted(Comparator.comparing(UploadedDocument::getUploadedAt, Comparator.nullsLast(Comparator.reverseOrder())))
-                .toList();
+        OutcomeConfigPair outcomes = resolveConfiguredOutcomes(masterProgrammeId, programmeBatchId);
 
-        if (!docs.isEmpty()) {
-            UploadedDocument latestDoc = docs.get(0);
+        Optional<UploadedDocument> latestDocOpt = uploadedDocumentRepository
+                .findFirstByProgrammeBatchIdAndDocumentTypeOrderByUploadedAtDesc(programmeBatchId, DocumentType.SURVEY);
+
+        if (latestDocOpt.isPresent()) {
+            UploadedDocument latestDoc = latestDocOpt.get();
             if (latestDoc.getSavedPath() != null) {
                 Path p = Paths.get(latestDoc.getSavedPath());
                 if (Files.exists(p)) {
-                    try {
-                        byte[] bytes = Files.readAllBytes(p);
-                        ByteArrayMultipartFile mockFile = new ByteArrayMultipartFile(
-                                "file", latestDoc.getFileName() != null ? latestDoc.getFileName() : "programme_survey.xlsx",
-                                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", bytes);
-                        return processAndSaveProgrammeSurveyFile(masterProgrammeId, programmeBatchId, mockFile, latestDoc.getUploadedBy());
-                    } catch (Exception ignored) {}
+                    try (InputStream is = Files.newInputStream(p)) {
+                        ProgrammeSurveyResultDto res = parseProgrammeSurveyInputStream(
+                                is, masterProgrammeId, programmeBatchId,
+                                outcomes.configuredPOCodes, outcomes.configuredPSOCodes,
+                                latestDoc.getId() != null ? latestDoc.getId() : "psurvey-" + UUID.randomUUID().toString().substring(0, 8)
+                        );
+                        programmeSurveyStore.put(key, res);
+                        return res;
+                    } catch (Exception e) {
+                        log.warn("[AttainmentCalculationService] Failed to reload saved programme survey for batch {}: {}", programmeBatchId, e.getMessage());
+                    }
                 }
             }
         }
 
-        return processAndSaveProgrammeSurveyFile(masterProgrammeId, programmeBatchId, null, null);
-    }
-
-    private static class ByteArrayMultipartFile implements MultipartFile {
-        private final String name;
-        private final String originalFilename;
-        private final String contentType;
-        private final byte[] content;
-
-        public ByteArrayMultipartFile(String name, String originalFilename, String contentType, byte[] content) {
-            this.name = name;
-            this.originalFilename = originalFilename;
-            this.contentType = contentType;
-            this.content = content != null ? content : new byte[0];
-        }
-
-        @Override public String getName() { return name; }
-        @Override public String getOriginalFilename() { return originalFilename; }
-        @Override public String getContentType() { return contentType; }
-        @Override public boolean isEmpty() { return content.length == 0; }
-        @Override public long getSize() { return content.length; }
-        @Override public byte[] getBytes() { return content; }
-        @Override public java.io.InputStream getInputStream() { return new java.io.ByteArrayInputStream(content); }
-        @Override public void transferTo(java.io.File dest) throws java.io.IOException, IllegalStateException { Files.write(dest.toPath(), content); }
+        ProgrammeSurveyResultDto defaultResult = buildDefaultProgrammeSurveyResult(
+                masterProgrammeId, programmeBatchId, outcomes.configuredPOCodes, outcomes.configuredPSOCodes);
+        programmeSurveyStore.put(key, defaultResult);
+        return defaultResult;
     }
 
     @Transactional
@@ -2406,7 +2428,7 @@ public class AttainmentCalculationService {
     //  PROGRAMME ATTAINMENT AGGREGATION ENGINE (BATCH-CENTRIC)
     // =========================================================================
 
-    @Transactional(readOnly = true)
+    @Transactional(readOnly = true, noRollbackFor = Exception.class)
     public ProgrammeAttainmentResultDto calculateProgrammeAttainment(String masterProgrammeId, String programmeBatchId) {
         log.debug("[AttainmentCalculationService] calculateProgrammeAttainment called | masterProgrammeId: " + masterProgrammeId + " | programmeBatchId: " + programmeBatchId);
         MasterProgramme prog = masterProgrammeRepository.findById(masterProgrammeId).orElse(null);
@@ -2720,7 +2742,7 @@ public class AttainmentCalculationService {
         String key = masterProgrammeId + "::" + programmeBatchId;
         ProgrammeSurveyResultDto exitSurvey = programmeSurveyStore.containsKey(key)
                 ? programmeSurveyStore.get(key)
-                : processAndSaveProgrammeSurveyFile(masterProgrammeId, programmeBatchId, null, null);
+                : getProgrammeSurveyResult(masterProgrammeId, programmeBatchId);
 
         Map<String, BigDecimal> exitSurveyPoMap = new HashMap<>();
         if (exitSurvey.getPoIndirectAttainment() != null) {

@@ -73,7 +73,7 @@ public class EmailService {
         }
     }
 
-    private String buildResetEmailHtml(String recipientName, String resetLink) {
+    String buildResetEmailHtml(String recipientName, String resetLink) {
         String name = recipientName != null && !recipientName.isBlank() ? recipientName.trim() : "Faculty / Member";
         return """
             <!DOCTYPE html>
@@ -84,10 +84,10 @@ public class EmailService {
               <title>Password Reset</title>
             </head>
             <body style="margin:0;padding:0;background-color:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1e293b;">
-              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#f1f5f9;padding:40px 15px;">
+              <table role="presentation" width="100%%" cellspacing="0" cellpadding="0" style="background-color:#f1f5f9;padding:40px 15px;">
                 <tr>
                   <td align="center">
-                    <table role="presentation" width="100%" style="max-width:580px;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 10px 25px rgba(0,0,0,0.06);border:1px solid #e2e8f0;" cellspacing="0" cellpadding="0">
+                    <table role="presentation" width="100%%" style="max-width:580px;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 10px 25px rgba(0,0,0,0.06);border:1px solid #e2e8f0;" cellspacing="0" cellpadding="0">
                       <!-- Header -->
                       <tr>
                         <td style="background:linear-gradient(135deg, #1e1b4b 0%%, #312e81 50%%, #4338ca 100%%);padding:36px 30px;text-align:center;color:#ffffff;">
