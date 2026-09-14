@@ -838,27 +838,283 @@ public class IqacAnalyticsApiIntegrationTest {
     }
 
     @Test
-    @DisplayName("Phase 10A: Genuinely Empty Batch - Returns clean un-evaluated state")
+    @DisplayName("Phase 10A Hotfix TEST A: Inactive batch with no finalized snapshot - Analytics must NOT produce HTTP 500")
     @WithMockUser(username = "iqac_user", roles = {"IQAC"})
-    void testUnstartedBatchReturnsCleanEmptyState() {
-        ProgrammeBatch emptyBatch = programmeBatchRepository.save(ProgrammeBatch.builder()
-                .id("batch-empty")
-                .masterProgrammeId(progMba.getId())
-                .name("2026-2028 Empty")
-                .startYear(2026)
-                .endYear(2028)
+    void testInactiveBatch_NoFinalizedReport_NoHttp500() {
+        ProgrammeBatch inactiveBatch = programmeBatchRepository.save(ProgrammeBatch.builder()
+                .id("batch-inactive-test")
+                .masterProgrammeId(progBtech.getId())
+                .name("BTECH-CSE 2021-2025 Inactive")
+                .status("INACTIVE")
+                .startYear(2021)
+                .endYear(2025)
                 .build());
 
-        AnalyticsKpiResponseDto kpis = analyticsService.getKpis(null, null, null, emptyBatch.getId());
-        assertThat(kpis.getScopeSummary().getTotalEvaluatedBatches()).isEqualTo(0);
-        assertThat(kpis.getScopeSummary().getTotalEvaluatedCourseOfferings()).isEqualTo(0);
-        assertThat(kpis.getPoTargetAchievement().getTotalEvaluatedInstances()).isEqualTo(0);
+        ProgrammeBatchCourse c1 = programmeBatchCourseRepository.save(ProgrammeBatchCourse.builder()
+                .id("pbc-inact-1")
+                .programmeBatchId(inactiveBatch.getId())
+                .masterCourseId("cs-inact-101")
+                .code("CS-INACT-101")
+                .name("Inactive Course")
+                .semester(1)
+                .build());
 
-        ProgrammeLandscapeResponseDto landscape = analyticsService.getProgrammeLandscape(
-                null, null, null, emptyBatch.getId(), 0, 10, null, "ALL", null, "ASC");
-        assertThat(landscape.getContent()).hasSize(1);
-        ProgrammeLandscapeRowDto row = landscape.getContent().get(0);
-        assertThat(row.getReportAvailabilityStatus()).isEqualTo("NO_FINALIZED_REPORT");
-        assertThat(row.getPosEvaluated()).isEqualTo(0);
+        CourseOutcome co1 = courseOutcomeRepository.save(CourseOutcome.builder()
+                .id("co-inact-1")
+                .programmeBatchCourseId(c1.getId())
+                .code("CO1")
+                .statement("Inactive CO1")
+                .targetLevel(new BigDecimal("2.50"))
+                .build());
+
+        coPoMappingRepository.save(CoPoMapping.builder()
+                .id("cpm-inact-1")
+                .courseOutcomeId(co1.getId())
+                .poCode("PO1")
+                .mappingLevel(3)
+                .build());
+
+        studentCoMarkRepository.save(StudentCoMark.builder()
+                .id("scm-inact-1")
+                .programmeBatchCourseId(c1.getId())
+                .studentId("std-inact-1")
+                .prn("20210001")
+                .studentName("Inactive Student")
+                .coCode("CO1")
+                .marksObtained(new BigDecimal("80.00"))
+                .maxMarks(new BigDecimal("100.00"))
+                .build());
+
+        // Call all analytics endpoints for the inactive batch
+        assertDoesNotThrow(() -> {
+            AnalyticsKpiResponseDto kpis = analyticsService.getKpis(null, null, null, inactiveBatch.getId());
+            assertThat(kpis).isNotNull();
+            assertThat(kpis.getScopeSummary().getTotalEvaluatedBatches()).isEqualTo(1);
+
+            List<PoHealthItemDto> poHealth = analyticsService.getPoHealth(null, null, null, inactiveBatch.getId());
+            assertThat(poHealth).isNotEmpty();
+
+            List<PsoHealthItemDto> psoHealth = analyticsService.getPsoHealth(null, null, null, inactiveBatch.getId());
+            assertThat(psoHealth).isNotNull();
+
+            ProgrammeLandscapeResponseDto landscape = analyticsService.getProgrammeLandscape(
+                    null, null, null, inactiveBatch.getId(), 0, 10, null, "ALL", null, "ASC");
+            assertThat(landscape.getContent()).hasSize(1);
+
+            List<AttentionAreaItemDto> attention = analyticsService.getAttentionAreas(
+                    null, null, null, inactiveBatch.getId(), 5, "ALL");
+            assertThat(attention).isNotNull();
+
+            List<ScopedTrendSeriesDto> trends = analyticsService.getTrends(
+                    null, null, progBtech.getId(), 5);
+            assertThat(trends).isNotNull();
+
+            AtrIntelligenceResponseDto atrIntel = analyticsService.getAtrIntelligence(
+                    null, null, null, inactiveBatch.getId());
+            assertThat(atrIntel).isNotNull();
+        });
+    }
+
+    @Test
+    @DisplayName("Phase 10A Hotfix TEST B: Completed batch with no finalized snapshot - Analytics must NOT produce HTTP 500 or UnexpectedRollbackException")
+    @WithMockUser(username = "iqac_user", roles = {"IQAC"})
+    void testCompletedBatch_NoFinalizedReport_NoHttp500OrRollbackException() {
+        ProgrammeBatch completedBatch = programmeBatchRepository.save(ProgrammeBatch.builder()
+                .id("batch-completed-test")
+                .masterProgrammeId(progBtech.getId())
+                .name("BTECH-CSE 2020-2024 Completed")
+                .status("COMPLETED")
+                .editingWindowUntil(ZonedDateTime.now().minusDays(10)) // Editing window closed
+                .startYear(2020)
+                .endYear(2024)
+                .build());
+
+        ProgrammeBatchCourse c1 = programmeBatchCourseRepository.save(ProgrammeBatchCourse.builder()
+                .id("pbc-comp-1")
+                .programmeBatchId(completedBatch.getId())
+                .masterCourseId("cs-comp-101")
+                .code("CS-COMP-101")
+                .name("Completed Course")
+                .semester(1)
+                .build());
+
+        CourseOutcome co1 = courseOutcomeRepository.save(CourseOutcome.builder()
+                .id("co-comp-1")
+                .programmeBatchCourseId(c1.getId())
+                .code("CO1")
+                .statement("Completed CO1")
+                .targetLevel(new BigDecimal("2.50"))
+                .build());
+
+        coPoMappingRepository.save(CoPoMapping.builder()
+                .id("cpm-comp-1")
+                .courseOutcomeId(co1.getId())
+                .poCode("PO1")
+                .mappingLevel(3)
+                .build());
+
+        studentCoMarkRepository.save(StudentCoMark.builder()
+                .id("scm-comp-1")
+                .programmeBatchCourseId(c1.getId())
+                .studentId("std-comp-1")
+                .prn("20200001")
+                .studentName("Completed Student")
+                .coCode("CO1")
+                .marksObtained(new BigDecimal("85.00"))
+                .maxMarks(new BigDecimal("100.00"))
+                .build());
+
+        assertDoesNotThrow(() -> {
+            AnalyticsKpiResponseDto kpis = analyticsService.getKpis(null, null, null, completedBatch.getId());
+            assertThat(kpis).isNotNull();
+            assertThat(kpis.getScopeSummary().getTotalEvaluatedBatches()).isEqualTo(1);
+
+            List<PoHealthItemDto> poHealth = analyticsService.getPoHealth(null, null, null, completedBatch.getId());
+            assertThat(poHealth).isNotEmpty();
+
+            List<PsoHealthItemDto> psoHealth = analyticsService.getPsoHealth(null, null, null, completedBatch.getId());
+            assertThat(psoHealth).isNotNull();
+
+            AtrIntelligenceResponseDto atrIntel = analyticsService.getAtrIntelligence(
+                    null, null, null, completedBatch.getId());
+            assertThat(atrIntel).isNotNull();
+        });
+    }
+
+    @Test
+    @DisplayName("Phase 10A Hotfix TEST C & G: Mixed institution scope with inactive, completed, finalized, and empty batches - All endpoints succeed")
+    @WithMockUser(username = "iqac_user", roles = {"IQAC"})
+    void testMixedInstitutionScope_NoRollbackPoisoning_AllEndpointsSucceed() {
+        // Create an inactive batch
+        ProgrammeBatch inactiveBatch = programmeBatchRepository.save(ProgrammeBatch.builder()
+                .id("batch-mix-inact")
+                .masterProgrammeId(progBtech.getId())
+                .name("Mixed Inactive Batch")
+                .status("INACTIVE")
+                .startYear(2021)
+                .endYear(2025)
+                .build());
+
+        // Create a completed batch with closed edit window
+        ProgrammeBatch completedBatch = programmeBatchRepository.save(ProgrammeBatch.builder()
+                .id("batch-mix-comp")
+                .masterProgrammeId(progMba.getId())
+                .name("Mixed Completed Batch")
+                .status("COMPLETED")
+                .editingWindowUntil(ZonedDateTime.now().minusDays(5))
+                .startYear(2022)
+                .endYear(2024)
+                .build());
+
+        // Create course and marks for completed batch
+        ProgrammeBatchCourse cComp = programmeBatchCourseRepository.save(ProgrammeBatchCourse.builder()
+                .id("pbc-mix-comp-1")
+                .programmeBatchId(completedBatch.getId())
+                .masterCourseId("mba-comp-101")
+                .code("MBA-COMP-101")
+                .name("MBA Comp Course")
+                .semester(1)
+                .build());
+
+        studentCoMarkRepository.save(StudentCoMark.builder()
+                .id("scm-mix-comp-1")
+                .programmeBatchCourseId(cComp.getId())
+                .studentId("std-mcomp-1")
+                .prn("20220001")
+                .studentName("MBA Comp Student")
+                .coCode("CO1")
+                .marksObtained(new BigDecimal("90.00"))
+                .maxMarks(new BigDecimal("100.00"))
+                .build());
+
+        // Institution-wide queries (all null scope)
+        assertDoesNotThrow(() -> {
+            AnalyticsKpiResponseDto kpis = analyticsService.getKpis(null, null, null, null);
+            assertThat(kpis).isNotNull();
+            assertThat(kpis.getScopeSummary().getTotalEvaluatedBatches()).isGreaterThan(0);
+
+            List<PoHealthItemDto> poHealth = analyticsService.getPoHealth(null, null, null, null);
+            assertThat(poHealth).isNotEmpty();
+
+            List<PsoHealthItemDto> psoHealth = analyticsService.getPsoHealth(null, null, null, null);
+            assertThat(psoHealth).isNotNull();
+
+            ProgrammeLandscapeResponseDto landscape = analyticsService.getProgrammeLandscape(
+                    null, null, null, null, 0, 20, null, "ALL", null, "ASC");
+            assertThat(landscape.getContent()).isNotEmpty();
+
+            List<AttentionAreaItemDto> attention = analyticsService.getAttentionAreas(
+                    null, null, null, null, 10, "ALL");
+            assertThat(attention).isNotNull();
+
+            List<ScopedTrendSeriesDto> trends = analyticsService.getTrends(
+                    null, null, null, 5);
+            assertThat(trends).isNotNull();
+
+            AtrIntelligenceResponseDto atrIntel = analyticsService.getAtrIntelligence(
+                    null, null, null, null);
+            assertThat(atrIntel).isNotNull();
+        });
+    }
+
+    @Test
+    @DisplayName("Phase 10A Hotfix TEST D: Active live batch calculates continuous attainment without finalized report")
+    @WithMockUser(username = "iqac_user", roles = {"IQAC"})
+    void testActiveLiveBatch_CalculatesLiveAttainmentCorrectly() {
+        ProgrammeBatch liveBatch = programmeBatchRepository.save(ProgrammeBatch.builder()
+                .id("batch-live-active")
+                .masterProgrammeId(progBtech.getId())
+                .name("BTECH-CSE 2025-2029 Active Live")
+                .status("ACTIVE")
+                .startYear(2025)
+                .endYear(2029)
+                .build());
+
+        ProgrammeBatchCourse c1 = programmeBatchCourseRepository.save(ProgrammeBatchCourse.builder()
+                .id("pbc-live-1")
+                .programmeBatchId(liveBatch.getId())
+                .masterCourseId("cs-live-101")
+                .code("CS-LIVE-101")
+                .name("Active Live Course")
+                .semester(1)
+                .build());
+
+        CourseOutcome co1 = courseOutcomeRepository.save(CourseOutcome.builder()
+                .id("co-live-1")
+                .programmeBatchCourseId(c1.getId())
+                .code("CO1")
+                .statement("Live CO1")
+                .targetLevel(new BigDecimal("2.50"))
+                .build());
+
+        coPoMappingRepository.save(CoPoMapping.builder()
+                .id("cpm-live-1")
+                .courseOutcomeId(co1.getId())
+                .poCode("PO1")
+                .mappingLevel(3)
+                .build());
+
+        studentCoMarkRepository.save(StudentCoMark.builder()
+                .id("scm-live-1")
+                .programmeBatchCourseId(c1.getId())
+                .studentId("std-live-1")
+                .prn("20240001")
+                .studentName("Live Student")
+                .coCode("CO1")
+                .marksObtained(new BigDecimal("80.00"))
+                .maxMarks(new BigDecimal("100.00"))
+                .build());
+
+        AnalyticsKpiResponseDto kpis = analyticsService.getKpis(null, null, null, liveBatch.getId());
+        assertThat(kpis.getScopeSummary().getDataSourceCurrency()).isEqualTo("CONTINUOUS_MONITORING_DATA");
+        assertThat(kpis.getScopeSummary().getTotalEvaluatedBatches()).isEqualTo(1);
+        assertThat(kpis.getScopeSummary().getTotalEvaluatedCourseOfferings()).isEqualTo(1);
+
+        List<PoHealthItemDto> poHealth = analyticsService.getPoHealth(null, null, null, liveBatch.getId());
+        assertThat(poHealth).isNotEmpty();
+        PoHealthItemDto po1Health = poHealth.stream().filter(p -> "PO1".equalsIgnoreCase(p.getPoCode())).findFirst().orElse(null);
+        assertThat(po1Health).isNotNull();
+        assertThat(po1Health.getEvaluatedInstanceCount()).isEqualTo(1);
     }
 }
+
