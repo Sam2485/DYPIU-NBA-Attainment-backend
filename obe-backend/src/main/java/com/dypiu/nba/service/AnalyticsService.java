@@ -216,9 +216,27 @@ public class AnalyticsService {
                 .map(b -> resolveBatchData(b, reportMap))
                 .toList();
 
-        // Group evaluated PO instances by poCode (PO1 .. PO12)
+        // Determine max PO count across all batches in scope (minimum 12)
+        int maxPo = 12;
+        for (ResolvedBatchAnalyticsData bData : resolvedBatches) {
+            for (ProgrammeBatchAttainmentReportDto.Report4PoRow po : bData.pos) {
+                if (po.getPoCode() != null) {
+                    String c = po.getPoCode().toUpperCase().trim();
+                    if (c.matches("^PO\\d+$")) {
+                        try {
+                            int num = Integer.parseInt(c.substring(2));
+                            if (num > maxPo) {
+                                maxPo = num;
+                            }
+                        } catch (NumberFormatException ignored) {}
+                    }
+                }
+            }
+        }
+
+        // Group evaluated PO instances by poCode (PO1 .. PO{maxPo})
         Map<String, List<PoInstanceData>> poInstances = new LinkedHashMap<>();
-        for (int i = 1; i <= 12; i++) {
+        for (int i = 1; i <= maxPo; i++) {
             poInstances.put("PO" + i, new ArrayList<>());
         }
 
@@ -232,8 +250,9 @@ public class AnalyticsService {
                 if (po.getStatement() != null && !po.getStatement().isBlank()) {
                     poStatements.put(code, po.getStatement());
                 }
+                poInstances.putIfAbsent(code, new ArrayList<>());
                 if (po.getFinalAttainment() != null && po.getTargetLevel() != null) {
-                    poInstances.computeIfAbsent(code, k -> new ArrayList<>()).add(new PoInstanceData(
+                    poInstances.get(code).add(new PoInstanceData(
                             bData.batchId,
                             po.getFinalAttainment(),
                             po.getTargetLevel(),
@@ -244,10 +263,19 @@ public class AnalyticsService {
             }
         }
 
+        List<String> sortedPoKeys = new ArrayList<>(poInstances.keySet());
+        sortedPoKeys.sort((a, b) -> {
+            boolean aIsNum = a.matches("^PO\\d+$");
+            boolean bIsNum = b.matches("^PO\\d+$");
+            if (aIsNum && bIsNum) {
+                return Integer.compare(Integer.parseInt(a.substring(2)), Integer.parseInt(b.substring(2)));
+            }
+            return a.compareToIgnoreCase(b);
+        });
+
         List<PoHealthItemDto> result = new ArrayList<>();
-        for (Map.Entry<String, List<PoInstanceData>> entry : poInstances.entrySet()) {
-            String poCode = entry.getKey();
-            List<PoInstanceData> list = entry.getValue();
+        for (String poCode : sortedPoKeys) {
+            List<PoInstanceData> list = poInstances.get(poCode);
             int evaluatedCount = list.size();
             int targetMetCount = 0;
             int targetDeficitCount = 0;
@@ -342,8 +370,9 @@ public class AnalyticsService {
                 if (pso.getStatement() != null && !pso.getStatement().isBlank()) {
                     psoStatements.put(code, pso.getStatement());
                 }
+                psoInstances.putIfAbsent(code, new ArrayList<>());
                 if (pso.getFinalAttainment() != null && pso.getTargetLevel() != null) {
-                    psoInstances.computeIfAbsent(code, k -> new ArrayList<>()).add(new PoInstanceData(
+                    psoInstances.get(code).add(new PoInstanceData(
                             bData.batchId,
                             pso.getFinalAttainment(),
                             pso.getTargetLevel(),
@@ -354,10 +383,19 @@ public class AnalyticsService {
             }
         }
 
+        List<String> sortedPsoKeys = new ArrayList<>(psoInstances.keySet());
+        sortedPsoKeys.sort((a, b) -> {
+            boolean aIsNum = a.matches("^PSO\\d+$");
+            boolean bIsNum = b.matches("^PSO\\d+$");
+            if (aIsNum && bIsNum) {
+                return Integer.compare(Integer.parseInt(a.substring(3)), Integer.parseInt(b.substring(3)));
+            }
+            return a.compareToIgnoreCase(b);
+        });
+
         List<PsoHealthItemDto> result = new ArrayList<>();
-        for (Map.Entry<String, List<PoInstanceData>> entry : psoInstances.entrySet()) {
-            String psoCode = entry.getKey();
-            List<PoInstanceData> list = entry.getValue();
+        for (String psoCode : sortedPsoKeys) {
+            List<PoInstanceData> list = psoInstances.get(psoCode);
             int evaluatedCount = list.size();
             int targetMetCount = 0;
             int targetDeficitCount = 0;
