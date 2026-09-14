@@ -1,7 +1,9 @@
 package com.dypiu.nba.service;
 
 import com.dypiu.nba.dto.CourseAttainmentReportDto;
+import com.dypiu.nba.dto.CourseMappingMatrixDto;
 import com.dypiu.nba.dto.ProgrammeAtrReportDto;
+import com.dypiu.nba.dto.ProgrammeAttainmentResultDto;
 import com.dypiu.nba.dto.ProgrammeBatchAttainmentReportDto;
 import com.dypiu.nba.dto.analytics.*;
 import com.dypiu.nba.entity.*;
@@ -42,6 +44,8 @@ public class AnalyticsService {
     private final ProgrammeAtrRepository programmeAtrRepository;
     private final ProgrammeOutcomeRepository programmeOutcomeRepository;
     private final ProgrammeSpecificOutcomeRepository programmeSpecificOutcomeRepository;
+    private final AttainmentCalculationService attainmentCalculationService;
+    private final OutcomeService outcomeService;
     private final CurrentUserScopeService currentUserScopeService;
     private final ObjectMapper objectMapper;
 
@@ -58,15 +62,19 @@ public class AnalyticsService {
         long totalDepts = scope.departmentId != null ? 1 : (scope.schoolId != null ? departmentRepository.findBySchoolId(scope.schoolId).size() : departmentRepository.count());
         long totalProgs = scope.masterProgrammeId != null ? 1 : (scope.departmentId != null ? masterProgrammeRepository.findByDepartmentIdAndDeletedAtIsNull(scope.departmentId).size() : masterProgrammeRepository.count());
 
-        List<ProgrammeBatchAttainmentReport> finalizedReports = getFinalizedReports(batchIds);
-        long totalEvaluatedBatches = finalizedReports.size();
+        Map<String, ProgrammeBatchAttainmentReport> reportMap = batchIds.isEmpty() ? Collections.emptyMap() :
+                programmeBatchAttainmentReportRepository.findByProgrammeBatchIdIn(batchIds).stream()
+                        .collect(Collectors.toMap(ProgrammeBatchAttainmentReport::getProgrammeBatchId, r -> r, (a, b) -> a));
 
-        List<String> courseOfferingIds = batchIds.isEmpty() ? Collections.emptyList() :
-                programmeBatchCourseRepository.findByProgrammeBatchIdIn(batchIds).stream().map(ProgrammeBatchCourse::getId).toList();
-        long totalEvaluatedCourses = courseOfferingIds.isEmpty() ? 0 :
-                courseAttainmentReportRepository.findByProgrammeBatchCourseIdIn(courseOfferingIds).stream()
-                        .filter(r -> r.getStatus() == ReportStatus.FINALIZED || r.getStatus() == ReportStatus.APPROVED)
-                        .count();
+        List<ResolvedBatchAnalyticsData> resolvedBatches = batchesInScope.stream()
+                .map(b -> resolveBatchData(b, reportMap))
+                .toList();
+
+        long totalEvaluatedBatches = resolvedBatches.stream().filter(r -> r.hasActiveData).count();
+        long totalEvaluatedCourses = resolvedBatches.stream().mapToLong(r -> r.totalEvaluatedCourses).sum();
+
+        boolean allFinalized = totalEvaluatedBatches > 0 && resolvedBatches.stream().filter(r -> r.hasActiveData).allMatch(r -> r.isFinalized);
+        String currency = totalEvaluatedBatches == 0 ? "NO_EVALUATED_DATA" : (allFinalized ? "FINALIZED_EVALUATED_DATA" : "CONTINUOUS_MONITORING_DATA");
 
         AnalyticsKpiResponseDto.ScopeSummary scopeSummary = AnalyticsKpiResponseDto.ScopeSummary.builder()
                 .totalSchools(totalSchools)
@@ -74,7 +82,7 @@ public class AnalyticsService {
                 .totalMasterProgrammes(totalProgs)
                 .totalEvaluatedBatches(totalEvaluatedBatches)
                 .totalEvaluatedCourseOfferings(totalEvaluatedCourses)
-                .dataSourceCurrency("FINALIZED_EVALUATED_DATA")
+                .dataSourceCurrency(currency)
                 .build();
 
         // 2. PO & PSO Target Achievement
@@ -90,15 +98,14 @@ public class AnalyticsService {
         int cohortsWithGaps = 0;
         int totalEvaluatedCohorts = 0;
 
-        for (ProgrammeBatchAttainmentReport report : finalizedReports) {
-            ParsedReport parsed = parseReport(report);
-            if (parsed.pos.isEmpty() && parsed.psos.isEmpty()) {
+        for (ResolvedBatchAnalyticsData bData : resolvedBatches) {
+            if (!bData.hasActiveData) {
                 continue;
             }
             totalEvaluatedCohorts++;
             boolean cohortHasGap = false;
 
-            for (ProgrammeBatchAttainmentReportDto.Report4PoRow po : parsed.pos) {
+            for (ProgrammeBatchAttainmentReportDto.Report4PoRow po : bData.pos) {
                 if (po.getFinalAttainment() == null || po.getTargetLevel() == null) continue;
                 poTotalEvaluated++;
                 boolean met = po.getFinalAttainment().compareTo(po.getTargetLevel()) >= 0;
@@ -110,7 +117,7 @@ public class AnalyticsService {
                 }
             }
 
-            for (ProgrammeBatchAttainmentReportDto.Report4PsoRow pso : parsed.psos) {
+            for (ProgrammeBatchAttainmentReportDto.Report4PsoRow pso : bData.psos) {
                 if (pso.getFinalAttainment() == null || pso.getTargetLevel() == null) continue;
                 psoTotalEvaluated++;
                 boolean met = pso.getFinalAttainment().compareTo(pso.getTargetLevel()) >= 0;
@@ -200,7 +207,14 @@ public class AnalyticsService {
         ResolvedScope scope = validateAndResolveScope(schoolId, departmentId, masterProgrammeId, programmeBatchId);
         List<ProgrammeBatch> batchesInScope = getBatchesInScope(scope);
         List<String> batchIds = batchesInScope.stream().map(ProgrammeBatch::getId).toList();
-        List<ProgrammeBatchAttainmentReport> finalizedReports = getFinalizedReports(batchIds);
+
+        Map<String, ProgrammeBatchAttainmentReport> reportMap = batchIds.isEmpty() ? Collections.emptyMap() :
+                programmeBatchAttainmentReportRepository.findByProgrammeBatchIdIn(batchIds).stream()
+                        .collect(Collectors.toMap(ProgrammeBatchAttainmentReport::getProgrammeBatchId, r -> r, (a, b) -> a));
+
+        List<ResolvedBatchAnalyticsData> resolvedBatches = batchesInScope.stream()
+                .map(b -> resolveBatchData(b, reportMap))
+                .toList();
 
         // Group evaluated PO instances by poCode (PO1 .. PO12)
         Map<String, List<PoInstanceData>> poInstances = new LinkedHashMap<>();
@@ -210,9 +224,9 @@ public class AnalyticsService {
 
         Map<String, String> poStatements = new HashMap<>();
 
-        for (ProgrammeBatchAttainmentReport report : finalizedReports) {
-            ParsedReport parsed = parseReport(report);
-            for (ProgrammeBatchAttainmentReportDto.Report4PoRow po : parsed.pos) {
+        for (ResolvedBatchAnalyticsData bData : resolvedBatches) {
+            if (!bData.hasActiveData) continue;
+            for (ProgrammeBatchAttainmentReportDto.Report4PoRow po : bData.pos) {
                 if (po.getPoCode() == null) continue;
                 String code = po.getPoCode().toUpperCase().trim();
                 if (po.getStatement() != null && !po.getStatement().isBlank()) {
@@ -220,7 +234,7 @@ public class AnalyticsService {
                 }
                 if (po.getFinalAttainment() != null && po.getTargetLevel() != null) {
                     poInstances.computeIfAbsent(code, k -> new ArrayList<>()).add(new PoInstanceData(
-                            report.getProgrammeBatchId(),
+                            bData.batchId,
                             po.getFinalAttainment(),
                             po.getTargetLevel(),
                             po.getDirectAttainment() != null ? po.getDirectAttainment() : BigDecimal.ZERO,
@@ -308,14 +322,21 @@ public class AnalyticsService {
         ResolvedScope scope = validateAndResolveScope(schoolId, departmentId, masterProgrammeId, programmeBatchId);
         List<ProgrammeBatch> batchesInScope = getBatchesInScope(scope);
         List<String> batchIds = batchesInScope.stream().map(ProgrammeBatch::getId).toList();
-        List<ProgrammeBatchAttainmentReport> finalizedReports = getFinalizedReports(batchIds);
+
+        Map<String, ProgrammeBatchAttainmentReport> reportMap = batchIds.isEmpty() ? Collections.emptyMap() :
+                programmeBatchAttainmentReportRepository.findByProgrammeBatchIdIn(batchIds).stream()
+                        .collect(Collectors.toMap(ProgrammeBatchAttainmentReport::getProgrammeBatchId, r -> r, (a, b) -> a));
+
+        List<ResolvedBatchAnalyticsData> resolvedBatches = batchesInScope.stream()
+                .map(b -> resolveBatchData(b, reportMap))
+                .toList();
 
         Map<String, List<PoInstanceData>> psoInstances = new LinkedHashMap<>();
         Map<String, String> psoStatements = new HashMap<>();
 
-        for (ProgrammeBatchAttainmentReport report : finalizedReports) {
-            ParsedReport parsed = parseReport(report);
-            for (ProgrammeBatchAttainmentReportDto.Report4PsoRow pso : parsed.psos) {
+        for (ResolvedBatchAnalyticsData bData : resolvedBatches) {
+            if (!bData.hasActiveData) continue;
+            for (ProgrammeBatchAttainmentReportDto.Report4PsoRow pso : bData.psos) {
                 if (pso.getPsoCode() == null) continue;
                 String code = pso.getPsoCode().toUpperCase().trim();
                 if (pso.getStatement() != null && !pso.getStatement().isBlank()) {
@@ -323,7 +344,7 @@ public class AnalyticsService {
                 }
                 if (pso.getFinalAttainment() != null && pso.getTargetLevel() != null) {
                     psoInstances.computeIfAbsent(code, k -> new ArrayList<>()).add(new PoInstanceData(
-                            report.getProgrammeBatchId(),
+                            bData.batchId,
                             pso.getFinalAttainment(),
                             pso.getTargetLevel(),
                             pso.getDirectAttainment() != null ? pso.getDirectAttainment() : BigDecimal.ZERO,
@@ -415,11 +436,13 @@ public class AnalyticsService {
         List<ProgrammeBatch> allBatches = getBatchesInScope(scope);
         List<String> batchIds = allBatches.stream().map(ProgrammeBatch::getId).toList();
 
-        Map<String, ProgrammeBatchAttainmentReport> reportMap = programmeBatchAttainmentReportRepository.findByProgrammeBatchIdIn(batchIds).stream()
-                .collect(Collectors.toMap(ProgrammeBatchAttainmentReport::getProgrammeBatchId, r -> r, (a, b) -> a));
+        Map<String, ProgrammeBatchAttainmentReport> reportMap = batchIds.isEmpty() ? Collections.emptyMap() :
+                programmeBatchAttainmentReportRepository.findByProgrammeBatchIdIn(batchIds).stream()
+                        .collect(Collectors.toMap(ProgrammeBatchAttainmentReport::getProgrammeBatchId, r -> r, (a, b) -> a));
 
-        Map<String, ProgrammeAtr> atrMap = programmeAtrRepository.findByProgrammeBatchIdIn(batchIds).stream()
-                .collect(Collectors.toMap(ProgrammeAtr::getProgrammeBatchId, a -> a, (a, b) -> a));
+        Map<String, ProgrammeAtr> atrMap = batchIds.isEmpty() ? Collections.emptyMap() :
+                programmeAtrRepository.findByProgrammeBatchIdIn(batchIds).stream()
+                        .collect(Collectors.toMap(ProgrammeAtr::getProgrammeBatchId, a -> a, (a, b) -> a));
 
         Map<String, MasterProgramme> progMap = masterProgrammeRepository.findAll().stream()
                 .collect(Collectors.toMap(MasterProgramme::getId, p -> p, (a, b) -> a));
@@ -440,12 +463,11 @@ public class AnalyticsService {
             ProgrammeBatchAttainmentReport report = reportMap.get(batch.getId());
             ProgrammeAtr atr = atrMap.get(batch.getId());
 
-            boolean isFinalized = report != null && (report.getStatus() == ReportStatus.FINALIZED || report.getStatus() == ReportStatus.APPROVED);
-            ParsedReport parsed = (isFinalized && report != null) ? parseReport(report) : new ParsedReport(Collections.emptyList(), Collections.emptyList());
+            ResolvedBatchAnalyticsData bData = resolveBatchData(batch, reportMap);
 
             int posEvaluated = 0;
             int posMet = 0;
-            for (ProgrammeBatchAttainmentReportDto.Report4PoRow po : parsed.pos) {
+            for (ProgrammeBatchAttainmentReportDto.Report4PoRow po : bData.pos) {
                 if (po.getFinalAttainment() != null && po.getTargetLevel() != null) {
                     posEvaluated++;
                     if (po.getFinalAttainment().compareTo(po.getTargetLevel()) >= 0) {
@@ -456,7 +478,7 @@ public class AnalyticsService {
 
             int psosEvaluated = 0;
             int psosMet = 0;
-            for (ProgrammeBatchAttainmentReportDto.Report4PsoRow pso : parsed.psos) {
+            for (ProgrammeBatchAttainmentReportDto.Report4PsoRow pso : bData.psos) {
                 if (pso.getFinalAttainment() != null && pso.getTargetLevel() != null) {
                     psosEvaluated++;
                     if (pso.getFinalAttainment().compareTo(pso.getTargetLevel()) >= 0) {
@@ -468,7 +490,7 @@ public class AnalyticsService {
             int gapCount = (posEvaluated - posMet) + (psosEvaluated - psosMet);
             boolean hasGaps = gapCount > 0;
 
-            String reportAvailability = isFinalized ? "FINALIZED_REPORT_AVAILABLE" : "NO_FINALIZED_REPORT";
+            String reportAvailability = bData.isFinalized ? "FINALIZED_REPORT_AVAILABLE" : (bData.hasActiveData ? "IN_PROGRESS_MONITORING" : "NO_FINALIZED_REPORT");
             String atrStatusStr = atr != null && atr.getStatus() != null ? atr.getStatus().name() : "NOT_RECORDED";
             ZonedDateTime finalizedTimestamp = (report != null && report.getApprovedAt() != null) ? report.getApprovedAt() : (report != null ? report.getUpdatedAt() : null);
 
@@ -494,7 +516,7 @@ public class AnalyticsService {
                     .gapCount(gapCount)
                     .hasGaps(hasGaps)
                     .reportAvailabilityStatus(reportAvailability)
-                    .underlyingReportStatus(report != null ? report.getStatus() : null)
+                    .underlyingReportStatus(bData.reportStatus)
                     .atrStatus(atrStatusStr)
                     .finalizedAt(finalizedTimestamp)
                     .build();
@@ -511,11 +533,15 @@ public class AnalyticsService {
 
             // Status filter
             if (statusFilter != null && !statusFilter.isBlank() && !statusFilter.equalsIgnoreCase("ALL")) {
-                if (statusFilter.equalsIgnoreCase("ALL_TARGETS_MET") && (!isFinalized || hasGaps)) {
+                if (statusFilter.equalsIgnoreCase("ALL_TARGETS_MET") && (!bData.hasActiveData || hasGaps)) {
                     continue;
-                } else if (statusFilter.equalsIgnoreCase("HAS_GAPS") && (!isFinalized || !hasGaps)) {
+                } else if (statusFilter.equalsIgnoreCase("HAS_GAPS") && (!bData.hasActiveData || !hasGaps)) {
                     continue;
-                } else if (statusFilter.equalsIgnoreCase("NO_FINALIZED_REPORT") && isFinalized) {
+                } else if (statusFilter.equalsIgnoreCase("NO_FINALIZED_REPORT") && bData.isFinalized) {
+                    continue;
+                } else if (statusFilter.equalsIgnoreCase("FINALIZED") && !bData.isFinalized) {
+                    continue;
+                } else if (statusFilter.equalsIgnoreCase("IN_PROGRESS") && (bData.isFinalized || !bData.hasActiveData)) {
                     continue;
                 }
             }
@@ -576,7 +602,6 @@ public class AnalyticsService {
         ResolvedScope scope = validateAndResolveScope(schoolId, departmentId, masterProgrammeId, programmeBatchId);
         List<ProgrammeBatch> batchesInScope = getBatchesInScope(scope);
         List<String> batchIds = batchesInScope.stream().map(ProgrammeBatch::getId).toList();
-        List<ProgrammeBatchAttainmentReport> finalizedReports = getFinalizedReports(batchIds);
 
         Map<String, MasterProgramme> progMap = masterProgrammeRepository.findAll().stream()
                 .collect(Collectors.toMap(MasterProgramme::getId, p -> p, (a, b) -> a));
@@ -584,21 +609,27 @@ public class AnalyticsService {
                 .collect(Collectors.toMap(Department::getId, d -> d, (a, b) -> a));
         Map<String, ProgrammeBatch> batchMap = batchesInScope.stream()
                 .collect(Collectors.toMap(ProgrammeBatch::getId, b -> b, (a, b) -> a));
-        Map<String, ProgrammeAtr> atrMap = programmeAtrRepository.findByProgrammeBatchIdIn(batchIds).stream()
-                .collect(Collectors.toMap(ProgrammeAtr::getProgrammeBatchId, a -> a, (a, b) -> a));
+        Map<String, ProgrammeAtr> atrMap = batchIds.isEmpty() ? Collections.emptyMap() :
+                programmeAtrRepository.findByProgrammeBatchIdIn(batchIds).stream()
+                        .collect(Collectors.toMap(ProgrammeAtr::getProgrammeBatchId, a -> a, (a, b) -> a));
+
+        Map<String, ProgrammeBatchAttainmentReport> reportMap = batchIds.isEmpty() ? Collections.emptyMap() :
+                programmeBatchAttainmentReportRepository.findByProgrammeBatchIdIn(batchIds).stream()
+                        .collect(Collectors.toMap(ProgrammeBatchAttainmentReport::getProgrammeBatchId, r -> r, (a, b) -> a));
 
         List<AttentionAreaItemDto> allDeficits = new ArrayList<>();
 
-        for (ProgrammeBatchAttainmentReport report : finalizedReports) {
-            ParsedReport parsed = parseReport(report);
-            ProgrammeBatch batch = batchMap.get(report.getProgrammeBatchId());
-            MasterProgramme prog = batch != null ? progMap.get(batch.getMasterProgrammeId()) : null;
+        for (ProgrammeBatch batch : batchesInScope) {
+            ResolvedBatchAnalyticsData bData = resolveBatchData(batch, reportMap);
+            if (!bData.hasActiveData) continue;
+
+            MasterProgramme prog = progMap.get(batch.getMasterProgrammeId());
             Department dept = prog != null && prog.getDepartmentId() != null ? deptMap.get(prog.getDepartmentId()) : null;
-            ProgrammeAtr atr = atrMap.get(report.getProgrammeBatchId());
+            ProgrammeAtr atr = atrMap.get(batch.getId());
 
             // Process PO deficits
             if (outcomeType == null || outcomeType.equalsIgnoreCase("ALL") || outcomeType.equalsIgnoreCase("PO")) {
-                for (ProgrammeBatchAttainmentReportDto.Report4PoRow po : parsed.pos) {
+                for (ProgrammeBatchAttainmentReportDto.Report4PoRow po : bData.pos) {
                     if (po.getFinalAttainment() != null && po.getTargetLevel() != null) {
                         BigDecimal gap = po.getFinalAttainment().subtract(po.getTargetLevel()).setScale(2, RoundingMode.HALF_UP);
                         if (gap.compareTo(BigDecimal.ZERO) < 0) {
@@ -607,12 +638,12 @@ public class AnalyticsService {
                                     : BigDecimal.ZERO;
 
                             allDeficits.add(AttentionAreaItemDto.builder()
-                                    .id(report.getProgrammeBatchId() + "_" + po.getPoCode())
+                                    .id(batch.getId() + "_" + po.getPoCode())
                                     .masterProgrammeId(prog != null ? prog.getId() : "")
                                     .programmeName(prog != null ? prog.getName() : "")
                                     .programmeCode(prog != null ? prog.getCode() : "")
-                                    .programmeBatchId(report.getProgrammeBatchId())
-                                    .batchName(batch != null ? batch.getName() : "")
+                                    .programmeBatchId(batch.getId())
+                                    .batchName(batch.getName())
                                     .departmentName(dept != null ? dept.getName() : "")
                                     .outcomeCode(po.getPoCode())
                                     .outcomeType("PO")
@@ -633,7 +664,7 @@ public class AnalyticsService {
 
             // Process PSO deficits
             if (outcomeType == null || outcomeType.equalsIgnoreCase("ALL") || outcomeType.equalsIgnoreCase("PSO")) {
-                for (ProgrammeBatchAttainmentReportDto.Report4PsoRow pso : parsed.psos) {
+                for (ProgrammeBatchAttainmentReportDto.Report4PsoRow pso : bData.psos) {
                     if (pso.getFinalAttainment() != null && pso.getTargetLevel() != null) {
                         BigDecimal gap = pso.getFinalAttainment().subtract(pso.getTargetLevel()).setScale(2, RoundingMode.HALF_UP);
                         if (gap.compareTo(BigDecimal.ZERO) < 0) {
@@ -642,12 +673,12 @@ public class AnalyticsService {
                                     : BigDecimal.ZERO;
 
                             allDeficits.add(AttentionAreaItemDto.builder()
-                                    .id(report.getProgrammeBatchId() + "_" + pso.getPsoCode())
+                                    .id(batch.getId() + "_" + pso.getPsoCode())
                                     .masterProgrammeId(prog != null ? prog.getId() : "")
                                     .programmeName(prog != null ? prog.getName() : "")
                                     .programmeCode(prog != null ? prog.getCode() : "")
-                                    .programmeBatchId(report.getProgrammeBatchId())
-                                    .batchName(batch != null ? batch.getName() : "")
+                                    .programmeBatchId(batch.getId())
+                                    .batchName(batch.getName())
                                     .departmentName(dept != null ? dept.getName() : "")
                                     .outcomeCode(pso.getPsoCode())
                                     .outcomeType("PSO")
@@ -696,14 +727,87 @@ public class AnalyticsService {
 
         for (ProgrammeBatchCourse course : courses) {
             CourseAttainmentReport cReport = reportMap.get(course.getId());
-            if (cReport == null) continue;
+            List<CourseAttainmentReportDto.Table1Row> table1 = null;
+            List<CourseAttainmentReportDto.Table3Row> table3 = null;
 
-            // Parse Table 1 mapping to see if this course maps to the outcome
-            List<CourseAttainmentReportDto.Table1Row> table1 = parseTable1Mapping(cReport.getTable1MappingJson());
-            List<CourseAttainmentReportDto.Table3Row> table3 = parseTable3CoAttainments(cReport.getTable3CoAttainmentJson());
+            BigDecimal defaultOverall = BigDecimal.ZERO;
+            BigDecimal defaultDirect = BigDecimal.ZERO;
+            BigDecimal defaultIndirect = BigDecimal.ZERO;
 
-            Map<String, CourseAttainmentReportDto.Table3Row> t3Map = table3.stream()
-                    .collect(Collectors.toMap(t -> t.getCoCode() != null ? t.getCoCode().toUpperCase().trim() : "", t -> t, (a, b) -> a));
+            if (cReport != null) {
+                table1 = parseTable1Mapping(cReport.getTable1MappingJson());
+                table3 = parseTable3CoAttainments(cReport.getTable3CoAttainmentJson());
+                defaultOverall = cReport.getOverallCoAttainment();
+                defaultDirect = cReport.getDirectAttainment();
+                defaultIndirect = cReport.getIndirectAttainment();
+            } else {
+                try {
+                    CourseMappingMatrixDto matrixDto = outcomeService.getCourseMappings(course.getId());
+                    if (matrixDto != null && matrixDto.getMatrix() != null) {
+                        table1 = new ArrayList<>();
+                        for (Map.Entry<String, Map<String, Integer>> entry : matrixDto.getMatrix().entrySet()) {
+                            String coCode = entry.getKey();
+                            Map<String, Integer> rowMap = entry.getValue();
+                            Map<String, Integer> poMap = new LinkedHashMap<>();
+                            Map<String, Integer> psoMap = new LinkedHashMap<>();
+                            if (rowMap != null) {
+                                for (Map.Entry<String, Integer> mEntry : rowMap.entrySet()) {
+                                    String k = mEntry.getKey().toUpperCase().trim();
+                                    if (k.startsWith("PSO")) {
+                                        psoMap.put(k, mEntry.getValue());
+                                    } else if (k.startsWith("PO")) {
+                                        poMap.put(k, mEntry.getValue());
+                                    }
+                                }
+                            }
+                            table1.add(CourseAttainmentReportDto.Table1Row.builder()
+                                    .coCode(coCode)
+                                    .poMappings(poMap)
+                                    .psoMappings(psoMap)
+                                    .build());
+                        }
+                    }
+
+                    Map<String, Object> calc = attainmentCalculationService.calculateCourseCoAttainment(course.getId());
+                    if (calc != null) {
+                        if (calc.get("overallCoAttainment") instanceof BigDecimal b) defaultOverall = b;
+                        if (calc.get("directAttainment") instanceof BigDecimal b) defaultDirect = b;
+                        if (calc.get("indirectAttainment") instanceof BigDecimal b) defaultIndirect = b;
+
+                        Object coAttObj = calc.get("coAttainment");
+                        if (coAttObj instanceof List<?> list) {
+                            table3 = new ArrayList<>();
+                            for (Object o : list) {
+                                if (o instanceof Map<?, ?> m) {
+                                    String cCode = m.get("coCode") != null ? m.get("coCode").toString() : null;
+                                    String cStmt = m.get("statement") != null ? m.get("statement").toString() : null;
+                                    BigDecimal finAtt = m.get("finalAttainment") instanceof BigDecimal b ? b : (m.get("finalAttainment") instanceof Number n ? BigDecimal.valueOf(n.doubleValue()) : null);
+                                    Integer dirLvl = m.get("directLevel") instanceof Integer i ? i : (m.get("directLevel") instanceof Number n ? n.intValue() : null);
+                                    Integer indLvl = m.get("indirectLevel") instanceof Integer i ? i : (m.get("indirectLevel") instanceof Number n ? n.intValue() : null);
+                                    BigDecimal tgt = m.get("target") instanceof BigDecimal b ? b : (m.get("target") instanceof Number n ? BigDecimal.valueOf(n.doubleValue()) : null);
+                                    Boolean tgtMet = m.get("targetMet") instanceof Boolean b ? b : null;
+
+                                    table3.add(CourseAttainmentReportDto.Table3Row.builder()
+                                            .coCode(cCode)
+                                            .statement(cStmt)
+                                            .finalAttainment(finAtt)
+                                            .directLevel(dirLvl)
+                                            .indirectLevel(indLvl)
+                                            .targetLevel(tgt)
+                                            .targetMet(tgtMet)
+                                            .build());
+                                }
+                            }
+                        }
+                    }
+                } catch (Exception ignored) {}
+            }
+
+            if (table1 == null || table1.isEmpty()) continue;
+
+            Map<String, CourseAttainmentReportDto.Table3Row> t3Map = (table3 != null) ? table3.stream()
+                    .collect(Collectors.toMap(t -> t.getCoCode() != null ? t.getCoCode().toUpperCase().trim() : "", t -> t, (a, b) -> a))
+                    : Collections.emptyMap();
 
             for (CourseAttainmentReportDto.Table1Row t1 : table1) {
                 if (t1.getCoCode() == null) continue;
@@ -717,9 +821,9 @@ public class AnalyticsService {
 
                 if (strength != null && strength > 0) {
                     CourseAttainmentReportDto.Table3Row t3 = t3Map.get(coCode);
-                    BigDecimal coOverall = t3 != null && t3.getFinalAttainment() != null ? t3.getFinalAttainment() : cReport.getOverallCoAttainment();
-                    BigDecimal coDirect = t3 != null && t3.getDirectLevel() != null ? BigDecimal.valueOf(t3.getDirectLevel()) : cReport.getDirectAttainment();
-                    BigDecimal coIndirect = t3 != null && t3.getIndirectLevel() != null ? BigDecimal.valueOf(t3.getIndirectLevel()) : cReport.getIndirectAttainment();
+                    BigDecimal coOverall = t3 != null && t3.getFinalAttainment() != null ? t3.getFinalAttainment() : defaultOverall;
+                    BigDecimal coDirect = t3 != null && t3.getDirectLevel() != null ? BigDecimal.valueOf(t3.getDirectLevel()) : defaultDirect;
+                    BigDecimal coIndirect = t3 != null && t3.getIndirectLevel() != null ? BigDecimal.valueOf(t3.getIndirectLevel()) : defaultIndirect;
                     BigDecimal coTarget = t3 != null && t3.getTargetLevel() != null ? t3.getTargetLevel() : BigDecimal.valueOf(2.00);
                     Boolean targetMet = t3 != null ? t3.getTargetMet() : (coOverall != null && coTarget != null && coOverall.compareTo(coTarget) >= 0);
 
@@ -970,8 +1074,9 @@ public class AnalyticsService {
                 .collect(Collectors.toMap(MasterProgramme::getId, p -> p, (a, b) -> a));
 
         List<String> batchIds = batchesInScope.stream().map(ProgrammeBatch::getId).toList();
-        Map<String, ProgrammeBatchAttainmentReport> reportMap = getFinalizedReports(batchIds).stream()
-                .collect(Collectors.toMap(ProgrammeBatchAttainmentReport::getProgrammeBatchId, r -> r, (a, b) -> a));
+        Map<String, ProgrammeBatchAttainmentReport> reportMap = batchIds.isEmpty() ? Collections.emptyMap() :
+                programmeBatchAttainmentReportRepository.findByProgrammeBatchIdIn(batchIds).stream()
+                        .collect(Collectors.toMap(ProgrammeBatchAttainmentReport::getProgrammeBatchId, r -> r, (a, b) -> a));
 
         List<ScopedTrendSeriesDto> seriesList = new ArrayList<>();
 
@@ -981,29 +1086,29 @@ public class AnalyticsService {
             String progName = prog != null ? prog.getName() : "Programme " + progId;
 
             List<ProgrammeBatch> pBatches = entry.getValue().stream()
-                    .filter(b -> reportMap.containsKey(b.getId()))
                     .sorted(Comparator.comparing((ProgrammeBatch b) -> b.getStartYear() != null ? b.getStartYear() : 0))
                     .collect(Collectors.toList());
 
-            // If numCohorts is explicitly requested, slice to the last numCohorts; otherwise return all available finalized cohorts
-            if (numCohorts != null && numCohorts > 0 && pBatches.size() > numCohorts) {
-                pBatches = pBatches.subList(pBatches.size() - numCohorts, pBatches.size());
+            List<ResolvedBatchAnalyticsData> resolvedProgBatches = pBatches.stream()
+                    .map(b -> resolveBatchData(b, reportMap))
+                    .filter(r -> r.hasActiveData)
+                    .collect(Collectors.toList());
+
+            // If numCohorts is explicitly requested, slice to the last numCohorts; otherwise return all available cohorts
+            if (numCohorts != null && numCohorts > 0 && resolvedProgBatches.size() > numCohorts) {
+                resolvedProgBatches = resolvedProgBatches.subList(resolvedProgBatches.size() - numCohorts, resolvedProgBatches.size());
             }
 
             List<CohortOutcomeDataPointDto> points = new ArrayList<>();
-            for (ProgrammeBatch batch : pBatches) {
-                ProgrammeBatchAttainmentReport report = reportMap.get(batch.getId());
-                if (report == null) continue;
-                ParsedReport parsed = parseReport(report);
-
-                for (ProgrammeBatchAttainmentReportDto.Report4PoRow po : parsed.pos) {
+            for (ResolvedBatchAnalyticsData bData : resolvedProgBatches) {
+                for (ProgrammeBatchAttainmentReportDto.Report4PoRow po : bData.pos) {
                     if (po.getFinalAttainment() != null && po.getTargetLevel() != null) {
                         BigDecimal gap = po.getFinalAttainment().subtract(po.getTargetLevel()).setScale(2, RoundingMode.HALF_UP);
                         points.add(CohortOutcomeDataPointDto.builder()
-                                .programmeBatchId(batch.getId())
-                                .batchName(batch.getName())
-                                .startYear(batch.getStartYear())
-                                .endYear(batch.getEndYear())
+                                .programmeBatchId(bData.batchId)
+                                .batchName(bData.batchName)
+                                .startYear(bData.startYear)
+                                .endYear(bData.endYear)
                                 .outcomeCode(po.getPoCode())
                                 .configuredTarget(po.getTargetLevel())
                                 .overallAttainment(po.getFinalAttainment())
@@ -1015,14 +1120,14 @@ public class AnalyticsService {
                     }
                 }
 
-                for (ProgrammeBatchAttainmentReportDto.Report4PsoRow pso : parsed.psos) {
+                for (ProgrammeBatchAttainmentReportDto.Report4PsoRow pso : bData.psos) {
                     if (pso.getFinalAttainment() != null && pso.getTargetLevel() != null) {
                         BigDecimal gap = pso.getFinalAttainment().subtract(pso.getTargetLevel()).setScale(2, RoundingMode.HALF_UP);
                         points.add(CohortOutcomeDataPointDto.builder()
-                                .programmeBatchId(batch.getId())
-                                .batchName(batch.getName())
-                                .startYear(batch.getStartYear())
-                                .endYear(batch.getEndYear())
+                                .programmeBatchId(bData.batchId)
+                                .batchName(bData.batchName)
+                                .startYear(bData.startYear)
+                                .endYear(bData.endYear)
                                 .outcomeCode(pso.getPsoCode())
                                 .configuredTarget(pso.getTargetLevel())
                                 .overallAttainment(pso.getFinalAttainment())
@@ -1057,9 +1162,12 @@ public class AnalyticsService {
         ResolvedScope scope = validateAndResolveScope(schoolId, departmentId, masterProgrammeId, programmeBatchId);
         List<ProgrammeBatch> batchesInScope = getBatchesInScope(scope);
         List<String> batchIds = batchesInScope.stream().map(ProgrammeBatch::getId).toList();
-        List<ProgrammeBatchAttainmentReport> finalizedReports = getFinalizedReports(batchIds);
 
-        List<ProgrammeAtr> atrsInScope = programmeAtrRepository.findByProgrammeBatchIdIn(batchIds);
+        Map<String, ProgrammeBatchAttainmentReport> reportMap = batchIds.isEmpty() ? Collections.emptyMap() :
+                programmeBatchAttainmentReportRepository.findByProgrammeBatchIdIn(batchIds).stream()
+                        .collect(Collectors.toMap(ProgrammeBatchAttainmentReport::getProgrammeBatchId, r -> r, (a, b) -> a));
+
+        List<ProgrammeAtr> atrsInScope = batchIds.isEmpty() ? Collections.emptyList() : programmeAtrRepository.findByProgrammeBatchIdIn(batchIds);
         Map<String, ProgrammeAtr> atrMap = atrsInScope.stream()
                 .collect(Collectors.toMap(ProgrammeAtr::getProgrammeBatchId, a -> a, (a, b) -> a));
 
@@ -1098,15 +1206,16 @@ public class AnalyticsService {
 
         List<AtrGapDetailDto> gapRecords = new ArrayList<>();
 
-        for (ProgrammeBatchAttainmentReport report : finalizedReports) {
-            ParsedReport parsed = parseReport(report);
-            ProgrammeBatch batch = batchMap.get(report.getProgrammeBatchId());
-            MasterProgramme prog = batch != null ? progMap.get(batch.getMasterProgrammeId()) : null;
+        for (ProgrammeBatch batch : batchesInScope) {
+            ResolvedBatchAnalyticsData bData = resolveBatchData(batch, reportMap);
+            if (!bData.hasActiveData) continue;
+
+            MasterProgramme prog = progMap.get(batch.getMasterProgrammeId());
             Department dept = prog != null && prog.getDepartmentId() != null ? deptMap.get(prog.getDepartmentId()) : null;
-            ProgrammeAtr atr = atrMap.get(report.getProgrammeBatchId());
+            ProgrammeAtr atr = atrMap.get(batch.getId());
 
             // Process PO gaps
-            for (ProgrammeBatchAttainmentReportDto.Report4PoRow po : parsed.pos) {
+            for (ProgrammeBatchAttainmentReportDto.Report4PoRow po : bData.pos) {
                 if (po.getFinalAttainment() != null && po.getTargetLevel() != null) {
                     BigDecimal gap = po.getFinalAttainment().subtract(po.getTargetLevel()).setScale(2, RoundingMode.HALF_UP);
                     if (gap.compareTo(BigDecimal.ZERO) < 0) {
@@ -1117,12 +1226,12 @@ public class AnalyticsService {
                         List<String> actions = atr != null ? parseAtrActions(atr.getObservationsJson(), po.getPoCode(), "PO") : Collections.emptyList();
 
                         gapRecords.add(AtrGapDetailDto.builder()
-                                .id(report.getProgrammeBatchId() + "_" + po.getPoCode())
+                                .id(batch.getId() + "_" + po.getPoCode())
                                 .masterProgrammeId(prog != null ? prog.getId() : "")
                                 .programmeName(prog != null ? prog.getName() : "")
                                 .programmeCode(prog != null ? prog.getCode() : "")
-                                .programmeBatchId(report.getProgrammeBatchId())
-                                .batchName(batch != null ? batch.getName() : "")
+                                .programmeBatchId(batch.getId())
+                                .batchName(batch.getName())
                                 .departmentName(dept != null ? dept.getName() : "")
                                 .outcomeCode(po.getPoCode())
                                 .outcomeType("PO")
@@ -1148,7 +1257,7 @@ public class AnalyticsService {
             }
 
             // Process PSO gaps
-            for (ProgrammeBatchAttainmentReportDto.Report4PsoRow pso : parsed.psos) {
+            for (ProgrammeBatchAttainmentReportDto.Report4PsoRow pso : bData.psos) {
                 if (pso.getFinalAttainment() != null && pso.getTargetLevel() != null) {
                     BigDecimal gap = pso.getFinalAttainment().subtract(pso.getTargetLevel()).setScale(2, RoundingMode.HALF_UP);
                     if (gap.compareTo(BigDecimal.ZERO) < 0) {
@@ -1159,12 +1268,12 @@ public class AnalyticsService {
                         List<String> actions = atr != null ? parseAtrActions(atr.getObservationsJson(), pso.getPsoCode(), "PSO") : Collections.emptyList();
 
                         gapRecords.add(AtrGapDetailDto.builder()
-                                .id(report.getProgrammeBatchId() + "_" + pso.getPsoCode())
+                                .id(batch.getId() + "_" + pso.getPsoCode())
                                 .masterProgrammeId(prog != null ? prog.getId() : "")
                                 .programmeName(prog != null ? prog.getName() : "")
                                 .programmeCode(prog != null ? prog.getCode() : "")
-                                .programmeBatchId(report.getProgrammeBatchId())
-                                .batchName(batch != null ? batch.getName() : "")
+                                .programmeBatchId(batch.getId())
+                                .batchName(batch.getName())
                                 .departmentName(dept != null ? dept.getName() : "")
                                 .outcomeCode(pso.getPsoCode())
                                 .outcomeType("PSO")
@@ -1367,6 +1476,171 @@ public class AnalyticsService {
                 .collect(Collectors.toList());
     }
 
+    private ResolvedBatchAnalyticsData resolveBatchData(ProgrammeBatch batch, Map<String, ProgrammeBatchAttainmentReport> reportMap) {
+        if (batch == null) {
+            return new ResolvedBatchAnalyticsData(null, null, "", null, null, false, null, Collections.emptyList(), Collections.emptyList(), 0, 0, false);
+        }
+
+        ProgrammeBatchAttainmentReport report = reportMap != null ? reportMap.get(batch.getId()) :
+                programmeBatchAttainmentReportRepository.findByProgrammeBatchId(batch.getId()).orElse(null);
+
+        boolean isFinalized = report != null && (report.getStatus() == ReportStatus.FINALIZED || report.getStatus() == ReportStatus.APPROVED);
+
+        List<ProgrammeBatchCourse> courses = programmeBatchCourseRepository.findByProgrammeBatchId(batch.getId());
+        int totalCourses = courses.size();
+
+        if (isFinalized) {
+            ParsedReport parsed = parseReport(report);
+            boolean hasData = !parsed.pos.isEmpty() || !parsed.psos.isEmpty();
+            List<String> offeringIds = courses.stream().map(ProgrammeBatchCourse::getId).toList();
+            int evaluatedCourses = 0;
+            if (!offeringIds.isEmpty()) {
+                Set<String> evaluatedSet = new HashSet<>();
+                courseAttainmentReportRepository.findByProgrammeBatchCourseIdIn(offeringIds)
+                        .forEach(r -> evaluatedSet.add(r.getProgrammeBatchCourseId()));
+                studentCoMarkRepository.findByProgrammeBatchCourseIdIn(offeringIds)
+                        .forEach(m -> evaluatedSet.add(m.getProgrammeBatchCourseId()));
+                evaluatedCourses = evaluatedSet.size();
+                if (evaluatedCourses == 0 && hasData) {
+                    evaluatedCourses = totalCourses;
+                }
+            }
+            return new ResolvedBatchAnalyticsData(
+                    batch.getId(),
+                    batch.getMasterProgrammeId(),
+                    batch.getName(),
+                    batch.getStartYear(),
+                    batch.getEndYear(),
+                    true,
+                    report.getStatus(),
+                    parsed.pos,
+                    parsed.psos,
+                    evaluatedCourses,
+                    totalCourses,
+                    hasData
+            );
+        }
+
+        // In-Progress Continuous Monitoring
+        if (courses.isEmpty()) {
+            return new ResolvedBatchAnalyticsData(
+                    batch.getId(),
+                    batch.getMasterProgrammeId(),
+                    batch.getName(),
+                    batch.getStartYear(),
+                    batch.getEndYear(),
+                    false,
+                    report != null ? report.getStatus() : null,
+                    Collections.emptyList(),
+                    Collections.emptyList(),
+                    0,
+                    0,
+                    false
+            );
+        }
+
+        List<String> offeringIds = courses.stream().map(ProgrammeBatchCourse::getId).toList();
+        Set<String> evaluatedOfferingIds = new HashSet<>();
+        courseAttainmentReportRepository.findByProgrammeBatchCourseIdIn(offeringIds)
+                .forEach(r -> evaluatedOfferingIds.add(r.getProgrammeBatchCourseId()));
+        studentCoMarkRepository.findByProgrammeBatchCourseIdIn(offeringIds)
+                .forEach(m -> evaluatedOfferingIds.add(m.getProgrammeBatchCourseId()));
+
+        int totalEvaluatedCourses = evaluatedOfferingIds.size();
+
+        // If no course has marks or reports, batch is genuinely not evaluated
+        if (totalEvaluatedCourses == 0) {
+            return new ResolvedBatchAnalyticsData(
+                    batch.getId(),
+                    batch.getMasterProgrammeId(),
+                    batch.getName(),
+                    batch.getStartYear(),
+                    batch.getEndYear(),
+                    false,
+                    report != null ? report.getStatus() : null,
+                    Collections.emptyList(),
+                    Collections.emptyList(),
+                    0,
+                    totalCourses,
+                    false
+            );
+        }
+
+        // Calculate live continuous attainment using authoritative calculation service
+        try {
+            ProgrammeAttainmentResultDto calcResult = attainmentCalculationService.calculateProgrammeAttainment(batch.getMasterProgrammeId(), batch.getId());
+            List<ProgrammeBatchAttainmentReportDto.Report4PoRow> poRows = new ArrayList<>();
+            List<ProgrammeBatchAttainmentReportDto.Report4PsoRow> psoRows = new ArrayList<>();
+
+            if (calcResult != null && calcResult.getOverallAttainment() != null) {
+                if (calcResult.getOverallAttainment().getPos() != null) {
+                    for (ProgrammeAttainmentResultDto.OutcomeAttainmentItem it : calcResult.getOverallAttainment().getPos()) {
+                        String code = it.getPoCode() != null ? it.getPoCode() : it.getOutcomeCode();
+                        if (code == null) continue;
+                        poRows.add(ProgrammeBatchAttainmentReportDto.Report4PoRow.builder()
+                                .poCode(code)
+                                .statement(it.getOutcomeStatement())
+                                .targetLevel(it.getTarget() != null ? it.getTarget() : new BigDecimal("2.50"))
+                                .directAttainment(it.getDirectAttainment() != null ? it.getDirectAttainment() : BigDecimal.ZERO)
+                                .indirectAttainment(it.getIndirectAttainment() != null ? it.getIndirectAttainment() : BigDecimal.ZERO)
+                                .finalAttainment(it.getOverallAttainment() != null ? it.getOverallAttainment() : BigDecimal.ZERO)
+                                .observation(it.getObservation())
+                                .build());
+                    }
+                }
+
+                if (calcResult.getOverallAttainment().getPsos() != null) {
+                    for (ProgrammeAttainmentResultDto.OutcomeAttainmentItem it : calcResult.getOverallAttainment().getPsos()) {
+                        String code = it.getPsoCode() != null ? it.getPsoCode() : it.getOutcomeCode();
+                        if (code == null) continue;
+                        psoRows.add(ProgrammeBatchAttainmentReportDto.Report4PsoRow.builder()
+                                .psoCode(code)
+                                .statement(it.getOutcomeStatement())
+                                .targetLevel(it.getTarget() != null ? it.getTarget() : new BigDecimal("2.50"))
+                                .directAttainment(it.getDirectAttainment() != null ? it.getDirectAttainment() : BigDecimal.ZERO)
+                                .indirectAttainment(it.getIndirectAttainment() != null ? it.getIndirectAttainment() : BigDecimal.ZERO)
+                                .finalAttainment(it.getOverallAttainment() != null ? it.getOverallAttainment() : BigDecimal.ZERO)
+                                .observation(it.getObservation())
+                                .build());
+                    }
+                }
+            }
+
+            boolean hasData = !poRows.isEmpty() || !psoRows.isEmpty();
+
+            return new ResolvedBatchAnalyticsData(
+                    batch.getId(),
+                    batch.getMasterProgrammeId(),
+                    batch.getName(),
+                    batch.getStartYear(),
+                    batch.getEndYear(),
+                    false,
+                    report != null ? report.getStatus() : null,
+                    poRows,
+                    psoRows,
+                    totalEvaluatedCourses,
+                    totalCourses,
+                    hasData
+            );
+        } catch (Exception e) {
+            log.warn("[AnalyticsService] Error calculating live continuous attainment for batch {}: {}", batch.getId(), e.getMessage());
+            return new ResolvedBatchAnalyticsData(
+                    batch.getId(),
+                    batch.getMasterProgrammeId(),
+                    batch.getName(),
+                    batch.getStartYear(),
+                    batch.getEndYear(),
+                    false,
+                    report != null ? report.getStatus() : null,
+                    Collections.emptyList(),
+                    Collections.emptyList(),
+                    totalEvaluatedCourses,
+                    totalCourses,
+                    false
+            );
+        }
+    }
+
     private ParsedReport parseReport(ProgrammeBatchAttainmentReport report) {
         if (report == null || report.getOverallAttainmentReportJson() == null || report.getOverallAttainmentReportJson().isBlank()) {
             return new ParsedReport(Collections.emptyList(), Collections.emptyList());
@@ -1410,4 +1684,18 @@ public class AnalyticsService {
     private record ResolvedScope(String schoolId, String departmentId, String masterProgrammeId, String programmeBatchId) {}
     private record ParsedReport(List<ProgrammeBatchAttainmentReportDto.Report4PoRow> pos, List<ProgrammeBatchAttainmentReportDto.Report4PsoRow> psos) {}
     private record PoInstanceData(String batchId, BigDecimal attainment, BigDecimal target, BigDecimal direct, BigDecimal indirect) {}
+    private record ResolvedBatchAnalyticsData(
+            String batchId,
+            String masterProgrammeId,
+            String batchName,
+            Integer startYear,
+            Integer endYear,
+            boolean isFinalized,
+            ReportStatus reportStatus,
+            List<ProgrammeBatchAttainmentReportDto.Report4PoRow> pos,
+            List<ProgrammeBatchAttainmentReportDto.Report4PsoRow> psos,
+            int totalEvaluatedCourses,
+            int totalCoursesInBatch,
+            boolean hasActiveData
+    ) {}
 }

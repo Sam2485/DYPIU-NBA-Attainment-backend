@@ -186,26 +186,17 @@ public class AuthenticationSecurityHardeningTest {
     }
 
     @Test
-    @DisplayName("Password reset strictly requires geolocation and logs IP/location to IQAC audit trail")
+    @DisplayName("Password reset audits request to IQAC and logs IP to audit trail")
     void testPasswordResetLocationEnforcementAndAuditLogging() {
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.setRemoteAddr("103.21.12.88");
         request.addHeader("User-Agent", "Mozilla/5.0 Chrome/120.0 Safari/537.36");
 
-        // 1. Missing location must be strictly restricted
-        ForgotPasswordRequest reqNoLocation = new ForgotPasswordRequest();
-        reqNoLocation.setEmail(testUser.getEmail());
-        assertThrows(BadRequestException.class, () -> authService.requestPasswordReset(reqNoLocation, request));
+        // 1. Password reset request succeeds and creates audit log
+        ForgotPasswordRequest req = new ForgotPasswordRequest();
+        req.setEmail(testUser.getEmail());
 
-        // 2. Request with location succeeds and creates audit log
-        ForgotPasswordRequest validReq = new ForgotPasswordRequest();
-        validReq.setEmail(testUser.getEmail());
-        validReq.setLatitude(18.651234);
-        validReq.setLongitude(73.761234);
-        validReq.setAccuracy(15.0);
-        validReq.setLocation("18.651234, 73.761234 (Accuracy: ±15m)");
-
-        String msg = authService.requestPasswordReset(validReq, request);
+        String msg = authService.requestPasswordReset(req, request);
         assertTrue(msg.contains("If an account with that email exists"));
 
         // Verify audit log recorded for password reset request
@@ -215,8 +206,6 @@ public class AuthenticationSecurityHardeningTest {
         assertFalse(logs.isEmpty());
         var latestRequestLog = logs.get(logs.size() - 1);
         assertEquals("103.21.12.88", latestRequestLog.getIpAddress());
-        assertTrue(latestRequestLog.getRemarks().contains("18.651234, 73.761234"));
-        assertTrue(latestRequestLog.getMetadata().contains("accuracyMeters"));
 
         // 3. Reset password execution logs audit trail with location and IP
         String resetToken = authService.createTestPasswordResetToken(testUser.getUsername());

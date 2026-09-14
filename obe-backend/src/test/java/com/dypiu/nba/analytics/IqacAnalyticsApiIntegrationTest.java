@@ -68,6 +68,12 @@ public class IqacAnalyticsApiIntegrationTest {
     private ProgrammeSpecificOutcomeRepository psoRepository;
 
     @Autowired
+    private CourseOutcomeRepository courseOutcomeRepository;
+
+    @Autowired
+    private CoPoMappingRepository coPoMappingRepository;
+
+    @Autowired
     private UserRepository userRepository;
 
     @Autowired
@@ -702,5 +708,157 @@ public class IqacAnalyticsApiIntegrationTest {
                 () -> analyticsService.updateStudentEvidenceThreshold(new BigDecimal("105.00"), "iqac_user")
         );
         assertThat(ex2.getStatusCode()).isEqualTo(org.springframework.http.HttpStatus.BAD_REQUEST);
+    }
+
+    @Test
+    @DisplayName("Phase 10A: Continuous Monitoring - Live In-Progress Batch Exposes Valid Analytics Before Finalization")
+    @WithMockUser(username = "iqac_user", roles = {"IQAC"})
+    void testContinuousMonitoringForActiveInProgressBatch() {
+        // Setup in-progress batch with course, COs, mappings, and student marks (no finalized report)
+        ProgrammeBatchCourse liveCourse = programmeBatchCourseRepository.save(ProgrammeBatchCourse.builder()
+                .id("pbc-live-101")
+                .programmeBatchId(batch2024Draft.getId())
+                .code("CSE301")
+                .name("Database Management Systems")
+                .semester(5)
+                .build());
+
+        CourseOutcome co1 = courseOutcomeRepository.save(CourseOutcome.builder()
+                .id("co-live-1")
+                .programmeBatchCourseId(liveCourse.getId())
+                .code("CO1")
+                .statement("DBMS Foundations")
+                .targetLevel(new BigDecimal("2.50"))
+                .build());
+
+        coPoMappingRepository.save(CoPoMapping.builder()
+                .id("copo-live-1")
+                .courseOutcomeId(co1.getId())
+                .poCode("PO1")
+                .mappingLevel(3)
+                .build());
+
+        courseReportRepository.save(CourseAttainmentReport.builder()
+                .id("car-live-101")
+                .programmeBatchCourseId(liveCourse.getId())
+                .status(ReportStatus.DRAFT)
+                .directAttainment(new BigDecimal("2.60"))
+                .indirectAttainment(new BigDecimal("2.40"))
+                .overallCoAttainment(new BigDecimal("2.56"))
+                .table1MappingJson("[{\"coCode\":\"CO1\",\"poMappings\":{\"PO1\":3,\"PO2\":2},\"psoMappings\":{\"PSO1\":3}}]")
+                .table3CoAttainmentJson("[{\"coCode\":\"CO1\",\"statement\":\"DBMS Foundations\",\"directLevel\":3,\"indirectLevel\":2,\"finalAttainment\":2.80,\"targetLevel\":2.50,\"targetMet\":true}]")
+                .build());
+
+        studentCoMarkRepository.save(StudentCoMark.builder()
+                .id("scm-live-1")
+                .programmeBatchCourseId(liveCourse.getId())
+                .studentId("std-live-1")
+                .prn("202401040001")
+                .studentName("Student Live")
+                .coCode("CO1")
+                .marksObtained(new BigDecimal("80.00"))
+                .maxMarks(new BigDecimal("100.00"))
+                .build());
+
+        // 1. Check KPIs for the draft batch scope
+        AnalyticsKpiResponseDto kpis = analyticsService.getKpis(null, null, null, batch2024Draft.getId());
+        assertThat(kpis).isNotNull();
+        assertThat(kpis.getScopeSummary().getTotalEvaluatedBatches()).isEqualTo(1);
+        assertThat(kpis.getScopeSummary().getTotalEvaluatedCourseOfferings()).isGreaterThanOrEqualTo(1);
+        assertThat(kpis.getScopeSummary().getDataSourceCurrency()).isEqualTo("CONTINUOUS_MONITORING_DATA");
+        assertThat(kpis.getPoTargetAchievement().getTotalEvaluatedInstances()).isGreaterThan(0);
+
+        // 2. Check Programme Landscape
+        ProgrammeLandscapeResponseDto landscape = analyticsService.getProgrammeLandscape(
+                null, null, null, batch2024Draft.getId(), 0, 10, null, "ALL", null, "ASC");
+        assertThat(landscape.getContent()).hasSize(1);
+        ProgrammeLandscapeRowDto row = landscape.getContent().get(0);
+        assertThat(row.getProgrammeBatchId()).isEqualTo(batch2024Draft.getId());
+        assertThat(row.getReportAvailabilityStatus()).isEqualTo("IN_PROGRESS_MONITORING");
+        assertThat(row.getPosEvaluated()).isGreaterThan(0);
+
+        // 3. Check PO Health
+        List<PoHealthItemDto> poHealth = analyticsService.getPoHealth(null, null, null, batch2024Draft.getId());
+        assertThat(poHealth).isNotEmpty();
+        PoHealthItemDto po1 = poHealth.stream().filter(p -> "PO1".equals(p.getPoCode())).findFirst().orElse(null);
+        assertThat(po1).isNotNull();
+        assertThat(po1.getEvaluatedInstanceCount()).isGreaterThan(0);
+        assertThat(po1.getAverageAttainment()).isGreaterThan(BigDecimal.ZERO);
+    }
+
+    @Test
+    @DisplayName("Phase 10A: Partial Data Handling - Evaluated count accurately reflects partially completed courses")
+    @WithMockUser(username = "iqac_user", roles = {"IQAC"})
+    void testPartialCourseDataHandling() {
+        ProgrammeBatch partialBatch = programmeBatchRepository.save(ProgrammeBatch.builder()
+                .id("batch-partial")
+                .masterProgrammeId(progBtech.getId())
+                .name("2025-2029 Partial")
+                .startYear(2025)
+                .endYear(2029)
+                .build());
+
+        // Create 3 courses in batch
+        ProgrammeBatchCourse c1 = programmeBatchCourseRepository.save(ProgrammeBatchCourse.builder()
+                .id("pbc-part-1").programmeBatchId(partialBatch.getId()).code("CS101").name("Course 1").semester(1).build());
+        ProgrammeBatchCourse c2 = programmeBatchCourseRepository.save(ProgrammeBatchCourse.builder()
+                .id("pbc-part-2").programmeBatchId(partialBatch.getId()).code("CS102").name("Course 2").semester(1).build());
+        ProgrammeBatchCourse c3 = programmeBatchCourseRepository.save(ProgrammeBatchCourse.builder()
+                .id("pbc-part-3").programmeBatchId(partialBatch.getId()).code("CS103").name("Course 3").semester(1).build());
+
+        // Only c1 has marks entered
+        studentCoMarkRepository.save(StudentCoMark.builder()
+                .id("scm-part-1")
+                .programmeBatchCourseId(c1.getId())
+                .studentId("std-p1")
+                .prn("20250001")
+                .studentName("Student P1")
+                .coCode("CO1")
+                .marksObtained(new BigDecimal("75.00"))
+                .maxMarks(new BigDecimal("100.00"))
+                .build());
+
+        AnalyticsKpiResponseDto kpis = analyticsService.getKpis(null, null, null, partialBatch.getId());
+        assertThat(kpis.getScopeSummary().getTotalEvaluatedCourseOfferings()).isEqualTo(1);
+        assertThat(kpis.getScopeSummary().getTotalEvaluatedBatches()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("Phase 10A: Historical Protection - Finalized report values remain frozen")
+    @WithMockUser(username = "iqac_user", roles = {"IQAC"})
+    void testHistoricalProtectionForFinalizedBatch() {
+        ProgrammeLandscapeResponseDto landscape = analyticsService.getProgrammeLandscape(
+                null, null, null, batch2022.getId(), 0, 10, null, "ALL", null, "ASC");
+
+        assertThat(landscape.getContent()).hasSize(1);
+        ProgrammeLandscapeRowDto row = landscape.getContent().get(0);
+        assertThat(row.getProgrammeBatchId()).isEqualTo(batch2022.getId());
+        assertThat(row.getReportAvailabilityStatus()).isEqualTo("FINALIZED_REPORT_AVAILABLE");
+        assertThat(row.getUnderlyingReportStatus()).isEqualTo(ReportStatus.FINALIZED);
+    }
+
+    @Test
+    @DisplayName("Phase 10A: Genuinely Empty Batch - Returns clean un-evaluated state")
+    @WithMockUser(username = "iqac_user", roles = {"IQAC"})
+    void testUnstartedBatchReturnsCleanEmptyState() {
+        ProgrammeBatch emptyBatch = programmeBatchRepository.save(ProgrammeBatch.builder()
+                .id("batch-empty")
+                .masterProgrammeId(progMba.getId())
+                .name("2026-2028 Empty")
+                .startYear(2026)
+                .endYear(2028)
+                .build());
+
+        AnalyticsKpiResponseDto kpis = analyticsService.getKpis(null, null, null, emptyBatch.getId());
+        assertThat(kpis.getScopeSummary().getTotalEvaluatedBatches()).isEqualTo(0);
+        assertThat(kpis.getScopeSummary().getTotalEvaluatedCourseOfferings()).isEqualTo(0);
+        assertThat(kpis.getPoTargetAchievement().getTotalEvaluatedInstances()).isEqualTo(0);
+
+        ProgrammeLandscapeResponseDto landscape = analyticsService.getProgrammeLandscape(
+                null, null, null, emptyBatch.getId(), 0, 10, null, "ALL", null, "ASC");
+        assertThat(landscape.getContent()).hasSize(1);
+        ProgrammeLandscapeRowDto row = landscape.getContent().get(0);
+        assertThat(row.getReportAvailabilityStatus()).isEqualTo("NO_FINALIZED_REPORT");
+        assertThat(row.getPosEvaluated()).isEqualTo(0);
     }
 }
