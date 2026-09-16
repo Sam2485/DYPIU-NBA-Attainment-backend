@@ -62,9 +62,10 @@ public class SecurityConfig {
             )
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-                // Public endpoints: Auth flows and basic uptime healthcheck
+                // Public endpoints: Auth flows, basic uptime healthcheck, and WebSocket upgrade handshake
                 .requestMatchers("/auth/**", "/api/v1/auth/**").permitAll()
                 .requestMatchers(HttpMethod.GET, "/health", "/actuator/health", "/actuator/info").permitAll()
+                .requestMatchers("/ws/**", "/obe/ws/**").permitAll()
 
                 // Restricted administrative tooling: Swagger/OpenAPI & sensitive Actuators require IQAC role
                 .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").hasRole("IQAC")
