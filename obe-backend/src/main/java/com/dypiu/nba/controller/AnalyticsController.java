@@ -27,12 +27,13 @@ public class AnalyticsController {
             @RequestParam(required = false) String schoolId,
             @RequestParam(required = false) String departmentId,
             @RequestParam(required = false) String masterProgrammeId,
-            @RequestParam(required = false) String programmeBatchId) {
+            @RequestParam(required = false) String programmeBatchId,
+            @RequestParam(required = false) String batchStatus) {
 
-        log.debug("[AnalyticsController] getKpis: schoolId={}, departmentId={}, masterProgrammeId={}, programmeBatchId={}",
-                schoolId, departmentId, masterProgrammeId, programmeBatchId);
+        log.debug("[AnalyticsController] getKpis: schoolId={}, departmentId={}, masterProgrammeId={}, programmeBatchId={}, batchStatus={}",
+                schoolId, departmentId, masterProgrammeId, programmeBatchId, batchStatus);
 
-        AnalyticsKpiResponseDto data = analyticsService.getKpis(schoolId, departmentId, masterProgrammeId, programmeBatchId);
+        AnalyticsKpiResponseDto data = analyticsService.getKpis(schoolId, departmentId, masterProgrammeId, programmeBatchId, batchStatus);
         return ResponseEntity.ok(ApiResponse.<AnalyticsKpiResponseDto>builder()
                 .success(true)
                 .message("Analytics KPIs retrieved successfully")
@@ -86,14 +87,16 @@ public class AnalyticsController {
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(required = false) String query,
             @RequestParam(defaultValue = "ALL") String statusFilter,
+            @RequestParam(required = false) String batchStatus,
+            @RequestParam(required = false) Boolean attentionOnly,
             @RequestParam(defaultValue = "programmeName") String sortBy,
             @RequestParam(defaultValue = "ASC") String direction) {
 
-        log.debug("[AnalyticsController] getProgrammeLandscape: schoolId={}, departmentId={}, masterProgrammeId={}, programmeBatchId={}, page={}, size={}",
-                schoolId, departmentId, masterProgrammeId, programmeBatchId, page, size);
+        log.debug("[AnalyticsController] getProgrammeLandscape: schoolId={}, departmentId={}, masterProgrammeId={}, programmeBatchId={}, page={}, size={}, batchStatus={}, attentionOnly={}",
+                schoolId, departmentId, masterProgrammeId, programmeBatchId, page, size, batchStatus, attentionOnly);
 
         ProgrammeLandscapeResponseDto data = analyticsService.getProgrammeLandscape(
-                schoolId, departmentId, masterProgrammeId, programmeBatchId, page, size, query, statusFilter, sortBy, direction);
+                schoolId, departmentId, masterProgrammeId, programmeBatchId, page, size, query, statusFilter, batchStatus, attentionOnly, sortBy, direction);
         return ResponseEntity.ok(ApiResponse.<ProgrammeLandscapeResponseDto>builder()
                 .success(true)
                 .message("Programme landscape retrieved successfully")

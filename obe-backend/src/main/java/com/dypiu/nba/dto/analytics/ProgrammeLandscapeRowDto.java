@@ -22,6 +22,7 @@ public class ProgrammeLandscapeRowDto {
     private String schoolName;
     private String programmeBatchId;
     private String batchName;
+    private String batchStatus;
     private Integer startYear;
     private Integer endYear;
 
@@ -33,6 +34,8 @@ public class ProgrammeLandscapeRowDto {
     private int psosMet;
     private int psosTotal;
 
+    private int poBelowTarget;
+    private int psoBelowTarget;
     private int gapCount;
     private boolean hasGaps;
 

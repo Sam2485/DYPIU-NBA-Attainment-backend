@@ -24,6 +24,7 @@ public class AnalyticsKpiResponseDto {
         private long totalSchools;
         private long totalDepartments;
         private long totalMasterProgrammes;
+        private long totalBatches;
         private long totalEvaluatedBatches;
         private long totalEvaluatedCourseOfferings;
         private String dataSourceCurrency;
