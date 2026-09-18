@@ -41,6 +41,20 @@ public class AnalyticsController {
                 .build());
     }
 
+    @GetMapping("/batch-overview")
+    public ResponseEntity<ApiResponse<BatchOverviewResponseDto>> getBatchOverview(
+            @RequestParam String programmeBatchId) {
+
+        log.debug("[AnalyticsController] getBatchOverview: programmeBatchId={}", programmeBatchId);
+
+        BatchOverviewResponseDto data = analyticsService.getBatchOverview(programmeBatchId);
+        return ResponseEntity.ok(ApiResponse.<BatchOverviewResponseDto>builder()
+                .success(true)
+                .message("Batch analytics overview retrieved successfully")
+                .data(data)
+                .build());
+    }
+
     @GetMapping("/po-health")
     public ResponseEntity<ApiResponse<List<PoHealthItemDto>>> getPoHealth(
             @RequestParam(required = false) String schoolId,
