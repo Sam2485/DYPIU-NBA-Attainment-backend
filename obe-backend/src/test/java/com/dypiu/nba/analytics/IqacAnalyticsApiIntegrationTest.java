@@ -77,6 +77,12 @@ public class IqacAnalyticsApiIntegrationTest {
     private UserRepository userRepository;
 
     @Autowired
+    private CourseAtrRepository courseAtrRepository;
+
+    @Autowired
+    private ProgrammeBatchIndirectAssessmentRepository indirectAssessmentRepository;
+
+    @Autowired
     private ObjectMapper objectMapper;
 
     private School schoolSoet;
@@ -1467,6 +1473,295 @@ public class IqacAnalyticsApiIntegrationTest {
 
         List<ProgrammeBatch> batches = programmeBatchRepository.findByMasterProgrammeIdAndDeletedAtIsNull(progBtech.getId());
         assertThat(batches.stream().anyMatch(b -> b.getId().equals(noGapsBatch.getId()))).isTrue();
+    }
+
+    // =========================================================================
+    // BATCH OVERVIEW ENDPOINT TESTS
+    // =========================================================================
+
+    @Test
+    @DisplayName("BATCH OVERVIEW TEST 1: Happy path - complete overview data returned for valid batch")
+    @WithMockUser(username = "iqac_user", roles = {"IQAC"})
+    void testBatchOverview_HappyPath() throws Exception {
+        // Update batch2022 coordinator name
+        batch2022.setCoordinatorName("Dr. John Doe");
+        batch2022.setStatus("ACTIVE");
+        programmeBatchRepository.save(batch2022);
+
+        // Add a ProgrammeBatchCourse for batch2022
+        ProgrammeBatchCourse c1 = programmeBatchCourseRepository.save(ProgrammeBatchCourse.builder()
+                .id("pbc-bo-1")
+                .programmeBatchId(batch2022.getId())
+                .code("CS301")
+                .name("Data Structures")
+                .semester(3)
+                .courseCoordinatorName("Prof. Smith")
+                .status("ACTIVE")
+                .build());
+
+        // Add CourseAtr with VERIFIED status
+        courseAtrRepository.save(CourseAtr.builder()
+                .id("catr-bo-1")
+                .programmeBatchCourseId(c1.getId())
+                .coCode("CO1")
+                .targetScore(new BigDecimal("2.00"))
+                .actualScore(new BigDecimal("2.10"))
+                .status(CourseAtrStatus.VERIFIED)
+                .verifiedBy("verifier@dypiu.ac.in")
+                .build());
+
+        // Add an indirect assessment
+        indirectAssessmentRepository.save(ProgrammeBatchIndirectAssessment.builder()
+                .id("pbia-bo-1")
+                .programmeBatchId(batch2022.getId())
+                .name("Alumni Survey 2024")
+                .type("SURVEY")
+                .scoresJson(objectMapper.writeValueAsString(Map.of("PO1", new BigDecimal("2.60"), "PO4", new BigDecimal("2.20"))))
+                .createdBy("admin")
+                .build());
+
+        BatchOverviewResponseDto overview = analyticsService.getBatchOverview(batch2022.getId());
+
+        assertThat(overview).isNotNull();
+
+        // 1. Batch Context
+        assertThat(overview.getBatch()).isNotNull();
+        assertThat(overview.getBatch().getProgrammeBatchId()).isEqualTo(batch2022.getId());
+        assertThat(overview.getBatch().getBatchName()).isEqualTo("2022-2026");
+        assertThat(overview.getBatch().getCoordinatorName()).isEqualTo("Dr. John Doe");
+        assertThat(overview.getBatch().getAcademicYear()).isEqualTo("2022-2026");
+        assertThat(overview.getBatch().getSchool()).isNotNull();
+        assertThat(overview.getBatch().getSchool().getName()).isEqualTo("School of Engineering");
+        assertThat(overview.getBatch().getDepartment()).isNotNull();
+        assertThat(overview.getBatch().getDepartment().getName()).isEqualTo("Computer Science");
+        assertThat(overview.getBatch().getProgramme()).isNotNull();
+        assertThat(overview.getBatch().getProgramme().getCode()).isEqualTo("B.Tech");
+
+        // 2. PO Health
+        assertThat(overview.getPoHealth()).isNotEmpty();
+        BatchOverviewResponseDto.PoHealthDto po1 = overview.getPoHealth().stream()
+                .filter(p -> "PO1".equals(p.getPoCode())).findFirst().orElse(null);
+        assertThat(po1).isNotNull();
+        assertThat(po1.getAttainment()).isEqualByComparingTo("2.40");
+        assertThat(po1.getTarget()).isEqualByComparingTo("2.00");
+        assertThat(po1.getGap()).isEqualByComparingTo("0.40");
+        assertThat(po1.isTargetMet()).isTrue();
+
+        BatchOverviewResponseDto.PoHealthDto po4 = overview.getPoHealth().stream()
+                .filter(p -> "PO4".equals(p.getPoCode())).findFirst().orElse(null);
+        assertThat(po4).isNotNull();
+        assertThat(po4.getAttainment()).isEqualByComparingTo("1.50");
+        assertThat(po4.getTarget()).isEqualByComparingTo("2.00");
+        assertThat(po4.getGap()).isEqualByComparingTo("-0.50");
+        assertThat(po4.isTargetMet()).isFalse();
+
+        // 3. PSO Health
+        assertThat(overview.getPsoHealth()).isNotEmpty();
+        BatchOverviewResponseDto.PsoHealthDto pso1 = overview.getPsoHealth().stream()
+                .filter(p -> "PSO1".equals(p.getPsoCode())).findFirst().orElse(null);
+        assertThat(pso1).isNotNull();
+        assertThat(pso1.getAttainment()).isEqualByComparingTo("2.20");
+        assertThat(pso1.isTargetMet()).isTrue();
+
+        // 4. Summary Counts
+        assertThat(overview.getSummary()).isNotNull();
+        assertThat(overview.getSummary().getPoEvaluated()).isEqualTo(2);
+        assertThat(overview.getSummary().getPoMet()).isEqualTo(1);
+        assertThat(overview.getSummary().getPoBelowTarget()).isEqualTo(1);
+        assertThat(overview.getSummary().getPsoEvaluated()).isEqualTo(1);
+        assertThat(overview.getSummary().getPsoMet()).isEqualTo(1);
+        assertThat(overview.getSummary().getPsoBelowTarget()).isEqualTo(0);
+        assertThat(overview.getSummary().getTotalDeficits()).isEqualTo(1);
+
+        // 5. Attention Areas
+        assertThat(overview.getAttentionAreas()).isNotEmpty();
+        assertThat(overview.getAttentionAreas().get(0).getOutcomeCode()).isEqualTo("PO4");
+        assertThat(overview.getAttentionAreas().get(0).getGap()).isNegative();
+
+        // 6. Direct vs Indirect
+        assertThat(overview.getDirectIndirect()).isNotNull();
+        assertThat(overview.getDirectIndirect().getProgrammeDirectWeight()).isEqualByComparingTo("0.80");
+        assertThat(overview.getDirectIndirect().getProgrammeIndirectWeight()).isEqualByComparingTo("0.20");
+        assertThat(overview.getDirectIndirect().getProgrammeDirect()).isNotNull();
+
+        // 7. Course Contributions
+        assertThat(overview.getCourseContributions()).isNotEmpty();
+        BatchOverviewResponseDto.CourseContributionItemDto courseItem = overview.getCourseContributions().stream()
+                .filter(c -> c1.getId().equals(c.getProgrammeBatchCourseId())).findFirst().orElse(null);
+        assertThat(courseItem).isNotNull();
+        assertThat(courseItem.getCourseCode()).isEqualTo("CS301");
+        assertThat(courseItem.getCourseCoordinator()).isEqualTo("Prof. Smith");
+
+        // 8. Programme Indirect Indication
+        assertThat(overview.getProgrammeIndirect()).isNotNull();
+        assertThat(overview.getProgrammeIndirect().getAssessmentCount()).isGreaterThanOrEqualTo(1);
+
+        // 9. Programme ATR Indication
+        assertThat(overview.getProgrammeAtr()).isNotNull();
+        assertThat(overview.getProgrammeAtr().isExists()).isTrue();
+
+        // 10. Course ATR Summary
+        assertThat(overview.getCourseAtr()).isNotNull();
+        assertThat(overview.getCourseAtr().getTotalCourses()).isGreaterThanOrEqualTo(1);
+        assertThat(overview.getCourseAtr().getCoursesWithAtr()).isGreaterThanOrEqualTo(1);
+        assertThat(overview.getCourseAtr().getVerifiedCount()).isGreaterThanOrEqualTo(1);
+
+        // 11. Historical Navigation Context
+        assertThat(overview.getHistorical()).isNotNull();
+        assertThat(overview.getHistorical().isAvailable()).isTrue();
+        assertThat(overview.getHistorical().getMasterProgrammeId()).isEqualTo(progBtech.getId());
+    }
+
+    @Test
+    @DisplayName("BATCH OVERVIEW TEST 2: Programme Coordinator forbidden from accessing other programme batch")
+    @WithMockUser(username = "pc_user", roles = {"PROGRAMME_COORDINATOR"})
+    void testBatchOverview_ScopeEnforcement_ProgrammeCoordinatorForbidden() {
+        // pc_user is scoped to progBtech ("prog-btech")
+        // Create an MBA batch belonging to progMba ("prog-mba")
+        ProgrammeBatch mbaBatch = programmeBatchRepository.save(ProgrammeBatch.builder()
+                .id("batch-mba-test-pc")
+                .masterProgrammeId(progMba.getId())
+                .name("MBA 2022-2024")
+                .startYear(2022)
+                .endYear(2024)
+                .build());
+
+        // Attempting to access MBA batch solely by supplying programmeBatchId must throw 403 Forbidden
+        org.springframework.web.server.ResponseStatusException ex = assertThrows(
+                org.springframework.web.server.ResponseStatusException.class,
+                () -> analyticsService.getBatchOverview(mbaBatch.getId())
+        );
+        assertThat(ex.getStatusCode().value()).isEqualTo(403);
+
+        // Accessing batch2022 (belongs to progBtech) succeeds
+        BatchOverviewResponseDto ownBatchOverview = analyticsService.getBatchOverview(batch2022.getId());
+        assertThat(ownBatchOverview).isNotNull();
+        assertThat(ownBatchOverview.getBatch().getProgrammeBatchId()).isEqualTo(batch2022.getId());
+    }
+
+    @Test
+    @DisplayName("BATCH OVERVIEW TEST 3: HOD and Director forbidden from accessing batch outside department / school")
+    void testBatchOverview_ScopeEnforcement_HodAndDirectorForbidden() {
+        ProgrammeBatch mbaBatch = programmeBatchRepository.save(ProgrammeBatch.builder()
+                .id("batch-mba-test-hod-dir")
+                .masterProgrammeId(progMba.getId())
+                .name("MBA 2023-2025")
+                .startYear(2023)
+                .endYear(2025)
+                .build());
+
+        // As HOD CSE: MBA batch is in SOM / MBA department
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+                new org.springframework.security.authentication.UsernamePasswordAuthenticationToken("hod_user", "N/A",
+                        List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_HOD"))));
+
+        org.springframework.web.server.ResponseStatusException exHod = assertThrows(
+                org.springframework.web.server.ResponseStatusException.class,
+                () -> analyticsService.getBatchOverview(mbaBatch.getId())
+        );
+        assertThat(exHod.getStatusCode().value()).isEqualTo(403);
+
+        // As Director SOET: MBA batch is in SOM school
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+                new org.springframework.security.authentication.UsernamePasswordAuthenticationToken("dir_user", "N/A",
+                        List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_DIRECTOR"))));
+
+        org.springframework.web.server.ResponseStatusException exDir = assertThrows(
+                org.springframework.web.server.ResponseStatusException.class,
+                () -> analyticsService.getBatchOverview(mbaBatch.getId())
+        );
+        assertThat(exDir.getStatusCode().value()).isEqualTo(403);
+    }
+
+    @Test
+    @DisplayName("BATCH OVERVIEW TEST 4: IQAC can access any batch across schools and programmes")
+    @WithMockUser(username = "iqac_user", roles = {"IQAC"})
+    void testBatchOverview_ScopeEnforcement_IqacUnrestricted() {
+        ProgrammeBatch mbaBatch = programmeBatchRepository.save(ProgrammeBatch.builder()
+                .id("batch-mba-test-iqac")
+                .masterProgrammeId(progMba.getId())
+                .name("MBA 2024-2026")
+                .startYear(2024)
+                .endYear(2026)
+                .build());
+
+        // IQAC can access B.Tech batch
+        BatchOverviewResponseDto btechOverview = analyticsService.getBatchOverview(batch2022.getId());
+        assertThat(btechOverview).isNotNull();
+
+        // IQAC can also access MBA batch
+        BatchOverviewResponseDto mbaOverview = analyticsService.getBatchOverview(mbaBatch.getId());
+        assertThat(mbaOverview).isNotNull();
+        assertThat(mbaOverview.getBatch().getProgramme().getCode()).isEqualTo("MBA");
+    }
+
+    @Test
+    @DisplayName("BATCH OVERVIEW TEST 5: Missing data states handled gracefully (no synthetic zeroes)")
+    @WithMockUser(username = "iqac_user", roles = {"IQAC"})
+    void testBatchOverview_MissingData_GracefulHandling() {
+        ProgrammeBatch emptyBatch = programmeBatchRepository.save(ProgrammeBatch.builder()
+                .id("batch-empty-test")
+                .masterProgrammeId(progBtech.getId())
+                .name("Empty Batch 2025-2029")
+                .startYear(2025)
+                .endYear(2029)
+                .build());
+
+        BatchOverviewResponseDto overview = analyticsService.getBatchOverview(emptyBatch.getId());
+
+        assertThat(overview).isNotNull();
+        assertThat(overview.getBatch().getProgrammeBatchId()).isEqualTo(emptyBatch.getId());
+
+        // Programme ATR does not exist
+        assertThat(overview.getProgrammeAtr().isExists()).isFalse();
+        assertThat(overview.getProgrammeAtr().getStatus()).isNull();
+        assertThat(overview.getProgrammeAtr().isRevisionRequired()).isFalse();
+
+        // Course ATR has 0 courses and 0 records
+        assertThat(overview.getCourseAtr().getTotalCourses()).isEqualTo(0);
+        assertThat(overview.getCourseAtr().getCoursesWithAtr()).isEqualTo(0);
+        assertThat(overview.getCourseAtr().getTotalRecords()).isEqualTo(0);
+
+        // Indirect assessments
+        assertThat(overview.getProgrammeIndirect().getAssessmentCount()).isEqualTo(0);
+        assertThat(overview.getProgrammeIndirect().isHasExitSurvey()).isFalse();
+
+        // Outcomes empty
+        assertThat(overview.getPoHealth()).isEmpty();
+        assertThat(overview.getPsoHealth()).isEmpty();
+        assertThat(overview.getSummary().getTotalDeficits()).isEqualTo(0);
+        assertThat(overview.getAttentionAreas()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("BATCH OVERVIEW TEST 6: Gap formula invariant (gap = attainment - target)")
+    @WithMockUser(username = "iqac_user", roles = {"IQAC"})
+    void testBatchOverview_GapFormulaInvariant() {
+        BatchOverviewResponseDto overview = analyticsService.getBatchOverview(batch2022.getId());
+
+        assertThat(overview).isNotNull();
+        assertThat(overview.getPoHealth()).isNotEmpty();
+
+        for (BatchOverviewResponseDto.PoHealthDto po : overview.getPoHealth()) {
+            if (po.getAttainment() != null && po.getTarget() != null) {
+                BigDecimal expectedGap = po.getAttainment().subtract(po.getTarget()).setScale(2, RoundingMode.HALF_UP);
+                assertThat(po.getGap()).isEqualByComparingTo(expectedGap);
+                boolean expectedMet = po.getAttainment().compareTo(po.getTarget()) >= 0;
+                assertThat(po.isTargetMet()).isEqualTo(expectedMet);
+            }
+        }
+
+        for (BatchOverviewResponseDto.PsoHealthDto pso : overview.getPsoHealth()) {
+            if (pso.getAttainment() != null && pso.getTarget() != null) {
+                BigDecimal expectedGap = pso.getAttainment().subtract(pso.getTarget()).setScale(2, RoundingMode.HALF_UP);
+                assertThat(pso.getGap()).isEqualByComparingTo(expectedGap);
+                boolean expectedMet = pso.getAttainment().compareTo(pso.getTarget()) >= 0;
+                assertThat(pso.isTargetMet()).isEqualTo(expectedMet);
+            }
+        }
+
+        assertThat(overview.getSummary().getTotalDeficits())
+                .isEqualTo(overview.getSummary().getPoBelowTarget() + overview.getSummary().getPsoBelowTarget());
     }
 }
 
