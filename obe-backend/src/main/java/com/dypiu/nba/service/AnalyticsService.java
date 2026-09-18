@@ -53,14 +53,30 @@ public class AnalyticsService {
     // 1. KPI ENDPOINT
     // ==========================================
     public AnalyticsKpiResponseDto getKpis(String schoolId, String departmentId, String masterProgrammeId, String programmeBatchId) {
+        return getKpis(schoolId, departmentId, masterProgrammeId, programmeBatchId, null);
+    }
+
+    public AnalyticsKpiResponseDto getKpis(String schoolId, String departmentId, String masterProgrammeId, String programmeBatchId, String batchStatus) {
         ResolvedScope scope = validateAndResolveScope(schoolId, departmentId, masterProgrammeId, programmeBatchId);
         List<ProgrammeBatch> batchesInScope = getBatchesInScope(scope);
+        if (batchStatus != null && !batchStatus.isBlank() && !batchStatus.equalsIgnoreCase("ALL")) {
+            batchesInScope = batchesInScope.stream()
+                    .filter(b -> b.getDeletedAt() == null
+                            && b.getStatus() != null
+                            && b.getStatus().equalsIgnoreCase(batchStatus.trim()))
+                    .toList();
+        } else {
+            batchesInScope = batchesInScope.stream()
+                    .filter(b -> b.getDeletedAt() == null)
+                    .toList();
+        }
         List<String> batchIds = batchesInScope.stream().map(ProgrammeBatch::getId).toList();
 
         // 1. Scope summary
         long totalSchools = scope.schoolId != null ? 1 : schoolRepository.count();
         long totalDepts = scope.departmentId != null ? 1 : (scope.schoolId != null ? departmentRepository.findBySchoolId(scope.schoolId).size() : departmentRepository.count());
         long totalProgs = scope.masterProgrammeId != null ? 1 : (scope.departmentId != null ? masterProgrammeRepository.findByDepartmentIdAndDeletedAtIsNull(scope.departmentId).size() : masterProgrammeRepository.count());
+        long totalBatches = batchesInScope.size();
 
         Map<String, ProgrammeBatchAttainmentReport> reportMap = batchIds.isEmpty() ? Collections.emptyMap() :
                 programmeBatchAttainmentReportRepository.findByProgrammeBatchIdIn(batchIds).stream()
@@ -80,6 +96,7 @@ public class AnalyticsService {
                 .totalSchools(totalSchools)
                 .totalDepartments(totalDepts)
                 .totalMasterProgrammes(totalProgs)
+                .totalBatches(totalBatches)
                 .totalEvaluatedBatches(totalEvaluatedBatches)
                 .totalEvaluatedCourseOfferings(totalEvaluatedCourses)
                 .dataSourceCurrency(currency)
@@ -469,9 +486,34 @@ public class AnalyticsService {
     public ProgrammeLandscapeResponseDto getProgrammeLandscape(
             String schoolId, String departmentId, String masterProgrammeId, String programmeBatchId,
             int page, int size, String query, String statusFilter, String sortBy, String direction) {
+        return getProgrammeLandscape(schoolId, departmentId, masterProgrammeId, programmeBatchId, page, size, query, statusFilter, null, null, sortBy, direction);
+    }
+
+    public ProgrammeLandscapeResponseDto getProgrammeLandscape(
+            String schoolId, String departmentId, String masterProgrammeId, String programmeBatchId,
+            int page, int size, String query, String statusFilter, String batchStatus, Boolean attentionOnly, String sortBy, String direction) {
+
+        boolean isAttentionOnly = Boolean.TRUE.equals(attentionOnly)
+                || (statusFilter != null && (statusFilter.equalsIgnoreCase("ATTENTION_ONLY") || statusFilter.equalsIgnoreCase("ACTIVE_ATTENTION")));
+
+        final String effectiveBatchStatus = (batchStatus != null && !batchStatus.isBlank())
+                ? batchStatus
+                : (statusFilter != null && statusFilter.equalsIgnoreCase("ACTIVE_ATTENTION") ? "ACTIVE" : null);
 
         ResolvedScope scope = validateAndResolveScope(schoolId, departmentId, masterProgrammeId, programmeBatchId);
         List<ProgrammeBatch> allBatches = getBatchesInScope(scope);
+        if (effectiveBatchStatus != null && !effectiveBatchStatus.isBlank() && !effectiveBatchStatus.equalsIgnoreCase("ALL")) {
+            allBatches = allBatches.stream()
+                    .filter(b -> b.getDeletedAt() == null
+                            && b.getStatus() != null
+                            && b.getStatus().equalsIgnoreCase(effectiveBatchStatus.trim()))
+                    .toList();
+        } else {
+            allBatches = allBatches.stream()
+                    .filter(b -> b.getDeletedAt() == null)
+                    .toList();
+        }
+
         List<String> batchIds = allBatches.stream().map(ProgrammeBatch::getId).toList();
 
         Map<String, ProgrammeBatchAttainmentReport> reportMap = batchIds.isEmpty() ? Collections.emptyMap() :
@@ -525,7 +567,9 @@ public class AnalyticsService {
                 }
             }
 
-            int gapCount = (posEvaluated - posMet) + (psosEvaluated - psosMet);
+            int poBelowTarget = Math.max(0, posEvaluated - posMet);
+            int psoBelowTarget = Math.max(0, psosEvaluated - psosMet);
+            int gapCount = poBelowTarget + psoBelowTarget;
             boolean hasGaps = gapCount > 0;
 
             String reportAvailability = bData.isFinalized ? "FINALIZED_REPORT_AVAILABLE" : (bData.hasActiveData ? "IN_PROGRESS_MONITORING" : "NO_FINALIZED_REPORT");
@@ -543,6 +587,7 @@ public class AnalyticsService {
                     .schoolName(school != null ? school.getName() : "")
                     .programmeBatchId(batch.getId())
                     .batchName(batch.getName())
+                    .batchStatus(batch.getStatus())
                     .startYear(batch.getStartYear())
                     .endYear(batch.getEndYear())
                     .posEvaluated(posEvaluated)
@@ -551,6 +596,8 @@ public class AnalyticsService {
                     .psosEvaluated(psosEvaluated)
                     .psosMet(psosMet)
                     .psosTotal(3)
+                    .poBelowTarget(poBelowTarget)
+                    .psoBelowTarget(psoBelowTarget)
                     .gapCount(gapCount)
                     .hasGaps(hasGaps)
                     .reportAvailabilityStatus(reportAvailability)
@@ -558,6 +605,11 @@ public class AnalyticsService {
                     .atrStatus(atrStatusStr)
                     .finalizedAt(finalizedTimestamp)
                     .build();
+
+            // Attention Only filtering
+            if (isAttentionOnly && (!hasGaps || gapCount <= 0)) {
+                continue;
+            }
 
             // Text search filtering
             if (query != null && !query.isBlank()) {
@@ -570,7 +622,10 @@ public class AnalyticsService {
             }
 
             // Status filter
-            if (statusFilter != null && !statusFilter.isBlank() && !statusFilter.equalsIgnoreCase("ALL")) {
+            if (statusFilter != null && !statusFilter.isBlank()
+                    && !statusFilter.equalsIgnoreCase("ALL")
+                    && !statusFilter.equalsIgnoreCase("ATTENTION_ONLY")
+                    && !statusFilter.equalsIgnoreCase("ACTIVE_ATTENTION")) {
                 if (statusFilter.equalsIgnoreCase("ALL_TARGETS_MET") && (!bData.hasActiveData || hasGaps)) {
                     continue;
                 } else if (statusFilter.equalsIgnoreCase("HAS_GAPS") && (!bData.hasActiveData || !hasGaps)) {

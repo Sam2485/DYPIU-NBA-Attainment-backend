@@ -1116,5 +1116,357 @@ public class IqacAnalyticsApiIntegrationTest {
         assertThat(po1Health).isNotNull();
         assertThat(po1Health.getEvaluatedInstanceCount()).isEqualTo(1);
     }
+
+    // =========================================================================
+    // LIVE PROGRAMME BATCH ATTENTION DASHBOARD TESTS (Phase 10B)
+    // =========================================================================
+
+    @Test
+    @DisplayName("TEST 1: ACTIVE batch with gaps -> returned in attention list")
+    @WithMockUser(username = "iqac_user", roles = {"IQAC"})
+    void testActiveBatchWithGaps_ReturnedInAttentionList() throws Exception {
+        ProgrammeBatch activeWithGaps = programmeBatchRepository.save(ProgrammeBatch.builder()
+                .id("batch-active-gaps")
+                .masterProgrammeId(progBtech.getId())
+                .name("Active Batch With Gaps")
+                .status("ACTIVE")
+                .startYear(2025)
+                .endYear(2029)
+                .build());
+
+        List<ProgrammeBatchAttainmentReportDto.Report4PoRow> pos = List.of(
+                ProgrammeBatchAttainmentReportDto.Report4PoRow.builder().poCode("PO1").targetLevel(new BigDecimal("2.00")).finalAttainment(new BigDecimal("1.50")).build(),
+                ProgrammeBatchAttainmentReportDto.Report4PoRow.builder().poCode("PO2").targetLevel(new BigDecimal("2.00")).finalAttainment(new BigDecimal("2.50")).build()
+        );
+        List<ProgrammeBatchAttainmentReportDto.Report4PsoRow> psos = List.of(
+                ProgrammeBatchAttainmentReportDto.Report4PsoRow.builder().psoCode("PSO1").targetLevel(new BigDecimal("2.00")).finalAttainment(new BigDecimal("1.80")).build()
+        );
+        reportRepository.save(ProgrammeBatchAttainmentReport.builder()
+                .id("rep-active-gaps")
+                .programmeBatchId(activeWithGaps.getId())
+                .status(ReportStatus.FINALIZED)
+                .overallAttainmentReportJson(objectMapper.writeValueAsString(Map.of("po", pos, "pso", psos)))
+                .build());
+
+        ProgrammeLandscapeResponseDto response = analyticsService.getProgrammeLandscape(
+                null, null, null, activeWithGaps.getId(), 0, 10, null, null, "ACTIVE", true, "gapCount", "DESC");
+
+        assertThat(response.getContent()).hasSize(1);
+        ProgrammeLandscapeRowDto row = response.getContent().get(0);
+        assertThat(row.getProgrammeBatchId()).isEqualTo("batch-active-gaps");
+        assertThat(row.getBatchStatus()).isEqualTo("ACTIVE");
+        assertThat(row.getPoBelowTarget()).isEqualTo(1);
+        assertThat(row.getPsoBelowTarget()).isEqualTo(1);
+        assertThat(row.getGapCount()).isEqualTo(2);
+        assertThat(row.isHasGaps()).isTrue();
+    }
+
+    @Test
+    @DisplayName("TEST 2: ACTIVE batch with zero gaps -> excluded from attention list, but present in active landscape")
+    @WithMockUser(username = "iqac_user", roles = {"IQAC"})
+    void testActiveBatchZeroGaps_ExcludedFromAttentionList() throws Exception {
+        ProgrammeBatch activeNoGaps = programmeBatchRepository.save(ProgrammeBatch.builder()
+                .id("batch-active-nogaps")
+                .masterProgrammeId(progBtech.getId())
+                .name("Active Batch Zero Gaps")
+                .status("ACTIVE")
+                .startYear(2025)
+                .endYear(2029)
+                .build());
+
+        List<ProgrammeBatchAttainmentReportDto.Report4PoRow> pos = List.of(
+                ProgrammeBatchAttainmentReportDto.Report4PoRow.builder().poCode("PO1").targetLevel(new BigDecimal("2.00")).finalAttainment(new BigDecimal("2.50")).build()
+        );
+        reportRepository.save(ProgrammeBatchAttainmentReport.builder()
+                .id("rep-active-nogaps")
+                .programmeBatchId(activeNoGaps.getId())
+                .status(ReportStatus.FINALIZED)
+                .overallAttainmentReportJson(objectMapper.writeValueAsString(Map.of("po", pos)))
+                .build());
+
+        // Attention list (attentionOnly = true) -> must NOT include activeNoGaps
+        ProgrammeLandscapeResponseDto attentionResponse = analyticsService.getProgrammeLandscape(
+                null, null, null, activeNoGaps.getId(), 0, 10, null, null, "ACTIVE", true, "gapCount", "DESC");
+        assertThat(attentionResponse.getContent()).isEmpty();
+
+        // Active population list (attentionOnly = false) -> MUST include activeNoGaps
+        ProgrammeLandscapeResponseDto allActiveResponse = analyticsService.getProgrammeLandscape(
+                null, null, null, activeNoGaps.getId(), 0, 10, null, null, "ACTIVE", false, "gapCount", "DESC");
+        assertThat(allActiveResponse.getContent()).hasSize(1);
+        assertThat(allActiveResponse.getContent().get(0).getGapCount()).isEqualTo(0);
+    }
+
+    @Test
+    @DisplayName("TEST 3: COMPLETED batch with gaps -> excluded from ACTIVE attention list")
+    @WithMockUser(username = "iqac_user", roles = {"IQAC"})
+    void testCompletedBatchWithGaps_ExcludedFromAttentionList() throws Exception {
+        ProgrammeBatch completedBatch = programmeBatchRepository.save(ProgrammeBatch.builder()
+                .id("batch-completed-gaps")
+                .masterProgrammeId(progBtech.getId())
+                .name("Completed Batch With Gaps")
+                .status("COMPLETED")
+                .startYear(2020)
+                .endYear(2024)
+                .build());
+
+        List<ProgrammeBatchAttainmentReportDto.Report4PoRow> pos = List.of(
+                ProgrammeBatchAttainmentReportDto.Report4PoRow.builder().poCode("PO1").targetLevel(new BigDecimal("2.00")).finalAttainment(new BigDecimal("1.20")).build()
+        );
+        reportRepository.save(ProgrammeBatchAttainmentReport.builder()
+                .id("rep-completed-gaps")
+                .programmeBatchId(completedBatch.getId())
+                .status(ReportStatus.FINALIZED)
+                .overallAttainmentReportJson(objectMapper.writeValueAsString(Map.of("po", pos)))
+                .build());
+
+        ProgrammeLandscapeResponseDto response = analyticsService.getProgrammeLandscape(
+                null, null, null, completedBatch.getId(), 0, 10, null, null, "ACTIVE", true, "gapCount", "DESC");
+        assertThat(response.getContent()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("TEST 4: INACTIVE batch with gaps -> excluded from ACTIVE attention list")
+    @WithMockUser(username = "iqac_user", roles = {"IQAC"})
+    void testInactiveBatchWithGaps_ExcludedFromAttentionList() throws Exception {
+        ProgrammeBatch inactiveBatch = programmeBatchRepository.save(ProgrammeBatch.builder()
+                .id("batch-inactive-gaps")
+                .masterProgrammeId(progBtech.getId())
+                .name("Inactive Batch With Gaps")
+                .status("INACTIVE")
+                .startYear(2021)
+                .endYear(2025)
+                .build());
+
+        List<ProgrammeBatchAttainmentReportDto.Report4PoRow> pos = List.of(
+                ProgrammeBatchAttainmentReportDto.Report4PoRow.builder().poCode("PO1").targetLevel(new BigDecimal("2.00")).finalAttainment(new BigDecimal("1.20")).build()
+        );
+        reportRepository.save(ProgrammeBatchAttainmentReport.builder()
+                .id("rep-inactive-gaps")
+                .programmeBatchId(inactiveBatch.getId())
+                .status(ReportStatus.FINALIZED)
+                .overallAttainmentReportJson(objectMapper.writeValueAsString(Map.of("po", pos)))
+                .build());
+
+        ProgrammeLandscapeResponseDto response = analyticsService.getProgrammeLandscape(
+                null, null, null, inactiveBatch.getId(), 0, 10, null, null, "ACTIVE", true, "gapCount", "DESC");
+        assertThat(response.getContent()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("TEST 5: GRADUATED batch with gaps -> excluded from ACTIVE attention list")
+    @WithMockUser(username = "iqac_user", roles = {"IQAC"})
+    void testGraduatedBatchWithGaps_ExcludedFromAttentionList() throws Exception {
+        ProgrammeBatch graduatedBatch = programmeBatchRepository.save(ProgrammeBatch.builder()
+                .id("batch-graduated-gaps")
+                .masterProgrammeId(progBtech.getId())
+                .name("Graduated Batch With Gaps")
+                .status("GRADUATED")
+                .startYear(2019)
+                .endYear(2023)
+                .build());
+
+        List<ProgrammeBatchAttainmentReportDto.Report4PoRow> pos = List.of(
+                ProgrammeBatchAttainmentReportDto.Report4PoRow.builder().poCode("PO1").targetLevel(new BigDecimal("2.00")).finalAttainment(new BigDecimal("1.20")).build()
+        );
+        reportRepository.save(ProgrammeBatchAttainmentReport.builder()
+                .id("rep-graduated-gaps")
+                .programmeBatchId(graduatedBatch.getId())
+                .status(ReportStatus.FINALIZED)
+                .overallAttainmentReportJson(objectMapper.writeValueAsString(Map.of("po", pos)))
+                .build());
+
+        ProgrammeLandscapeResponseDto response = analyticsService.getProgrammeLandscape(
+                null, null, null, graduatedBatch.getId(), 0, 10, null, null, "ACTIVE", true, "gapCount", "DESC");
+        assertThat(response.getContent()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("TEST 6: Soft-deleted ACTIVE batch with gaps -> excluded from attention list")
+    @WithMockUser(username = "iqac_user", roles = {"IQAC"})
+    void testSoftDeletedBatch_ExcludedFromAttentionList() throws Exception {
+        ProgrammeBatch deletedBatch = programmeBatchRepository.save(ProgrammeBatch.builder()
+                .id("batch-deleted-gaps")
+                .masterProgrammeId(progBtech.getId())
+                .name("Deleted Batch With Gaps")
+                .status("ACTIVE")
+                .startYear(2035)
+                .endYear(2039)
+                .deletedAt(ZonedDateTime.now())
+                .build());
+
+        ProgrammeLandscapeResponseDto response = analyticsService.getProgrammeLandscape(
+                null, null, null, deletedBatch.getId(), 0, 10, null, null, "ACTIVE", true, "gapCount", "DESC");
+        assertThat(response.getContent()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("TEST 7: School filter + ACTIVE batches -> only authorized ACTIVE batches in that school")
+    @WithMockUser(username = "iqac_user", roles = {"IQAC"})
+    void testSchoolFilter_ActiveBatchesRestrictedToSchool() throws Exception {
+        ProgrammeBatch somBatch = programmeBatchRepository.save(ProgrammeBatch.builder()
+                .id("batch-som-active")
+                .masterProgrammeId(progMba.getId())
+                .name("SOM MBA Active")
+                .status("ACTIVE")
+                .startYear(2024)
+                .endYear(2026)
+                .build());
+
+        List<ProgrammeBatchAttainmentReportDto.Report4PoRow> pos = List.of(
+                ProgrammeBatchAttainmentReportDto.Report4PoRow.builder().poCode("PO1").targetLevel(new BigDecimal("2.00")).finalAttainment(new BigDecimal("1.20")).build()
+        );
+        reportRepository.save(ProgrammeBatchAttainmentReport.builder()
+                .id("rep-som-active")
+                .programmeBatchId(somBatch.getId())
+                .status(ReportStatus.FINALIZED)
+                .overallAttainmentReportJson(objectMapper.writeValueAsString(Map.of("po", pos)))
+                .build());
+
+        // Query school SOET -> SOM batch must NOT appear
+        ProgrammeLandscapeResponseDto responseSoet = analyticsService.getProgrammeLandscape(
+                schoolSoet.getId(), null, null, null, 0, 10, null, null, "ACTIVE", true, "gapCount", "DESC");
+        assertThat(responseSoet.getContent().stream().noneMatch(r -> r.getProgrammeBatchId().equals("batch-som-active"))).isTrue();
+
+        // Query school SOM -> SOM batch MUST appear
+        ProgrammeLandscapeResponseDto responseSom = analyticsService.getProgrammeLandscape(
+                schoolSom.getId(), null, null, null, 0, 10, null, null, "ACTIVE", true, "gapCount", "DESC");
+        assertThat(responseSom.getContent().stream().anyMatch(r -> r.getProgrammeBatchId().equals("batch-som-active"))).isTrue();
+    }
+
+    @Test
+    @DisplayName("TEST 8: Programme filter + ACTIVE batches -> only authorized ACTIVE batches in that programme")
+    @WithMockUser(username = "iqac_user", roles = {"IQAC"})
+    void testProgrammeFilter_ActiveBatchesRestrictedToProgramme() throws Exception {
+        ProgrammeBatch btechBatch = programmeBatchRepository.save(ProgrammeBatch.builder()
+                .id("batch-prog-filter-btech")
+                .masterProgrammeId(progBtech.getId())
+                .name("BTech Active Attention")
+                .status("ACTIVE")
+                .startYear(2025)
+                .endYear(2029)
+                .build());
+
+        List<ProgrammeBatchAttainmentReportDto.Report4PoRow> pos = List.of(
+                ProgrammeBatchAttainmentReportDto.Report4PoRow.builder().poCode("PO1").targetLevel(new BigDecimal("2.00")).finalAttainment(new BigDecimal("1.00")).build()
+        );
+        reportRepository.save(ProgrammeBatchAttainmentReport.builder()
+                .id("rep-prog-filter-btech")
+                .programmeBatchId(btechBatch.getId())
+                .status(ReportStatus.FINALIZED)
+                .overallAttainmentReportJson(objectMapper.writeValueAsString(Map.of("po", pos)))
+                .build());
+
+        // Filter for progMba -> btechBatch must NOT appear
+        ProgrammeLandscapeResponseDto responseMba = analyticsService.getProgrammeLandscape(
+                null, null, progMba.getId(), null, 0, 10, null, null, "ACTIVE", true, "gapCount", "DESC");
+        assertThat(responseMba.getContent().stream().noneMatch(r -> r.getProgrammeBatchId().equals("batch-prog-filter-btech"))).isTrue();
+
+        // Filter for progBtech -> btechBatch MUST appear
+        ProgrammeLandscapeResponseDto responseBtech = analyticsService.getProgrammeLandscape(
+                null, null, progBtech.getId(), null, 0, 10, null, null, "ACTIVE", true, "gapCount", "DESC");
+        assertThat(responseBtech.getContent().stream().anyMatch(r -> r.getProgrammeBatchId().equals("batch-prog-filter-btech"))).isTrue();
+    }
+
+    @Test
+    @DisplayName("TEST 9: RBAC/scope remains enforced for Attention Dashboard")
+    @WithMockUser(username = "dir_user", roles = {"DIRECTOR"})
+    void testRbacEnforcement_DirectorCannotAccessOtherSchool() {
+        // Director of SOET trying to access SOM
+        assertThrows(org.springframework.web.server.ResponseStatusException.class, () ->
+                analyticsService.getProgrammeLandscape(schoolSom.getId(), null, null, null, 0, 10, null, null, "ACTIVE", true, "gapCount", "DESC"));
+    }
+
+    @Test
+    @DisplayName("TEST 10: Attention ordering by gapCount DESC")
+    @WithMockUser(username = "iqac_user", roles = {"IQAC"})
+    void testAttentionOrdering_GapCountDesc() throws Exception {
+        ProgrammeBatch batchGap1 = programmeBatchRepository.save(ProgrammeBatch.builder()
+                .id("batch-order-gap1")
+                .masterProgrammeId(progBtech.getId())
+                .name("Order Gap 1")
+                .status("ACTIVE")
+                .startYear(2025)
+                .endYear(2029)
+                .build());
+
+        ProgrammeBatch batchGap3 = programmeBatchRepository.save(ProgrammeBatch.builder()
+                .id("batch-order-gap3")
+                .masterProgrammeId(progBtech.getId())
+                .name("Order Gap 3")
+                .status("ACTIVE")
+                .startYear(2026)
+                .endYear(2030)
+                .build());
+
+        // batchGap1 has 1 deficit
+        List<ProgrammeBatchAttainmentReportDto.Report4PoRow> pos1 = List.of(
+                ProgrammeBatchAttainmentReportDto.Report4PoRow.builder().poCode("PO1").targetLevel(new BigDecimal("2.00")).finalAttainment(new BigDecimal("1.00")).build()
+        );
+        reportRepository.save(ProgrammeBatchAttainmentReport.builder()
+                .id("rep-order-gap1")
+                .programmeBatchId(batchGap1.getId())
+                .status(ReportStatus.FINALIZED)
+                .overallAttainmentReportJson(objectMapper.writeValueAsString(Map.of("po", pos1)))
+                .build());
+
+        // batchGap3 has 3 deficits (2 PO, 1 PSO)
+        List<ProgrammeBatchAttainmentReportDto.Report4PoRow> pos3 = List.of(
+                ProgrammeBatchAttainmentReportDto.Report4PoRow.builder().poCode("PO1").targetLevel(new BigDecimal("2.00")).finalAttainment(new BigDecimal("1.00")).build(),
+                ProgrammeBatchAttainmentReportDto.Report4PoRow.builder().poCode("PO2").targetLevel(new BigDecimal("2.00")).finalAttainment(new BigDecimal("1.00")).build()
+        );
+        List<ProgrammeBatchAttainmentReportDto.Report4PsoRow> psos3 = List.of(
+                ProgrammeBatchAttainmentReportDto.Report4PsoRow.builder().psoCode("PSO1").targetLevel(new BigDecimal("2.00")).finalAttainment(new BigDecimal("1.00")).build()
+        );
+        reportRepository.save(ProgrammeBatchAttainmentReport.builder()
+                .id("rep-order-gap3")
+                .programmeBatchId(batchGap3.getId())
+                .status(ReportStatus.FINALIZED)
+                .overallAttainmentReportJson(objectMapper.writeValueAsString(Map.of("po", pos3, "pso", psos3)))
+                .build());
+
+        ProgrammeLandscapeResponseDto response = analyticsService.getProgrammeLandscape(
+                schoolSoet.getId(), null, null, null, 0, 10, null, null, "ACTIVE", true, "gapCount", "DESC");
+
+        List<ProgrammeLandscapeRowDto> content = response.getContent();
+        assertThat(content.size()).isGreaterThanOrEqualTo(2);
+
+        int idxGap3 = -1;
+        int idxGap1 = -1;
+        for (int i = 0; i < content.size(); i++) {
+            if ("batch-order-gap3".equals(content.get(i).getProgrammeBatchId())) idxGap3 = i;
+            if ("batch-order-gap1".equals(content.get(i).getProgrammeBatchId())) idxGap1 = i;
+        }
+
+        assertThat(idxGap3).isNotEqualTo(-1);
+        assertThat(idxGap1).isNotEqualTo(-1);
+        assertThat(idxGap3).isLessThan(idxGap1); // Higher gapCount must come FIRST in DESC order
+    }
+
+    @Test
+    @DisplayName("TEST 11: Existing historical/finalized Analytics behavior preserved")
+    @WithMockUser(username = "iqac_user", roles = {"IQAC"})
+    void testExistingHistoricalAnalytics_Preserved() {
+        // Calling landscape with statusFilter=ALL and no batchStatus must still return all historical cohorts
+        ProgrammeLandscapeResponseDto response = analyticsService.getProgrammeLandscape(
+                null, null, null, null, 0, 10, null, "ALL", null, "ASC");
+        assertThat(response.getContent().stream().anyMatch(r -> r.getProgrammeBatchId().equals(batch2022.getId()))).isTrue();
+    }
+
+    @Test
+    @DisplayName("TEST 12: Academic batch selector API behavior unchanged (not restricted to gapCount > 0)")
+    @WithMockUser(username = "iqac_user", roles = {"IQAC"})
+    void testAcademicBatchSelector_NotRestrictedToGaps() {
+        ProgrammeBatch noGapsBatch = programmeBatchRepository.save(ProgrammeBatch.builder()
+                .id("batch-selector-nogaps")
+                .masterProgrammeId(progBtech.getId())
+                .name("Selector Batch Zero Gaps")
+                .status("ACTIVE")
+                .startYear(2027)
+                .endYear(2031)
+                .build());
+
+        List<ProgrammeBatch> batches = programmeBatchRepository.findByMasterProgrammeIdAndDeletedAtIsNull(progBtech.getId());
+        assertThat(batches.stream().anyMatch(b -> b.getId().equals(noGapsBatch.getId()))).isTrue();
+    }
 }
 
