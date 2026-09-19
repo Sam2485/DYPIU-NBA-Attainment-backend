@@ -3,6 +3,7 @@ package com.dypiu.nba.service;
 import com.dypiu.nba.dto.ConsolidatedIndirectAttainmentDto;
 import com.dypiu.nba.dto.CourseAttainmentReportDto;
 import com.dypiu.nba.dto.CourseMappingMatrixDto;
+import com.dypiu.nba.dto.IndirectAssessmentDto;
 import com.dypiu.nba.dto.ProgrammeAtrReportDto;
 import com.dypiu.nba.dto.ProgrammeAttainmentResultDto;
 import com.dypiu.nba.dto.ProgrammeBatchAttainmentReportDto;
@@ -1230,6 +1231,255 @@ public class AnalyticsService {
                 .targetMet(targetMet)
                 .contributingCourseCount(contributingCourses.size())
                 .courses(contributingCourses)
+                .build();
+    }
+
+    // ==========================================
+    // PROGRAMME INDIRECT ATTAINMENT DRILL-DOWN
+    // ==========================================
+    public OutcomeIndirectDrilldownResponseDto getOutcomeIndirectDrilldown(String programmeBatchId, String outcomeCode, String outcomeType) {
+        if (programmeBatchId == null || programmeBatchId.isBlank()) {
+            throw new BadRequestException("programmeBatchId is required");
+        }
+        if (outcomeCode == null || outcomeCode.isBlank()) {
+            throw new BadRequestException("outcomeCode is required");
+        }
+        if (outcomeType == null || outcomeType.isBlank()) {
+            throw new BadRequestException("outcomeType is required");
+        }
+
+        String type = outcomeType.trim().toUpperCase();
+        if (!"PO".equals(type) && !"PSO".equals(type)) {
+            throw new BadRequestException("Invalid outcomeType: " + outcomeType + ". Must be PO or PSO");
+        }
+
+        String targetCode = outcomeCode.trim().toUpperCase();
+        if ("PO".equals(type)) {
+            if (targetCode.startsWith("PSO")) {
+                throw new BadRequestException("Outcome code " + outcomeCode + " does not match outcomeType PO");
+            }
+        } else {
+            if (!targetCode.startsWith("PSO")) {
+                throw new BadRequestException("Outcome code " + outcomeCode + " does not match outcomeType PSO");
+            }
+        }
+
+        // 1. Authorize & Resolve batch scope (hierarchical upward check & RBAC)
+        ResolvedScope scope = validateAndResolveScope(null, null, null, programmeBatchId);
+        ProgrammeBatch batch = programmeBatchRepository.findById(scope.programmeBatchId)
+                .orElseThrow(() -> new BadRequestException("ProgrammeBatch not found: " + scope.programmeBatchId));
+
+        // 2. Resolve batch attainment report / continuous calculation data
+        ProgrammeBatchAttainmentReport report = programmeBatchAttainmentReportRepository.findByProgrammeBatchId(batch.getId()).orElse(null);
+        ResolvedBatchAnalyticsData bData = resolveBatchData(batch, report != null ? Map.of(batch.getId(), report) : Collections.emptyMap());
+
+        // 3. Locate target outcome definition and extract authoritative target & statement
+        BigDecimal target = new BigDecimal("2.50");
+        String statement = null;
+        boolean outcomeFound = false;
+
+        if ("PO".equals(type)) {
+            ProgrammeBatchAttainmentReportDto.Report4PoRow matchedPo = (bData.pos != null) ? bData.pos.stream()
+                    .filter(p -> p.getPoCode() != null && p.getPoCode().equalsIgnoreCase(targetCode))
+                    .findFirst()
+                    .orElse(null) : null;
+            if (matchedPo != null) {
+                outcomeFound = true;
+                if (matchedPo.getTargetLevel() != null) target = matchedPo.getTargetLevel();
+                statement = matchedPo.getStatement();
+            } else {
+                List<ProgrammeOutcome> pos = programmeOutcomeRepository.findByProgrammeBatchIdOrderByCodeAsc(batch.getId());
+                if (pos.isEmpty()) {
+                    pos = programmeOutcomeRepository.findByProgrammeBatchIdOrderByCodeAsc(batch.getMasterProgrammeId());
+                }
+                ProgrammeOutcome poDef = pos.stream()
+                        .filter(p -> p.getCode() != null && p.getCode().equalsIgnoreCase(targetCode))
+                        .findFirst()
+                        .orElse(null);
+                if (poDef != null) {
+                    outcomeFound = true;
+                    statement = poDef.getStatement() != null ? poDef.getStatement() : "Programme Outcome " + targetCode;
+                    if (poDef.getTarget() != null) target = poDef.getTarget();
+                } else if (targetCode.matches("^PO([1-9]|1[0-2])$")) {
+                    outcomeFound = true;
+                    statement = "Programme Outcome " + targetCode;
+                }
+            }
+        } else {
+            ProgrammeBatchAttainmentReportDto.Report4PsoRow matchedPso = (bData.psos != null) ? bData.psos.stream()
+                    .filter(p -> p.getPsoCode() != null && p.getPsoCode().equalsIgnoreCase(targetCode))
+                    .findFirst()
+                    .orElse(null) : null;
+            if (matchedPso != null) {
+                outcomeFound = true;
+                if (matchedPso.getTargetLevel() != null) target = matchedPso.getTargetLevel();
+                statement = matchedPso.getStatement();
+            } else {
+                List<ProgrammeSpecificOutcome> psos = programmeSpecificOutcomeRepository.findByProgrammeBatchIdOrderByCodeAsc(batch.getId());
+                if (psos.isEmpty()) {
+                    psos = programmeSpecificOutcomeRepository.findByProgrammeBatchIdOrderByCodeAsc(batch.getMasterProgrammeId());
+                }
+                ProgrammeSpecificOutcome psoDef = psos.stream()
+                        .filter(p -> p.getCode() != null && p.getCode().equalsIgnoreCase(targetCode))
+                        .findFirst()
+                        .orElse(null);
+                if (psoDef != null) {
+                    outcomeFound = true;
+                    statement = psoDef.getStatement() != null ? psoDef.getStatement() : "Programme Specific Outcome " + targetCode;
+                    if (psoDef.getTarget() != null) target = psoDef.getTarget();
+                } else if (targetCode.matches("^PSO[1-3]$")) {
+                    outcomeFound = true;
+                    statement = "Programme Specific Outcome " + targetCode;
+                }
+            }
+        }
+
+        if (!outcomeFound) {
+            throw new ResourceNotFoundException("Outcome '" + targetCode + "' of type '" + type + "' not found for programme batch: " + programmeBatchId);
+        }
+
+        // 4. Retrieve Programme Exit Survey (if present)
+        ProgrammeSurveyResultDto exitSurvey = null;
+        try {
+            exitSurvey = attainmentCalculationService.getProgrammeSurveyResult(batch.getMasterProgrammeId(), batch.getId());
+        } catch (Exception e) {
+            log.debug("[AnalyticsService] No exit survey found for batch {}: {}", batch.getId(), e.getMessage());
+        }
+
+        Map<String, BigDecimal> exitScores = new LinkedHashMap<>();
+        if (exitSurvey != null && exitSurvey.getRecordsProcessed() > 0) {
+            if (exitSurvey.getPoIndirectAttainment() != null) {
+                for (ProgrammeSurveyResultDto.PoIndirectItem it : exitSurvey.getPoIndirectAttainment()) {
+                    if (it.getPoCode() != null && it.getIndirectAttainment() != null && it.getIndirectAttainment().compareTo(BigDecimal.ZERO) > 0) {
+                        exitScores.put(it.getPoCode().toUpperCase().trim(), it.getIndirectAttainment());
+                    }
+                }
+            }
+            if (exitSurvey.getPsoIndirectAttainment() != null) {
+                for (ProgrammeSurveyResultDto.PsoIndirectItem it : exitSurvey.getPsoIndirectAttainment()) {
+                    if (it.getPsoCode() != null && it.getIndirectAttainment() != null && it.getIndirectAttainment().compareTo(BigDecimal.ZERO) > 0) {
+                        exitScores.put(it.getPsoCode().toUpperCase().trim(), it.getIndirectAttainment());
+                    }
+                }
+            }
+        }
+
+        // 5. Retrieve authoritative consolidated indirect attainment
+        BigDecimal indirectAttainment = BigDecimal.ZERO;
+        if ("PO".equals(type)) {
+            ProgrammeBatchAttainmentReportDto.Report4PoRow matchedPo = (bData.pos != null) ? bData.pos.stream()
+                    .filter(p -> p.getPoCode() != null && p.getPoCode().equalsIgnoreCase(targetCode))
+                    .findFirst()
+                    .orElse(null) : null;
+            if (matchedPo != null && matchedPo.getIndirectAttainment() != null) {
+                indirectAttainment = matchedPo.getIndirectAttainment();
+            }
+        } else {
+            ProgrammeBatchAttainmentReportDto.Report4PsoRow matchedPso = (bData.psos != null) ? bData.psos.stream()
+                    .filter(p -> p.getPsoCode() != null && p.getPsoCode().equalsIgnoreCase(targetCode))
+                    .findFirst()
+                    .orElse(null) : null;
+            if (matchedPso != null && matchedPso.getIndirectAttainment() != null) {
+                indirectAttainment = matchedPso.getIndirectAttainment();
+            }
+        }
+
+        // Fallback live consolidation if not finalized/empty in bData
+        if (indirectAttainment.compareTo(BigDecimal.ZERO) == 0 && indirectAssessmentService != null) {
+            Map<String, BigDecimal> liveConsolidated = indirectAssessmentService.computeConsolidatedScores(batch.getId(), exitScores);
+            if (liveConsolidated != null && liveConsolidated.containsKey(targetCode)) {
+                indirectAttainment = liveConsolidated.get(targetCode);
+            }
+        }
+
+        // 6. Gather and filter evidence items in chronological order
+        List<OutcomeIndirectEvidenceItemDto> evidenceList = new ArrayList<>();
+        List<IndirectAssessmentDto> dbAssessments = indirectAssessmentService != null
+                ? indirectAssessmentService.getAssessments(batch.getId())
+                : Collections.emptyList();
+
+        for (IndirectAssessmentDto a : dbAssessments) {
+            Map<String, BigDecimal> scores = a.getScores();
+            BigDecimal rawScore = (scores != null) ? scores.get(targetCode) : null;
+            boolean evaluated = rawScore != null && rawScore.compareTo(BigDecimal.ZERO) > 0;
+            BigDecimal outcomeValue = evaluated ? rawScore.setScale(2, RoundingMode.HALF_UP) : null;
+
+            evidenceList.add(OutcomeIndirectEvidenceItemDto.builder()
+                    .assessmentId(a.getId())
+                    .type(a.getType() != null ? a.getType() : "EVENT")
+                    .name(a.getName())
+                    .description(a.getDescription())
+                    .date(a.getCreatedAt())
+                    .outcomeEvaluated(evaluated)
+                    .outcomeValue(outcomeValue)
+                    .responseCount(null)
+                    .createdBy(a.getCreatedBy())
+                    .build());
+        }
+
+        // Include Exit Survey as evidence if present
+        if (exitSurvey != null && exitSurvey.getRecordsProcessed() > 0) {
+            BigDecimal exitSurveyScore = null;
+            if ("PO".equals(type) && exitSurvey.getPoIndirectAttainment() != null) {
+                exitSurveyScore = exitSurvey.getPoIndirectAttainment().stream()
+                        .filter(it -> it.getPoCode() != null && it.getPoCode().equalsIgnoreCase(targetCode))
+                        .map(ProgrammeSurveyResultDto.PoIndirectItem::getIndirectAttainment)
+                        .findFirst()
+                        .orElse(null);
+            } else if ("PSO".equals(type) && exitSurvey.getPsoIndirectAttainment() != null) {
+                exitSurveyScore = exitSurvey.getPsoIndirectAttainment().stream()
+                        .filter(it -> it.getPsoCode() != null && it.getPsoCode().equalsIgnoreCase(targetCode))
+                        .map(ProgrammeSurveyResultDto.PsoIndirectItem::getIndirectAttainment)
+                        .findFirst()
+                        .orElse(null);
+            }
+
+            boolean surveyEvaluated = exitSurveyScore != null && exitSurveyScore.compareTo(BigDecimal.ZERO) > 0;
+            BigDecimal surveyValue = surveyEvaluated ? exitSurveyScore.setScale(2, RoundingMode.HALF_UP) : null;
+
+            ZonedDateTime exitDate = null;
+            if (!evidenceList.isEmpty()) {
+                ZonedDateTime lastDate = evidenceList.get(evidenceList.size() - 1).getDate();
+                exitDate = (lastDate != null) ? lastDate.plusMinutes(1) : ZonedDateTime.now();
+            } else {
+                exitDate = batch.getCreatedAt() != null ? batch.getCreatedAt() : ZonedDateTime.now();
+            }
+
+            evidenceList.add(OutcomeIndirectEvidenceItemDto.builder()
+                    .assessmentId(exitSurvey.getUploadId() != null && !exitSurvey.getUploadId().isBlank()
+                            ? exitSurvey.getUploadId() : "exit-survey-" + batch.getId())
+                    .type("EXIT_SURVEY")
+                    .name("Programme End Exit Survey")
+                    .description("Graduating batch comprehensive programme exit survey")
+                    .date(exitDate)
+                    .outcomeEvaluated(surveyEvaluated)
+                    .outcomeValue(surveyValue)
+                    .responseCount(exitSurvey.getRecordsProcessed())
+                    .createdBy("Programme Coordinator")
+                    .build());
+        }
+
+        int totalEvidenceCount = evidenceList.size();
+        int participatingEvidenceCount = (int) evidenceList.stream()
+                .filter(OutcomeIndirectEvidenceItemDto::isOutcomeEvaluated)
+                .count();
+
+        BigDecimal indirectGap = indirectAttainment.subtract(target).setScale(2, RoundingMode.HALF_UP);
+        boolean targetMet = indirectAttainment.compareTo(target) >= 0;
+
+        return OutcomeIndirectDrilldownResponseDto.builder()
+                .programmeBatchId(batch.getId())
+                .batchName(batch.getName())
+                .outcomeCode(targetCode)
+                .outcomeType(type)
+                .outcomeStatement(statement)
+                .indirectAttainment(indirectAttainment.setScale(2, RoundingMode.HALF_UP))
+                .target(target.setScale(2, RoundingMode.HALF_UP))
+                .indirectGap(indirectGap)
+                .targetMet(targetMet)
+                .totalEvidenceCount(totalEvidenceCount)
+                .participatingEvidenceCount(participatingEvidenceCount)
+                .evidence(evidenceList)
                 .build();
     }
 

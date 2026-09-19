@@ -212,6 +212,24 @@ public class AnalyticsController {
                 .build());
     }
 
+    @GetMapping("/outcome-indirect-drilldown")
+    public ResponseEntity<ApiResponse<OutcomeIndirectDrilldownResponseDto>> getOutcomeIndirectDrilldown(
+            @RequestParam String programmeBatchId,
+            @RequestParam String outcomeCode,
+            @RequestParam(required = false, defaultValue = "PO") String outcomeType) {
+
+        log.debug("[AnalyticsController] getOutcomeIndirectDrilldown: programmeBatchId={}, outcomeCode={}, outcomeType={}",
+                programmeBatchId, outcomeCode, outcomeType);
+
+        OutcomeIndirectDrilldownResponseDto data = analyticsService.getOutcomeIndirectDrilldown(
+                programmeBatchId, outcomeCode, outcomeType);
+        return ResponseEntity.ok(ApiResponse.<OutcomeIndirectDrilldownResponseDto>builder()
+                .success(true)
+                .message("Outcome indirect attainment drill-down retrieved successfully")
+                .data(data)
+                .build());
+    }
+
     @GetMapping("/student-evidence")
     public ResponseEntity<ApiResponse<StudentCoEvidenceResponseDto>> getStudentCoEvidence(
             @RequestParam String programmeBatchCourseId,
