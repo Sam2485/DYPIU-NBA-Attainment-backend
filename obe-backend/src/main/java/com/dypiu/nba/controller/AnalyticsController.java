@@ -157,6 +157,38 @@ public class AnalyticsController {
                 .build());
     }
 
+    @GetMapping("/historical-programme-attainment")
+    public ResponseEntity<ApiResponse<HistoricalProgrammeAttainmentResponseDto>> getHistoricalProgrammeAttainment(
+            @RequestParam String masterProgrammeId,
+            @RequestParam(required = false) String outcomeCode) {
+
+        log.debug("[AnalyticsController] getHistoricalProgrammeAttainment: masterProgrammeId={}, outcomeCode={}",
+                masterProgrammeId, outcomeCode);
+
+        HistoricalProgrammeAttainmentResponseDto data = analyticsService.getHistoricalProgrammeAttainment(masterProgrammeId, outcomeCode);
+        return ResponseEntity.ok(ApiResponse.<HistoricalProgrammeAttainmentResponseDto>builder()
+                .success(true)
+                .message("Historical programme attainment retrieved successfully")
+                .data(data)
+                .build());
+    }
+
+    @GetMapping("/compare-batches")
+    public ResponseEntity<ApiResponse<BatchComparisonAnalyticsResponseDto>> compareBatches(
+            @RequestParam String programmeBatchId1,
+            @RequestParam String programmeBatchId2) {
+
+        log.debug("[AnalyticsController] compareBatches: programmeBatchId1={}, programmeBatchId2={}",
+                programmeBatchId1, programmeBatchId2);
+
+        BatchComparisonAnalyticsResponseDto data = analyticsService.compareBatches(programmeBatchId1, programmeBatchId2);
+        return ResponseEntity.ok(ApiResponse.<BatchComparisonAnalyticsResponseDto>builder()
+                .success(true)
+                .message("Batch comparison analytics retrieved successfully")
+                .data(data)
+                .build());
+    }
+
     @GetMapping("/atr-intelligence")
     public ResponseEntity<ApiResponse<AtrIntelligenceResponseDto>> getAtrIntelligence(
             @RequestParam(required = false) String schoolId,
