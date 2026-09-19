@@ -879,4 +879,27 @@ public class CourseAndCoAnalyticsApiIntegrationTest {
                         .param("coCode", "CO1"))
                 .andExpect(status().isForbidden());
     }
+
+    @Test
+    @WithMockUser(username = "iqac_test_user", roles = {"IQAC"})
+    @DisplayName("Test 39: Course offering without AttainmentConfiguration returns 200 OK without 500 NPE")
+    void test39_CoAnalytics_UnconfiguredCourse_DoesNotThrow500() throws Exception {
+        ProgrammeBatchCourse unconfiguredCourse = programmeBatchCourseRepository.save(ProgrammeBatchCourse.builder()
+                .id("pbc-unconfigured-" + UUID.randomUUID().toString().substring(0, 8))
+                .programmeBatchId(batchCse.getId())
+                .code("CS999")
+                .name("Unconfigured Course")
+                .semester(5)
+                .courseCoordinatorName("Dr. Unconfigured")
+                .build());
+
+        mockMvc.perform(get("/api/v1/analytics/co-analytics")
+                        .param("programmeBatchCourseId", unconfiguredCourse.getId())
+                        .param("coCode", "CO1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.coCode").value("CO1"))
+                .andExpect(jsonPath("$.data.directAttainment").exists())
+                .andExpect(jsonPath("$.data.indirectAttainment").exists());
+    }
 }

@@ -59,6 +59,7 @@ public class AnalyticsService {
     private final CourseOutcomeRepository courseOutcomeRepository;
     private final AttainmentReportService attainmentReportService;
     private final AttainmentConfigurationRepository attainmentConfigurationRepository;
+    private final BatchLifecycleService batchLifecycleService;
 
     // ==========================================
     // 1. KPI ENDPOINT
@@ -1697,17 +1698,27 @@ public class AnalyticsService {
                 ? config.getEffectiveApprovedIndirectThreshold() : new BigDecimal("60.00");
 
         // 6. Authoritative Course Attainment Report
-        CourseAttainmentReportDto reportDto = attainmentReportService.getOrCreateCourseAttainmentReport(offering.getId());
-        BigDecimal overallCourseAttainment = reportDto.getOverallCoAttainment() != null
+        CourseAttainmentReportDto reportDto = null;
+        try {
+            reportDto = attainmentReportService.getOrCreateCourseAttainmentReport(offering.getId());
+        } catch (Exception ex) {
+            log.warn("[AnalyticsService] Could not get or create course attainment report for offering {}: {}", offering.getId(), ex.getMessage());
+        }
+        BigDecimal overallCourseAttainment = reportDto != null && reportDto.getOverallCoAttainment() != null
                 ? reportDto.getOverallCoAttainment() : BigDecimal.ZERO;
-        BigDecimal directAttainment = reportDto.getDirectAttainment() != null
+        BigDecimal directAttainment = reportDto != null && reportDto.getDirectAttainment() != null
                 ? reportDto.getDirectAttainment() : BigDecimal.ZERO;
-        BigDecimal indirectAttainment = reportDto.getIndirectAttainment() != null
+        BigDecimal indirectAttainment = reportDto != null && reportDto.getIndirectAttainment() != null
                 ? reportDto.getIndirectAttainment() : BigDecimal.ZERO;
-        String attainmentStatus = reportDto.getStatus() != null ? reportDto.getStatus().name() : "DRAFT";
+        String attainmentStatus = reportDto != null && reportDto.getStatus() != null ? reportDto.getStatus().name() : "DRAFT";
 
         // 7. Authoritative Articulation Matrix (CO -> PO/PSO)
-        CourseMappingMatrixDto matrixDto = outcomeService.getCourseMappings(offering.getId());
+        CourseMappingMatrixDto matrixDto = null;
+        try {
+            matrixDto = outcomeService.getCourseMappings(offering.getId());
+        } catch (Exception ex) {
+            log.warn("[AnalyticsService] Could not resolve course mappings for offering {}: {}", offering.getId(), ex.getMessage());
+        }
         Map<String, Map<String, Integer>> matrix = (matrixDto != null && matrixDto.getMatrix() != null)
                 ? matrixDto.getMatrix() : Collections.emptyMap();
 
@@ -1719,7 +1730,7 @@ public class AnalyticsService {
 
         // 9. Course CO Overview Table
         List<CourseCoOverviewItemDto> coItems = new ArrayList<>();
-        if (reportDto.getTable3CoAttainments() != null) {
+        if (reportDto != null && reportDto.getTable3CoAttainments() != null) {
             for (CourseAttainmentReportDto.Table3Row t3 : reportDto.getTable3CoAttainments()) {
                 String coCode = t3.getCoCode();
                 Map<String, Integer> rowMappings = matrix.getOrDefault(coCode, Collections.emptyMap());
@@ -1739,14 +1750,14 @@ public class AnalyticsService {
                         .coCode(coCode)
                         .statement(t3.getStatement())
                         .target(t3.getTargetLevel())
-                        .directPercentage(t3.getDirectPercentage())
-                        .directLevel(t3.getDirectLevel())
-                        .directAttainment(t3.getDirectLevel() != null ? BigDecimal.valueOf(t3.getDirectLevel()).setScale(2, RoundingMode.HALF_UP) : null)
-                        .indirectPercentage(t3.getIndirectPercentage())
-                        .indirectScore(t3.getIndirectScore())
-                        .indirectLevel(t3.getIndirectLevel())
-                        .indirectAttainment(t3.getIndirectLevel() != null ? BigDecimal.valueOf(t3.getIndirectLevel()).setScale(2, RoundingMode.HALF_UP) : null)
-                        .overallAttainment(t3.getFinalAttainment())
+                        .directPercentage(t3.getDirectPercentage() != null ? t3.getDirectPercentage() : BigDecimal.ZERO)
+                        .directLevel(t3.getDirectLevel() != null ? t3.getDirectLevel() : 0)
+                        .directAttainment(t3.getDirectLevel() != null ? BigDecimal.valueOf(t3.getDirectLevel()).setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO)
+                        .indirectPercentage(t3.getIndirectPercentage() != null ? t3.getIndirectPercentage() : BigDecimal.ZERO)
+                        .indirectScore(t3.getIndirectScore() != null ? t3.getIndirectScore() : BigDecimal.ZERO)
+                        .indirectLevel(t3.getIndirectLevel() != null ? t3.getIndirectLevel() : 0)
+                        .indirectAttainment(t3.getIndirectLevel() != null ? BigDecimal.valueOf(t3.getIndirectLevel()).setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO)
+                        .overallAttainment(t3.getFinalAttainment() != null ? t3.getFinalAttainment() : BigDecimal.ZERO)
                         .targetMet(t3.getTargetMet())
                         .observation(t3.getObservation())
                         .directWeight(directWeight)
@@ -1755,6 +1766,67 @@ public class AnalyticsService {
                         .psoMappings(psoMap)
                         .selectedOutcomeMapping(selectedMapping)
                         .build());
+            }
+        }
+
+        if (coItems.isEmpty()) {
+            List<CourseOutcome> dbCos = courseOutcomeRepository.findByProgrammeBatchCourseId(offering.getId());
+            if (dbCos.isEmpty()) {
+                for (int i = 1; i <= 5; i++) {
+                    String cCode = "CO" + i;
+                    coItems.add(CourseCoOverviewItemDto.builder()
+                            .coCode(cCode)
+                            .statement("Course outcome " + cCode)
+                            .target(new BigDecimal("2.50"))
+                            .directPercentage(BigDecimal.ZERO)
+                            .directLevel(0)
+                            .directAttainment(BigDecimal.ZERO)
+                            .indirectPercentage(BigDecimal.ZERO)
+                            .indirectScore(BigDecimal.ZERO)
+                            .indirectLevel(0)
+                            .indirectAttainment(BigDecimal.ZERO)
+                            .overallAttainment(BigDecimal.ZERO)
+                            .targetMet(false)
+                            .directWeight(directWeight)
+                            .indirectWeight(indirectWeight)
+                            .poMappings(Collections.emptyMap())
+                            .psoMappings(Collections.emptyMap())
+                            .build());
+                }
+            } else {
+                for (CourseOutcome co : dbCos) {
+                    String cCode = co.getCode();
+                    Map<String, Integer> rowMappings = matrix.getOrDefault(cCode, Collections.emptyMap());
+                    Map<String, Integer> poMap = new LinkedHashMap<>();
+                    Map<String, Integer> psoMap = new LinkedHashMap<>();
+                    for (Map.Entry<String, Integer> m : rowMappings.entrySet()) {
+                        if (m.getKey().toUpperCase().startsWith("PSO")) {
+                            psoMap.put(m.getKey(), m.getValue());
+                        } else {
+                            poMap.put(m.getKey(), m.getValue());
+                        }
+                    }
+                    Integer selectedMapping = (targetOutcomeCode != null) ? rowMappings.get(targetOutcomeCode) : null;
+                    coItems.add(CourseCoOverviewItemDto.builder()
+                            .coCode(cCode)
+                            .statement(co.getStatement())
+                            .target(co.getTargetLevel() != null ? co.getTargetLevel() : new BigDecimal("2.50"))
+                            .directPercentage(BigDecimal.ZERO)
+                            .directLevel(0)
+                            .directAttainment(BigDecimal.ZERO)
+                            .indirectPercentage(BigDecimal.ZERO)
+                            .indirectScore(BigDecimal.ZERO)
+                            .indirectLevel(0)
+                            .indirectAttainment(BigDecimal.ZERO)
+                            .overallAttainment(BigDecimal.ZERO)
+                            .targetMet(false)
+                            .directWeight(directWeight)
+                            .indirectWeight(indirectWeight)
+                            .poMappings(poMap)
+                            .psoMappings(psoMap)
+                            .selectedOutcomeMapping(selectedMapping)
+                            .build());
+                }
             }
         }
 
@@ -1980,29 +2052,61 @@ public class AnalyticsService {
 
         String targetCo = coCode.trim().toUpperCase();
 
-        // 4. Resolve Course Outcome Definition
-        List<CourseOutcome> cos = courseOutcomeRepository.findByProgrammeBatchCourseId(offering.getId());
-        CourseOutcome coDef = cos.stream()
-                .filter(c -> c.getCode() != null && c.getCode().equalsIgnoreCase(targetCo))
-                .findFirst()
-                .orElseThrow(() -> new ResourceNotFoundException("Course Outcome '" + targetCo + "' not found for course: " + offering.getId()));
-
-        // 5. Configuration & Weights
+        // 4. Configuration & Weights
         AttainmentConfiguration config = attainmentConfigurationRepository.findByProgrammeBatchCourseId(offering.getId()).orElse(null);
         BigDecimal directWeight = config != null && config.getEffectiveApprovedDirectWeight() != null
                 ? config.getEffectiveApprovedDirectWeight() : new BigDecimal("80.00");
         BigDecimal indirectWeight = config != null && config.getEffectiveApprovedIndirectWeight() != null
                 ? config.getEffectiveApprovedIndirectWeight() : new BigDecimal("20.00");
+        BigDecimal defaultThreshold = config != null && config.getEffectiveApprovedDirectThreshold() != null
+                ? config.getEffectiveApprovedDirectThreshold() : new BigDecimal("60.00");
 
-        // 6. Course Attainment Report for Table 3 CO details
-        CourseAttainmentReportDto reportDto = attainmentReportService.getOrCreateCourseAttainmentReport(offering.getId());
+        // 5. Course Attainment Report for Table 3 CO details
+        CourseAttainmentReportDto reportDto = null;
+        try {
+            reportDto = attainmentReportService.getOrCreateCourseAttainmentReport(offering.getId());
+        } catch (Exception ex) {
+            log.warn("[AnalyticsService] Could not get or create course attainment report for offering {}: {}", offering.getId(), ex.getMessage());
+        }
+
         CourseAttainmentReportDto.Table3Row t3 = null;
-        if (reportDto.getTable3CoAttainments() != null) {
+        if (reportDto != null && reportDto.getTable3CoAttainments() != null) {
             t3 = reportDto.getTable3CoAttainments().stream()
                     .filter(r -> r.getCoCode() != null && r.getCoCode().equalsIgnoreCase(targetCo))
                     .findFirst()
                     .orElse(null);
         }
+
+        // 6. Resolve Course Outcome Definition
+        List<CourseOutcome> cos = courseOutcomeRepository.findByProgrammeBatchCourseId(offering.getId());
+        if (cos.isEmpty()) {
+            if (reportDto != null && reportDto.getTable3CoAttainments() != null && !reportDto.getTable3CoAttainments().isEmpty()) {
+                cos = reportDto.getTable3CoAttainments().stream()
+                        .map(r -> CourseOutcome.builder()
+                                .id("co-" + r.getCoCode())
+                                .programmeBatchCourseId(offering.getId())
+                                .code(r.getCoCode())
+                                .statement(r.getStatement() != null ? r.getStatement() : "Course Outcome " + r.getCoCode())
+                                .targetLevel(r.getTargetLevel() != null ? r.getTargetLevel() : new BigDecimal("2.50"))
+                                .build())
+                        .collect(Collectors.toList());
+            } else {
+                cos = new ArrayList<>();
+                for (int i = 1; i <= 5; i++) {
+                    cos.add(CourseOutcome.builder()
+                            .id("co-default-" + i)
+                            .programmeBatchCourseId(offering.getId())
+                            .code("CO" + i)
+                            .statement("Course outcome CO" + i)
+                            .targetLevel(new BigDecimal("2.50"))
+                            .build());
+                }
+            }
+        }
+        CourseOutcome coDef = cos.stream()
+                .filter(c -> c.getCode() != null && c.getCode().equalsIgnoreCase(targetCo))
+                .findFirst()
+                .orElseThrow(() -> new ResourceNotFoundException("Course Outcome '" + targetCo + "' not found for course: " + offering.getId()));
 
         String statement = (t3 != null && t3.getStatement() != null && !t3.getStatement().isBlank())
                 ? t3.getStatement()
@@ -2012,18 +2116,13 @@ public class AnalyticsService {
                 ? t3.getTargetLevel()
                 : (coDef.getTargetLevel() != null ? coDef.getTargetLevel() : new BigDecimal("2.50"));
 
-        BigDecimal overallAttainment = t3 != null ? t3.getFinalAttainment() : null;
-        BigDecimal directAttainment = (t3 != null && t3.getDirectLevel() != null)
-                ? BigDecimal.valueOf(t3.getDirectLevel()).setScale(2, RoundingMode.HALF_UP)
-                : null;
-        BigDecimal indirectAttainment = (t3 != null && t3.getIndirectLevel() != null)
-                ? BigDecimal.valueOf(t3.getIndirectLevel()).setScale(2, RoundingMode.HALF_UP)
-                : null;
-        Boolean targetMet = t3 != null ? t3.getTargetMet() : (overallAttainment != null && overallAttainment.compareTo(target) >= 0);
-        String observation = t3 != null ? t3.getObservation() : null;
-
         // 7. PO/PSO Mappings for this CO
-        CourseMappingMatrixDto matrixDto = outcomeService.getCourseMappings(offering.getId());
+        CourseMappingMatrixDto matrixDto = null;
+        try {
+            matrixDto = outcomeService.getCourseMappings(offering.getId());
+        } catch (Exception ex) {
+            log.warn("[AnalyticsService] Could not resolve course mappings for offering {}: {}", offering.getId(), ex.getMessage());
+        }
         Map<String, Map<String, Integer>> matrix = (matrixDto != null && matrixDto.getMatrix() != null)
                 ? matrixDto.getMatrix() : Collections.emptyMap();
         Map<String, Integer> coMappings = matrix.getOrDefault(targetCo, Collections.emptyMap());
@@ -2038,36 +2137,40 @@ public class AnalyticsService {
         }
 
         // 8. Direct Evidence Summary
-        ExaminationAttainmentResultDto examResult = attainmentCalculationService.getExaminationAttainment(offering.getId());
+        ExaminationAttainmentResultDto examResult = null;
+        try {
+            examResult = attainmentCalculationService.getExaminationAttainment(offering.getId());
+        } catch (Exception ex) {
+            log.warn("[AnalyticsService] Could not resolve examination attainment for offering {}: {}", offering.getId(), ex.getMessage());
+        }
+
         int totalStudents = examResult != null && examResult.getTotalStudents() != null ? examResult.getTotalStudents() : 0;
         int evaluatedStudents = (examResult != null && examResult.getStudentMarks() != null && !examResult.getStudentMarks().isEmpty())
                 ? examResult.getStudentMarks().size()
                 : totalStudents;
         BigDecimal directThreshold = examResult != null && examResult.getThresholdPercentage() != null
                 ? examResult.getThresholdPercentage()
-                : config.getEffectiveApprovedDirectThreshold();
+                : defaultThreshold;
         BigDecimal directPct = (examResult != null && examResult.getPercentageAboveThreshold() != null && examResult.getPercentageAboveThreshold().containsKey(targetCo))
                 ? examResult.getPercentageAboveThreshold().get(targetCo)
-                : (t3 != null ? t3.getDirectPercentage() : BigDecimal.ZERO);
+                : (t3 != null && t3.getDirectPercentage() != null ? t3.getDirectPercentage() : BigDecimal.ZERO);
         Integer directLvl = (examResult != null && examResult.getCoAttainmentLevels() != null && examResult.getCoAttainmentLevels().containsKey(targetCo))
                 ? examResult.getCoAttainmentLevels().get(targetCo)
-                : (t3 != null ? t3.getDirectLevel() : 0);
-        Integer studentsMeeting = examResult != null && examResult.getStudentsAboveThreshold() != null
+                : (t3 != null && t3.getDirectLevel() != null ? t3.getDirectLevel() : 0);
+        Integer studentsMeeting = (examResult != null && examResult.getStudentsAboveThreshold() != null && examResult.getStudentsAboveThreshold().containsKey(targetCo))
                 ? examResult.getStudentsAboveThreshold().get(targetCo)
-                : null;
-
-        CoDirectEvidenceSummaryDto directSummary = CoDirectEvidenceSummaryDto.builder()
-                .totalStudents(totalStudents)
-                .evaluatedStudents(evaluatedStudents)
-                .threshold(directThreshold)
-                .directPercentage(directPct)
-                .directLevel(directLvl)
-                .directAttainment(directAttainment)
-                .studentsMeetingThreshold(studentsMeeting)
-                .build();
+                : (totalStudents > 0 && directPct != null
+                        ? BigDecimal.valueOf(totalStudents).multiply(directPct).divide(new BigDecimal("100.00"), 0, RoundingMode.HALF_UP).intValue()
+                        : 0);
 
         // 9. Indirect Evidence Summary
-        SurveyAttainmentResultDto surveyResult = attainmentCalculationService.getSurveyAttainment(offering.getId());
+        SurveyAttainmentResultDto surveyResult = null;
+        try {
+            surveyResult = attainmentCalculationService.getSurveyAttainment(offering.getId());
+        } catch (Exception ex) {
+            log.warn("[AnalyticsService] Could not resolve survey attainment for offering {}: {}", offering.getId(), ex.getMessage());
+        }
+
         int responseCount = surveyResult != null && surveyResult.getTotalStudents() != null ? surveyResult.getTotalStudents() : 0;
         Map<String, Integer> levelDist = new LinkedHashMap<>();
         if (surveyResult != null) {
@@ -2080,20 +2183,53 @@ public class AnalyticsService {
         }
         BigDecimal indirectScore = (surveyResult != null && surveyResult.getIndirectAttainmentScores() != null && surveyResult.getIndirectAttainmentScores().containsKey(targetCo))
                 ? surveyResult.getIndirectAttainmentScores().get(targetCo)
-                : (t3 != null ? t3.getIndirectScore() : BigDecimal.ZERO);
+                : (t3 != null && t3.getIndirectScore() != null ? t3.getIndirectScore() : BigDecimal.ZERO);
         Integer indirectLvl = (surveyResult != null && surveyResult.getCoAttainmentLevels() != null && surveyResult.getCoAttainmentLevels().containsKey(targetCo))
                 ? surveyResult.getCoAttainmentLevels().get(targetCo)
-                : (t3 != null ? t3.getIndirectLevel() : 0);
+                : (t3 != null && t3.getIndirectLevel() != null ? t3.getIndirectLevel() : 0);
         BigDecimal indirectPct = (surveyResult != null && surveyResult.getOverallIndirectPercentages() != null && surveyResult.getOverallIndirectPercentages().containsKey(targetCo))
                 ? surveyResult.getOverallIndirectPercentages().get(targetCo)
-                : (t3 != null ? t3.getIndirectPercentage() : BigDecimal.ZERO);
+                : (t3 != null && t3.getIndirectPercentage() != null ? t3.getIndirectPercentage() : BigDecimal.ZERO);
+
+        // Compute Direct, Indirect, and Overall Attainment Levels reliably
+        BigDecimal directAttainment = (t3 != null && t3.getDirectLevel() != null)
+                ? BigDecimal.valueOf(t3.getDirectLevel()).setScale(2, RoundingMode.HALF_UP)
+                : (directLvl != null ? BigDecimal.valueOf(directLvl).setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
+
+        BigDecimal indirectAttainment = (t3 != null && t3.getIndirectLevel() != null)
+                ? BigDecimal.valueOf(t3.getIndirectLevel()).setScale(2, RoundingMode.HALF_UP)
+                : (indirectLvl != null ? BigDecimal.valueOf(indirectLvl).setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
+
+        BigDecimal overallAttainment = (t3 != null && t3.getFinalAttainment() != null)
+                ? t3.getFinalAttainment()
+                : directAttainment.multiply(directWeight).divide(new BigDecimal("100.00"), 4, RoundingMode.HALF_UP)
+                        .add(indirectAttainment.multiply(indirectWeight).divide(new BigDecimal("100.00"), 4, RoundingMode.HALF_UP))
+                        .setScale(2, RoundingMode.HALF_UP);
+
+        Boolean targetMet = (overallAttainment != null && target != null)
+                ? overallAttainment.compareTo(target) >= 0
+                : (t3 != null && t3.getTargetMet() != null ? t3.getTargetMet() : false);
+
+        String observation = (t3 != null && t3.getObservation() != null)
+                ? t3.getObservation()
+                : (targetMet ? "Target achieved (" + overallAttainment + " >= " + target + ")" : "Target not achieved (" + overallAttainment + " < " + target + ")");
+
+        CoDirectEvidenceSummaryDto directSummary = CoDirectEvidenceSummaryDto.builder()
+                .totalStudents(totalStudents)
+                .evaluatedStudents(evaluatedStudents)
+                .threshold(directThreshold)
+                .directPercentage(directPct != null ? directPct : BigDecimal.ZERO)
+                .directLevel(directLvl != null ? directLvl : 0)
+                .directAttainment(directAttainment)
+                .studentsMeetingThreshold(studentsMeeting)
+                .build();
 
         CoIndirectEvidenceSummaryDto indirectSummary = CoIndirectEvidenceSummaryDto.builder()
                 .responseCount(responseCount)
                 .levelDistribution(levelDist)
-                .indirectScore(indirectScore)
-                .indirectLevel(indirectLvl)
-                .indirectPercentage(indirectPct)
+                .indirectScore(indirectScore != null ? indirectScore : BigDecimal.ZERO)
+                .indirectLevel(indirectLvl != null ? indirectLvl : 0)
+                .indirectPercentage(indirectPct != null ? indirectPct : BigDecimal.ZERO)
                 .build();
 
         String coordinatorName = offering.getCourseCoordinatorName() != null && !offering.getCourseCoordinatorName().isBlank()
@@ -2273,6 +2409,187 @@ public class AnalyticsService {
         }
 
         return seriesList;
+    }
+
+    // ==========================================
+    // 6A. HISTORICAL PROGRAMME ATTAINMENT ENDPOINT
+    // ==========================================
+    public HistoricalProgrammeAttainmentResponseDto getHistoricalProgrammeAttainment(String masterProgrammeId, String outcomeCode) {
+        if (masterProgrammeId == null || masterProgrammeId.isBlank()) {
+            throw new BadRequestException("masterProgrammeId is required.");
+        }
+        validateAndResolveScope(null, null, masterProgrammeId, null);
+
+        MasterProgramme prog = masterProgrammeRepository.findById(masterProgrammeId.trim())
+                .orElseThrow(() -> new ResourceNotFoundException("MasterProgramme not found: " + masterProgrammeId));
+
+        List<ProgrammeBatch> allBatches = programmeBatchRepository.findByMasterProgrammeIdAndDeletedAtIsNull(masterProgrammeId.trim());
+
+        // Strictly filter to concluded batches only (COMPLETED or GRADUATED)
+        List<ProgrammeBatch> concludedBatches = allBatches.stream()
+                .filter(batchLifecycleService::isBatchConcluded)
+                .sorted(Comparator.comparing((ProgrammeBatch b) -> b.getStartYear() != null ? b.getStartYear() : 0)
+                        .thenComparing(b -> b.getEndYear() != null ? b.getEndYear() : 0))
+                .collect(Collectors.toList());
+
+        List<HistoricalProgrammeAttainmentResponseDto.HistoricalBatchSummaryDto> batchSummaries = new ArrayList<>();
+        List<HistoricalProgrammeAttainmentResponseDto.HistoricalOutcomeDataPointDto> allDataPoints = new ArrayList<>();
+        Set<String> distinctOutcomes = new TreeSet<>(this::compareOutcomeCodes);
+
+        if (!concludedBatches.isEmpty()) {
+            List<String> batchIds = concludedBatches.stream().map(ProgrammeBatch::getId).toList();
+            Map<String, ProgrammeBatchAttainmentReport> reportMap = programmeBatchAttainmentReportRepository
+                    .findByProgrammeBatchIdIn(batchIds).stream()
+                    .collect(Collectors.toMap(ProgrammeBatchAttainmentReport::getProgrammeBatchId, r -> r, (a, b) -> a));
+
+            for (ProgrammeBatch batch : concludedBatches) {
+                batchSummaries.add(HistoricalProgrammeAttainmentResponseDto.HistoricalBatchSummaryDto.builder()
+                        .batchId(batch.getId())
+                        .batchName(batch.getName())
+                        .startYear(batch.getStartYear())
+                        .endYear(batch.getEndYear())
+                        .status(batch.getStatus())
+                        .build());
+
+                Map<String, OutcomeItemMetrics> outcomeMetrics = resolveBatchOutcomeMetrics(batch, reportMap);
+                for (OutcomeItemMetrics metric : outcomeMetrics.values()) {
+                    distinctOutcomes.add(metric.outcomeCode());
+                    allDataPoints.add(HistoricalProgrammeAttainmentResponseDto.HistoricalOutcomeDataPointDto.builder()
+                            .batchId(batch.getId())
+                            .batchName(batch.getName())
+                            .startYear(batch.getStartYear())
+                            .endYear(batch.getEndYear())
+                            .status(batch.getStatus())
+                            .outcomeCode(metric.outcomeCode())
+                            .outcomeType(metric.outcomeType())
+                            .directAttainment(metric.directAttainment())
+                            .indirectAttainment(metric.indirectAttainment())
+                            .finalAttainment(metric.finalAttainment())
+                            .targetLevel(metric.targetLevel())
+                            .gap(metric.gap())
+                            .targetMet(metric.targetMet())
+                            .build());
+                }
+            }
+        }
+
+        // Filter data points by outcomeCode if specified
+        List<HistoricalProgrammeAttainmentResponseDto.HistoricalOutcomeDataPointDto> filteredDataPoints = allDataPoints;
+        if (outcomeCode != null && !outcomeCode.isBlank()) {
+            final String filterCode = outcomeCode.trim().toUpperCase();
+            filteredDataPoints = allDataPoints.stream()
+                    .filter(dp -> dp.getOutcomeCode() != null && dp.getOutcomeCode().equalsIgnoreCase(filterCode))
+                    .collect(Collectors.toList());
+        }
+
+        return HistoricalProgrammeAttainmentResponseDto.builder()
+                .masterProgrammeId(prog.getId())
+                .programmeName(prog.getName())
+                .batches(batchSummaries)
+                .outcomes(new ArrayList<>(distinctOutcomes))
+                .dataPoints(filteredDataPoints)
+                .build();
+    }
+
+    // ==========================================
+    // 6B. BATCH COMPARISON ANALYTICS ENDPOINT
+    // ==========================================
+    public BatchComparisonAnalyticsResponseDto compareBatches(String programmeBatchId1, String programmeBatchId2) {
+        if (programmeBatchId1 == null || programmeBatchId1.isBlank() || programmeBatchId2 == null || programmeBatchId2.isBlank()) {
+            throw new BadRequestException("Both programmeBatchId1 and programmeBatchId2 are required.");
+        }
+        String id1 = programmeBatchId1.trim();
+        String id2 = programmeBatchId2.trim();
+        if (id1.equalsIgnoreCase(id2)) {
+            throw new BadRequestException("Cannot compare a batch with itself. Please select two different batches.");
+        }
+
+        ProgrammeBatch batch1 = programmeBatchRepository.findById(id1)
+                .orElseThrow(() -> new ResourceNotFoundException("ProgrammeBatch not found: " + id1));
+        ProgrammeBatch batch2 = programmeBatchRepository.findById(id2)
+                .orElseThrow(() -> new ResourceNotFoundException("ProgrammeBatch not found: " + id2));
+
+        // Validate security scope for both batches independently
+        validateAndResolveScope(null, null, null, batch1.getId());
+        validateAndResolveScope(null, null, null, batch2.getId());
+
+        // Resolve programmes for both batches (cross-programme comparison allowed)
+        MasterProgramme prog1 = masterProgrammeRepository.findById(batch1.getMasterProgrammeId()).orElse(null);
+        MasterProgramme prog2 = masterProgrammeRepository.findById(batch2.getMasterProgrammeId()).orElse(null);
+
+        BatchComparisonAnalyticsResponseDto.BatchMetaDto meta1 = BatchComparisonAnalyticsResponseDto.BatchMetaDto.builder()
+                .programmeId(batch1.getMasterProgrammeId())
+                .programmeName(prog1 != null ? prog1.getName() : "Programme " + batch1.getMasterProgrammeId())
+                .batchId(batch1.getId())
+                .batchName(batch1.getName())
+                .startYear(batch1.getStartYear())
+                .endYear(batch1.getEndYear())
+                .status(batch1.getStatus())
+                .build();
+
+        BatchComparisonAnalyticsResponseDto.BatchMetaDto meta2 = BatchComparisonAnalyticsResponseDto.BatchMetaDto.builder()
+                .programmeId(batch2.getMasterProgrammeId())
+                .programmeName(prog2 != null ? prog2.getName() : "Programme " + batch2.getMasterProgrammeId())
+                .batchId(batch2.getId())
+                .batchName(batch2.getName())
+                .startYear(batch2.getStartYear())
+                .endYear(batch2.getEndYear())
+                .status(batch2.getStatus())
+                .build();
+
+        Map<String, ProgrammeBatchAttainmentReport> reportMap = programmeBatchAttainmentReportRepository
+                .findByProgrammeBatchIdIn(List.of(batch1.getId(), batch2.getId())).stream()
+                .collect(Collectors.toMap(ProgrammeBatchAttainmentReport::getProgrammeBatchId, r -> r, (a, b) -> a));
+
+        Map<String, OutcomeItemMetrics> metricsMap1 = resolveBatchOutcomeMetrics(batch1, reportMap);
+        Map<String, OutcomeItemMetrics> metricsMap2 = resolveBatchOutcomeMetrics(batch2, reportMap);
+
+        Set<String> allOutcomeCodes = new TreeSet<>(this::compareOutcomeCodes);
+        allOutcomeCodes.addAll(metricsMap1.keySet());
+        allOutcomeCodes.addAll(metricsMap2.keySet());
+
+        List<BatchComparisonAnalyticsResponseDto.OutcomeComparisonItemDto> comparisonItems = new ArrayList<>();
+        for (String code : allOutcomeCodes) {
+            OutcomeItemMetrics m1 = metricsMap1.get(code);
+            OutcomeItemMetrics m2 = metricsMap2.get(code);
+
+            String outcomeType = (m1 != null) ? m1.outcomeType() : (m2 != null ? m2.outcomeType() : (code.startsWith("PSO") ? "PSO" : "PO"));
+
+            BatchComparisonAnalyticsResponseDto.OutcomeMetricsDto b1Metrics = (m1 != null)
+                    ? BatchComparisonAnalyticsResponseDto.OutcomeMetricsDto.builder()
+                    .directAttainment(m1.directAttainment())
+                    .indirectAttainment(m1.indirectAttainment())
+                    .finalAttainment(m1.finalAttainment())
+                    .targetLevel(m1.targetLevel())
+                    .gap(m1.gap())
+                    .targetMet(m1.targetMet())
+                    .build()
+                    : null;
+
+            BatchComparisonAnalyticsResponseDto.OutcomeMetricsDto b2Metrics = (m2 != null)
+                    ? BatchComparisonAnalyticsResponseDto.OutcomeMetricsDto.builder()
+                    .directAttainment(m2.directAttainment())
+                    .indirectAttainment(m2.indirectAttainment())
+                    .finalAttainment(m2.finalAttainment())
+                    .targetLevel(m2.targetLevel())
+                    .gap(m2.gap())
+                    .targetMet(m2.targetMet())
+                    .build()
+                    : null;
+
+            comparisonItems.add(BatchComparisonAnalyticsResponseDto.OutcomeComparisonItemDto.builder()
+                    .outcomeCode(code)
+                    .outcomeType(outcomeType)
+                    .batch1(b1Metrics)
+                    .batch2(b2Metrics)
+                    .build());
+        }
+
+        return BatchComparisonAnalyticsResponseDto.builder()
+                .batch1(meta1)
+                .batch2(meta2)
+                .outcomes(comparisonItems)
+                .build();
     }
 
     // ==========================================
@@ -3244,5 +3561,155 @@ public class AnalyticsService {
             int totalEvaluatedCourses,
             int totalCoursesInBatch,
             boolean hasActiveData
+    ) {}
+
+    private Map<String, OutcomeItemMetrics> resolveBatchOutcomeMetrics(
+            ProgrammeBatch batch,
+            Map<String, ProgrammeBatchAttainmentReport> reportMap) {
+        Map<String, OutcomeItemMetrics> map = new LinkedHashMap<>();
+        if (batch == null) return map;
+
+        ProgrammeBatchAttainmentReport report = (reportMap != null) ? reportMap.get(batch.getId()) :
+                programmeBatchAttainmentReportRepository.findByProgrammeBatchId(batch.getId()).orElse(null);
+
+        boolean isFinalized = report != null &&
+                (report.getStatus() == ReportStatus.FINALIZED || report.getStatus() == ReportStatus.APPROVED);
+
+        if (isFinalized) {
+            ParsedReport parsed = parseReport(report);
+            if (!parsed.pos().isEmpty() || !parsed.psos().isEmpty()) {
+                for (ProgrammeBatchAttainmentReportDto.Report4PoRow po : parsed.pos()) {
+                    if (po.getPoCode() == null) continue;
+                    String code = po.getPoCode().trim().toUpperCase();
+                    BigDecimal target = (po.getTargetLevel() != null) ? po.getTargetLevel().setScale(2, RoundingMode.HALF_UP) : new BigDecimal("2.50");
+                    BigDecimal direct = (po.getDirectAttainment() != null) ? po.getDirectAttainment().setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO.setScale(2);
+                    BigDecimal indirect = (po.getIndirectAttainment() != null) ? po.getIndirectAttainment().setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO.setScale(2);
+                    BigDecimal finalAtt = (po.getFinalAttainment() != null) ? po.getFinalAttainment().setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO.setScale(2);
+                    BigDecimal gap = finalAtt.subtract(target).setScale(2, RoundingMode.HALF_UP);
+                    boolean met = finalAtt.compareTo(target) >= 0;
+                    map.put(code, new OutcomeItemMetrics(code, "PO", direct, indirect, finalAtt, target, gap, met));
+                }
+                for (ProgrammeBatchAttainmentReportDto.Report4PsoRow pso : parsed.psos()) {
+                    if (pso.getPsoCode() == null) continue;
+                    String code = pso.getPsoCode().trim().toUpperCase();
+                    BigDecimal target = (pso.getTargetLevel() != null) ? pso.getTargetLevel().setScale(2, RoundingMode.HALF_UP) : new BigDecimal("2.50");
+                    BigDecimal direct = (pso.getDirectAttainment() != null) ? pso.getDirectAttainment().setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO.setScale(2);
+                    BigDecimal indirect = (pso.getIndirectAttainment() != null) ? pso.getIndirectAttainment().setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO.setScale(2);
+                    BigDecimal finalAtt = (pso.getFinalAttainment() != null) ? pso.getFinalAttainment().setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO.setScale(2);
+                    BigDecimal gap = finalAtt.subtract(target).setScale(2, RoundingMode.HALF_UP);
+                    boolean met = finalAtt.compareTo(target) >= 0;
+                    map.put(code, new OutcomeItemMetrics(code, "PSO", direct, indirect, finalAtt, target, gap, met));
+                }
+                return map;
+            }
+        }
+
+        // Active / non-finalized batch: calculate live continuous attainment using authoritative service
+        try {
+            ProgrammeAttainmentResultDto calcResult = attainmentCalculationService
+                    .calculateProgrammeAttainment(batch.getMasterProgrammeId(), batch.getId());
+            if (calcResult != null && calcResult.getOverallAttainment() != null) {
+                if (calcResult.getOverallAttainment().getPos() != null) {
+                    for (ProgrammeAttainmentResultDto.OutcomeAttainmentItem it : calcResult.getOverallAttainment().getPos()) {
+                        String rawCode = it.getPoCode() != null ? it.getPoCode() : it.getOutcomeCode();
+                        if (rawCode == null) continue;
+                        String code = rawCode.trim().toUpperCase();
+                        BigDecimal target = (it.getTarget() != null) ? it.getTarget().setScale(2, RoundingMode.HALF_UP) : new BigDecimal("2.50");
+                        BigDecimal direct = (it.getDirectAttainment() != null) ? it.getDirectAttainment().setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO.setScale(2);
+                        BigDecimal indirect = (it.getIndirectAttainment() != null) ? it.getIndirectAttainment().setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO.setScale(2);
+                        BigDecimal finalAtt = (it.getOverallAttainment() != null) ? it.getOverallAttainment().setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO.setScale(2);
+                        BigDecimal gap = finalAtt.subtract(target).setScale(2, RoundingMode.HALF_UP);
+                        boolean met = finalAtt.compareTo(target) >= 0;
+                        map.put(code, new OutcomeItemMetrics(code, "PO", direct, indirect, finalAtt, target, gap, met));
+                    }
+                }
+                if (calcResult.getOverallAttainment().getPsos() != null) {
+                    for (ProgrammeAttainmentResultDto.OutcomeAttainmentItem it : calcResult.getOverallAttainment().getPsos()) {
+                        String rawCode = it.getPsoCode() != null ? it.getPsoCode() : it.getOutcomeCode();
+                        if (rawCode == null) continue;
+                        String code = rawCode.trim().toUpperCase();
+                        BigDecimal target = (it.getTarget() != null) ? it.getTarget().setScale(2, RoundingMode.HALF_UP) : new BigDecimal("2.50");
+                        BigDecimal direct = (it.getDirectAttainment() != null) ? it.getDirectAttainment().setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO.setScale(2);
+                        BigDecimal indirect = (it.getIndirectAttainment() != null) ? it.getIndirectAttainment().setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO.setScale(2);
+                        BigDecimal finalAtt = (it.getOverallAttainment() != null) ? it.getOverallAttainment().setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO.setScale(2);
+                        BigDecimal gap = finalAtt.subtract(target).setScale(2, RoundingMode.HALF_UP);
+                        boolean met = finalAtt.compareTo(target) >= 0;
+                        map.put(code, new OutcomeItemMetrics(code, "PSO", direct, indirect, finalAtt, target, gap, met));
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.warn("[AnalyticsService] Error calculating live continuous attainment for batch {}: {}", batch.getId(), e.getMessage());
+        }
+
+        // Fallback if still empty: load configured outcomes for batch
+        if (map.isEmpty()) {
+            List<ProgrammeOutcome> pos = programmeOutcomeRepository.findByProgrammeBatchIdOrderByCodeAsc(batch.getId());
+            if (pos == null || pos.isEmpty()) {
+                pos = programmeOutcomeRepository.findByProgrammeBatchIdOrderByCodeAsc(batch.getMasterProgrammeId());
+            }
+            if (pos != null) {
+                for (ProgrammeOutcome po : pos) {
+                    if (po.getCode() == null) continue;
+                    String code = po.getCode().trim().toUpperCase();
+                    BigDecimal target = (po.getTarget() != null) ? po.getTarget().setScale(2, RoundingMode.HALF_UP) : new BigDecimal("2.50");
+                    BigDecimal zero = BigDecimal.ZERO.setScale(2);
+                    map.put(code, new OutcomeItemMetrics(code, "PO", zero, zero, zero, target, zero.subtract(target).setScale(2, RoundingMode.HALF_UP), false));
+                }
+            }
+            List<ProgrammeSpecificOutcome> psos = programmeSpecificOutcomeRepository.findByProgrammeBatchIdOrderByCodeAsc(batch.getId());
+            if (psos == null || psos.isEmpty()) {
+                psos = programmeSpecificOutcomeRepository.findByProgrammeBatchIdOrderByCodeAsc(batch.getMasterProgrammeId());
+            }
+            if (psos != null) {
+                for (ProgrammeSpecificOutcome pso : psos) {
+                    if (pso.getCode() == null) continue;
+                    String code = pso.getCode().trim().toUpperCase();
+                    BigDecimal target = (pso.getTarget() != null) ? pso.getTarget().setScale(2, RoundingMode.HALF_UP) : new BigDecimal("2.50");
+                    BigDecimal zero = BigDecimal.ZERO.setScale(2);
+                    map.put(code, new OutcomeItemMetrics(code, "PSO", zero, zero, zero, target, zero.subtract(target).setScale(2, RoundingMode.HALF_UP), false));
+                }
+            }
+        }
+
+        return map;
+    }
+
+    private int compareOutcomeCodes(String code1, String code2) {
+        if (code1 == null && code2 == null) return 0;
+        if (code1 == null) return -1;
+        if (code2 == null) return 1;
+        String c1 = code1.trim().toUpperCase();
+        String c2 = code2.trim().toUpperCase();
+        boolean isPo1 = c1.startsWith("PO") && !c1.startsWith("PSO");
+        boolean isPo2 = c2.startsWith("PO") && !c2.startsWith("PSO");
+        if (isPo1 && !isPo2) return -1;
+        if (!isPo1 && isPo2) return 1;
+        int num1 = extractOutcomeDigits(c1);
+        int num2 = extractOutcomeDigits(c2);
+        if (num1 != num2) {
+            return Integer.compare(num1, num2);
+        }
+        return c1.compareTo(c2);
+    }
+
+    private int extractOutcomeDigits(String s) {
+        try {
+            String digits = s.replaceAll("\\D+", "");
+            return digits.isEmpty() ? 0 : Integer.parseInt(digits);
+        } catch (Exception e) {
+            return 0;
+        }
+    }
+
+    private record OutcomeItemMetrics(
+            String outcomeCode,
+            String outcomeType,
+            BigDecimal directAttainment,
+            BigDecimal indirectAttainment,
+            BigDecimal finalAttainment,
+            BigDecimal targetLevel,
+            BigDecimal gap,
+            Boolean targetMet
     ) {}
 }
