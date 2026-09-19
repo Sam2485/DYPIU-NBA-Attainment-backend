@@ -201,9 +201,11 @@ public class IndirectAssessmentService {
         for (Map.Entry<String, BigDecimal> e : raw.entrySet()) {
             if (e.getKey() != null && !e.getKey().isBlank() && e.getValue() != null) {
                 BigDecimal val = e.getValue();
-                if (val.compareTo(BigDecimal.ZERO) > 0) {
-                    // Clamp between 0.00 and 3.00
-                    if (val.compareTo(new BigDecimal("3.00")) > 0) val = new BigDecimal("3.00");
+                // Validate score is strictly within 0.00 to 3.00
+                if (val.compareTo(BigDecimal.ZERO) < 0 || val.compareTo(new BigDecimal("3.00")) > 0) {
+                    throw new BadRequestException("Indirect attainment score for " + e.getKey().trim().toUpperCase() + " must be between 0.00 and 3.00");
+                }
+                if (val.compareTo(BigDecimal.ZERO) >= 0) {
                     sanitized.put(e.getKey().trim().toUpperCase(), val.setScale(2, RoundingMode.HALF_UP));
                 }
             }

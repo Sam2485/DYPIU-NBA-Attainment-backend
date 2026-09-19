@@ -3,6 +3,7 @@ package com.dypiu.nba.service;
 import com.dypiu.nba.dto.ProgrammeCoordinatorSetupProgressDto;
 import com.dypiu.nba.dto.ProgrammeTargetDto;
 import com.dypiu.nba.entity.*;
+import com.dypiu.nba.exception.BadRequestException;
 import com.dypiu.nba.repository.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -60,6 +61,9 @@ public class Phase6ProgrammeCoordinatorIntegrationTest {
 
     @Autowired
     private ApprovalRequestRepository approvalRequestRepository;
+
+    @Autowired
+    private CourseOutcomeRepository courseOutcomeRepository;
 
     private String progId1;
     private String progId2;
@@ -329,5 +333,134 @@ public class Phase6ProgrammeCoordinatorIntegrationTest {
         assertEquals(SetupStepStatus.COMPLETED, completed.getOverallStatus());
         assertTrue(completed.getCompletedSteps().containsAll(List.of("courses", "po_pso_target", "indirect_attainment", "programme_atr", "review")));
         assertTrue(completed.getPendingSteps().isEmpty());
+    }
+
+    @Test
+    @DisplayName("TEST G: Save Programme Targets Allows Boundary Targets 0.00 and 3.00")
+    void testSaveProgrammeTargets_AllowsBoundaryTargets0And3() {
+        Map<String, BigDecimal> poTargets = Map.of("PO1", new BigDecimal("0.00"), "PO2", new BigDecimal("3.00"));
+        Map<String, BigDecimal> psoTargets = Map.of("PSO1", new BigDecimal("0.00"), "PSO2", new BigDecimal("3.00"));
+
+        ProgrammeTargetDto saved = outcomeService.saveProgrammeTargets(progId1, ProgrammeTargetDto.builder()
+                .masterProgrammeId(progId1)
+                .programmeBatchId(programmeBatchId1)
+                .poTargets(poTargets)
+                .psoTargets(psoTargets)
+                .build());
+
+        assertNotNull(saved);
+        assertEquals(new BigDecimal("0.00"), saved.getPoTargets().get("PO1"));
+        assertEquals(new BigDecimal("3.00"), saved.getPoTargets().get("PO2"));
+        assertEquals(new BigDecimal("0.00"), saved.getPsoTargets().get("PSO1"));
+        assertEquals(new BigDecimal("3.00"), saved.getPsoTargets().get("PSO2"));
+    }
+
+    @Test
+    @DisplayName("TEST H: Save Programme Targets Rejects Targets Greater Than 3.00")
+    void testSaveProgrammeTargets_RejectsTargetsGreaterThan3() {
+        Map<String, BigDecimal> poTargets = Map.of("PO1", new BigDecimal("3.50"));
+
+        BadRequestException ex = assertThrows(BadRequestException.class, () ->
+                outcomeService.saveProgrammeTargets(progId1, ProgrammeTargetDto.builder()
+                        .masterProgrammeId(progId1)
+                        .programmeBatchId(programmeBatchId1)
+                        .poTargets(poTargets)
+                        .build())
+        );
+        assertTrue(ex.getMessage().contains("must be between 0.00 and 3.00"));
+    }
+
+    @Test
+    @DisplayName("TEST I: Save Programme Targets Rejects Targets Less Than 0.00")
+    void testSaveProgrammeTargets_RejectsTargetsLessThan0() {
+        Map<String, BigDecimal> poTargets = Map.of("PO1", new BigDecimal("-0.10"));
+
+        BadRequestException ex = assertThrows(BadRequestException.class, () ->
+                outcomeService.saveProgrammeTargets(progId1, ProgrammeTargetDto.builder()
+                        .masterProgrammeId(progId1)
+                        .programmeBatchId(programmeBatchId1)
+                        .poTargets(poTargets)
+                        .build())
+        );
+        assertTrue(ex.getMessage().contains("must be between 0.00 and 3.00"));
+    }
+
+    @Test
+    @DisplayName("TEST J: Save Course CO Targets Allows Boundary Targets 0.00 and 3.00")
+    void testSaveCourseCoTargets_AllowsBoundaryTargets0And3() {
+        ProgrammeBatchCourse c = programmeBatchCourseRepository.save(ProgrammeBatchCourse.builder()
+                .id("crs-test-co-" + UUID.randomUUID().toString().substring(0, 6))
+                .programmeBatchId(programmeBatchId1)
+                .semester(1)
+                .code("CS302")
+                .name("Algorithms")
+                .masterProgrammeId(progId1)
+                .credits(3)
+                .courseType("THEORY")
+                .status("ACTIVE")
+                .build());
+
+        courseOutcomeRepository.save(CourseOutcome.builder()
+                .id("co-1-" + UUID.randomUUID().toString().substring(0, 6))
+                .programmeBatchCourseId(c.getId())
+                .code("CO1")
+                .statement("CO1 Statement")
+                .build());
+
+        courseOutcomeRepository.save(CourseOutcome.builder()
+                .id("co-2-" + UUID.randomUUID().toString().substring(0, 6))
+                .programmeBatchCourseId(c.getId())
+                .code("CO2")
+                .statement("CO2 Statement")
+                .build());
+
+        Map<String, Object> targets = Map.of("CO1", "0.00", "CO2", 3.00);
+        Map<String, Object> res = academicService.saveCourseCoTargets(c.getId(), targets);
+        assertNotNull(res);
+        assertTrue((Boolean) res.get("success"));
+
+        List<CourseOutcome> updated = courseOutcomeRepository.findByProgrammeBatchCourseId(c.getId());
+        for (CourseOutcome co : updated) {
+            if ("CO1".equals(co.getCode())) {
+                assertEquals(new BigDecimal("0.00"), co.getTargetLevel());
+            } else if ("CO2".equals(co.getCode())) {
+                assertEquals(new BigDecimal("3.00"), co.getTargetLevel());
+            }
+        }
+    }
+
+    @Test
+    @DisplayName("TEST K: Save Course CO Targets Rejects Targets Outside 0.00 and 3.00")
+    void testSaveCourseCoTargets_RejectsTargetsOutside0And3() {
+        ProgrammeBatchCourse c = programmeBatchCourseRepository.save(ProgrammeBatchCourse.builder()
+                .id("crs-test-co2-" + UUID.randomUUID().toString().substring(0, 6))
+                .programmeBatchId(programmeBatchId1)
+                .semester(1)
+                .code("CS303")
+                .name("Database Systems")
+                .masterProgrammeId(progId1)
+                .credits(3)
+                .courseType("THEORY")
+                .status("ACTIVE")
+                .build());
+
+        courseOutcomeRepository.save(CourseOutcome.builder()
+                .id("co-3-" + UUID.randomUUID().toString().substring(0, 6))
+                .programmeBatchCourseId(c.getId())
+                .code("CO1")
+                .statement("CO1 Statement")
+                .build());
+
+        Map<String, Object> targetsTooHigh = Map.of("CO1", 3.50);
+        BadRequestException exHigh = assertThrows(BadRequestException.class, () ->
+                academicService.saveCourseCoTargets(c.getId(), targetsTooHigh)
+        );
+        assertTrue(exHigh.getMessage().contains("must be between 0.00 and 3.00"));
+
+        Map<String, Object> targetsTooLow = Map.of("CO1", -1.00);
+        BadRequestException exLow = assertThrows(BadRequestException.class, () ->
+                academicService.saveCourseCoTargets(c.getId(), targetsTooLow)
+        );
+        assertTrue(exLow.getMessage().contains("must be between 0.00 and 3.00"));
     }
 }
