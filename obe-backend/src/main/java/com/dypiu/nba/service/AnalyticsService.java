@@ -10,6 +10,7 @@ import com.dypiu.nba.dto.ProgrammeSurveyResultDto;
 import com.dypiu.nba.dto.analytics.*;
 import com.dypiu.nba.entity.*;
 import com.dypiu.nba.exception.BadRequestException;
+import com.dypiu.nba.exception.ResourceNotFoundException;
 import com.dypiu.nba.repository.*;
 import com.dypiu.nba.security.CurrentUserScope;
 import com.dypiu.nba.security.CurrentUserScopeService;
@@ -950,6 +951,286 @@ public class AnalyticsService {
         if (programmeBatchId == null || outcomeCode == null) return Collections.emptyList();
         validateAndResolveScope(null, null, null, programmeBatchId);
         return findContributingCourseEvidence(programmeBatchId, outcomeCode, outcomeType != null ? outcomeType : "PO");
+    }
+
+    // ==========================================
+    // PROGRAMME DIRECT ATTAINMENT DRILL-DOWN
+    // ==========================================
+    public OutcomeDirectDrilldownResponseDto getOutcomeDirectDrilldown(String programmeBatchId, String outcomeCode, String outcomeType) {
+        if (programmeBatchId == null || programmeBatchId.isBlank()) {
+            throw new BadRequestException("programmeBatchId is required");
+        }
+        if (outcomeCode == null || outcomeCode.isBlank()) {
+            throw new BadRequestException("outcomeCode is required");
+        }
+
+        String type = (outcomeType != null && !outcomeType.isBlank()) ? outcomeType.trim().toUpperCase() : "PO";
+        if (!"PO".equals(type) && !"PSO".equals(type)) {
+            throw new BadRequestException("Invalid outcomeType: " + outcomeType + ". Must be PO or PSO");
+        }
+
+        String targetCode = outcomeCode.trim().toUpperCase();
+
+        // 1. Authorize & Resolve batch scope (hierarchical upward check)
+        ResolvedScope scope = validateAndResolveScope(null, null, null, programmeBatchId);
+        ProgrammeBatch batch = programmeBatchRepository.findById(scope.programmeBatchId)
+                .orElseThrow(() -> new BadRequestException("ProgrammeBatch not found: " + scope.programmeBatchId));
+
+        // 2. Resolve courses for this batch
+        List<ProgrammeBatchCourse> courses = programmeBatchCourseRepository.findByProgrammeBatchId(batch.getId());
+        courses.sort(Comparator.comparing((ProgrammeBatchCourse c) -> c.getSemester() != null ? c.getSemester() : 1)
+                .thenComparing(c -> c.getCourseCode() != null ? c.getCourseCode() : ""));
+
+        List<String> offeringIds = courses.stream().map(ProgrammeBatchCourse::getId).toList();
+        Map<String, CourseAttainmentReport> courseReportMap = offeringIds.isEmpty() ? Collections.emptyMap() :
+                courseAttainmentReportRepository.findByProgrammeBatchCourseIdIn(offeringIds).stream()
+                        .collect(Collectors.toMap(CourseAttainmentReport::getProgrammeBatchCourseId, r -> r, (a, b) -> a));
+
+        // 3. Resolve batch attainment report / continuous calculation data
+        ProgrammeBatchAttainmentReport report = programmeBatchAttainmentReportRepository.findByProgrammeBatchId(batch.getId()).orElse(null);
+        boolean isFinalized = report != null && (report.getStatus() == ReportStatus.FINALIZED || report.getStatus() == ReportStatus.APPROVED);
+
+        List<ProgrammeBatchAttainmentReportDto.Report4PoRow> poRows = new ArrayList<>();
+        List<ProgrammeBatchAttainmentReportDto.Report4PsoRow> psoRows = new ArrayList<>();
+        Map<String, ProgrammeBatchAttainmentReportDto.CourseContributionRow> mappingRowMap = new HashMap<>();
+        Map<String, ProgrammeBatchAttainmentReportDto.CourseContributionRow> directRowMap = new HashMap<>();
+
+        if (isFinalized) {
+            ParsedReport parsed = parseReport(report);
+            poRows = parsed.pos();
+            psoRows = parsed.psos();
+            try {
+                if (report.getAverageMappingReportJson() != null && !report.getAverageMappingReportJson().isBlank()) {
+                    Map<String, Object> r1Map = objectMapper.readValue(report.getAverageMappingReportJson(), new TypeReference<Map<String, Object>>() {});
+                    if (r1Map.containsKey("courses")) {
+                        List<ProgrammeBatchAttainmentReportDto.CourseContributionRow> cRows = objectMapper.convertValue(
+                                r1Map.get("courses"), new TypeReference<List<ProgrammeBatchAttainmentReportDto.CourseContributionRow>>() {});
+                        for (ProgrammeBatchAttainmentReportDto.CourseContributionRow row : cRows) {
+                            if (row.getProgrammeBatchCourseId() != null) mappingRowMap.put(row.getProgrammeBatchCourseId(), row);
+                        }
+                    }
+                }
+                if (report.getDirectAttainmentReportJson() != null && !report.getDirectAttainmentReportJson().isBlank()) {
+                    Map<String, Object> r2Map = objectMapper.readValue(report.getDirectAttainmentReportJson(), new TypeReference<Map<String, Object>>() {});
+                    if (r2Map.containsKey("courses")) {
+                        List<ProgrammeBatchAttainmentReportDto.CourseContributionRow> cRows = objectMapper.convertValue(
+                                r2Map.get("courses"), new TypeReference<List<ProgrammeBatchAttainmentReportDto.CourseContributionRow>>() {});
+                        for (ProgrammeBatchAttainmentReportDto.CourseContributionRow row : cRows) {
+                            if (row.getProgrammeBatchCourseId() != null) directRowMap.put(row.getProgrammeBatchCourseId(), row);
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("[AnalyticsService] Error parsing finalized course contribution rows for batch {}: {}", batch.getId(), e.getMessage());
+            }
+        } else if (!courses.isEmpty()) {
+            try {
+                ProgrammeAttainmentResultDto calcResult = attainmentCalculationService.calculateProgrammeAttainment(batch.getMasterProgrammeId(), batch.getId());
+                if (calcResult != null) {
+                    if (calcResult.getOverallAttainment() != null) {
+                        if (calcResult.getOverallAttainment().getPos() != null) {
+                            for (ProgrammeAttainmentResultDto.OutcomeAttainmentItem it : calcResult.getOverallAttainment().getPos()) {
+                                String code = it.getPoCode() != null ? it.getPoCode() : it.getOutcomeCode();
+                                if (code == null) continue;
+                                poRows.add(ProgrammeBatchAttainmentReportDto.Report4PoRow.builder()
+                                        .poCode(code)
+                                        .statement(it.getOutcomeStatement())
+                                        .targetLevel(it.getTarget() != null ? it.getTarget() : new BigDecimal("2.50"))
+                                        .directAttainment(it.getDirectAttainment() != null ? it.getDirectAttainment() : BigDecimal.ZERO)
+                                        .indirectAttainment(it.getIndirectAttainment() != null ? it.getIndirectAttainment() : BigDecimal.ZERO)
+                                        .finalAttainment(it.getOverallAttainment() != null ? it.getOverallAttainment() : BigDecimal.ZERO)
+                                        .observation(it.getObservation())
+                                        .build());
+                            }
+                        }
+                        if (calcResult.getOverallAttainment().getPsos() != null) {
+                            for (ProgrammeAttainmentResultDto.OutcomeAttainmentItem it : calcResult.getOverallAttainment().getPsos()) {
+                                String code = it.getPsoCode() != null ? it.getPsoCode() : it.getOutcomeCode();
+                                if (code == null) continue;
+                                psoRows.add(ProgrammeBatchAttainmentReportDto.Report4PsoRow.builder()
+                                        .psoCode(code)
+                                        .statement(it.getOutcomeStatement())
+                                        .targetLevel(it.getTarget() != null ? it.getTarget() : new BigDecimal("2.50"))
+                                        .directAttainment(it.getDirectAttainment() != null ? it.getDirectAttainment() : BigDecimal.ZERO)
+                                        .indirectAttainment(it.getIndirectAttainment() != null ? it.getIndirectAttainment() : BigDecimal.ZERO)
+                                        .finalAttainment(it.getOverallAttainment() != null ? it.getOverallAttainment() : BigDecimal.ZERO)
+                                        .observation(it.getObservation())
+                                        .build());
+                            }
+                        }
+                    }
+                    if (calcResult.getCourseMappingRows() != null) {
+                        for (ProgrammeAttainmentResultDto.CourseContributionRow row : calcResult.getCourseMappingRows()) {
+                            if (row.getProgrammeBatchCourseId() != null) {
+                                mappingRowMap.put(row.getProgrammeBatchCourseId(), ProgrammeBatchAttainmentReportDto.CourseContributionRow.builder()
+                                        .programmeBatchCourseId(row.getProgrammeBatchCourseId())
+                                        .masterCourseId(row.getMasterCourseId())
+                                        .semester(row.getSemester())
+                                        .courseCode(row.getCourseCode())
+                                        .courseName(row.getCourseName())
+                                        .resourceName(row.getResourceName())
+                                        .poValues(row.getPoValues())
+                                        .psoValues(row.getPsoValues())
+                                        .build());
+                            }
+                        }
+                    }
+                    if (calcResult.getCourseDirectAttainmentRows() != null) {
+                        for (ProgrammeAttainmentResultDto.CourseContributionRow row : calcResult.getCourseDirectAttainmentRows()) {
+                            if (row.getProgrammeBatchCourseId() != null) {
+                                directRowMap.put(row.getProgrammeBatchCourseId(), ProgrammeBatchAttainmentReportDto.CourseContributionRow.builder()
+                                        .programmeBatchCourseId(row.getProgrammeBatchCourseId())
+                                        .masterCourseId(row.getMasterCourseId())
+                                        .semester(row.getSemester())
+                                        .courseCode(row.getCourseCode())
+                                        .courseName(row.getCourseName())
+                                        .resourceName(row.getResourceName())
+                                        .poValues(row.getPoValues())
+                                        .psoValues(row.getPsoValues())
+                                        .build());
+                            }
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("[AnalyticsService] Error calculating live continuous attainment for batch {}: {}", batch.getId(), e.getMessage());
+            }
+        }
+
+        // 4. Locate target outcome and extract authoritative direct attainment & target
+        BigDecimal directAttainment = BigDecimal.ZERO;
+        BigDecimal target = new BigDecimal("2.50");
+        String statement = null;
+        boolean outcomeFound = false;
+
+        if ("PO".equals(type)) {
+            ProgrammeBatchAttainmentReportDto.Report4PoRow matchedPo = poRows.stream()
+                    .filter(p -> p.getPoCode() != null && p.getPoCode().equalsIgnoreCase(targetCode))
+                    .findFirst()
+                    .orElse(null);
+            if (matchedPo != null) {
+                outcomeFound = true;
+                if (matchedPo.getDirectAttainment() != null) directAttainment = matchedPo.getDirectAttainment();
+                if (matchedPo.getTargetLevel() != null) target = matchedPo.getTargetLevel();
+                statement = matchedPo.getStatement();
+            } else {
+                List<ProgrammeOutcome> pos = programmeOutcomeRepository.findByProgrammeBatchIdOrderByCodeAsc(batch.getId());
+                if (pos.isEmpty()) {
+                    pos = programmeOutcomeRepository.findByProgrammeBatchIdOrderByCodeAsc(batch.getMasterProgrammeId());
+                }
+                ProgrammeOutcome poDef = pos.stream()
+                        .filter(p -> p.getCode() != null && p.getCode().equalsIgnoreCase(targetCode))
+                        .findFirst()
+                        .orElse(null);
+                if (poDef != null) {
+                    outcomeFound = true;
+                    statement = poDef.getStatement() != null ? poDef.getStatement() : "Programme Outcome " + targetCode;
+                    if (poDef.getTarget() != null) target = poDef.getTarget();
+                }
+            }
+        } else {
+            ProgrammeBatchAttainmentReportDto.Report4PsoRow matchedPso = psoRows.stream()
+                    .filter(p -> p.getPsoCode() != null && p.getPsoCode().equalsIgnoreCase(targetCode))
+                    .findFirst()
+                    .orElse(null);
+            if (matchedPso != null) {
+                outcomeFound = true;
+                if (matchedPso.getDirectAttainment() != null) directAttainment = matchedPso.getDirectAttainment();
+                if (matchedPso.getTargetLevel() != null) target = matchedPso.getTargetLevel();
+                statement = matchedPso.getStatement();
+            } else {
+                List<ProgrammeSpecificOutcome> psos = programmeSpecificOutcomeRepository.findByProgrammeBatchIdOrderByCodeAsc(batch.getId());
+                if (psos.isEmpty()) {
+                    psos = programmeSpecificOutcomeRepository.findByProgrammeBatchIdOrderByCodeAsc(batch.getMasterProgrammeId());
+                }
+                ProgrammeSpecificOutcome psoDef = psos.stream()
+                        .filter(p -> p.getCode() != null && p.getCode().equalsIgnoreCase(targetCode))
+                        .findFirst()
+                        .orElse(null);
+                if (psoDef != null) {
+                    outcomeFound = true;
+                    statement = psoDef.getStatement() != null ? psoDef.getStatement() : "Programme Specific Outcome " + targetCode;
+                    if (psoDef.getTarget() != null) target = psoDef.getTarget();
+                }
+            }
+        }
+
+        if (!outcomeFound) {
+            throw new ResourceNotFoundException("Outcome '" + targetCode + "' of type '" + type + "' not found for programme batch: " + programmeBatchId);
+        }
+
+        if (statement == null || statement.isBlank()) {
+            statement = ("PO".equals(type) ? "Programme Outcome " : "Programme Specific Outcome ") + targetCode;
+        }
+
+        directAttainment = directAttainment.setScale(2, RoundingMode.HALF_UP);
+        target = target.setScale(2, RoundingMode.HALF_UP);
+        BigDecimal directGap = directAttainment.subtract(target).setScale(2, RoundingMode.HALF_UP);
+        boolean targetMet = directAttainment.compareTo(target) >= 0;
+
+        // 5. Filter contributing courses (authoritative inclusion rule: contribution > 0)
+        List<OutcomeDirectCourseDto> contributingCourses = new ArrayList<>();
+        boolean isPo = "PO".equals(type);
+
+        for (ProgrammeBatchCourse c : courses) {
+            CourseAttainmentReport cr = courseReportMap.get(c.getId());
+            ProgrammeBatchAttainmentReportDto.CourseContributionRow mRow = mappingRowMap.get(c.getId());
+            ProgrammeBatchAttainmentReportDto.CourseContributionRow dRow = directRowMap.get(c.getId());
+
+            BigDecimal contribution = null;
+            if (dRow != null) {
+                Map<String, BigDecimal> valMap = isPo ? dRow.getPoValues() : dRow.getPsoValues();
+                if (valMap != null) {
+                    contribution = valMap.get(targetCode);
+                }
+            }
+
+            BigDecimal mappingStrength = null;
+            if (mRow != null) {
+                Map<String, BigDecimal> mapStrengthMap = isPo ? mRow.getPoValues() : mRow.getPsoValues();
+                if (mapStrengthMap != null) {
+                    mappingStrength = mapStrengthMap.get(targetCode);
+                }
+            }
+
+            // Strictly preserve the authoritative inclusion rule: contribution > 0
+            if (contribution != null && contribution.compareTo(BigDecimal.ZERO) > 0) {
+                String coordinator = c.getCourseCoordinatorName() != null && !c.getCourseCoordinatorName().isBlank()
+                        ? c.getCourseCoordinatorName()
+                        : (c.getAssignedFaculty() != null ? c.getAssignedFaculty() : "");
+
+                BigDecimal overallCourseAttainment = cr != null ? cr.getOverallCoAttainment() : null;
+
+                contributingCourses.add(OutcomeDirectCourseDto.builder()
+                        .programmeBatchCourseId(c.getId())
+                        .courseCode(c.getCourseCode() != null ? c.getCourseCode() : c.getCode())
+                        .courseName(c.getCourseName() != null ? c.getCourseName() : c.getName())
+                        .semester(c.getSemester())
+                        .courseCoordinator(coordinator)
+                        .overallCourseAttainment(overallCourseAttainment != null ? overallCourseAttainment.setScale(2, RoundingMode.HALF_UP) : null)
+                        .mappingStrength(mappingStrength != null ? mappingStrength.setScale(2, RoundingMode.HALF_UP) : null)
+                        .contribution(contribution.setScale(2, RoundingMode.HALF_UP))
+                        .build());
+            }
+        }
+
+        // Deterministic ordering: semester ascending, then course code ascending
+        contributingCourses.sort(Comparator.comparing((OutcomeDirectCourseDto c) -> c.getSemester() != null ? c.getSemester() : 1)
+                .thenComparing(c -> c.getCourseCode() != null ? c.getCourseCode() : ""));
+
+        return OutcomeDirectDrilldownResponseDto.builder()
+                .programmeBatchId(batch.getId())
+                .batchName(batch.getName())
+                .outcomeCode(targetCode)
+                .outcomeType(type)
+                .outcomeStatement(statement)
+                .directAttainment(directAttainment)
+                .target(target)
+                .directGap(directGap)
+                .targetMet(targetMet)
+                .contributingCourseCount(contributingCourses.size())
+                .courses(contributingCourses)
+                .build();
     }
 
     // ==========================================
