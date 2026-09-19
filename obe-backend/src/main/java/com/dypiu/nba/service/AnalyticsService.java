@@ -8,6 +8,8 @@ import com.dypiu.nba.dto.ProgrammeAtrReportDto;
 import com.dypiu.nba.dto.ProgrammeAttainmentResultDto;
 import com.dypiu.nba.dto.ProgrammeBatchAttainmentReportDto;
 import com.dypiu.nba.dto.ProgrammeSurveyResultDto;
+import com.dypiu.nba.dto.ExaminationAttainmentResultDto;
+import com.dypiu.nba.dto.SurveyAttainmentResultDto;
 import com.dypiu.nba.dto.analytics.*;
 import com.dypiu.nba.entity.*;
 import com.dypiu.nba.exception.BadRequestException;
@@ -54,6 +56,9 @@ public class AnalyticsService {
     private final ObjectMapper objectMapper;
     private final CourseAtrRepository courseAtrRepository;
     private final IndirectAssessmentService indirectAssessmentService;
+    private final CourseOutcomeRepository courseOutcomeRepository;
+    private final AttainmentReportService attainmentReportService;
+    private final AttainmentConfigurationRepository attainmentConfigurationRepository;
 
     // ==========================================
     // 1. KPI ENDPOINT
@@ -1630,6 +1635,495 @@ public class AnalyticsService {
                 .lowestPercentage(totalStudents > 0 ? lowestPct : BigDecimal.ZERO)
                 .scoreDistribution(scoreDistribution)
                 .studentRecords(studentRows)
+                .build();
+    }
+
+    // ==========================================
+    // COURSE ANALYTICS AGGREGATED ENDPOINT
+    // ==========================================
+    public CourseAnalyticsResponseDto getCourseAnalytics(String programmeBatchCourseId, String outcomeCode, String outcomeType) {
+        if (programmeBatchCourseId == null || programmeBatchCourseId.isBlank()) {
+            throw new BadRequestException("programmeBatchCourseId is required");
+        }
+
+        // 1. Resolve Course Offering
+        ProgrammeBatchCourse offering = programmeBatchCourseRepository.findById(programmeBatchCourseId.trim())
+                .orElseThrow(() -> new ResourceNotFoundException("Course offering not found: " + programmeBatchCourseId));
+
+        // 2. Resolve Programme Batch
+        ProgrammeBatch batch = programmeBatchRepository.findById(offering.getProgrammeBatchId())
+                .orElseThrow(() -> new ResourceNotFoundException("Programme batch not found: " + offering.getProgrammeBatchId()));
+
+        // 3. Resolve Academic Hierarchy
+        MasterProgramme prog = batch.getMasterProgrammeId() != null
+                ? masterProgrammeRepository.findById(batch.getMasterProgrammeId()).orElse(null)
+                : null;
+        Department dept = prog != null && prog.getDepartmentId() != null
+                ? departmentRepository.findById(prog.getDepartmentId()).orElse(null)
+                : null;
+        School school = dept != null && dept.getSchoolId() != null
+                ? schoolRepository.findById(dept.getSchoolId()).orElse(null)
+                : null;
+
+        // 4. Enforce Scope Security (Director, HOD, Programme Coordinator)
+        validateAndResolveScope(
+                school != null ? school.getId() : null,
+                dept != null ? dept.getId() : null,
+                prog != null ? prog.getId() : null,
+                batch.getId()
+        );
+
+        // Enforce Course Coordinator / Faculty Scope Security
+        CurrentUserScope userScope = currentUserScopeService.getCurrentUserScope();
+        if (userScope != null && userScope.isFaculty()) {
+            boolean isCoord = (offering.getCourseCoordinatorId() != null && Objects.equals(offering.getCourseCoordinatorId(), userScope.getUserId()))
+                    || (offering.getCourseCoordinatorEmail() != null && offering.getCourseCoordinatorEmail().equalsIgnoreCase(userScope.getEmail()));
+            boolean isAssigned = isCoord || (offering.getAssignedFaculty() != null
+                    && (offering.getAssignedFaculty().contains(userScope.getEmail()) || offering.getAssignedFaculty().contains(userScope.getName())));
+            if (!isAssigned) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: You are not assigned to this Course Offering.");
+            }
+        }
+
+        // 5. Authoritative Configuration & Weights
+        AttainmentConfiguration config = attainmentConfigurationRepository.findByProgrammeBatchCourseId(offering.getId()).orElse(null);
+        BigDecimal directWeight = config != null && config.getEffectiveApprovedDirectWeight() != null
+                ? config.getEffectiveApprovedDirectWeight() : new BigDecimal("80.00");
+        BigDecimal indirectWeight = config != null && config.getEffectiveApprovedIndirectWeight() != null
+                ? config.getEffectiveApprovedIndirectWeight() : new BigDecimal("20.00");
+        BigDecimal directThreshold = config != null && config.getEffectiveApprovedDirectThreshold() != null
+                ? config.getEffectiveApprovedDirectThreshold() : new BigDecimal("60.00");
+        BigDecimal indirectThreshold = config != null && config.getEffectiveApprovedIndirectThreshold() != null
+                ? config.getEffectiveApprovedIndirectThreshold() : new BigDecimal("60.00");
+
+        // 6. Authoritative Course Attainment Report
+        CourseAttainmentReportDto reportDto = attainmentReportService.getOrCreateCourseAttainmentReport(offering.getId());
+        BigDecimal overallCourseAttainment = reportDto.getOverallCoAttainment() != null
+                ? reportDto.getOverallCoAttainment() : BigDecimal.ZERO;
+        BigDecimal directAttainment = reportDto.getDirectAttainment() != null
+                ? reportDto.getDirectAttainment() : BigDecimal.ZERO;
+        BigDecimal indirectAttainment = reportDto.getIndirectAttainment() != null
+                ? reportDto.getIndirectAttainment() : BigDecimal.ZERO;
+        String attainmentStatus = reportDto.getStatus() != null ? reportDto.getStatus().name() : "DRAFT";
+
+        // 7. Authoritative Articulation Matrix (CO -> PO/PSO)
+        CourseMappingMatrixDto matrixDto = outcomeService.getCourseMappings(offering.getId());
+        Map<String, Map<String, Integer>> matrix = (matrixDto != null && matrixDto.getMatrix() != null)
+                ? matrixDto.getMatrix() : Collections.emptyMap();
+
+        // 8. Selected Outcome Preparation
+        String targetOutcomeCode = (outcomeCode != null && !outcomeCode.isBlank()) ? outcomeCode.trim().toUpperCase() : null;
+        String targetOutcomeType = (outcomeType != null && !outcomeType.isBlank())
+                ? outcomeType.trim().toUpperCase()
+                : (targetOutcomeCode != null && targetOutcomeCode.startsWith("PSO") ? "PSO" : "PO");
+
+        // 9. Course CO Overview Table
+        List<CourseCoOverviewItemDto> coItems = new ArrayList<>();
+        if (reportDto.getTable3CoAttainments() != null) {
+            for (CourseAttainmentReportDto.Table3Row t3 : reportDto.getTable3CoAttainments()) {
+                String coCode = t3.getCoCode();
+                Map<String, Integer> rowMappings = matrix.getOrDefault(coCode, Collections.emptyMap());
+                Map<String, Integer> poMap = new LinkedHashMap<>();
+                Map<String, Integer> psoMap = new LinkedHashMap<>();
+                for (Map.Entry<String, Integer> m : rowMappings.entrySet()) {
+                    if (m.getKey().toUpperCase().startsWith("PSO")) {
+                        psoMap.put(m.getKey(), m.getValue());
+                    } else {
+                        poMap.put(m.getKey(), m.getValue());
+                    }
+                }
+
+                Integer selectedMapping = (targetOutcomeCode != null) ? rowMappings.get(targetOutcomeCode) : null;
+
+                coItems.add(CourseCoOverviewItemDto.builder()
+                        .coCode(coCode)
+                        .statement(t3.getStatement())
+                        .target(t3.getTargetLevel())
+                        .directPercentage(t3.getDirectPercentage())
+                        .directLevel(t3.getDirectLevel())
+                        .directAttainment(t3.getDirectLevel() != null ? BigDecimal.valueOf(t3.getDirectLevel()).setScale(2, RoundingMode.HALF_UP) : null)
+                        .indirectPercentage(t3.getIndirectPercentage())
+                        .indirectScore(t3.getIndirectScore())
+                        .indirectLevel(t3.getIndirectLevel())
+                        .indirectAttainment(t3.getIndirectLevel() != null ? BigDecimal.valueOf(t3.getIndirectLevel()).setScale(2, RoundingMode.HALF_UP) : null)
+                        .overallAttainment(t3.getFinalAttainment())
+                        .targetMet(t3.getTargetMet())
+                        .observation(t3.getObservation())
+                        .directWeight(directWeight)
+                        .indirectWeight(indirectWeight)
+                        .poMappings(poMap)
+                        .psoMappings(psoMap)
+                        .selectedOutcomeMapping(selectedMapping)
+                        .build());
+            }
+        }
+
+        // 10. Authoritative PO & PSO Contributions
+        List<ProgrammeOutcome> batchPOs = programmeOutcomeRepository.findByProgrammeBatchIdOrderByCodeAsc(batch.getId());
+        if (batchPOs.isEmpty()) {
+            batchPOs = programmeOutcomeRepository.findByProgrammeBatchIdOrderByCodeAsc(batch.getMasterProgrammeId());
+        }
+        List<ProgrammeSpecificOutcome> batchPSOs = programmeSpecificOutcomeRepository.findByProgrammeBatchIdOrderByCodeAsc(batch.getId());
+        if (batchPSOs.isEmpty()) {
+            batchPSOs = programmeSpecificOutcomeRepository.findByProgrammeBatchIdOrderByCodeAsc(batch.getMasterProgrammeId());
+        }
+
+        Map<String, CourseAttainmentReportDto.Table2PoRow> poRowMap = reportDto.getTable2DirectPO() != null
+                ? reportDto.getTable2DirectPO().stream().filter(r -> r.getPoCode() != null).collect(Collectors.toMap(r -> r.getPoCode().toUpperCase(), r -> r, (a, b) -> a))
+                : Collections.emptyMap();
+        Map<String, CourseAttainmentReportDto.Table2PsoRow> psoRowMap = reportDto.getTable2DirectPSO() != null
+                ? reportDto.getTable2DirectPSO().stream().filter(r -> r.getPsoCode() != null).collect(Collectors.toMap(r -> r.getPsoCode().toUpperCase(), r -> r, (a, b) -> a))
+                : Collections.emptyMap();
+
+        List<OutcomeContributionItemDto> poContributions = new ArrayList<>();
+        for (ProgrammeOutcome po : batchPOs) {
+            String code = po.getCode().toUpperCase();
+            CourseAttainmentReportDto.Table2PoRow row = poRowMap.get(code);
+            BigDecimal avgMap = row != null ? row.getAverageMapping() : null;
+            BigDecimal contrib = row != null ? row.getDirectContribution() : null;
+            boolean isMapped = avgMap != null && avgMap.compareTo(BigDecimal.ZERO) > 0;
+            BigDecimal target = po.getTarget() != null ? po.getTarget() : new BigDecimal("2.50");
+            Boolean targetMet = (isMapped && contrib != null) ? (contrib.compareTo(target) >= 0) : null;
+
+            if (isMapped) {
+                poContributions.add(OutcomeContributionItemDto.builder()
+                        .outcomeCode(po.getCode())
+                        .outcomeType("PO")
+                        .outcomeStatement(po.getStatement())
+                        .mappingStrength(avgMap)
+                        .contribution(contrib)
+                        .target(target)
+                        .targetMet(targetMet)
+                        .mapped(true)
+                        .build());
+            }
+        }
+
+        List<OutcomeContributionItemDto> psoContributions = new ArrayList<>();
+        for (ProgrammeSpecificOutcome pso : batchPSOs) {
+            String code = pso.getCode().toUpperCase();
+            CourseAttainmentReportDto.Table2PsoRow row = psoRowMap.get(code);
+            BigDecimal avgMap = row != null ? row.getAverageMapping() : null;
+            BigDecimal contrib = row != null ? row.getDirectContribution() : null;
+            boolean isMapped = avgMap != null && avgMap.compareTo(BigDecimal.ZERO) > 0;
+            BigDecimal target = pso.getTarget() != null ? pso.getTarget() : new BigDecimal("2.50");
+            Boolean targetMet = (isMapped && contrib != null) ? (contrib.compareTo(target) >= 0) : null;
+
+            if (isMapped) {
+                psoContributions.add(OutcomeContributionItemDto.builder()
+                        .outcomeCode(pso.getCode())
+                        .outcomeType("PSO")
+                        .outcomeStatement(pso.getStatement())
+                        .mappingStrength(avgMap)
+                        .contribution(contrib)
+                        .target(target)
+                        .targetMet(targetMet)
+                        .mapped(true)
+                        .build());
+            }
+        }
+
+        List<OutcomeContributionItemDto> allOutcomes = new ArrayList<>();
+        allOutcomes.addAll(poContributions);
+        allOutcomes.addAll(psoContributions);
+
+        // 11. Selected Outcome Resolution
+        SelectedOutcomeContributionDto selectedOutcomeDto = null;
+        if (targetOutcomeCode != null) {
+            OutcomeContributionItemDto matched = allOutcomes.stream()
+                    .filter(o -> o.getOutcomeCode().equalsIgnoreCase(targetOutcomeCode))
+                    .findFirst()
+                    .orElse(null);
+
+            if (matched != null) {
+                selectedOutcomeDto = SelectedOutcomeContributionDto.builder()
+                        .outcomeCode(matched.getOutcomeCode())
+                        .outcomeType(matched.getOutcomeType())
+                        .outcomeStatement(matched.getOutcomeStatement())
+                        .mappingStrength(matched.getMappingStrength())
+                        .overallCourseAttainment(overallCourseAttainment)
+                        .contribution(matched.getContribution())
+                        .target(matched.getTarget())
+                        .targetMet(matched.getTargetMet())
+                        .mapped(true)
+                        .build();
+            } else {
+                String stmt = null;
+                BigDecimal tgt = new BigDecimal("2.50");
+                boolean foundDef = false;
+                if ("PO".equalsIgnoreCase(targetOutcomeType)) {
+                    ProgrammeOutcome poDef = batchPOs.stream().filter(p -> p.getCode().equalsIgnoreCase(targetOutcomeCode)).findFirst().orElse(null);
+                    if (poDef != null) {
+                        foundDef = true;
+                        stmt = poDef.getStatement();
+                        if (poDef.getTarget() != null) tgt = poDef.getTarget();
+                    }
+                } else {
+                    ProgrammeSpecificOutcome psoDef = batchPSOs.stream().filter(p -> p.getCode().equalsIgnoreCase(targetOutcomeCode)).findFirst().orElse(null);
+                    if (psoDef != null) {
+                        foundDef = true;
+                        stmt = psoDef.getStatement();
+                        if (psoDef.getTarget() != null) tgt = psoDef.getTarget();
+                    }
+                }
+
+                if (!foundDef) {
+                    throw new ResourceNotFoundException("Outcome '" + targetOutcomeCode + "' not found for programme batch: " + batch.getId());
+                }
+
+                selectedOutcomeDto = SelectedOutcomeContributionDto.builder()
+                        .outcomeCode(targetOutcomeCode)
+                        .outcomeType(targetOutcomeType)
+                        .outcomeStatement(stmt)
+                        .mappingStrength(null)
+                        .overallCourseAttainment(overallCourseAttainment)
+                        .contribution(null)
+                        .target(tgt)
+                        .targetMet(null)
+                        .mapped(false)
+                        .build();
+            }
+        }
+
+        // 12. Course ATR Status Context
+        List<CourseAtr> atrs = courseAtrRepository.findByProgrammeBatchCourseId(offering.getId());
+        boolean courseAtrAvailable = !atrs.isEmpty();
+        String courseAtrStatus = !atrs.isEmpty() && atrs.get(0).getStatus() != null
+                ? atrs.get(0).getStatus().name() : "DRAFT";
+
+        String coordinatorName = offering.getCourseCoordinatorName() != null && !offering.getCourseCoordinatorName().isBlank()
+                ? offering.getCourseCoordinatorName()
+                : (offering.getAssignedFaculty() != null ? offering.getAssignedFaculty() : "");
+
+        return CourseAnalyticsResponseDto.builder()
+                .programmeBatchId(batch.getId())
+                .programmeBatchCourseId(offering.getId())
+                .batchName(batch.getName())
+                .masterProgrammeId(prog != null ? prog.getId() : batch.getMasterProgrammeId())
+                .programmeName(prog != null ? prog.getName() : "")
+                .schoolId(school != null ? school.getId() : "")
+                .schoolName(school != null ? school.getName() : "")
+                .departmentId(dept != null ? dept.getId() : "")
+                .departmentName(dept != null ? dept.getName() : "")
+                .courseCode(offering.getEffectiveCourseCode() != null ? offering.getEffectiveCourseCode() : offering.getCode())
+                .courseName(offering.getEffectiveCourseName() != null ? offering.getEffectiveCourseName() : offering.getName())
+                .semester(offering.getSemester())
+                .courseCoordinator(coordinatorName)
+                .courseCoordinatorEmail(offering.getCourseCoordinatorEmail() != null ? offering.getCourseCoordinatorEmail() : "")
+                .masterCourseId(offering.getMasterCourseId() != null ? offering.getMasterCourseId() : offering.getId())
+                .overallCourseAttainment(overallCourseAttainment)
+                .directAttainment(directAttainment)
+                .indirectAttainment(indirectAttainment)
+                .directWeight(directWeight)
+                .indirectWeight(indirectWeight)
+                .directThreshold(directThreshold)
+                .indirectThreshold(indirectThreshold)
+                .attainmentStatus(attainmentStatus)
+                .selectedOutcome(selectedOutcomeDto)
+                .outcomes(allOutcomes)
+                .poContributions(poContributions)
+                .psoContributions(psoContributions)
+                .courseOutcomes(coItems)
+                .mappingMatrix(matrix)
+                .courseAtrAvailable(courseAtrAvailable)
+                .courseAtrStatus(courseAtrStatus)
+                .build();
+    }
+
+    // ==========================================
+    // CO ANALYTICS DETAIL ENDPOINT
+    // ==========================================
+    public CoAnalyticsResponseDto getCoAnalytics(String programmeBatchCourseId, String coCode) {
+        if (programmeBatchCourseId == null || programmeBatchCourseId.isBlank()) {
+            throw new BadRequestException("programmeBatchCourseId is required");
+        }
+        if (coCode == null || coCode.isBlank()) {
+            throw new BadRequestException("coCode is required");
+        }
+
+        // 1. Resolve Course Offering
+        ProgrammeBatchCourse offering = programmeBatchCourseRepository.findById(programmeBatchCourseId.trim())
+                .orElseThrow(() -> new ResourceNotFoundException("Course offering not found: " + programmeBatchCourseId));
+
+        // 2. Resolve Programme Batch
+        ProgrammeBatch batch = programmeBatchRepository.findById(offering.getProgrammeBatchId())
+                .orElseThrow(() -> new ResourceNotFoundException("Programme batch not found: " + offering.getProgrammeBatchId()));
+
+        MasterProgramme prog = batch.getMasterProgrammeId() != null
+                ? masterProgrammeRepository.findById(batch.getMasterProgrammeId()).orElse(null)
+                : null;
+        Department dept = prog != null && prog.getDepartmentId() != null
+                ? departmentRepository.findById(prog.getDepartmentId()).orElse(null)
+                : null;
+        School school = dept != null && dept.getSchoolId() != null
+                ? schoolRepository.findById(dept.getSchoolId()).orElse(null)
+                : null;
+
+        // 3. Enforce Scope Security
+        validateAndResolveScope(
+                school != null ? school.getId() : null,
+                dept != null ? dept.getId() : null,
+                prog != null ? prog.getId() : null,
+                batch.getId()
+        );
+
+        CurrentUserScope userScope = currentUserScopeService.getCurrentUserScope();
+        if (userScope != null && userScope.isFaculty()) {
+            boolean isCoord = (offering.getCourseCoordinatorId() != null && Objects.equals(offering.getCourseCoordinatorId(), userScope.getUserId()))
+                    || (offering.getCourseCoordinatorEmail() != null && offering.getCourseCoordinatorEmail().equalsIgnoreCase(userScope.getEmail()));
+            boolean isAssigned = isCoord || (offering.getAssignedFaculty() != null
+                    && (offering.getAssignedFaculty().contains(userScope.getEmail()) || offering.getAssignedFaculty().contains(userScope.getName())));
+            if (!isAssigned) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: You are not assigned to this Course Offering.");
+            }
+        }
+
+        String targetCo = coCode.trim().toUpperCase();
+
+        // 4. Resolve Course Outcome Definition
+        List<CourseOutcome> cos = courseOutcomeRepository.findByProgrammeBatchCourseId(offering.getId());
+        CourseOutcome coDef = cos.stream()
+                .filter(c -> c.getCode() != null && c.getCode().equalsIgnoreCase(targetCo))
+                .findFirst()
+                .orElseThrow(() -> new ResourceNotFoundException("Course Outcome '" + targetCo + "' not found for course: " + offering.getId()));
+
+        // 5. Configuration & Weights
+        AttainmentConfiguration config = attainmentConfigurationRepository.findByProgrammeBatchCourseId(offering.getId()).orElse(null);
+        BigDecimal directWeight = config != null && config.getEffectiveApprovedDirectWeight() != null
+                ? config.getEffectiveApprovedDirectWeight() : new BigDecimal("80.00");
+        BigDecimal indirectWeight = config != null && config.getEffectiveApprovedIndirectWeight() != null
+                ? config.getEffectiveApprovedIndirectWeight() : new BigDecimal("20.00");
+
+        // 6. Course Attainment Report for Table 3 CO details
+        CourseAttainmentReportDto reportDto = attainmentReportService.getOrCreateCourseAttainmentReport(offering.getId());
+        CourseAttainmentReportDto.Table3Row t3 = null;
+        if (reportDto.getTable3CoAttainments() != null) {
+            t3 = reportDto.getTable3CoAttainments().stream()
+                    .filter(r -> r.getCoCode() != null && r.getCoCode().equalsIgnoreCase(targetCo))
+                    .findFirst()
+                    .orElse(null);
+        }
+
+        String statement = (t3 != null && t3.getStatement() != null && !t3.getStatement().isBlank())
+                ? t3.getStatement()
+                : (coDef.getStatement() != null ? coDef.getStatement() : "Course Outcome " + targetCo);
+
+        BigDecimal target = (t3 != null && t3.getTargetLevel() != null)
+                ? t3.getTargetLevel()
+                : (coDef.getTargetLevel() != null ? coDef.getTargetLevel() : new BigDecimal("2.50"));
+
+        BigDecimal overallAttainment = t3 != null ? t3.getFinalAttainment() : null;
+        BigDecimal directAttainment = (t3 != null && t3.getDirectLevel() != null)
+                ? BigDecimal.valueOf(t3.getDirectLevel()).setScale(2, RoundingMode.HALF_UP)
+                : null;
+        BigDecimal indirectAttainment = (t3 != null && t3.getIndirectLevel() != null)
+                ? BigDecimal.valueOf(t3.getIndirectLevel()).setScale(2, RoundingMode.HALF_UP)
+                : null;
+        Boolean targetMet = t3 != null ? t3.getTargetMet() : (overallAttainment != null && overallAttainment.compareTo(target) >= 0);
+        String observation = t3 != null ? t3.getObservation() : null;
+
+        // 7. PO/PSO Mappings for this CO
+        CourseMappingMatrixDto matrixDto = outcomeService.getCourseMappings(offering.getId());
+        Map<String, Map<String, Integer>> matrix = (matrixDto != null && matrixDto.getMatrix() != null)
+                ? matrixDto.getMatrix() : Collections.emptyMap();
+        Map<String, Integer> coMappings = matrix.getOrDefault(targetCo, Collections.emptyMap());
+        Map<String, Integer> poMappings = new LinkedHashMap<>();
+        Map<String, Integer> psoMappings = new LinkedHashMap<>();
+        for (Map.Entry<String, Integer> entry : coMappings.entrySet()) {
+            if (entry.getKey().toUpperCase().startsWith("PSO")) {
+                psoMappings.put(entry.getKey(), entry.getValue());
+            } else {
+                poMappings.put(entry.getKey(), entry.getValue());
+            }
+        }
+
+        // 8. Direct Evidence Summary
+        ExaminationAttainmentResultDto examResult = attainmentCalculationService.getExaminationAttainment(offering.getId());
+        int totalStudents = examResult != null && examResult.getTotalStudents() != null ? examResult.getTotalStudents() : 0;
+        int evaluatedStudents = (examResult != null && examResult.getStudentMarks() != null && !examResult.getStudentMarks().isEmpty())
+                ? examResult.getStudentMarks().size()
+                : totalStudents;
+        BigDecimal directThreshold = examResult != null && examResult.getThresholdPercentage() != null
+                ? examResult.getThresholdPercentage()
+                : config.getEffectiveApprovedDirectThreshold();
+        BigDecimal directPct = (examResult != null && examResult.getPercentageAboveThreshold() != null && examResult.getPercentageAboveThreshold().containsKey(targetCo))
+                ? examResult.getPercentageAboveThreshold().get(targetCo)
+                : (t3 != null ? t3.getDirectPercentage() : BigDecimal.ZERO);
+        Integer directLvl = (examResult != null && examResult.getCoAttainmentLevels() != null && examResult.getCoAttainmentLevels().containsKey(targetCo))
+                ? examResult.getCoAttainmentLevels().get(targetCo)
+                : (t3 != null ? t3.getDirectLevel() : 0);
+        Integer studentsMeeting = examResult != null && examResult.getStudentsAboveThreshold() != null
+                ? examResult.getStudentsAboveThreshold().get(targetCo)
+                : null;
+
+        CoDirectEvidenceSummaryDto directSummary = CoDirectEvidenceSummaryDto.builder()
+                .totalStudents(totalStudents)
+                .evaluatedStudents(evaluatedStudents)
+                .threshold(directThreshold)
+                .directPercentage(directPct)
+                .directLevel(directLvl)
+                .directAttainment(directAttainment)
+                .studentsMeetingThreshold(studentsMeeting)
+                .build();
+
+        // 9. Indirect Evidence Summary
+        SurveyAttainmentResultDto surveyResult = attainmentCalculationService.getSurveyAttainment(offering.getId());
+        int responseCount = surveyResult != null && surveyResult.getTotalStudents() != null ? surveyResult.getTotalStudents() : 0;
+        Map<String, Integer> levelDist = new LinkedHashMap<>();
+        if (surveyResult != null) {
+            Integer l1 = surveyResult.getLevel1Counts() != null ? surveyResult.getLevel1Counts().get(targetCo) : 0;
+            Integer l2 = surveyResult.getLevel2Counts() != null ? surveyResult.getLevel2Counts().get(targetCo) : 0;
+            Integer l3 = surveyResult.getLevel3Counts() != null ? surveyResult.getLevel3Counts().get(targetCo) : 0;
+            levelDist.put("Slight (Level 1)", l1 != null ? l1 : 0);
+            levelDist.put("Moderate (Level 2)", l2 != null ? l2 : 0);
+            levelDist.put("Substantial (Level 3)", l3 != null ? l3 : 0);
+        }
+        BigDecimal indirectScore = (surveyResult != null && surveyResult.getIndirectAttainmentScores() != null && surveyResult.getIndirectAttainmentScores().containsKey(targetCo))
+                ? surveyResult.getIndirectAttainmentScores().get(targetCo)
+                : (t3 != null ? t3.getIndirectScore() : BigDecimal.ZERO);
+        Integer indirectLvl = (surveyResult != null && surveyResult.getCoAttainmentLevels() != null && surveyResult.getCoAttainmentLevels().containsKey(targetCo))
+                ? surveyResult.getCoAttainmentLevels().get(targetCo)
+                : (t3 != null ? t3.getIndirectLevel() : 0);
+        BigDecimal indirectPct = (surveyResult != null && surveyResult.getOverallIndirectPercentages() != null && surveyResult.getOverallIndirectPercentages().containsKey(targetCo))
+                ? surveyResult.getOverallIndirectPercentages().get(targetCo)
+                : (t3 != null ? t3.getIndirectPercentage() : BigDecimal.ZERO);
+
+        CoIndirectEvidenceSummaryDto indirectSummary = CoIndirectEvidenceSummaryDto.builder()
+                .responseCount(responseCount)
+                .levelDistribution(levelDist)
+                .indirectScore(indirectScore)
+                .indirectLevel(indirectLvl)
+                .indirectPercentage(indirectPct)
+                .build();
+
+        String coordinatorName = offering.getCourseCoordinatorName() != null && !offering.getCourseCoordinatorName().isBlank()
+                ? offering.getCourseCoordinatorName()
+                : (offering.getAssignedFaculty() != null ? offering.getAssignedFaculty() : "");
+
+        return CoAnalyticsResponseDto.builder()
+                .programmeBatchId(batch.getId())
+                .programmeBatchCourseId(offering.getId())
+                .courseCode(offering.getEffectiveCourseCode() != null ? offering.getEffectiveCourseCode() : offering.getCode())
+                .courseName(offering.getEffectiveCourseName() != null ? offering.getEffectiveCourseName() : offering.getName())
+                .semester(offering.getSemester())
+                .courseCoordinator(coordinatorName)
+                .batchName(batch.getName())
+                .masterProgrammeId(prog != null ? prog.getId() : batch.getMasterProgrammeId())
+                .programmeName(prog != null ? prog.getName() : "")
+                .coCode(targetCo)
+                .coStatement(statement)
+                .target(target)
+                .targetMet(targetMet)
+                .directAttainment(directAttainment)
+                .indirectAttainment(indirectAttainment)
+                .overallAttainment(overallAttainment)
+                .directWeight(directWeight)
+                .indirectWeight(indirectWeight)
+                .observation(observation)
+                .poMappings(poMappings)
+                .psoMappings(psoMappings)
+                .directEvidenceSummary(directSummary)
+                .indirectEvidenceSummary(indirectSummary)
                 .build();
     }
 

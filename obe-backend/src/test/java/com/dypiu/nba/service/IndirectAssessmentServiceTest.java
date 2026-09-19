@@ -3,6 +3,7 @@ package com.dypiu.nba.service;
 import com.dypiu.nba.dto.ConsolidatedIndirectAttainmentDto;
 import com.dypiu.nba.dto.IndirectAssessmentDto;
 import com.dypiu.nba.entity.ProgrammeBatchIndirectAssessment;
+import com.dypiu.nba.exception.BadRequestException;
 import com.dypiu.nba.repository.ProgrammeBatchIndirectAssessmentRepository;
 import com.dypiu.nba.repository.ProgrammeBatchRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -122,5 +123,53 @@ class IndirectAssessmentServiceTest {
         assertEquals(new BigDecimal("2.50"), result.getScores().get("PSO1"));
         verify(repository, times(1)).save(any());
         verify(batchLifecycleService, times(1)).enforceBatchEditability(batchId);
+    }
+
+    @Test
+    void testCreateIndirectAssessment_ThrowsBadRequestException_WhenScoreGreaterThan3() {
+        String batchId = "batch-104";
+        IndirectAssessmentDto dto = IndirectAssessmentDto.builder()
+                .name("Industry Seminar")
+                .type("EVENT")
+                .scores(Map.of("PO1", new BigDecimal("3.50")))
+                .build();
+
+        BadRequestException ex = assertThrows(BadRequestException.class, () ->
+                service.createAssessment(batchId, dto, "test-user")
+        );
+        assertTrue(ex.getMessage().contains("must be between 0.00 and 3.00"));
+    }
+
+    @Test
+    void testCreateIndirectAssessment_ThrowsBadRequestException_WhenScoreLessThan0() {
+        String batchId = "batch-105";
+        IndirectAssessmentDto dto = IndirectAssessmentDto.builder()
+                .name("Industry Seminar")
+                .type("EVENT")
+                .scores(Map.of("PO2", new BigDecimal("-0.50")))
+                .build();
+
+        BadRequestException ex = assertThrows(BadRequestException.class, () ->
+                service.createAssessment(batchId, dto, "test-user")
+        );
+        assertTrue(ex.getMessage().contains("must be between 0.00 and 3.00"));
+    }
+
+    @Test
+    void testCreateIndirectAssessment_AllowsScoresWithin0And3Inclusive() {
+        String batchId = "batch-106";
+        IndirectAssessmentDto dto = IndirectAssessmentDto.builder()
+                .name("Hackathon")
+                .type("EVENT")
+                .scores(Map.of("PO1", new BigDecimal("0.00"), "PO2", new BigDecimal("3.00")))
+                .build();
+
+        when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        IndirectAssessmentDto created = service.createAssessment(batchId, dto, "test-user");
+
+        assertNotNull(created);
+        assertEquals(new BigDecimal("0.00"), created.getScores().get("PO1"));
+        assertEquals(new BigDecimal("3.00"), created.getScores().get("PO2"));
     }
 }

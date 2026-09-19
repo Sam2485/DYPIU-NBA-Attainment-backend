@@ -2,6 +2,7 @@ package com.dypiu.nba.service;
 import lombok.extern.slf4j.Slf4j;
 
 import com.dypiu.nba.entity.*;
+import com.dypiu.nba.exception.BadRequestException;
 import com.dypiu.nba.exception.ResourceNotFoundException;
 import com.dypiu.nba.repository.*;
 import com.dypiu.nba.security.CurrentUserScope;
@@ -23,6 +24,7 @@ import com.dypiu.nba.dto.CourseCoordinatorSummaryDto;
 import com.dypiu.nba.dto.CourseCoordinatorSetupProgressDto;
 import com.dypiu.nba.dto.UserDto;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.ZonedDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -4643,14 +4645,21 @@ public class AcademicService {
             for (CourseOutcome co : cos) {
                 if (coTargets.containsKey(co.getCode())) {
                     Object val = coTargets.get(co.getCode());
+                    BigDecimal targetVal = null;
                     if (val instanceof Number) {
-                        co.setTargetLevel(BigDecimal.valueOf(((Number) val).doubleValue()));
+                        targetVal = BigDecimal.valueOf(((Number) val).doubleValue());
                     } else if (val instanceof String) {
                         try {
-                            co.setTargetLevel(new BigDecimal((String) val));
+                            targetVal = new BigDecimal((String) val);
                         } catch (Exception ignored) {}
                     }
-                    courseOutcomeRepository.save(co);
+                    if (targetVal != null) {
+                        if (targetVal.compareTo(BigDecimal.ZERO) < 0 || targetVal.compareTo(new BigDecimal("3.00")) > 0) {
+                            throw new BadRequestException("Target level for " + co.getCode() + " must be between 0.00 and 3.00");
+                        }
+                        co.setTargetLevel(targetVal.setScale(2, RoundingMode.HALF_UP));
+                        courseOutcomeRepository.save(co);
+                    }
                 }
             }
         }

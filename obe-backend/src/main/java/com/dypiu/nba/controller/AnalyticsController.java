@@ -247,6 +247,41 @@ public class AnalyticsController {
                 .build());
     }
 
+    @GetMapping("/course-analytics")
+    public ResponseEntity<ApiResponse<CourseAnalyticsResponseDto>> getCourseAnalytics(
+            @RequestParam String programmeBatchCourseId,
+            @RequestParam(required = false) String outcomeCode,
+            @RequestParam(required = false, defaultValue = "PO") String outcomeType) {
+
+        log.debug("[AnalyticsController] getCourseAnalytics: programmeBatchCourseId={}, outcomeCode={}, outcomeType={}",
+                programmeBatchCourseId, outcomeCode, outcomeType);
+
+        CourseAnalyticsResponseDto data = analyticsService.getCourseAnalytics(
+                programmeBatchCourseId, outcomeCode, outcomeType);
+        return ResponseEntity.ok(ApiResponse.<CourseAnalyticsResponseDto>builder()
+                .success(true)
+                .message("Course analytics retrieved successfully")
+                .data(data)
+                .build());
+    }
+
+    @GetMapping("/co-analytics")
+    public ResponseEntity<ApiResponse<CoAnalyticsResponseDto>> getCoAnalytics(
+            @RequestParam String programmeBatchCourseId,
+            @RequestParam String coCode) {
+
+        log.debug("[AnalyticsController] getCoAnalytics: programmeBatchCourseId={}, coCode={}",
+                programmeBatchCourseId, coCode);
+
+        CoAnalyticsResponseDto data = analyticsService.getCoAnalytics(
+                programmeBatchCourseId, coCode);
+        return ResponseEntity.ok(ApiResponse.<CoAnalyticsResponseDto>builder()
+                .success(true)
+                .message("CO analytics detail retrieved successfully")
+                .data(data)
+                .build());
+    }
+
     @GetMapping("/config/student-evidence-threshold")
     public ResponseEntity<ApiResponse<StudentEvidenceThresholdConfigDto>> getStudentEvidenceThresholdConfig() {
         StudentEvidenceThresholdConfigDto config = analyticsService.getStudentEvidenceThresholdConfig();

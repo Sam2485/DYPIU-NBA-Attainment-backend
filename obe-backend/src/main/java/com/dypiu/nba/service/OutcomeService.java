@@ -17,6 +17,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.ZonedDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -461,12 +462,21 @@ public class OutcomeService {
                     targetPo = existingByCode.get(key);
                     targetPo.setStatement(po.getStatement());
                     if (po.getTarget() != null) {
-                        targetPo.setTarget(po.getTarget());
+                        if (po.getTarget().compareTo(BigDecimal.ZERO) < 0 || po.getTarget().compareTo(new BigDecimal("3.00")) > 0) {
+                            throw new BadRequestException("Target for " + po.getCode() + " must be between 0.00 and 3.00");
+                        }
+                        targetPo.setTarget(po.getTarget().setScale(2, RoundingMode.HALF_UP));
                     }
                 } else {
                     targetPo = po;
                     if (targetPo.getId() == null || targetPo.getId().isBlank()) {
                         targetPo.setId("po-" + UUID.randomUUID().toString().substring(0, 8));
+                    }
+                    if (targetPo.getTarget() != null) {
+                        if (targetPo.getTarget().compareTo(BigDecimal.ZERO) < 0 || targetPo.getTarget().compareTo(new BigDecimal("3.00")) > 0) {
+                            throw new BadRequestException("Target for " + po.getCode() + " must be between 0.00 and 3.00");
+                        }
+                        targetPo.setTarget(targetPo.getTarget().setScale(2, RoundingMode.HALF_UP));
                     }
                 }
 
@@ -585,12 +595,21 @@ public class OutcomeService {
                     targetPso = existingByCode.get(key);
                     targetPso.setStatement(pso.getStatement());
                     if (pso.getTarget() != null) {
-                        targetPso.setTarget(pso.getTarget());
+                        if (pso.getTarget().compareTo(BigDecimal.ZERO) < 0 || pso.getTarget().compareTo(new BigDecimal("3.00")) > 0) {
+                            throw new BadRequestException("Target for " + pso.getCode() + " must be between 0.00 and 3.00");
+                        }
+                        targetPso.setTarget(pso.getTarget().setScale(2, RoundingMode.HALF_UP));
                     }
                 } else {
                     targetPso = pso;
                     if (targetPso.getId() == null || targetPso.getId().isBlank()) {
                         targetPso.setId("pso-" + UUID.randomUUID().toString().substring(0, 8));
+                    }
+                    if (targetPso.getTarget() != null) {
+                        if (targetPso.getTarget().compareTo(BigDecimal.ZERO) < 0 || targetPso.getTarget().compareTo(new BigDecimal("3.00")) > 0) {
+                            throw new BadRequestException("Target for " + pso.getCode() + " must be between 0.00 and 3.00");
+                        }
+                        targetPso.setTarget(targetPso.getTarget().setScale(2, RoundingMode.HALF_UP));
                     }
                 }
 
@@ -807,7 +826,10 @@ public class OutcomeService {
                     targetCo.setStatement(co.getStatement());
                     targetCo.setStatus(ApprovalStatus.DRAFT);
                     if (co.getTargetLevel() != null) {
-                        targetCo.setTargetLevel(co.getTargetLevel());
+                        if (co.getTargetLevel().compareTo(BigDecimal.ZERO) < 0 || co.getTargetLevel().compareTo(new BigDecimal("3.00")) > 0) {
+                            throw new BadRequestException("Target level for " + co.getCode() + " must be between 0.00 and 3.00");
+                        }
+                        targetCo.setTargetLevel(co.getTargetLevel().setScale(2, RoundingMode.HALF_UP));
                     }
                     if (co.getBloomsLevel() != null) {
                         targetCo.setBloomsLevel(co.getBloomsLevel());
@@ -819,6 +841,10 @@ public class OutcomeService {
                     }
                     if (targetCo.getTargetLevel() == null) {
                         targetCo.setTargetLevel(new BigDecimal("2.50"));
+                    } else if (targetCo.getTargetLevel().compareTo(BigDecimal.ZERO) < 0 || targetCo.getTargetLevel().compareTo(new BigDecimal("3.00")) > 0) {
+                        throw new BadRequestException("Target level for " + co.getCode() + " must be between 0.00 and 3.00");
+                    } else {
+                        targetCo.setTargetLevel(targetCo.getTargetLevel().setScale(2, RoundingMode.HALF_UP));
                     }
                     if (targetCo.getBloomsLevel() == null) {
                         targetCo.setBloomsLevel("L3 - Apply");
@@ -948,6 +974,12 @@ public class OutcomeService {
                 String rawCode = entry.getKey().trim();
                 String code = rawCode.toUpperCase();
                 BigDecimal val = entry.getValue();
+                if (val != null) {
+                    if (val.compareTo(BigDecimal.ZERO) < 0 || val.compareTo(new BigDecimal("3.00")) > 0) {
+                        throw new BadRequestException("PO target for " + code + " must be between 0.00 and 3.00");
+                    }
+                    val = val.setScale(2, RoundingMode.HALF_UP);
+                }
 
                 ProgrammeOutcome po = poMap.get(code);
                 if (po == null && !code.startsWith("PO") && !code.startsWith("PSO")) {
@@ -985,6 +1017,12 @@ public class OutcomeService {
                 String rawCode = entry.getKey().trim();
                 String code = rawCode.toUpperCase();
                 BigDecimal val = entry.getValue();
+                if (val != null) {
+                    if (val.compareTo(BigDecimal.ZERO) < 0 || val.compareTo(new BigDecimal("3.00")) > 0) {
+                        throw new BadRequestException("PSO target for " + code + " must be between 0.00 and 3.00");
+                    }
+                    val = val.setScale(2, RoundingMode.HALF_UP);
+                }
 
                 ProgrammeSpecificOutcome pso = psoMap.get(code);
                 if (pso == null && !code.startsWith("PSO")) {
