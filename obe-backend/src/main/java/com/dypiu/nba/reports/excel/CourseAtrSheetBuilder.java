@@ -10,6 +10,10 @@ import java.util.List;
 public class CourseAtrSheetBuilder {
 
     public static Sheet build(Workbook wb, String sheetName, CourseAtrSnapshot snapshot) {
+        return build(wb, sheetName, snapshot, null, null);
+    }
+
+    public static Sheet build(Workbook wb, String sheetName, CourseAtrSnapshot snapshot, byte[] leftLogo, byte[] rightLogo) {
         Sheet sheet = wb.createSheet(sheetName != null ? sheetName : "Course ATR");
 
         CellStyle headerStyle = ExcelStyles.createHeaderStyle(wb, false);
@@ -20,15 +24,16 @@ public class CourseAtrSheetBuilder {
         CellStyle statusGap = ExcelStyles.createStatusGapStyle(wb);
         CellStyle subTitleStyle = ExcelStyles.createSubTitleStyle(wb);
 
-        String courseScope = "Course: " + (snapshot.getCourseName() != null ? snapshot.getCourseName() : "")
-                + (snapshot.getCourseCode() != null && !snapshot.getCourseCode().isBlank() ? " (" + snapshot.getCourseCode() + ")" : "");
-        String semStr = "Semester " + (snapshot.getSemester() != null ? snapshot.getSemester() : "—");
-
         int totalCols = 6;
-        int rowIdx = CommonExcelHeaderRenderer.renderHeader(
-                wb, sheet, snapshot.getInstitutionName(), snapshot.getSchoolName(),
-                "COURSE ACTION TAKEN REPORT (ATR)",
-                courseScope, snapshot.getAcademicYear(), semStr, snapshot.getReportId(), totalCols, false);
+        int rowIdx = CourseExcelHeaderRenderer.renderHeader(
+                wb, sheet,
+                snapshot.getInstitutionName(),
+                snapshot.getSchoolName(),
+                "Course Action Taken Report (ATR)",
+                totalCols,
+                leftLogo,
+                rightLogo,
+                false);
 
         // --- SECTION: COURSE OUTCOMES (COs) ---
         Row coTitle = sheet.createRow(rowIdx++);

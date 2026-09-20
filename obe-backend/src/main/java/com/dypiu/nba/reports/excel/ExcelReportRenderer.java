@@ -46,13 +46,21 @@ public class ExcelReportRenderer {
         }
     }
 
-    public byte[] renderCourseAttainment(CourseAttainmentSnapshot snapshot) {
+    public byte[] renderCourseAttainment(CourseAttainmentSnapshot snapshot, byte[] leftLogo, byte[] rightLogo) {
         try (Workbook wb = new XSSFWorkbook()) {
-            CourseAttainmentSheetBuilder.build(wb, "Course Attainment", snapshot);
+            CourseAttainmentSheetBuilder.build(wb, "Attainment-main", snapshot, leftLogo, rightLogo);
+            PoMappingSheetBuilder.build(wb, "PO mapping", snapshot, leftLogo, rightLogo);
+            PsoMappingSheetBuilder.build(wb, "PSO mapping", snapshot, leftLogo, rightLogo);
+            ExaminationSheetBuilder.build(wb, "Examination", snapshot, leftLogo, rightLogo);
+            CourseEndSurveySheetBuilder.build(wb, "Course End Survey", snapshot, leftLogo, rightLogo);
             return writeToBytes(wb);
         } catch (IOException e) {
             throw new RuntimeException("Failed to render Course Attainment Excel", e);
         }
+    }
+
+    public byte[] renderCourseAttainment(CourseAttainmentSnapshot snapshot) {
+        return renderCourseAttainment(snapshot, null, null);
     }
 
     public byte[] renderProgrammeAtr(ProgrammeAtrSnapshot snapshot) {
@@ -64,13 +72,17 @@ public class ExcelReportRenderer {
         }
     }
 
-    public byte[] renderCourseAtr(CourseAtrSnapshot snapshot) {
+    public byte[] renderCourseAtr(CourseAtrSnapshot snapshot, byte[] leftLogo, byte[] rightLogo) {
         try (Workbook wb = new XSSFWorkbook()) {
-            CourseAtrSheetBuilder.build(wb, "Course ATR", snapshot);
+            CourseAtrSheetBuilder.build(wb, "Course ATR", snapshot, leftLogo, rightLogo);
             return writeToBytes(wb);
         } catch (IOException e) {
             throw new RuntimeException("Failed to render Course ATR Excel", e);
         }
+    }
+
+    public byte[] renderCourseAtr(CourseAtrSnapshot snapshot) {
+        return renderCourseAtr(snapshot, null, null);
     }
 
     private byte[] writeToBytes(Workbook wb) throws IOException {

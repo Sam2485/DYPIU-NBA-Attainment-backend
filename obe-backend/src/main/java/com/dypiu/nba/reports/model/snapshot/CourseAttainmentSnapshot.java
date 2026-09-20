@@ -34,6 +34,41 @@ public class CourseAttainmentSnapshot extends ReportSnapshot {
     private List<OutcomeContributionRow> table2DirectPO;
     private List<OutcomeContributionRow> table2DirectPSO;
     private List<CoAttainmentRow> table3CoAttainments;
+    private List<PoDetailRow> poDetails;
+    private List<PsoDetailRow> psoDetails;
+    private ExaminationSection examinationData;
+    private SurveySection surveyData;
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class PoDetailRow {
+        private String poCode;
+        private String statement;
+        private List<CompetencyDetailRow> competencies;
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class PsoDetailRow {
+        private String psoCode;
+        private String statement;
+        private List<CompetencyDetailRow> competencies;
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class CompetencyDetailRow {
+        private String competencyCode;
+        private String statement;
+        private Map<String, String> coKeywords;
+        private Map<String, String> coMappings;
+    }
 
     @Data
     @Builder
@@ -70,5 +105,60 @@ public class CourseAttainmentSnapshot extends ReportSnapshot {
         private Integer indirectLevel;
         private BigDecimal finalAttainment;
         private Boolean targetMet;
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class ExaminationSection {
+        private String courseName;
+        private String className;
+        private String academicYear;
+        private Integer totalStudents;
+        private BigDecimal thresholdPercentage;
+        private List<String> coCodes;
+        private Map<String, BigDecimal> coMaxMarks;
+        private Map<String, BigDecimal> coThresholdMarks;
+        private Map<String, Integer> studentsAboveThreshold;
+        private Map<String, BigDecimal> percentageAboveThreshold;
+        private List<StudentMarksRow> students;
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class StudentMarksRow {
+        private Integer srNo;
+        private String prn;
+        private String studentName;
+        private Map<String, BigDecimal> coMarks;
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class SurveySection {
+        private Integer totalStudents;
+        private List<String> coCodes;
+        private Map<String, Integer> level1Counts; // Slight (1)
+        private Map<String, Integer> level2Counts; // Moderate (2)
+        private Map<String, Integer> level3Counts; // Substantial (3)
+        private Map<String, BigDecimal> level1Percentages;
+        private Map<String, BigDecimal> level2Percentages;
+        private Map<String, BigDecimal> level3Percentages;
+        private Map<String, BigDecimal> overallIndirectPercentages;
+        private List<SurveyResponseRow> responses;
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class SurveyResponseRow {
+        private Integer srNo;
+        private Map<String, String> coFeedbacks; // "Slight", "Moderate", "Substantial"
     }
 }
