@@ -276,7 +276,7 @@ public class AttainmentReportService {
                 .build();
     }
 
-    private CourseAttainmentReportDto mapToDto(CourseAttainmentReport report, ProgrammeBatchCourse offering) {
+    public CourseAttainmentReportDto mapToDto(CourseAttainmentReport report, ProgrammeBatchCourse offering) {
         ProgrammeBatch batch = programmeBatchRepository.findById(offering.getProgrammeBatchId()).orElse(null);
 
         List<CourseAttainmentReportDto.Table1Row> table1 = fromJson(report.getTable1MappingJson(), new TypeReference<>() {});
