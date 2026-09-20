@@ -1,11 +1,290 @@
 package com.dypiu.nba.reports.excel;
 
+import com.dypiu.nba.reports.model.snapshot.ProgrammeAttainmentSnapshot;
+import com.dypiu.nba.reports.template.ReportTemplateDto;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.ss.util.CellRangeAddress;
+import org.apache.poi.util.Units;
+import org.apache.poi.xssf.usermodel.DefaultIndexedColorMap;
+import org.apache.poi.xssf.usermodel.XSSFCellStyle;
+import org.apache.poi.xssf.usermodel.XSSFColor;
 
+import java.awt.Color;
+import java.time.format.DateTimeFormatter;
+
+/**
+ * Authoritative Shared Excel Header Renderer for Programme Attainment reports.
+ * <p>
+ * Strictly replicates the visual structure, layout, styles, row heights, column proportions,
+ * borders, fonts, fills, and alignments of the reference workbook
+ * (Final-Mapping-Attainment Values Sheet (2) (1) (1).xlsx).
+ * <p>
+ * Structure:
+ * - Row 0 (Excel 1, ht=15.75 pt): Empty spacer row.
+ * - Row 1 (Excel 2, ht=27.75 pt): Upper header row 1 (Institution Name, Logo top, Reserved area top).
+ * - Row 2 (Excel 3, ht=41.25 pt): Upper header row 2 (School Name, Logo bottom, Reserved area bottom).
+ * - Row 3 (Excel 4, ht=15.75 pt): Lower header row 1 (Academic Year, Report Title, Revision).
+ * - Row 4 (Excel 5, ht=15.75 pt): Lower header row 2 (Dated).
+ * - Row 5 (Excel 6, ht=42.75 pt): Lower header row 3 (Term, Department/Programme, Date of Preparation).
+ * - Row 6 (Excel 7, ht=15.75 pt): Empty spacer row.
+ * - Row 7 (Excel 8, ht=15.75 pt): Empty spacer row.
+ * - Returns Row 8 (Excel Row 9) for table headers.
+ * <p>
+ * Strict Invariant: HEADER LAST COLUMN == CONTENT LAST COLUMN (0 to totalColumns - 1).
+ */
+@Slf4j
 public class CommonExcelHeaderRenderer {
 
+    // Authoritative reference colors matching the reference workbook:
+    // Upper region: pure white #FFFFFF
+    // Lower region: reference grey #D9D9D9 (FFD9D9D9)
+    public static final Color COLOR_GREY_HEADER = new Color(217, 217, 217);
+
+    /**
+     * Primary shared renderer method for Programme Attainment sheets.
+     */
+    public static int renderProgrammeHeader(
+            Workbook wb,
+            Sheet sheet,
+            ProgrammeAttainmentSnapshot snapshot,
+            String reportTitle,
+            int totalColumns,
+            byte[] leftLogoBytes,
+            ReportTemplateDto template,
+            String term,
+            boolean isLandscape) {
+
+        String institution = (snapshot != null && snapshot.getInstitutionName() != null && !snapshot.getInstitutionName().isBlank())
+                ? snapshot.getInstitutionName()
+                : (template != null && template.getHeaderConfig() != null && template.getHeaderConfig().getInstitutionName() != null
+                    ? template.getHeaderConfig().getInstitutionName()
+                    : "D. Y. PATIL INTERNATIONAL UNIVERSITY, PUNE");
+
+        String school = (snapshot != null && snapshot.getSchoolName() != null && !snapshot.getSchoolName().isBlank())
+                ? snapshot.getSchoolName()
+                : "School of Engineering and Technology";
+
+        String ay = (snapshot != null && snapshot.getAcademicYear() != null && !snapshot.getAcademicYear().isBlank())
+                ? snapshot.getAcademicYear()
+                : "—";
+
+        String deptOrProg;
+        if (snapshot != null && snapshot.getDepartmentName() != null && !snapshot.getDepartmentName().isBlank()) {
+            deptOrProg = "Department : " + snapshot.getDepartmentName();
+        } else if (snapshot != null && snapshot.getMasterProgrammeName() != null && !snapshot.getMasterProgrammeName().isBlank()) {
+            deptOrProg = "Department : " + snapshot.getMasterProgrammeName();
+        } else {
+            deptOrProg = "Department : " + school;
+        }
+
+        String revision = (template != null && template.getTemplateVersion() != null)
+                ? String.format("%02d", template.getTemplateVersion())
+                : "00";
+
+        DateTimeFormatter dtf = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+        String dated;
+        if (template != null && template.getUpdatedAt() != null) {
+            dated = template.getUpdatedAt().format(dtf);
+        } else if (snapshot != null && snapshot.getGeneratedAt() != null) {
+            dated = snapshot.getGeneratedAt().format(dtf);
+        } else {
+            dated = "—";
+        }
+
+        String dateOfPrep = (snapshot != null && snapshot.getGeneratedAt() != null)
+                ? snapshot.getGeneratedAt().format(dtf)
+                : "";
+
+        return renderProgrammeHeader(
+                wb, sheet,
+                institution, school, reportTitle,
+                ay, term != null ? term : "Term – I & II", deptOrProg,
+                revision, dated, dateOfPrep,
+                totalColumns, leftLogoBytes, isLandscape);
+    }
+
+    /**
+     * Parameterized renderer accepting all discrete dynamic values.
+     */
+    public static int renderProgrammeHeader(
+            Workbook wb,
+            Sheet sheet,
+            String institutionName,
+            String schoolName,
+            String reportTitle,
+            String academicYear,
+            String term,
+            String departmentOrProgramme,
+            String revision,
+            String dated,
+            String dateOfPrep,
+            int totalColumns,
+            byte[] leftLogoBytes,
+            boolean isLandscape) {
+
+        int endCol = Math.max(totalColumns - 1, 5);
+
+        // 1. Calculate dynamic zone column boundaries
+        int rightCols = 4;
+        int colRightStart = Math.max(endCol - rightCols + 1, 3);
+        int colRightEnd = endCol;
+        int colLeftStart = 0;
+        int colLeftEnd = (totalColumns > 16 ? 1 : 0);
+        int colCenterStart = colLeftEnd + 1;
+        int colCenterEnd = colRightStart - 1;
+
+        // 2. Prepare reference styles
+        CellStyle styleInst = createInstitutionStyle(wb);
+        CellStyle styleSchool = createSchoolStyle(wb);
+        CellStyle styleUpperBox = createUpperBoxStyle(wb);
+        CellStyle styleGreyCenter = createGreyCenterStyle(wb);
+        CellStyle styleGreyTop = createGreyTopStyle(wb);
+
+        // Row 0 (Excel Row 1, ht=15.75 pt): Empty spacer row
+        Row r0 = sheet.createRow(0);
+        r0.setHeightInPoints(15.75f);
+
+        // Row 1 (Excel Row 2, ht=27.75 pt) & Row 2 (Excel Row 3, ht=41.25 pt)
+        Row r1 = sheet.createRow(1);
+        r1.setHeightInPoints(27.75f);
+        Row r2 = sheet.createRow(2);
+        r2.setHeightInPoints(41.25f);
+
+        // Upper Left: Logo Area (A2:B3 or A2:A3)
+        styleRegion(sheet, 1, 2, colLeftStart, colLeftEnd, styleUpperBox, null);
+
+        // Upper Center Top: Institution Name (C2:M2 or B2:L2)
+        styleRegion(sheet, 1, 1, colCenterStart, colCenterEnd, styleInst, institutionName != null ? institutionName.toUpperCase() : "");
+
+        // Upper Center Bottom: School Name (C3:M3 or B3:L3)
+        styleRegion(sheet, 2, 2, colCenterStart, colCenterEnd, styleSchool, schoolName != null ? schoolName : "");
+
+        // Upper Right: Reserved Metadata Area (N2:Q3 or M2:P3)
+        styleRegion(sheet, 1, 2, colRightStart, colRightEnd, styleUpperBox, null);
+
+        // Row 3 (Excel Row 4, ht=15.75 pt) & Row 4 (Excel Row 5, ht=15.75 pt)
+        Row r3 = sheet.createRow(3);
+        r3.setHeightInPoints(15.75f);
+        Row r4 = sheet.createRow(4);
+        r4.setHeightInPoints(15.75f);
+
+        // Lower Left Top: Academic Year (A4:B5 or A4:A5)
+        String ayText = "Academic Year: " + (academicYear != null ? academicYear : "—");
+        styleRegion(sheet, 3, 4, colLeftStart, colLeftEnd, styleGreyCenter, ayText);
+
+        // Lower Center Top: Report Title (C4:M5 or B4:L5)
+        styleRegion(sheet, 3, 4, colCenterStart, colCenterEnd, styleGreyCenter, reportTitle != null ? reportTitle : "");
+
+        // Lower Right Row 4: Revision (N4:Q4 or M4:P4)
+        String revText = "Revision : " + (revision != null ? revision : "00");
+        styleRegion(sheet, 3, 3, colRightStart, colRightEnd, styleGreyCenter, revText);
+
+        // Lower Right Row 5: Dated (N5:Q5 or M5:P5)
+        String datedText = "Dated : " + (dated != null ? dated : "—");
+        styleRegion(sheet, 4, 4, colRightStart, colRightEnd, styleGreyCenter, datedText);
+
+        // Row 5 (Excel Row 6, ht=42.75 pt)
+        Row r5 = sheet.createRow(5);
+        r5.setHeightInPoints(42.75f);
+
+        // Lower Left Bottom: Term (A6:B6 or A6:A6)
+        String termText = (term != null && !term.isBlank() ? term : "Term – I & II");
+        styleRegion(sheet, 5, 5, colLeftStart, colLeftEnd, styleGreyCenter, termText);
+
+        // Lower Center Bottom: Department / Programme (C6:M6 or B6:L6)
+        styleRegion(sheet, 5, 5, colCenterStart, colCenterEnd, styleGreyCenter, departmentOrProgramme != null ? departmentOrProgramme : "");
+
+        // Lower Right Row 6: Date of Preparation (N6:Q6 or M6:P6)
+        String prepText = "Date of Preparation : " + (dateOfPrep != null ? dateOfPrep : "");
+        styleRegion(sheet, 5, 5, colRightStart, colRightEnd, styleGreyTop, prepText);
+
+        // Row 6 (Excel Row 7, ht=15.75 pt) & Row 7 (Excel Row 8, ht=15.75 pt): Spacers
+        Row r6 = sheet.createRow(6);
+        r6.setHeightInPoints(15.75f);
+        Row r7 = sheet.createRow(7);
+        r7.setHeightInPoints(15.75f);
+
+        // 3. Embed Logo into Left Area if available
+        if (leftLogoBytes != null && leftLogoBytes.length > 0) {
+            try {
+                int picType = (leftLogoBytes.length > 3 && (leftLogoBytes[0] & 0xFF) == 0xFF && (leftLogoBytes[1] & 0xFF) == 0xD8)
+                        ? Workbook.PICTURE_TYPE_JPEG : Workbook.PICTURE_TYPE_PNG;
+                int pictureIdx = wb.addPicture(leftLogoBytes, picType);
+                Drawing<?> drawing = sheet.getDrawingPatriarch();
+                if (drawing == null) {
+                    drawing = sheet.createDrawingPatriarch();
+                }
+                CreationHelper helper = wb.getCreationHelper();
+                ClientAnchor anchor = helper.createClientAnchor();
+                anchor.setCol1(colLeftStart);
+                anchor.setRow1(1);
+                anchor.setCol2(colLeftEnd + 1);
+                anchor.setRow2(3);
+                anchor.setDx1(Units.toEMU(6));
+                anchor.setDy1(Units.toEMU(4));
+                anchor.setDx2(-Units.toEMU(6));
+                anchor.setDy2(-Units.toEMU(4));
+                anchor.setAnchorType(ClientAnchor.AnchorType.MOVE_DONT_RESIZE);
+                Picture picture = drawing.createPicture(anchor, pictureIdx);
+                if (picture instanceof org.apache.poi.xssf.usermodel.XSSFPicture xPic) {
+                    try {
+                        if (xPic.getCTPicture() != null && xPic.getCTPicture().getNvPicPr() != null) {
+                            var nvPr = xPic.getCTPicture().getNvPicPr();
+                            var cNvPr = nvPr.getCNvPicPr();
+                            if (cNvPr != null) {
+                                var locks = cNvPr.isSetPicLocks() ? cNvPr.getPicLocks() : cNvPr.addNewPicLocks();
+                                locks.setNoChangeAspect(true);
+                            }
+                        }
+                    } catch (Exception ignored) {
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("Failed to embed logo into Programme Excel header", e);
+            }
+        }
+
+        // Configure Sheet Print & Page setup
+        sheet.setFitToPage(true);
+        sheet.getPrintSetup().setLandscape(isLandscape);
+        sheet.getPrintSetup().setFitWidth((short) 1);
+        sheet.getPrintSetup().setFitHeight((short) 0);
+        sheet.setDisplayGridlines(true);
+
+        return 8; // Next row index for table headers (Excel Row 9)
+    }
+
+    /**
+     * Backward-compatible method preserved for callers such as ProgrammeAtrSheetBuilder.
+     */
     public static int renderHeader(
+            Workbook wb,
+            Sheet sheet,
+            String institutionName,
+            String schoolName,
+            String reportTitle,
+            String scopeLabelAndValue,
+            String academicYear,
+            String termOrSemester,
+            String reportId,
+            int totalColumns,
+            boolean isLandscape) {
+
+        if (totalColumns <= 6) {
+            return renderCompactAtrHeader(wb, sheet, institutionName, schoolName, reportTitle,
+                    scopeLabelAndValue, academicYear, termOrSemester, reportId, totalColumns, isLandscape);
+        }
+
+        return renderProgrammeHeader(
+                wb, sheet,
+                institutionName, schoolName, reportTitle,
+                academicYear, termOrSemester, scopeLabelAndValue,
+                "00", "—", "—",
+                totalColumns, null, isLandscape);
+    }
+
+    private static int renderCompactAtrHeader(
             Workbook wb,
             Sheet sheet,
             String institutionName,
@@ -25,7 +304,6 @@ public class CommonExcelHeaderRenderer {
         CellStyle titleStyle = ExcelStyles.createSubTitleStyle(wb);
         CellStyle metaStyle = ExcelStyles.createMetaStyle(wb);
 
-        // Row 0: Institution Name
         Row r0 = sheet.createRow(0);
         r0.setHeightInPoints(24);
         Cell c0 = r0.createCell(0);
@@ -34,7 +312,6 @@ public class CommonExcelHeaderRenderer {
         c0.setCellStyle(instStyle);
         sheet.addMergedRegion(new CellRangeAddress(0, 0, 0, endCol));
 
-        // Row 1: School Name
         Row r1 = sheet.createRow(1);
         r1.setHeightInPoints(18);
         Cell c1 = r1.createCell(0);
@@ -43,7 +320,6 @@ public class CommonExcelHeaderRenderer {
         c1.setCellStyle(schoolStyle);
         sheet.addMergedRegion(new CellRangeAddress(1, 1, 0, endCol));
 
-        // Row 2: Report Title
         Row r2 = sheet.createRow(2);
         r2.setHeightInPoints(20);
         Cell c2 = r2.createCell(0);
@@ -51,7 +327,6 @@ public class CommonExcelHeaderRenderer {
         c2.setCellStyle(titleStyle);
         sheet.addMergedRegion(new CellRangeAddress(2, 2, 0, endCol));
 
-        // Row 3: Metadata Summary Bar
         Row r3 = sheet.createRow(3);
         r3.setHeightInPoints(18);
         Cell c3 = r3.createCell(0);
@@ -63,17 +338,136 @@ public class CommonExcelHeaderRenderer {
         c3.setCellStyle(metaStyle);
         sheet.addMergedRegion(new CellRangeAddress(3, 3, 0, endCol));
 
-        // Row 4: Spacer
         Row r4 = sheet.createRow(4);
         r4.setHeightInPoints(6);
 
-        // Configure Sheet Print & Page setup
         sheet.setFitToPage(true);
         sheet.getPrintSetup().setLandscape(isLandscape);
         sheet.getPrintSetup().setFitWidth((short) 1);
         sheet.getPrintSetup().setFitHeight((short) 0);
         sheet.setDisplayGridlines(true);
 
-        return 5; // Next row index for table headers
+        return 5;
+    }
+
+    private static void styleRegion(Sheet sheet, int firstRow, int lastRow, int firstCol, int lastCol, CellStyle style, String text) {
+        for (int r = firstRow; r <= lastRow; r++) {
+            Row row = sheet.getRow(r);
+            if (row == null) row = sheet.createRow(r);
+            for (int c = firstCol; c <= lastCol; c++) {
+                Cell cell = row.getCell(c);
+                if (cell == null) cell = row.createCell(c);
+                cell.setCellStyle(style);
+            }
+        }
+        if (text != null) {
+            Row r0 = sheet.getRow(firstRow);
+            Cell c0 = r0.getCell(firstCol);
+            c0.setCellValue(text);
+        }
+        if (lastRow > firstRow || lastCol > firstCol) {
+            sheet.addMergedRegion(new CellRangeAddress(firstRow, lastRow, firstCol, lastCol));
+        }
+    }
+
+    private static CellStyle createInstitutionStyle(Workbook wb) {
+        CellStyle style = wb.createCellStyle();
+        Font font = wb.createFont();
+        font.setFontName("Arial");
+        font.setFontHeightInPoints((short) 14);
+        font.setBold(true);
+        font.setColor(IndexedColors.BLACK.getIndex());
+        style.setFont(font);
+        style.setAlignment(HorizontalAlignment.CENTER);
+        style.setVerticalAlignment(VerticalAlignment.CENTER);
+        style.setWrapText(true);
+        style.setFillForegroundColor(IndexedColors.WHITE.getIndex());
+        style.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+        setBlackBorders(style);
+        return style;
+    }
+
+    private static CellStyle createSchoolStyle(Workbook wb) {
+        CellStyle style = wb.createCellStyle();
+        Font font = wb.createFont();
+        font.setFontName("Arial");
+        font.setFontHeightInPoints((short) 16);
+        font.setBold(true);
+        font.setColor(IndexedColors.BLACK.getIndex());
+        style.setFont(font);
+        style.setAlignment(HorizontalAlignment.CENTER);
+        style.setVerticalAlignment(VerticalAlignment.CENTER);
+        style.setWrapText(true);
+        style.setFillForegroundColor(IndexedColors.WHITE.getIndex());
+        style.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+        setBlackBorders(style);
+        return style;
+    }
+
+    private static CellStyle createUpperBoxStyle(Workbook wb) {
+        CellStyle style = wb.createCellStyle();
+        Font font = wb.createFont();
+        font.setFontName("Arial");
+        font.setFontHeightInPoints((short) 10);
+        style.setFont(font);
+        style.setAlignment(HorizontalAlignment.CENTER);
+        style.setVerticalAlignment(VerticalAlignment.CENTER);
+        style.setFillForegroundColor(IndexedColors.WHITE.getIndex());
+        style.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+        setBlackBorders(style);
+        return style;
+    }
+
+    private static CellStyle createGreyCenterStyle(Workbook wb) {
+        CellStyle style = wb.createCellStyle();
+        Font font = wb.createFont();
+        font.setFontName("Arial");
+        font.setFontHeightInPoints((short) 12);
+        font.setBold(true);
+        font.setColor(IndexedColors.BLACK.getIndex());
+        style.setFont(font);
+        style.setAlignment(HorizontalAlignment.CENTER);
+        style.setVerticalAlignment(VerticalAlignment.CENTER);
+        style.setWrapText(true);
+        applyGreyFill(style);
+        setBlackBorders(style);
+        return style;
+    }
+
+    private static CellStyle createGreyTopStyle(Workbook wb) {
+        CellStyle style = wb.createCellStyle();
+        Font font = wb.createFont();
+        font.setFontName("Arial");
+        font.setFontHeightInPoints((short) 12);
+        font.setBold(true);
+        font.setColor(IndexedColors.BLACK.getIndex());
+        style.setFont(font);
+        style.setAlignment(HorizontalAlignment.CENTER);
+        style.setVerticalAlignment(VerticalAlignment.TOP);
+        style.setWrapText(true);
+        applyGreyFill(style);
+        setBlackBorders(style);
+        return style;
+    }
+
+    private static void applyGreyFill(CellStyle style) {
+        if (style instanceof XSSFCellStyle xssf) {
+            xssf.setFillForegroundColor(new XSSFColor(COLOR_GREY_HEADER, new DefaultIndexedColorMap()));
+            xssf.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+        } else {
+            style.setFillForegroundColor(IndexedColors.GREY_25_PERCENT.getIndex());
+            style.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+        }
+    }
+
+    private static void setBlackBorders(CellStyle style) {
+        style.setBorderTop(BorderStyle.THIN);
+        style.setBorderBottom(BorderStyle.THIN);
+        style.setBorderLeft(BorderStyle.THIN);
+        style.setBorderRight(BorderStyle.THIN);
+        style.setTopBorderColor(IndexedColors.BLACK.getIndex());
+        style.setBottomBorderColor(IndexedColors.BLACK.getIndex());
+        style.setLeftBorderColor(IndexedColors.BLACK.getIndex());
+        style.setRightBorderColor(IndexedColors.BLACK.getIndex());
     }
 }

@@ -29,6 +29,8 @@ public class MasterProgrammeController {
             @RequestParam(required = false) String schoolId) {
         List<MasterProgramme> programmes = (departmentId != null && !departmentId.isBlank())
                 ? academicService.getProgrammesByDepartment(departmentId)
+                : (schoolId != null && !schoolId.isBlank())
+                ? academicService.getProgrammesBySchool(schoolId)
                 : academicService.getAllProgrammes();
         return ResponseEntity.ok(ApiResponse.<List<MasterProgramme>>builder()
                 .success(true)
@@ -91,7 +93,7 @@ public class MasterProgrammeController {
                 .build());
     }
 
-    @GetMapping("/{masterProgrammeId}/programme-batches")
+    @GetMapping({"/{masterProgrammeId}/programme-batches", "/{masterProgrammeId}/batches", "/master-programmes/{masterProgrammeId}/programme-batches"})
     public ResponseEntity<ApiResponse<List<ProgrammeBatch>>> getProgrammeBatches(
             @PathVariable String masterProgrammeId) {
         return ResponseEntity.ok(ApiResponse.<List<ProgrammeBatch>>builder()

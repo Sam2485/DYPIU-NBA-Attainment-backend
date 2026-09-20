@@ -13,6 +13,9 @@ import org.apache.poi.ss.usermodel.*;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.CacheEvict;
+import com.dypiu.nba.config.CacheConfig;
 import com.dypiu.nba.security.CurrentUserScope;
 import com.dypiu.nba.security.CurrentUserScopeService;
 import org.springframework.web.multipart.MultipartFile;
@@ -408,6 +411,7 @@ public class AttainmentCalculationService {
     // --- Database Persistence Helper Methods ---
 
     @Transactional
+    @CacheEvict(value = CacheConfig.CACHE_PROGRAMME_ATTAINMENT, allEntries = true)
     public void saveStudentCoMarksToDatabase(String courseOfferingOrMasterCourseId, Map<String, BigDecimal> coMaxMarks, List<StudentMarksRowDto> studentList) {
         log.debug("[AttainmentCalculationService] saveStudentCoMarksToDatabase called | courseOfferingOrMasterCourseId: " + courseOfferingOrMasterCourseId + " | students: " + (studentList != null ? studentList.size() : 0));
         if (courseOfferingOrMasterCourseId == null || studentList == null || studentList.isEmpty()) return;
@@ -851,6 +855,7 @@ public class AttainmentCalculationService {
     }
 
     @Transactional
+    @CacheEvict(value = CacheConfig.CACHE_PROGRAMME_ATTAINMENT, allEntries = true)
     public void deleteExaminationData(String courseOfferingOrMasterCourseId) {
         log.debug("[AttainmentCalculationService] deleteExaminationData called | courseOfferingOrMasterCourseId: " + courseOfferingOrMasterCourseId);
         enforceOfferingOrCourseScope(courseOfferingOrMasterCourseId);
@@ -884,6 +889,7 @@ public class AttainmentCalculationService {
     }
 
     @Transactional
+    @CacheEvict(value = CacheConfig.CACHE_PROGRAMME_ATTAINMENT, allEntries = true)
     public void deleteSurveyData(String courseOfferingOrMasterCourseId) {
         log.debug("[AttainmentCalculationService] deleteSurveyData called | courseOfferingOrMasterCourseId: " + courseOfferingOrMasterCourseId);
         enforceOfferingOrCourseScope(courseOfferingOrMasterCourseId);
@@ -915,6 +921,7 @@ public class AttainmentCalculationService {
     }
 
     @Transactional
+    @CacheEvict(value = CacheConfig.CACHE_PROGRAMME_ATTAINMENT, allEntries = true)
     public ExaminationAttainmentResultDto processAndSaveExaminationFile(String courseOfferingOrMasterCourseId, MultipartFile file, BigDecimal thresholdPercentage, String uploadedBy) {
         log.debug("[AttainmentCalculationService] processAndSaveExaminationFile called | courseOfferingOrMasterCourseId: " + courseOfferingOrMasterCourseId);
         enforceOfferingOrCourseScope(courseOfferingOrMasterCourseId);
@@ -1177,7 +1184,10 @@ public class AttainmentCalculationService {
         log.debug("[AttainmentCalculationService] getExaminationAttainment called | courseOfferingOrMasterCourseId: " + courseOfferingOrMasterCourseId);
         String offeringId = resolveOfferingId(courseOfferingOrMasterCourseId);
         if (examinationAttainmentStore.containsKey(offeringId)) {
-            return examinationAttainmentStore.get(offeringId);
+            ExaminationAttainmentResultDto cached = examinationAttainmentStore.get(offeringId);
+            if (cached != null && cached.getStudentMarks() != null && !cached.getStudentMarks().isEmpty()) {
+                return cached;
+            }
         }
 
         List<StudentCoMark> dbMarks = studentCoMarkRepository.findByProgrammeBatchCourseId(offeringId);
@@ -1357,6 +1367,7 @@ public class AttainmentCalculationService {
     }
 
     @Transactional
+    @CacheEvict(value = CacheConfig.CACHE_PROGRAMME_ATTAINMENT, allEntries = true)
     public SurveyAttainmentResultDto processAndSaveSurveyFile(String courseOfferingOrMasterCourseId, MultipartFile file, BigDecimal thresholdPercentage, String uploadedBy) {
         log.debug("[AttainmentCalculationService] processAndSaveSurveyFile called | courseOfferingOrMasterCourseId: " + courseOfferingOrMasterCourseId);
         enforceOfferingOrCourseScope(courseOfferingOrMasterCourseId);
@@ -1640,7 +1651,10 @@ public class AttainmentCalculationService {
         log.debug("[AttainmentCalculationService] getSurveyAttainment called | courseOfferingOrMasterCourseId: " + courseOfferingOrMasterCourseId);
         String offeringId = resolveOfferingId(courseOfferingOrMasterCourseId);
         if (surveyAttainmentStore.containsKey(offeringId)) {
-            return surveyAttainmentStore.get(offeringId);
+            SurveyAttainmentResultDto cached = surveyAttainmentStore.get(offeringId);
+            if (cached != null && cached.getSurveyResponses() != null && !cached.getSurveyResponses().isEmpty()) {
+                return cached;
+            }
         }
 
         Optional<UploadedDocument> docOpt = uploadedDocumentRepository
@@ -2284,6 +2298,7 @@ public class AttainmentCalculationService {
     }
 
     @Transactional
+    @CacheEvict(value = CacheConfig.CACHE_PROGRAMME_ATTAINMENT, allEntries = true)
     public ProgrammeSurveyResultDto processAndSaveProgrammeSurveyFile(String masterProgrammeId, String programmeBatchId, MultipartFile file, String uploadedBy) {
         log.debug("[AttainmentCalculationService] processAndSaveProgrammeSurveyFile called | masterProgrammeId: " + masterProgrammeId + " | programmeBatchId: " + programmeBatchId);
         if (file == null || file.isEmpty()) {
@@ -2382,6 +2397,7 @@ public class AttainmentCalculationService {
     }
 
     @Transactional
+    @CacheEvict(value = CacheConfig.CACHE_PROGRAMME_ATTAINMENT, allEntries = true)
     public ProgrammeSurveyResultDto saveProgrammeSurveyResult(String masterProgrammeId, String programmeBatchId, ProgrammeSurveyResultDto payload) {
         log.debug("[AttainmentCalculationService] saveProgrammeSurveyResult called | masterProgrammeId: " + masterProgrammeId + " | programmeBatchId: " + programmeBatchId);
         if (programmeBatchId != null) {
@@ -2402,6 +2418,7 @@ public class AttainmentCalculationService {
     }
 
     @Transactional
+    @CacheEvict(value = CacheConfig.CACHE_PROGRAMME_ATTAINMENT, allEntries = true)
     public void deleteProgrammeSurvey(String masterProgrammeId, String programmeBatchId) {
         log.debug("[AttainmentCalculationService] deleteProgrammeSurvey called | masterProgrammeId: " + masterProgrammeId + " | programmeBatchId: " + programmeBatchId);
         if (programmeBatchId != null) {
@@ -2429,6 +2446,7 @@ public class AttainmentCalculationService {
     // =========================================================================
 
     @Transactional(readOnly = true, noRollbackFor = Exception.class)
+    @Cacheable(value = CacheConfig.CACHE_PROGRAMME_ATTAINMENT, key = "#masterProgrammeId + ':' + #programmeBatchId")
     public ProgrammeAttainmentResultDto calculateProgrammeAttainment(String masterProgrammeId, String programmeBatchId) {
         log.debug("[AttainmentCalculationService] calculateProgrammeAttainment called | masterProgrammeId: " + masterProgrammeId + " | programmeBatchId: " + programmeBatchId);
         MasterProgramme prog = masterProgrammeRepository.findById(masterProgrammeId).orElse(null);

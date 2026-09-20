@@ -45,7 +45,11 @@ public class ReportsController {
 
     // --- 1. Master Programme Attainment Downloads ---
 
-    @GetMapping("/programme-attainment/{programmeBatchId}/master/excel")
+    @GetMapping({
+            "/programme-attainment/{programmeBatchId}/master/excel",
+            "/programme-attainment/{programmeBatchId}/excel",
+            "/programme-attainment/{programmeBatchId}/export/excel"
+    })
     public ResponseEntity<byte[]> downloadProgrammeAttainmentMasterExcel(
             @PathVariable String programmeBatchId,
             @RequestParam(required = false) String masterProgrammeId,
@@ -53,7 +57,7 @@ public class ReportsController {
 
         String user = principal != null ? principal.getName() : "Academic User";
         GeneratedReportDto report = orchestrationService.generateProgrammeAttainmentReport(
-                masterProgrammeId, programmeBatchId, ReportSection.ALL, user, "DYPIU");
+                masterProgrammeId, programmeBatchId, ReportSection.ALL, user, "DYPIU", ArtifactType.EXCEL);
 
         GeneratedReportDto.ArtifactSummaryDto artifact = report.getArtifacts().stream()
                 .filter(a -> a.getArtifactType() == ArtifactType.EXCEL)
@@ -64,7 +68,11 @@ public class ReportsController {
         return createDownloadResponse(bytes, artifact.getOriginalFilename(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     }
 
-    @GetMapping("/programme-attainment/{programmeBatchId}/master/pdf")
+    @GetMapping({
+            "/programme-attainment/{programmeBatchId}/master/pdf",
+            "/programme-attainment/{programmeBatchId}/pdf",
+            "/programme-attainment/{programmeBatchId}/export/pdf"
+    })
     public ResponseEntity<byte[]> downloadProgrammeAttainmentMasterPdf(
             @PathVariable String programmeBatchId,
             @RequestParam(required = false) String masterProgrammeId,
@@ -72,7 +80,7 @@ public class ReportsController {
 
         String user = principal != null ? principal.getName() : "Academic User";
         GeneratedReportDto report = orchestrationService.generateProgrammeAttainmentReport(
-                masterProgrammeId, programmeBatchId, ReportSection.ALL, user, "DYPIU");
+                masterProgrammeId, programmeBatchId, ReportSection.ALL, user, "DYPIU", ArtifactType.PDF);
 
         GeneratedReportDto.ArtifactSummaryDto artifact = report.getArtifacts().stream()
                 .filter(a -> a.getArtifactType() == ArtifactType.PDF)
@@ -95,7 +103,7 @@ public class ReportsController {
         ReportSection reportSection = parseReportSection(section);
         String user = principal != null ? principal.getName() : "Academic User";
         GeneratedReportDto report = orchestrationService.generateProgrammeAttainmentReport(
-                masterProgrammeId, programmeBatchId, reportSection, user, "DYPIU");
+                masterProgrammeId, programmeBatchId, reportSection, user, "DYPIU", ArtifactType.EXCEL);
 
         GeneratedReportDto.ArtifactSummaryDto artifact = report.getArtifacts().stream()
                 .filter(a -> a.getArtifactType() == ArtifactType.EXCEL)
@@ -116,7 +124,7 @@ public class ReportsController {
         ReportSection reportSection = parseReportSection(section);
         String user = principal != null ? principal.getName() : "Academic User";
         GeneratedReportDto report = orchestrationService.generateProgrammeAttainmentReport(
-                masterProgrammeId, programmeBatchId, reportSection, user, "DYPIU");
+                masterProgrammeId, programmeBatchId, reportSection, user, "DYPIU", ArtifactType.PDF);
 
         GeneratedReportDto.ArtifactSummaryDto artifact = report.getArtifacts().stream()
                 .filter(a -> a.getArtifactType() == ArtifactType.PDF)
@@ -139,7 +147,7 @@ public class ReportsController {
 
         String user = principal != null ? principal.getName() : "Course Coordinator";
         GeneratedReportDto report = orchestrationService.generateCourseAttainmentReport(
-                programmeBatchCourseId, user, "DYPIU");
+                programmeBatchCourseId, user, "DYPIU", ArtifactType.EXCEL);
 
         GeneratedReportDto.ArtifactSummaryDto artifact = report.getArtifacts().stream()
                 .filter(a -> a.getArtifactType() == ArtifactType.EXCEL)
@@ -160,7 +168,7 @@ public class ReportsController {
 
         String user = principal != null ? principal.getName() : "Course Coordinator";
         GeneratedReportDto report = orchestrationService.generateCourseAttainmentReport(
-                programmeBatchCourseId, user, "DYPIU");
+                programmeBatchCourseId, user, "DYPIU", ArtifactType.PDF);
 
         GeneratedReportDto.ArtifactSummaryDto artifact = report.getArtifacts().stream()
                 .filter(a -> a.getArtifactType() == ArtifactType.PDF)
@@ -180,7 +188,7 @@ public class ReportsController {
 
         String user = principal != null ? principal.getName() : "Programme Coordinator";
         GeneratedReportDto report = orchestrationService.generateProgrammeAtrReport(
-                programmeBatchId, user, "DYPIU");
+                programmeBatchId, user, "DYPIU", ArtifactType.EXCEL);
 
         GeneratedReportDto.ArtifactSummaryDto artifact = report.getArtifacts().stream()
                 .filter(a -> a.getArtifactType() == ArtifactType.EXCEL)
@@ -198,7 +206,7 @@ public class ReportsController {
 
         String user = principal != null ? principal.getName() : "Programme Coordinator";
         GeneratedReportDto report = orchestrationService.generateProgrammeAtrReport(
-                programmeBatchId, user, "DYPIU");
+                programmeBatchId, user, "DYPIU", ArtifactType.PDF);
 
         GeneratedReportDto.ArtifactSummaryDto artifact = report.getArtifacts().stream()
                 .filter(a -> a.getArtifactType() == ArtifactType.PDF)
@@ -218,7 +226,7 @@ public class ReportsController {
 
         String user = principal != null ? principal.getName() : "Course Coordinator";
         GeneratedReportDto report = orchestrationService.generateCourseAtrReport(
-                programmeBatchCourseId, user, "DYPIU");
+                programmeBatchCourseId, user, "DYPIU", ArtifactType.EXCEL);
 
         GeneratedReportDto.ArtifactSummaryDto artifact = report.getArtifacts().stream()
                 .filter(a -> a.getArtifactType() == ArtifactType.EXCEL)
@@ -236,7 +244,7 @@ public class ReportsController {
 
         String user = principal != null ? principal.getName() : "Course Coordinator";
         GeneratedReportDto report = orchestrationService.generateCourseAtrReport(
-                programmeBatchCourseId, user, "DYPIU");
+                programmeBatchCourseId, user, "DYPIU", ArtifactType.PDF);
 
         GeneratedReportDto.ArtifactSummaryDto artifact = report.getArtifacts().stream()
                 .filter(a -> a.getArtifactType() == ArtifactType.PDF)

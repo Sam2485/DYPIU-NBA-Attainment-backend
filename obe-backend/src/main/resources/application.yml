@@ -35,10 +35,10 @@ spring:
     database-platform: org.hibernate.dialect.PostgreSQLDialect
     hibernate:
       ddl-auto: validate # Flyway is mandatory authority for DB schema evolution
-    show-sql: true
+    show-sql: ${HIBERNATE_SHOW_SQL:false}
     properties:
       hibernate:
-        format_sql: true
+        format_sql: ${HIBERNATE_FORMAT_SQL:false}
         jdbc:
           batch_size: 50
           batch_versioned_data: true

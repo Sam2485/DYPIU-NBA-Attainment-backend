@@ -627,6 +627,15 @@ public class AcademicController {
         return ResponseEntity.ok(ApiResponse.<List<ProgrammeBatch>>builder().success(true).data(batches).build());
     }
 
+    @GetMapping({"/master-programmes/{masterProgrammeId}/programme-batches", "/master-programmes/{masterProgrammeId}/batches", "/programmes/{masterProgrammeId}/programme-batches"})
+    public ResponseEntity<ApiResponse<List<ProgrammeBatch>>> getProgrammeBatchesByProgramme(
+            @PathVariable String masterProgrammeId) {
+        return ResponseEntity.ok(ApiResponse.<List<ProgrammeBatch>>builder()
+                .success(true)
+                .data(academicService.getBatchesByProgramme(masterProgrammeId))
+                .build());
+    }
+
     @GetMapping("/programme-batches/course-coordinator")
     public ResponseEntity<ApiResponse<List<ProgrammeBatch>>> getBatchesByCourseCoordinator(
             @RequestParam(required = false) String coordinatorEmail,

@@ -1,41 +1,51 @@
 package com.dypiu.nba.reports.excel;
 
 import com.dypiu.nba.reports.model.snapshot.ProgrammeAttainmentSnapshot;
+import com.dypiu.nba.reports.template.ReportTemplateDto;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.ss.util.CellRangeAddress;
+import org.apache.poi.ss.util.RegionUtil;
 
 import java.math.BigDecimal;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 public class AverageDirectAttainmentSheetBuilder {
 
+    public static final String DEFAULT_SHEET_NAME = "Average Direct Attainment";
+
     public static Sheet build(Workbook wb, String sheetName, ProgrammeAttainmentSnapshot snapshot) {
-        Sheet sheet = wb.createSheet(sheetName != null ? sheetName : "Average Direct Attainment");
+        return build(wb, sheetName, snapshot, null, null);
+    }
+
+    public static Sheet build(Workbook wb, ProgrammeAttainmentSnapshot snapshot) {
+        return build(wb, DEFAULT_SHEET_NAME, snapshot, null, null);
+    }
+
+    public static Sheet build(Workbook wb, String sheetName, ProgrammeAttainmentSnapshot snapshot, byte[] logoBytes, ReportTemplateDto template) {
+        String resolvedSheetName = (sheetName != null && !sheetName.isBlank()) ? sheetName : DEFAULT_SHEET_NAME;
+        Sheet sheet = wb.createSheet(resolvedSheetName);
 
         CellStyle headerStyle = ExcelStyles.createHeaderStyle(wb, false);
         CellStyle psoHeaderStyle = ExcelStyles.createHeaderStyle(wb, true);
         CellStyle dataLeft = ExcelStyles.createDataStyle(wb, false, false);
         CellStyle dataCenter = ExcelStyles.createDataStyle(wb, true, false);
-        CellStyle boldCode = ExcelStyles.createDataStyle(wb, true, true);
+        CellStyle codeCenter = ExcelStyles.createDataStyle(wb, true, false);
         CellStyle summaryPo = ExcelStyles.createSummaryStyle(wb, false);
         CellStyle summaryPso = ExcelStyles.createSummaryStyle(wb, true);
+        CellStyle summaryTitle = ExcelStyles.createSummaryTitleStyle(wb);
 
-        List<String> poCodes = snapshot.getPoCodes() != null ? snapshot.getPoCodes() : List.of();
-        List<String> psoCodes = snapshot.getPsoCodes() != null ? snapshot.getPsoCodes() : List.of();
+        List<String> poCodes = new ArrayList<>(snapshot.getPoCodes() != null ? snapshot.getPoCodes() : List.of());
+        poCodes.sort(ExcelStyles.NATURAL_NUMERICAL_COMPARATOR);
+        List<String> psoCodes = new ArrayList<>(snapshot.getPsoCodes() != null ? snapshot.getPsoCodes() : List.of());
+        psoCodes.sort(ExcelStyles.NATURAL_NUMERICAL_COMPARATOR);
         int totalCols = 3 + poCodes.size() + psoCodes.size();
 
-        String progScope = "Programme: " + (snapshot.getMasterProgrammeName() != null ? snapshot.getMasterProgrammeName() : "")
-                + (snapshot.getMasterProgrammeCode() != null && !snapshot.getMasterProgrammeCode().isBlank() ? " (" + snapshot.getMasterProgrammeCode() + ")" : "");
+        int startRow = CommonExcelHeaderRenderer.renderProgrammeHeader(
+                wb, sheet, snapshot, "PO & PSO Attainment (Direct)", totalCols, logoBytes, template, "Term – I & II", true);
 
-        int startRow = CommonExcelHeaderRenderer.renderHeader(
-                wb, sheet, snapshot.getInstitutionName(), snapshot.getSchoolName(),
-                "PROGRAMME ATTAINMENT — AVERAGE DIRECT ATTAINMENT",
-                progScope, snapshot.getAcademicYear(), "All Semesters (Sem 1–8)", snapshot.getReportId(), totalCols, true);
-
-        // Table Header
+        // Table Header (Excel Row 9, startRow index 8)
         Row headerRow = sheet.createRow(startRow);
-        headerRow.setHeightInPoints(24);
+        headerRow.setHeightInPoints(20.0f);
 
         int colIdx = 0;
         createCell(headerRow, colIdx++, "Sem", headerStyle);
@@ -45,51 +55,91 @@ public class AverageDirectAttainmentSheetBuilder {
         for (String po : poCodes) createCell(headerRow, colIdx++, po, headerStyle);
         for (String pso : psoCodes) createCell(headerRow, colIdx++, pso, psoHeaderStyle);
 
-        // Data Rows
+        // Data Rows grouped by Semester
         ProgrammeAttainmentSnapshot.AverageDirectSection section = snapshot.getSection2AverageDirect();
         int rowIdx = startRow + 1;
-        if (section != null && section.getCourses() != null) {
-            for (ProgrammeAttainmentSnapshot.CourseDirectRow course : section.getCourses()) {
-                Row row = sheet.createRow(rowIdx++);
-                row.setHeightInPoints(18);
-                int cIdx = 0;
-                createCell(row, cIdx++, "Sem " + (course.getSemester() != null ? course.getSemester() : "—"), dataCenter);
-                createCell(row, cIdx++, course.getCourseCode() != null ? course.getCourseCode() : "", boldCode);
-                createCell(row, cIdx++, course.getCourseName() != null ? course.getCourseName() : "", dataLeft);
 
-                Map<String, BigDecimal> poMap = course.getPoValues() != null ? course.getPoValues() : Map.of();
-                for (String po : poCodes) {
-                    BigDecimal val = poMap.get(po);
-                    if (val != null && val.compareTo(BigDecimal.ZERO) > 0) {
-                        Cell c = row.createCell(cIdx++);
-                        c.setCellValue(val.doubleValue());
-                        c.setCellStyle(dataCenter);
-                    } else {
-                        createCell(row, cIdx++, "—", dataCenter);
+        if (section != null && section.getCourses() != null && !section.getCourses().isEmpty()) {
+            // Group courses by semester preserving natural semester order
+            Map<Integer, List<ProgrammeAttainmentSnapshot.CourseDirectRow>> coursesBySem = new LinkedHashMap<>();
+            for (ProgrammeAttainmentSnapshot.CourseDirectRow course : section.getCourses()) {
+                Integer sem = course.getSemester();
+                coursesBySem.computeIfAbsent(sem, k -> new ArrayList<>()).add(course);
+            }
+
+            // Sort semesters ascending, with nulls last
+            List<Integer> sortedSemesters = new ArrayList<>(coursesBySem.keySet());
+            sortedSemesters.sort(Comparator.nullsLast(Integer::compareTo));
+
+            for (Integer sem : sortedSemesters) {
+                List<ProgrammeAttainmentSnapshot.CourseDirectRow> semCourses = coursesBySem.get(sem);
+                int semStartRow = rowIdx;
+                int semEndRow = rowIdx + semCourses.size() - 1;
+                String semLabel = AverageMappingSheetBuilder.formatSemesterLabel(sem);
+
+                for (ProgrammeAttainmentSnapshot.CourseDirectRow course : semCourses) {
+                    Row row = sheet.createRow(rowIdx++);
+                    row.setHeightInPoints(16.5f);
+
+                    int cIdx = 0;
+                    Cell semCell = row.createCell(cIdx++);
+                    if (row.getRowNum() == semStartRow) {
+                        semCell.setCellValue(semLabel);
+                    }
+                    semCell.setCellStyle(dataCenter);
+
+                    createCell(row, cIdx++, course.getCourseCode() != null ? course.getCourseCode() : "", codeCenter);
+                    createCell(row, cIdx++, course.getCourseName() != null ? course.getCourseName() : "", dataLeft);
+
+                    Map<String, BigDecimal> poMap = course.getPoValues() != null ? course.getPoValues() : Map.of();
+                    for (String po : poCodes) {
+                        BigDecimal val = poMap.get(po);
+                        if (val != null && val.compareTo(BigDecimal.ZERO) > 0) {
+                            Cell c = row.createCell(cIdx++);
+                            c.setCellValue(val.doubleValue());
+                            c.setCellStyle(dataCenter);
+                        } else {
+                            createCell(row, cIdx++, "—", dataCenter);
+                        }
+                    }
+
+                    Map<String, BigDecimal> psoMap = course.getPsoValues() != null ? course.getPsoValues() : Map.of();
+                    for (String pso : psoCodes) {
+                        BigDecimal val = psoMap.get(pso);
+                        if (val != null && val.compareTo(BigDecimal.ZERO) > 0) {
+                            Cell c = row.createCell(cIdx++);
+                            c.setCellValue(val.doubleValue());
+                            c.setCellStyle(dataCenter);
+                        } else {
+                            createCell(row, cIdx++, "—", dataCenter);
+                        }
                     }
                 }
 
-                Map<String, BigDecimal> psoMap = course.getPsoValues() != null ? course.getPsoValues() : Map.of();
-                for (String pso : psoCodes) {
-                    BigDecimal val = psoMap.get(pso);
-                    if (val != null && val.compareTo(BigDecimal.ZERO) > 0) {
-                        Cell c = row.createCell(cIdx++);
-                        c.setCellValue(val.doubleValue());
-                        c.setCellStyle(dataCenter);
-                    } else {
-                        createCell(row, cIdx++, "—", dataCenter);
-                    }
+                // Merge semester cell vertically across course rows if more than 1 row
+                if (semEndRow > semStartRow) {
+                    CellRangeAddress semRegion = new CellRangeAddress(semStartRow, semEndRow, 0, 0);
+                    sheet.addMergedRegion(semRegion);
+                    RegionUtil.setBorderTop(BorderStyle.THIN, semRegion, sheet);
+                    RegionUtil.setBorderBottom(BorderStyle.THIN, semRegion, sheet);
+                    RegionUtil.setBorderLeft(BorderStyle.THIN, semRegion, sheet);
+                    RegionUtil.setBorderRight(BorderStyle.THIN, semRegion, sheet);
                 }
             }
         }
 
-        // Summary Row: Average Direct Attainment
+        // Summary Row: Average Attainment (Direct)
         Row sumRow = sheet.createRow(rowIdx);
-        sumRow.setHeightInPoints(22);
-        createCell(sumRow, 0, "", summaryPo);
-        createCell(sumRow, 1, "", summaryPo);
-        createCell(sumRow, 2, "Average Attainment (Direct)", summaryPo);
-        sheet.addMergedRegion(new CellRangeAddress(rowIdx, rowIdx, 0, 2));
+        sumRow.setHeightInPoints(22.0f);
+        createCell(sumRow, 0, "Average Attainment (Direct)", summaryTitle);
+        createCell(sumRow, 1, "", summaryTitle);
+        createCell(sumRow, 2, "", summaryTitle);
+        CellRangeAddress sumRegion = new CellRangeAddress(rowIdx, rowIdx, 0, 2);
+        sheet.addMergedRegion(sumRegion);
+        RegionUtil.setBorderTop(BorderStyle.THIN, sumRegion, sheet);
+        RegionUtil.setBorderBottom(BorderStyle.THIN, sumRegion, sheet);
+        RegionUtil.setBorderLeft(BorderStyle.THIN, sumRegion, sheet);
+        RegionUtil.setBorderRight(BorderStyle.THIN, sumRegion, sheet);
 
         Map<String, BigDecimal> avgMap = (section != null && section.getAverageDirectAttainment() != null)
                 ? section.getAverageDirectAttainment() : Map.of();
@@ -98,27 +148,49 @@ public class AverageDirectAttainmentSheetBuilder {
         for (String po : poCodes) {
             BigDecimal val = avgMap.get(po);
             Cell c = sumRow.createCell(sumColIdx++);
-            if (val != null) c.setCellValue(val.doubleValue());
-            else c.setCellValue("—");
+            if (val != null && val.compareTo(BigDecimal.ZERO) > 0) {
+                c.setCellValue(val.doubleValue());
+            } else {
+                c.setCellValue("—");
+            }
             c.setCellStyle(summaryPo);
         }
         for (String pso : psoCodes) {
             BigDecimal val = avgMap.get(pso);
             Cell c = sumRow.createCell(sumColIdx++);
-            if (val != null) c.setCellValue(val.doubleValue());
-            else c.setCellValue("—");
+            if (val != null && val.compareTo(BigDecimal.ZERO) > 0) {
+                c.setCellValue(val.doubleValue());
+            } else {
+                c.setCellValue("—");
+            }
             c.setCellStyle(summaryPso);
         }
 
+        // Freeze Pane & Repeating Rows
         sheet.createFreezePane(0, startRow + 1);
         sheet.setRepeatingRows(CellRangeAddress.valueOf("1:" + (startRow + 1)));
 
-        // Column Auto Sizing
-        sheet.setColumnWidth(0, 10 * 256);
-        sheet.setColumnWidth(1, 16 * 256);
-        sheet.setColumnWidth(2, 38 * 256);
+        // Page & Print Setup
+        PrintSetup printSetup = sheet.getPrintSetup();
+        printSetup.setLandscape(true);
+        printSetup.setPaperSize(PrintSetup.A4_PAPERSIZE);
+        sheet.setFitToPage(true);
+        printSetup.setFitWidth((short) 1);
+        printSetup.setFitHeight((short) 0);
+        sheet.setAutobreaks(true);
+        sheet.setHorizontallyCenter(true);
+        sheet.setMargin(Sheet.LeftMargin, 0.25);
+        sheet.setMargin(Sheet.RightMargin, 0.25);
+        sheet.setMargin(Sheet.TopMargin, 0.5);
+        sheet.setMargin(Sheet.BottomMargin, 0.5);
+        wb.setPrintArea(wb.getSheetIndex(sheet), 0, totalCols - 1, 0, rowIdx);
+
+        // Column Proportional Widths matching reference
+        sheet.setColumnWidth(0, (int) (15.82 * 256));
+        sheet.setColumnWidth(1, (int) (14.18 * 256));
+        sheet.setColumnWidth(2, (int) (41.00 * 256));
         for (int i = 3; i < totalCols; i++) {
-            sheet.setColumnWidth(i, 11 * 256);
+            sheet.setColumnWidth(i, (int) (7.50 * 256));
         }
 
         return sheet;

@@ -52,9 +52,10 @@ public class CourseEndSurveySheetBuilder {
         sheet.setDisplayGridlines(true);
         sheet.setPrintGridlines(true);
 
-        // 1. Resolve dynamic CO list
-        List<String> coCodes = extractCoCodes(snapshot);
-        int numCO = coCodes.size();
+        // 1. Resolve dynamic CO list in ascending order with acronyms
+        CourseOutcomeOrderHelper.CourseOutcomeRegistry registry = CourseOutcomeOrderHelper.resolveRegistry(snapshot);
+        List<CourseOutcomeOrderHelper.CourseOutcomeItem> coItems = registry.getItems();
+        int numCO = coItems.size();
 
         // 2. Dynamic column width (HEADER LAST COLUMN == CONTENT LAST COLUMN)
         int totalCols = 2 + numCO;
@@ -63,11 +64,11 @@ public class CourseEndSurveySheetBuilder {
         }
         int endCol = totalCols - 1;
 
-        // 3. Set column widths matching reference
-        sheet.setColumnWidth(0, (int) (10.25 * 256)); // Col A: Sr No / Labels
-        sheet.setColumnWidth(1, (int) (6.25 * 256));  // Col B: Level / No. of students
+        // 3. Set column widths matching reference (+10% increased)
+        sheet.setColumnWidth(0, (int) (11.275 * 256)); // Col A: Sr No / Labels
+        sheet.setColumnWidth(1, (int) (6.875 * 256));  // Col B: Level / No. of students
         for (int c = 2; c <= endCol; c++) {
-            sheet.setColumnWidth(c, (int) (12.75 * 256)); // Cols C..endCol: CO columns
+            sheet.setColumnWidth(c, (int) (14.025 * 256)); // Cols C..endCol: CO columns
         }
 
         // 4. Create CellStyles bundle
@@ -122,11 +123,11 @@ public class CourseEndSurveySheetBuilder {
 
         // If counts or percentages are missing but responses exist, compute defensively
         if (responses.size() > 0 && (level1Counts.isEmpty() || level1Percentages.isEmpty() || overallIndirectPercentages.isEmpty())) {
-            for (String co : coCodes) {
+            for (CourseOutcomeOrderHelper.CourseOutcomeItem item : coItems) {
                 int c1 = 0, c2 = 0, c3 = 0;
                 for (CourseAttainmentSnapshot.SurveyResponseRow r : responses) {
                     if (r.getCoFeedbacks() != null) {
-                        String fb = r.getCoFeedbacks().get(co);
+                        String fb = registry.lookupValue(r.getCoFeedbacks(), item);
                         if (fb != null) {
                             String lower = fb.trim().toLowerCase();
                             if (lower.contains("subst") || "3".equals(lower)) c3++;
@@ -135,21 +136,33 @@ public class CourseEndSurveySheetBuilder {
                         }
                     }
                 }
-                level1Counts.putIfAbsent(co, c1);
-                level2Counts.putIfAbsent(co, c2);
-                level3Counts.putIfAbsent(co, c3);
+                level1Counts.putIfAbsent(item.getActualCode(), c1);
+                level1Counts.putIfAbsent(item.getAcronym(), c1);
+                level2Counts.putIfAbsent(item.getActualCode(), c2);
+                level2Counts.putIfAbsent(item.getAcronym(), c2);
+                level3Counts.putIfAbsent(item.getActualCode(), c3);
+                level3Counts.putIfAbsent(item.getAcronym(), c3);
 
                 int divisor = (c1 + c2 + c3) > 0 ? (c1 + c2 + c3) : (totalStudents > 0 ? totalStudents : 1);
                 double p1Raw = (double) c1 * 100.0 / divisor;
                 double p2Raw = (double) c2 * 100.0 / divisor;
                 double p3Raw = (double) c3 * 100.0 / divisor;
 
-                level1Percentages.putIfAbsent(co, BigDecimal.valueOf(p1Raw).setScale(2, RoundingMode.HALF_UP));
-                level2Percentages.putIfAbsent(co, BigDecimal.valueOf(p2Raw).setScale(2, RoundingMode.HALF_UP));
-                level3Percentages.putIfAbsent(co, BigDecimal.valueOf(p3Raw).setScale(2, RoundingMode.HALF_UP));
+                BigDecimal p1 = BigDecimal.valueOf(p1Raw).setScale(2, RoundingMode.HALF_UP);
+                BigDecimal p2 = BigDecimal.valueOf(p2Raw).setScale(2, RoundingMode.HALF_UP);
+                BigDecimal p3 = BigDecimal.valueOf(p3Raw).setScale(2, RoundingMode.HALF_UP);
+
+                level1Percentages.putIfAbsent(item.getActualCode(), p1);
+                level1Percentages.putIfAbsent(item.getAcronym(), p1);
+                level2Percentages.putIfAbsent(item.getActualCode(), p2);
+                level2Percentages.putIfAbsent(item.getAcronym(), p2);
+                level3Percentages.putIfAbsent(item.getActualCode(), p3);
+                level3Percentages.putIfAbsent(item.getAcronym(), p3);
 
                 double indRaw = (p1Raw * 0.33) + (p2Raw * 0.67) + (p3Raw * 1.0);
-                overallIndirectPercentages.putIfAbsent(co, BigDecimal.valueOf(indRaw).setScale(2, RoundingMode.HALF_UP));
+                BigDecimal ind = BigDecimal.valueOf(indRaw).setScale(2, RoundingMode.HALF_UP);
+                overallIndirectPercentages.putIfAbsent(item.getActualCode(), ind);
+                overallIndirectPercentages.putIfAbsent(item.getAcronym(), ind);
             }
         }
 
@@ -164,7 +177,7 @@ public class CourseEndSurveySheetBuilder {
         getOrCreateCell(r6, 1).setCellStyle(s.blankDefault);
         for (int i = 0; i < numCO; i++) {
             Cell cell = getOrCreateCell(r6, 2 + i);
-            cell.setCellValue(coCodes.get(i));
+            cell.setCellValue(coItems.get(i).getAcronym());
             cell.setCellStyle(s.coHeaderCyan);
         }
 
@@ -182,12 +195,14 @@ public class CourseEndSurveySheetBuilder {
             cellB.setCellStyle(s.levelNumCell);
 
             for (int i = 0; i < numCO; i++) {
-                String co = coCodes.get(i);
+                CourseOutcomeOrderHelper.CourseOutcomeItem item = coItems.get(i);
                 Cell cellVal = getOrCreateCell(rCount, 2 + i);
                 int count = 0;
-                if (level == 1) count = level1Counts.getOrDefault(co, 0);
-                else if (level == 2) count = level2Counts.getOrDefault(co, 0);
-                else count = level3Counts.getOrDefault(co, 0);
+                Integer c = null;
+                if (level == 1) c = registry.lookupValue(level1Counts, item);
+                else if (level == 2) c = registry.lookupValue(level2Counts, item);
+                else c = registry.lookupValue(level3Counts, item);
+                if (c != null) count = c;
 
                 cellVal.setCellValue((double) count);
                 cellVal.setCellStyle(s.countValueCell);
@@ -224,12 +239,14 @@ public class CourseEndSurveySheetBuilder {
             cellB.setCellStyle(s.levelNumCell);
 
             for (int i = 0; i < numCO; i++) {
-                String co = coCodes.get(i);
+                CourseOutcomeOrderHelper.CourseOutcomeItem item = coItems.get(i);
                 Cell cellVal = getOrCreateCell(rPct, 2 + i);
                 BigDecimal pct = BigDecimal.ZERO;
-                if (level == 1) pct = level1Percentages.getOrDefault(co, BigDecimal.ZERO);
-                else if (level == 2) pct = level2Percentages.getOrDefault(co, BigDecimal.ZERO);
-                else pct = level3Percentages.getOrDefault(co, BigDecimal.ZERO);
+                BigDecimal p = null;
+                if (level == 1) p = registry.lookupValue(level1Percentages, item);
+                else if (level == 2) p = registry.lookupValue(level2Percentages, item);
+                else p = registry.lookupValue(level3Percentages, item);
+                if (p != null) pct = p;
 
                 cellVal.setCellValue(pct != null ? pct.doubleValue() : 0.0);
                 cellVal.setCellStyle(s.percentageValueCell);
@@ -271,9 +288,9 @@ public class CourseEndSurveySheetBuilder {
         RegionUtil.setBorderRight(BorderStyle.THIN, rangeOverallLabel, sheet);
 
         for (int i = 0; i < numCO; i++) {
-            String co = coCodes.get(i);
+            CourseOutcomeOrderHelper.CourseOutcomeItem item = coItems.get(i);
             Cell cellVal = getOrCreateCell(r15, 2 + i);
-            BigDecimal indPct = overallIndirectPercentages.getOrDefault(co, BigDecimal.ZERO);
+            BigDecimal indPct = registry.lookupValue(overallIndirectPercentages, item);
             cellVal.setCellValue(indPct != null ? indPct.doubleValue() : 0.0);
             cellVal.setCellStyle(s.overallIndirectValueCell);
         }
@@ -301,7 +318,7 @@ public class CourseEndSurveySheetBuilder {
 
         for (int i = 0; i < numCO; i++) {
             Cell cell = getOrCreateCell(r18, 2 + i);
-            cell.setCellValue(coCodes.get(i));
+            cell.setCellValue(coItems.get(i).getAcronym());
             cell.setCellStyle(s.coHeaderBrightBlue11);
         }
 
@@ -343,11 +360,17 @@ public class CourseEndSurveySheetBuilder {
 
             // Cols C..endCol: feedback rating text ("Slight", "Moderate", "Substantial")
             for (int i = 0; i < numCO; i++) {
-                String co = coCodes.get(i);
+                CourseOutcomeOrderHelper.CourseOutcomeItem item = coItems.get(i);
                 Cell cellFb = getOrCreateCell(rResp, 2 + i);
                 String feedback = "";
                 if (resp.getCoFeedbacks() != null) {
-                    feedback = resp.getCoFeedbacks().getOrDefault(co, "");
+                    feedback = registry.lookupValue(resp.getCoFeedbacks(), item);
+                }
+                if (feedback != null && !feedback.isBlank()) {
+                    String trimmed = feedback.trim();
+                    if ("1".equals(trimmed) || "1.0".equals(trimmed)) feedback = "Slight";
+                    else if ("2".equals(trimmed) || "2.0".equals(trimmed)) feedback = "Moderate";
+                    else if ("3".equals(trimmed) || "3.0".equals(trimmed)) feedback = "Substantial";
                 }
                 cellFb.setCellValue(feedback != null ? feedback : "");
                 cellFb.setCellStyle(s.responseFeedbackCell);
@@ -362,33 +385,7 @@ public class CourseEndSurveySheetBuilder {
     // =========================================================================
 
     private static List<String> extractCoCodes(CourseAttainmentSnapshot snapshot) {
-        if (snapshot != null) {
-            if (snapshot.getSurveyData() != null
-                    && snapshot.getSurveyData().getCoCodes() != null
-                    && !snapshot.getSurveyData().getCoCodes().isEmpty()) {
-                return new ArrayList<>(snapshot.getSurveyData().getCoCodes());
-            }
-            if (snapshot.getSurveyData() != null
-                    && snapshot.getSurveyData().getLevel1Counts() != null
-                    && !snapshot.getSurveyData().getLevel1Counts().isEmpty()) {
-                return new ArrayList<>(snapshot.getSurveyData().getLevel1Counts().keySet());
-            }
-            if (snapshot.getTable3CoAttainments() != null && !snapshot.getTable3CoAttainments().isEmpty()) {
-                List<String> list = new ArrayList<>();
-                for (CourseAttainmentSnapshot.CoAttainmentRow r : snapshot.getTable3CoAttainments()) {
-                    if (r.getCoCode() != null && !r.getCoCode().isBlank()) {
-                        list.add(r.getCoCode().trim());
-                    }
-                }
-                if (!list.isEmpty()) return list;
-            }
-            if (snapshot.getExaminationData() != null
-                    && snapshot.getExaminationData().getCoCodes() != null
-                    && !snapshot.getExaminationData().getCoCodes().isEmpty()) {
-                return new ArrayList<>(snapshot.getExaminationData().getCoCodes());
-            }
-        }
-        return Arrays.asList("CO1", "CO2", "CO3", "CO4", "CO5", "CO6");
+        return CourseOutcomeOrderHelper.resolveRegistry(snapshot).getAcronyms();
     }
 
     // =========================================================================

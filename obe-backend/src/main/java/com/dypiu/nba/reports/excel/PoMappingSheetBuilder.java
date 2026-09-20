@@ -64,26 +64,27 @@ public class PoMappingSheetBuilder {
     public static Sheet build(Workbook wb, String sheetName, CourseAttainmentSnapshot snapshot, byte[] leftLogo, byte[] rightLogo) {
         Sheet sheet = wb.createSheet(sheetName != null ? sheetName : "PO mapping");
 
-        // 1. Resolve dynamic CO list
-        List<String> coCodes = extractCoCodes(snapshot);
-        int numCO = coCodes.size();
+        // 1. Resolve dynamic CO list in ascending order with acronyms
+        CourseOutcomeOrderHelper.CourseOutcomeRegistry registry = CourseOutcomeOrderHelper.resolveRegistry(snapshot);
+        List<CourseOutcomeOrderHelper.CourseOutcomeItem> coItems = registry.getItems();
+        int numCO = coItems.size();
 
         // 2. Compute dynamic columns width (HEADER LAST COLUMN == CONTENT LAST COLUMN)
         int totalCols = 4 + 2 * numCO;
         if (totalCols < 4) totalCols = 4;
         int endCol = totalCols - 1;
 
-        // 3. Set authoritative column widths
-        sheet.setColumnWidth(0, (int) (29.25 * 256));
-        sheet.setColumnWidth(1, (int) (47.0 * 256));
-        sheet.setColumnWidth(2, (int) (1.58 * 256)); // Thin blank separator
+        // 3. Set authoritative column widths (+10% increased)
+        sheet.setColumnWidth(0, (int) (32.175 * 256));
+        sheet.setColumnWidth(1, (int) (51.7 * 256));
+        sheet.setColumnWidth(2, (int) (1.738 * 256)); // Thin blank separator
         for (int i = 0; i < numCO; i++) {
-            sheet.setColumnWidth(3 + i, (int) (8.58 * 256)); // Keywords CO columns
+            sheet.setColumnWidth(3 + i, (int) (9.438 * 256)); // Keywords CO columns
         }
         int sepCol2 = 3 + numCO;
-        sheet.setColumnWidth(sepCol2, (int) (1.5 * 256)); // Thin blank separator
+        sheet.setColumnWidth(sepCol2, (int) (1.65 * 256)); // Thin blank separator
         for (int i = 0; i < numCO; i++) {
-            sheet.setColumnWidth(4 + numCO + i, (int) (7.08 * 256)); // Y or N CO columns
+            sheet.setColumnWidth(4 + numCO + i, (int) (7.788 * 256)); // Y or N CO columns
         }
 
         // 4. Create CellStyles bundle
@@ -166,7 +167,7 @@ public class PoMappingSheetBuilder {
 
         for (int i = 0; i < numCO; i++) {
             Cell cKw = getOrCreateCell(rHeaders, 3 + i);
-            cKw.setCellValue(coCodes.get(i));
+            cKw.setCellValue(coItems.get(i).getAcronym());
             cKw.setCellStyle(s.tableHeaderCenter);
         }
 
@@ -174,7 +175,7 @@ public class PoMappingSheetBuilder {
 
         for (int i = 0; i < numCO; i++) {
             Cell cYn = getOrCreateCell(rHeaders, 4 + numCO + i);
-            cYn.setCellValue(coCodes.get(i));
+            cYn.setCellValue(coItems.get(i).getAcronym());
             cYn.setCellStyle(s.tableHeaderCenter);
         }
         rowIdx++;
@@ -216,8 +217,8 @@ public class PoMappingSheetBuilder {
 
                 // Cols 3 to 2 + numCO: Keywords from respective CO
                 for (int j = 0; j < numCO; j++) {
-                    String coCode = coCodes.get(j);
-                    String kw = (comp != null && comp.coKeywords != null) ? comp.coKeywords.get(coCode) : null;
+                    CourseOutcomeOrderHelper.CourseOutcomeItem coItem = coItems.get(j);
+                    String kw = (comp != null && comp.coKeywords != null) ? registry.lookupValue(comp.coKeywords, coItem) : null;
                     Cell cellKw = getOrCreateCell(r, 3 + j);
                     if (kw != null && !kw.isBlank()) {
                         cellKw.setCellValue(kw.trim());
@@ -233,10 +234,10 @@ public class PoMappingSheetBuilder {
 
                 // Cols 4 + numCO to 3 + 2 * numCO: Y or N
                 for (int j = 0; j < numCO; j++) {
-                    String coCode = coCodes.get(j);
-                    String yn = (comp != null && comp.coMappings != null) ? comp.coMappings.get(coCode) : null;
+                    CourseOutcomeOrderHelper.CourseOutcomeItem coItem = coItems.get(j);
+                    String yn = (comp != null && comp.coMappings != null) ? registry.lookupValue(comp.coMappings, coItem) : null;
                     if (yn == null && comp != null && comp.coKeywords != null) {
-                        String kw = comp.coKeywords.get(coCode);
+                        String kw = registry.lookupValue(comp.coKeywords, coItem);
                         if (kw != null && !kw.isBlank()) {
                             yn = "Y";
                         }
@@ -284,17 +285,17 @@ public class PoMappingSheetBuilder {
 
             int[] mappedCounts = new int[numCO];
             for (int j = 0; j < numCO; j++) {
-                String coCode = coCodes.get(j);
+                CourseOutcomeOrderHelper.CourseOutcomeItem coItem = coItems.get(j);
                 int count = 0;
                 for (CompModel c : comps) {
-                    String yn = (c.coMappings != null) ? c.coMappings.get(coCode) : null;
-                    if ("Y".equalsIgnoreCase(yn) || (c.coKeywords != null && c.coKeywords.containsKey(coCode) && !c.coKeywords.get(coCode).isBlank())) {
+                    String yn = (c.coMappings != null) ? registry.lookupValue(c.coMappings, coItem) : null;
+                    if ("Y".equalsIgnoreCase(yn) || (c.coKeywords != null && registry.lookupValue(c.coKeywords, coItem) != null && !registry.lookupValue(c.coKeywords, coItem).isBlank())) {
                         count++;
                     }
                 }
                 // Defensive fallback: if 0 competencies were defined, check table1Mapping strength
                 if (count == 0 && comps.isEmpty()) {
-                    Integer strength = findStrengthInTable1(snapshot, coCode, po.code);
+                    Integer strength = findStrengthInTable1(snapshot, coItem, po.code);
                     if (strength != null && strength > 0) count = 1;
                 }
                 mappedCounts[j] = count;
@@ -360,8 +361,8 @@ public class PoMappingSheetBuilder {
             getOrCreateCell(rSum3, sepCol2); // separator
 
             for (int j = 0; j < numCO; j++) {
-                String coCode = coCodes.get(j);
-                Integer strength = findStrengthInTable1(snapshot, coCode, po.code);
+                CourseOutcomeOrderHelper.CourseOutcomeItem coItem = coItems.get(j);
+                Integer strength = findStrengthInTable1(snapshot, coItem, po.code);
                 if (strength == null || strength <= 0) {
                     int pct = pctValues[j];
                     if (pct >= 75) strength = 3;
@@ -389,28 +390,23 @@ public class PoMappingSheetBuilder {
     }
 
     private static List<String> extractCoCodes(CourseAttainmentSnapshot snapshot) {
-        List<String> codes = new ArrayList<>();
-        if (snapshot.getTable1Mapping() != null && !snapshot.getTable1Mapping().isEmpty()) {
-            for (CourseAttainmentSnapshot.CoMappingRow r : snapshot.getTable1Mapping()) {
-                if (r.getCoCode() != null && !r.getCoCode().isBlank()) {
-                    codes.add(r.getCoCode().trim());
-                }
-            }
-        } else if (snapshot.getTable3CoAttainments() != null && !snapshot.getTable3CoAttainments().isEmpty()) {
-            for (CourseAttainmentSnapshot.CoAttainmentRow r : snapshot.getTable3CoAttainments()) {
-                if (r.getCoCode() != null && !r.getCoCode().isBlank()) {
-                    codes.add(r.getCoCode().trim());
+        return CourseOutcomeOrderHelper.resolveRegistry(snapshot).getAcronyms();
+    }
+
+    private static Integer findStrengthInTable1(CourseAttainmentSnapshot snapshot, CourseOutcomeOrderHelper.CourseOutcomeItem coItem, String poCode) {
+        if (snapshot == null || snapshot.getTable1Mapping() == null || coItem == null) return null;
+        for (CourseAttainmentSnapshot.CoMappingRow r : snapshot.getTable1Mapping()) {
+            if (r.getCoCode() != null && (r.getCoCode().equalsIgnoreCase(coItem.getActualCode()) || r.getCoCode().equalsIgnoreCase(coItem.getAcronym()))) {
+                if (r.getPoMappings() != null && r.getPoMappings().containsKey(poCode)) {
+                    return r.getPoMappings().get(poCode);
                 }
             }
         }
-        if (codes.isEmpty()) {
-            codes = List.of("CO1", "CO2", "CO3", "CO4", "CO5", "CO6");
-        }
-        return codes;
+        return null;
     }
 
     private static Integer findStrengthInTable1(CourseAttainmentSnapshot snapshot, String coCode, String poCode) {
-        if (snapshot == null || snapshot.getTable1Mapping() == null) return null;
+        if (snapshot == null || snapshot.getTable1Mapping() == null || coCode == null) return null;
         for (CourseAttainmentSnapshot.CoMappingRow r : snapshot.getTable1Mapping()) {
             if (coCode.equalsIgnoreCase(r.getCoCode())) {
                 if (r.getPoMappings() != null && r.getPoMappings().containsKey(poCode)) {

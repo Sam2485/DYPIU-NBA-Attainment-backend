@@ -255,8 +255,21 @@ public class CourseExcelHeaderRenderer {
                 xAnchor.setDy2(-Units.pixelToEMU(2));
             }
 
-            anchor.setAnchorType(ClientAnchor.AnchorType.MOVE_AND_RESIZE);
-            drawing.createPicture(anchor, pictureIdx);
+            anchor.setAnchorType(ClientAnchor.AnchorType.MOVE_DONT_RESIZE);
+            Picture picture = drawing.createPicture(anchor, pictureIdx);
+            if (picture instanceof XSSFPicture xPic) {
+                try {
+                    if (xPic.getCTPicture() != null && xPic.getCTPicture().getNvPicPr() != null) {
+                        var nvPr = xPic.getCTPicture().getNvPicPr();
+                        var cNvPr = nvPr.getCNvPicPr();
+                        if (cNvPr != null) {
+                            var locks = cNvPr.isSetPicLocks() ? cNvPr.getPicLocks() : cNvPr.addNewPicLocks();
+                            locks.setNoChangeAspect(true);
+                        }
+                    }
+                } catch (Exception ignored) {
+                }
+            }
 
         } catch (Exception e) {
             log.warn("Failed to embed logo into Course Excel header: {}", e.getMessage());

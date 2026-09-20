@@ -2125,10 +2125,13 @@ public class AcademicService {
     @Transactional(readOnly = true)
     public List<MasterProgramme> getProgrammesBySchool(String schoolId) {
         log.debug("[AcademicService] getProgrammesBySchool called | schoolId: " + schoolId);
+        if (schoolId == null || schoolId.isBlank() || "ALL".equalsIgnoreCase(schoolId.trim())) {
+            return getAllProgrammes();
+        }
         CurrentUserScope scope = getScope();
         if (scope != null && scope.isDirector()) {
             String dirSchoolId = scope.getRequiredSchoolId();
-            if (schoolId != null && !schoolId.isBlank() && !schoolId.equals(dirSchoolId)) {
+            if (schoolId != null && !schoolId.isBlank() && !schoolId.trim().equalsIgnoreCase(dirSchoolId)) {
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: You cannot view programmes of a different school.");
             }
             schoolId = dirSchoolId;
@@ -2140,7 +2143,25 @@ public class AcademicService {
             enforceSchoolScope(schoolId);
             return getAllProgrammes();
         }
-        List<Department> depts = departmentRepository.findBySchoolId(schoolId);
+        String cleanSchoolId = schoolId.trim();
+        List<Department> depts = departmentRepository.findBySchoolId(cleanSchoolId);
+        if (depts == null || depts.isEmpty()) {
+            Optional<School> schOpt = schoolRepository.findById(cleanSchoolId);
+            if (schOpt.isPresent() && schOpt.get().getCode() != null) {
+                depts = departmentRepository.findBySchoolId(schOpt.get().getCode().trim());
+            } else {
+                List<School> allSchools = schoolRepository.findAll();
+                for (School s : allSchools) {
+                    if (cleanSchoolId.equalsIgnoreCase(s.getId()) || cleanSchoolId.equalsIgnoreCase(s.getCode())) {
+                        depts = departmentRepository.findBySchoolId(s.getId());
+                        if (depts == null || depts.isEmpty()) {
+                            depts = departmentRepository.findBySchoolId(s.getCode());
+                        }
+                        break;
+                    }
+                }
+            }
+        }
         if (depts == null || depts.isEmpty()) {
             return Collections.emptyList();
         }
@@ -2689,7 +2710,7 @@ public class AcademicService {
 
     @Transactional(readOnly = true)
     public List<ProgrammeBatch> getBatchesByProgramme(String masterProgrammeId) {
-        return getBatchesFiltered(masterProgrammeId, null, null, null, null, null, null, "ACTIVE");
+        return getBatchesFiltered(masterProgrammeId, null, null, null, null, null, null, null);
     }
 
     @Transactional(readOnly = true)

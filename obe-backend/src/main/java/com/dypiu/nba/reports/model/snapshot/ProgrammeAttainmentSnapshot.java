@@ -17,6 +17,7 @@ public class ProgrammeAttainmentSnapshot extends ReportSnapshot {
     private String masterProgrammeId;
     private String masterProgrammeCode;
     private String masterProgrammeName;
+    private String departmentName;
 
     private String programmeBatchId;
     private String programmeBatchName;
@@ -84,6 +85,7 @@ public class ProgrammeAttainmentSnapshot extends ReportSnapshot {
         private String surveyType;
         private Integer totalStudents;
         private List<StudentSurveyRow> studentResponses;
+        private List<IndirectAssessmentRow> otherAssessments;
         private Map<String, BigDecimal> averageIndirectAttainment;
         private BigDecimal overallIndirectAttainment;
     }
@@ -98,6 +100,27 @@ public class ProgrammeAttainmentSnapshot extends ReportSnapshot {
         private String studentName;
         private Map<String, BigDecimal> poRatings;
         private Map<String, BigDecimal> psoRatings;
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class IndirectAssessmentRow {
+        private String id;
+        private String eventTitle;
+        private String assessmentType;
+        private Map<String, BigDecimal> poValues;
+        private Map<String, BigDecimal> psoValues;
+
+        public BigDecimal getValue(String outcomeCode) {
+            if (outcomeCode == null) return null;
+            if (outcomeCode.toUpperCase().startsWith("PSO")) {
+                return psoValues != null ? psoValues.get(outcomeCode.toUpperCase()) : null;
+            } else {
+                return poValues != null ? poValues.get(outcomeCode.toUpperCase()) : null;
+            }
+        }
     }
 
     @Data

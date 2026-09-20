@@ -162,9 +162,9 @@ public class ProgrammeAttainmentGenerationTest {
         try (Workbook wb = new XSSFWorkbook(new ByteArrayInputStream(masterExcel))) {
             assertEquals(4, wb.getNumberOfSheets());
             assertEquals("Average Mapping", wb.getSheetName(0));
-            assertEquals("Average Direct Attainment", wb.getSheetName(1));
-            assertEquals("Average Indirect Attainment", wb.getSheetName(2));
-            assertEquals("Overall Attainment", wb.getSheetName(3));
+            assertTrue(wb.getSheetName(1).equalsIgnoreCase("average attainment(D)") || wb.getSheetName(1).equalsIgnoreCase("Average Direct Attainment"));
+            assertTrue(wb.getSheetName(2).equalsIgnoreCase("AVERAGE ATTAINMENT (ID)") || wb.getSheetName(2).equalsIgnoreCase("Average Indirect Attainment"));
+            assertEquals("Overall Programme Attainment", wb.getSheetName(3));
         }
     }
 

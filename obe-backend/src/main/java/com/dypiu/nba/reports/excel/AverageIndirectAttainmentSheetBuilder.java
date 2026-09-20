@@ -1,17 +1,29 @@
 package com.dypiu.nba.reports.excel;
 
 import com.dypiu.nba.reports.model.snapshot.ProgrammeAttainmentSnapshot;
+import com.dypiu.nba.reports.template.ReportTemplateDto;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.ss.util.CellRangeAddress;
+import org.apache.poi.ss.util.RegionUtil;
 
 import java.math.BigDecimal;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 public class AverageIndirectAttainmentSheetBuilder {
 
+    public static final String DEFAULT_SHEET_NAME = "AVERAGE ATTAINMENT (ID)";
+
     public static Sheet build(Workbook wb, String sheetName, ProgrammeAttainmentSnapshot snapshot) {
-        Sheet sheet = wb.createSheet(sheetName != null ? sheetName : "Average Indirect Attainment");
+        return build(wb, sheetName, snapshot, null, null);
+    }
+
+    public static Sheet build(Workbook wb, ProgrammeAttainmentSnapshot snapshot) {
+        return build(wb, DEFAULT_SHEET_NAME, snapshot, null, null);
+    }
+
+    public static Sheet build(Workbook wb, String sheetName, ProgrammeAttainmentSnapshot snapshot, byte[] logoBytes, ReportTemplateDto template) {
+        String resolvedSheetName = (sheetName != null && !sheetName.isBlank()) ? sheetName : DEFAULT_SHEET_NAME;
+        Sheet sheet = wb.createSheet(resolvedSheetName);
 
         CellStyle headerStyle = ExcelStyles.createHeaderStyle(wb, false);
         CellStyle psoHeaderStyle = ExcelStyles.createHeaderStyle(wb, true);
@@ -20,22 +32,23 @@ public class AverageIndirectAttainmentSheetBuilder {
         CellStyle boldPrn = ExcelStyles.createDataStyle(wb, true, true);
         CellStyle summaryPo = ExcelStyles.createSummaryStyle(wb, false);
         CellStyle summaryPso = ExcelStyles.createSummaryStyle(wb, true);
+        CellStyle summaryTitle = ExcelStyles.createSummaryTitleStyle(wb);
+        CellStyle sectionHeaderStyle = ExcelStyles.createSectionHeaderStyle(wb);
 
-        List<String> poCodes = snapshot.getPoCodes() != null ? snapshot.getPoCodes() : List.of();
-        List<String> psoCodes = snapshot.getPsoCodes() != null ? snapshot.getPsoCodes() : List.of();
+        List<String> poCodes = new ArrayList<>(snapshot.getPoCodes() != null ? snapshot.getPoCodes() : List.of());
+        poCodes.sort(ExcelStyles.NATURAL_NUMERICAL_COMPARATOR);
+        List<String> psoCodes = new ArrayList<>(snapshot.getPsoCodes() != null ? snapshot.getPsoCodes() : List.of());
+        psoCodes.sort(ExcelStyles.NATURAL_NUMERICAL_COMPARATOR);
         int totalCols = 3 + poCodes.size() + psoCodes.size();
 
-        String progScope = "Programme: " + (snapshot.getMasterProgrammeName() != null ? snapshot.getMasterProgrammeName() : "")
-                + (snapshot.getMasterProgrammeCode() != null && !snapshot.getMasterProgrammeCode().isBlank() ? " (" + snapshot.getMasterProgrammeCode() + ")" : "");
+        int startRow = CommonExcelHeaderRenderer.renderProgrammeHeader(
+                wb, sheet, snapshot, "PO & PSO Attainment (Indirect)", totalCols, logoBytes, template, "Term – I & II", true);
 
-        int startRow = CommonExcelHeaderRenderer.renderHeader(
-                wb, sheet, snapshot.getInstitutionName(), snapshot.getSchoolName(),
-                "PROGRAMME ATTAINMENT — AVERAGE INDIRECT ATTAINMENT (EXIT SURVEY)",
-                progScope, snapshot.getAcademicYear(), "Graduate Exit Survey", snapshot.getReportId(), totalCols, true);
-
-        // Table Header
+        // ==========================================
+        // SECTION A: PROGRAMME END SURVEY (Student-level evidence)
+        // ==========================================
         Row headerRow = sheet.createRow(startRow);
-        headerRow.setHeightInPoints(24);
+        headerRow.setHeightInPoints(20.0f);
 
         int colIdx = 0;
         createCell(headerRow, colIdx++, "Sr No", headerStyle);
@@ -45,7 +58,6 @@ public class AverageIndirectAttainmentSheetBuilder {
         for (String po : poCodes) createCell(headerRow, colIdx++, po, headerStyle);
         for (String pso : psoCodes) createCell(headerRow, colIdx++, pso, psoHeaderStyle);
 
-        // Data Rows
         ProgrammeAttainmentSnapshot.AverageIndirectSection section = snapshot.getSection3AverageIndirect();
         int rowIdx = startRow + 1;
         List<ProgrammeAttainmentSnapshot.StudentSurveyRow> responses = (section != null) ? section.getStudentResponses() : null;
@@ -53,7 +65,7 @@ public class AverageIndirectAttainmentSheetBuilder {
         if (responses != null && !responses.isEmpty()) {
             for (ProgrammeAttainmentSnapshot.StudentSurveyRow row : responses) {
                 Row r = sheet.createRow(rowIdx++);
-                r.setHeightInPoints(18);
+                r.setHeightInPoints(16.5f);
                 int cIdx = 0;
                 createCell(r, cIdx++, String.valueOf(row.getSrNo() != null ? row.getSrNo() : (rowIdx - startRow)), dataCenter);
                 createCell(r, cIdx++, row.getPrn() != null ? row.getPrn() : "", boldPrn);
@@ -85,20 +97,116 @@ public class AverageIndirectAttainmentSheetBuilder {
             }
         } else {
             Row r = sheet.createRow(rowIdx++);
-            r.setHeightInPoints(22);
+            r.setHeightInPoints(20.0f);
             Cell emptyCell = r.createCell(0);
             emptyCell.setCellValue("No student exit survey responses recorded for this batch.");
             emptyCell.setCellStyle(dataCenter);
-            sheet.addMergedRegion(new CellRangeAddress(rowIdx - 1, rowIdx - 1, 0, totalCols - 1));
+            for (int c = 1; c < totalCols; c++) {
+                createCell(r, c, "", dataCenter);
+            }
+            CellRangeAddress emptyRegion = new CellRangeAddress(rowIdx - 1, rowIdx - 1, 0, totalCols - 1);
+            sheet.addMergedRegion(emptyRegion);
+            RegionUtil.setBorderTop(BorderStyle.THIN, emptyRegion, sheet);
+            RegionUtil.setBorderBottom(BorderStyle.THIN, emptyRegion, sheet);
+            RegionUtil.setBorderLeft(BorderStyle.THIN, emptyRegion, sheet);
+            RegionUtil.setBorderRight(BorderStyle.THIN, emptyRegion, sheet);
         }
 
-        // Summary Row: Average Indirect Attainment
+        // ==========================================
+        // SECTION B: OTHER PROGRAMME INDIRECT ASSESSMENTS (Event / Survey level)
+        // ==========================================
+        List<ProgrammeAttainmentSnapshot.IndirectAssessmentRow> otherAssessments = (section != null) ? section.getOtherAssessments() : null;
+        if (otherAssessments != null && !otherAssessments.isEmpty()) {
+            // Spacer row
+            Row spacer = sheet.createRow(rowIdx++);
+            spacer.setHeightInPoints(12.0f);
+
+            // Section Banner: PROGRAMME INDIRECT ASSESSMENTS
+            Row secHeaderRow = sheet.createRow(rowIdx++);
+            secHeaderRow.setHeightInPoints(22.0f);
+            createCell(secHeaderRow, 0, "PROGRAMME INDIRECT ASSESSMENTS", sectionHeaderStyle);
+            for (int c = 1; c < totalCols; c++) {
+                createCell(secHeaderRow, c, "", sectionHeaderStyle);
+            }
+            CellRangeAddress secRegion = new CellRangeAddress(secHeaderRow.getRowNum(), secHeaderRow.getRowNum(), 0, totalCols - 1);
+            sheet.addMergedRegion(secRegion);
+            RegionUtil.setBorderTop(BorderStyle.THIN, secRegion, sheet);
+            RegionUtil.setBorderBottom(BorderStyle.THIN, secRegion, sheet);
+            RegionUtil.setBorderLeft(BorderStyle.THIN, secRegion, sheet);
+            RegionUtil.setBorderRight(BorderStyle.THIN, secRegion, sheet);
+
+            // Table Header for Other Indirect Assessments
+            Row indHeaderRow = sheet.createRow(rowIdx++);
+            indHeaderRow.setHeightInPoints(20.0f);
+            createCell(indHeaderRow, 0, "Event Title", headerStyle);
+            createCell(indHeaderRow, 1, "", headerStyle);
+            CellRangeAddress thTitleRegion = new CellRangeAddress(indHeaderRow.getRowNum(), indHeaderRow.getRowNum(), 0, 1);
+            sheet.addMergedRegion(thTitleRegion);
+            RegionUtil.setBorderTop(BorderStyle.THIN, thTitleRegion, sheet);
+            RegionUtil.setBorderBottom(BorderStyle.THIN, thTitleRegion, sheet);
+            RegionUtil.setBorderLeft(BorderStyle.THIN, thTitleRegion, sheet);
+            RegionUtil.setBorderRight(BorderStyle.THIN, thTitleRegion, sheet);
+
+            createCell(indHeaderRow, 2, "Assessment Type", headerStyle);
+            int hCol = 3;
+            for (String po : poCodes) createCell(indHeaderRow, hCol++, po, headerStyle);
+            for (String pso : psoCodes) createCell(indHeaderRow, hCol++, pso, psoHeaderStyle);
+
+            // Data Rows for each indirect assessment
+            for (ProgrammeAttainmentSnapshot.IndirectAssessmentRow assessment : otherAssessments) {
+                Row row = sheet.createRow(rowIdx++);
+                row.setHeightInPoints(16.5f);
+
+                createCell(row, 0, assessment.getEventTitle() != null ? assessment.getEventTitle() : "", dataLeft);
+                createCell(row, 1, "", dataLeft);
+                CellRangeAddress eventRegion = new CellRangeAddress(row.getRowNum(), row.getRowNum(), 0, 1);
+                sheet.addMergedRegion(eventRegion);
+                RegionUtil.setBorderTop(BorderStyle.THIN, eventRegion, sheet);
+                RegionUtil.setBorderBottom(BorderStyle.THIN, eventRegion, sheet);
+                RegionUtil.setBorderLeft(BorderStyle.THIN, eventRegion, sheet);
+                RegionUtil.setBorderRight(BorderStyle.THIN, eventRegion, sheet);
+
+                createCell(row, 2, assessment.getAssessmentType() != null ? assessment.getAssessmentType() : "", dataCenter);
+
+                int cIdx = 3;
+                for (String po : poCodes) {
+                    BigDecimal val = assessment.getValue(po);
+                    if (val != null && val.compareTo(BigDecimal.ZERO) > 0) {
+                        Cell c = row.createCell(cIdx++);
+                        c.setCellValue(val.doubleValue());
+                        c.setCellStyle(dataCenter);
+                    } else {
+                        createCell(row, cIdx++, "—", dataCenter);
+                    }
+                }
+
+                for (String pso : psoCodes) {
+                    BigDecimal val = assessment.getValue(pso);
+                    if (val != null && val.compareTo(BigDecimal.ZERO) > 0) {
+                        Cell c = row.createCell(cIdx++);
+                        c.setCellValue(val.doubleValue());
+                        c.setCellStyle(dataCenter);
+                    } else {
+                        createCell(row, cIdx++, "—", dataCenter);
+                    }
+                }
+            }
+        }
+
+        // ==========================================
+        // SECTION C: SUMMARY ROW: Average Attainment (Indirect)
+        // ==========================================
         Row sumRow = sheet.createRow(rowIdx);
-        sumRow.setHeightInPoints(22);
-        createCell(sumRow, 0, "", summaryPo);
-        createCell(sumRow, 1, "", summaryPo);
-        createCell(sumRow, 2, "Average Attainment (Indirect)", summaryPo);
-        sheet.addMergedRegion(new CellRangeAddress(rowIdx, rowIdx, 0, 2));
+        sumRow.setHeightInPoints(22.0f);
+        createCell(sumRow, 0, "Average Attainment (Indirect)", summaryTitle);
+        createCell(sumRow, 1, "", summaryTitle);
+        createCell(sumRow, 2, "", summaryTitle);
+        CellRangeAddress sumRegion = new CellRangeAddress(rowIdx, rowIdx, 0, 2);
+        sheet.addMergedRegion(sumRegion);
+        RegionUtil.setBorderTop(BorderStyle.THIN, sumRegion, sheet);
+        RegionUtil.setBorderBottom(BorderStyle.THIN, sumRegion, sheet);
+        RegionUtil.setBorderLeft(BorderStyle.THIN, sumRegion, sheet);
+        RegionUtil.setBorderRight(BorderStyle.THIN, sumRegion, sheet);
 
         Map<String, BigDecimal> avgMap = (section != null && section.getAverageIndirectAttainment() != null)
                 ? section.getAverageIndirectAttainment() : Map.of();
@@ -107,27 +215,49 @@ public class AverageIndirectAttainmentSheetBuilder {
         for (String po : poCodes) {
             BigDecimal val = avgMap.get(po);
             Cell c = sumRow.createCell(sumColIdx++);
-            if (val != null) c.setCellValue(val.doubleValue());
-            else c.setCellValue("—");
+            if (val != null && val.compareTo(BigDecimal.ZERO) > 0) {
+                c.setCellValue(val.doubleValue());
+            } else {
+                c.setCellValue("—");
+            }
             c.setCellStyle(summaryPo);
         }
         for (String pso : psoCodes) {
             BigDecimal val = avgMap.get(pso);
             Cell c = sumRow.createCell(sumColIdx++);
-            if (val != null) c.setCellValue(val.doubleValue());
-            else c.setCellValue("—");
+            if (val != null && val.compareTo(BigDecimal.ZERO) > 0) {
+                c.setCellValue(val.doubleValue());
+            } else {
+                c.setCellValue("—");
+            }
             c.setCellStyle(summaryPso);
         }
 
+        // Freeze Pane & Repeating Rows
         sheet.createFreezePane(0, startRow + 1);
         sheet.setRepeatingRows(CellRangeAddress.valueOf("1:" + (startRow + 1)));
 
-        // Column Auto Sizing
-        sheet.setColumnWidth(0, 10 * 256);
-        sheet.setColumnWidth(1, 18 * 256);
-        sheet.setColumnWidth(2, 38 * 256);
+        // Page & Print Setup
+        PrintSetup printSetup = sheet.getPrintSetup();
+        printSetup.setLandscape(true);
+        printSetup.setPaperSize(PrintSetup.A4_PAPERSIZE);
+        sheet.setFitToPage(true);
+        printSetup.setFitWidth((short) 1);
+        printSetup.setFitHeight((short) 0);
+        sheet.setAutobreaks(true);
+        sheet.setHorizontallyCenter(true);
+        sheet.setMargin(Sheet.LeftMargin, 0.25);
+        sheet.setMargin(Sheet.RightMargin, 0.25);
+        sheet.setMargin(Sheet.TopMargin, 0.5);
+        sheet.setMargin(Sheet.BottomMargin, 0.5);
+        wb.setPrintArea(wb.getSheetIndex(sheet), 0, totalCols - 1, 0, rowIdx);
+
+        // Column Proportional Widths matching reference
+        sheet.setColumnWidth(0, (int) (12.0 * 256));
+        sheet.setColumnWidth(1, (int) (18.0 * 256));
+        sheet.setColumnWidth(2, (int) (38.0 * 256));
         for (int i = 3; i < totalCols; i++) {
-            sheet.setColumnWidth(i, 11 * 256);
+            sheet.setColumnWidth(i, (int) (7.50 * 256));
         }
 
         return sheet;

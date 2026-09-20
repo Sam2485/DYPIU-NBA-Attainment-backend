@@ -48,14 +48,14 @@ class ExaminationSheetTest {
             assertNotNull(titleBand, "Title band at row 3 must exist");
             assertEquals(expectedEndCol, titleBand.getLastColumn(), "Header width must match 11 columns (Col K)");
 
-            // 2. Column widths
-            assertWidthClose(7.75, sheet.getColumnWidth(0) / 256.0);
-            assertWidthClose(7.25, sheet.getColumnWidth(1) / 256.0);
-            assertWidthClose(33.75, sheet.getColumnWidth(2) / 256.0);
-            assertWidthClose(1.5, sheet.getColumnWidth(3) / 256.0);
-            assertWidthClose(1.08, sheet.getColumnWidth(4) / 256.0);
+            // 2. Column widths (+10% increased)
+            assertWidthClose(8.525, sheet.getColumnWidth(0) / 256.0);
+            assertWidthClose(7.975, sheet.getColumnWidth(1) / 256.0);
+            assertWidthClose(37.125, sheet.getColumnWidth(2) / 256.0);
+            assertWidthClose(1.65, sheet.getColumnWidth(3) / 256.0);
+            assertWidthClose(1.19, sheet.getColumnWidth(4) / 256.0);
             for (int c = 5; c <= 10; c++) {
-                assertWidthClose(7.58, sheet.getColumnWidth(c) / 256.0);
+                assertWidthClose(8.34, sheet.getColumnWidth(c) / 256.0);
             }
 
             // 3. Row 4 (Excel Row 5, ht = 19.15 pt): Subject Name
