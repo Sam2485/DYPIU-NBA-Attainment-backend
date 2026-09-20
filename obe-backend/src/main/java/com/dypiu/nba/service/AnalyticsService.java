@@ -2737,9 +2737,13 @@ public class AnalyticsService {
                 coMap.getOrDefault(originatingCourse.getId(), Collections.emptyList())
         );
 
-        String targetCoCode = (coCode != null && !coCode.isBlank()) ? coCode.trim().toUpperCase() : null;
-        if (targetCoCode != null && !originatingData.coMetrics().containsKey(targetCoCode)) {
-            throw new ResourceNotFoundException("Course Outcome '" + coCode + "' not found for course offering: " + programmeBatchCourseId);
+        String targetCoCode = (coCode != null && !coCode.isBlank()) ? normalizeCoCode(coCode) : null;
+        if (targetCoCode != null) {
+            boolean matches = originatingData.coMetrics().keySet().stream()
+                    .anyMatch(c -> normalizeCoCode(c).equalsIgnoreCase(targetCoCode) || c.equalsIgnoreCase(coCode.trim()));
+            if (!matches) {
+                throw new ResourceNotFoundException("Course Outcome '" + coCode + "' not found for course offering: " + programmeBatchCourseId);
+            }
         }
 
         List<HistoricalCourseAttainmentResponseDto.HistoricalCourseBatchDto> batchDtos = new ArrayList<>();
@@ -2779,10 +2783,11 @@ public class AnalyticsService {
 
             for (Map.Entry<String, ResolvedCoMetricData> entry : data.coMetrics().entrySet()) {
                 String code = entry.getKey();
-                if (targetCoCode != null && !targetCoCode.equalsIgnoreCase(code)) {
+                String canonicalCo = normalizeCoCode(code);
+                if (targetCoCode != null && !targetCoCode.equalsIgnoreCase(canonicalCo) && !targetCoCode.equalsIgnoreCase(code)) {
                     continue;
                 }
-                distinctCoCodes.add(code);
+                distinctCoCodes.add(canonicalCo);
                 ResolvedCoMetricData metric = entry.getValue();
                 coDataPoints.add(HistoricalCourseAttainmentResponseDto.HistoricalCoDataPointDto.builder()
                         .programmeBatchCourseId(offering.getId())
@@ -2791,7 +2796,7 @@ public class AnalyticsService {
                         .startYear(batch.getStartYear())
                         .endYear(batch.getEndYear())
                         .status(batch.getStatus())
-                        .coCode(metric.coCode())
+                        .coCode(canonicalCo)
                         .statement(metric.statement())
                         .directAttainment(metric.directAttainment())
                         .indirectAttainment(metric.indirectAttainment())
@@ -2943,14 +2948,24 @@ public class AnalyticsService {
                 .indirectWeight(data2.indirectWeight())
                 .build();
 
+        Map<String, ResolvedCoMetricData> m1Normalized = new LinkedHashMap<>();
+        for (Map.Entry<String, ResolvedCoMetricData> e : data1.coMetrics().entrySet()) {
+            m1Normalized.putIfAbsent(normalizeCoCode(e.getKey()), e.getValue());
+        }
+
+        Map<String, ResolvedCoMetricData> m2Normalized = new LinkedHashMap<>();
+        for (Map.Entry<String, ResolvedCoMetricData> e : data2.coMetrics().entrySet()) {
+            m2Normalized.putIfAbsent(normalizeCoCode(e.getKey()), e.getValue());
+        }
+
         Set<String> allCoCodes = new TreeSet<>(this::compareCoCodes);
-        allCoCodes.addAll(data1.coMetrics().keySet());
-        allCoCodes.addAll(data2.coMetrics().keySet());
+        allCoCodes.addAll(m1Normalized.keySet());
+        allCoCodes.addAll(m2Normalized.keySet());
 
         List<CourseComparisonAnalyticsResponseDto.CoComparisonItemDto> coComparisons = new ArrayList<>();
         for (String code : allCoCodes) {
-            ResolvedCoMetricData m1 = data1.coMetrics().get(code);
-            ResolvedCoMetricData m2 = data2.coMetrics().get(code);
+            ResolvedCoMetricData m1 = m1Normalized.get(code);
+            ResolvedCoMetricData m2 = m2Normalized.get(code);
 
             String stmt = (m1 != null && m1.statement() != null) ? m1.statement()
                     : (m2 != null && m2.statement() != null ? m2.statement() : "Course outcome " + code);
@@ -4097,9 +4112,58 @@ public class AnalyticsService {
         return c1.compareTo(c2);
     }
 
+    public static String normalizeCoCode(String code) {
+        if (code == null || code.isBlank()) return "CO1";
+        String trimmed = code.trim().toUpperCase();
+
+        if (trimmed.contains(".")) {
+            String afterDot = trimmed.substring(trimmed.lastIndexOf('.') + 1);
+            String digits = afterDot.replaceAll("\\D+", "");
+            if (!digits.isEmpty()) {
+                try {
+                    return "CO" + Integer.parseInt(digits);
+                } catch (NumberFormatException ignored) {}
+            }
+        }
+
+        if (trimmed.contains("-") || trimmed.contains("_")) {
+            String afterSep = trimmed.replaceAll(".*[-_]", "");
+            String digits = afterSep.replaceAll("\\D+", "");
+            if (!digits.isEmpty()) {
+                try {
+                    return "CO" + Integer.parseInt(digits);
+                } catch (NumberFormatException ignored) {}
+            }
+        }
+
+        if (trimmed.matches("(?i)^CO\\s*\\d+$")) {
+            String digits = trimmed.replaceAll("\\D+", "");
+            if (!digits.isEmpty()) {
+                try {
+                    return "CO" + Integer.parseInt(digits);
+                } catch (NumberFormatException ignored) {}
+            }
+        }
+
+        java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("(\\d+)$").matcher(trimmed);
+        if (matcher.find()) {
+            String digits = matcher.group(1);
+            try {
+                int num = Integer.parseInt(digits);
+                if (num > 0 && num <= 50) {
+                    return "CO" + num;
+                }
+            } catch (NumberFormatException ignored) {}
+        }
+
+        return trimmed;
+    }
+
     private int extractOutcomeDigits(String s) {
+        if (s == null || s.isBlank()) return 0;
+        String norm = normalizeCoCode(s);
         try {
-            String digits = s.replaceAll("\\D+", "");
+            String digits = norm.replaceAll("\\D+", "");
             return digits.isEmpty() ? 0 : Integer.parseInt(digits);
         } catch (Exception e) {
             return 0;
