@@ -16,6 +16,7 @@ public class HistoricalProgrammeAttainmentResponseDto {
 
     private String masterProgrammeId;
     private String programmeName;
+    private String currentBatchId;
     private List<HistoricalBatchSummaryDto> batches;
     private List<String> outcomes;
     private List<HistoricalOutcomeDataPointDto> dataPoints;

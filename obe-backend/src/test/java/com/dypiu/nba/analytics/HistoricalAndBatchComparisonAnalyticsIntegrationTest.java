@@ -274,14 +274,14 @@ public class HistoricalAndBatchComparisonAnalyticsIntegrationTest {
 
     @Test
     @WithMockUser(username = "iqac_analyst", roles = {"IQAC"})
-    @DisplayName("1. ACTIVE batches excluded from historical programme attainment")
-    void testHistorical_ActiveBatchesExcluded() {
+    @DisplayName("1. ALL batches including ACTIVE included in historical programme attainment")
+    void testHistorical_AllBatchesIncluded() {
         HistoricalProgrammeAttainmentResponseDto result = analyticsService
                 .getHistoricalProgrammeAttainment(progCse.getId(), null);
 
-        assertThat(result.getBatches()).noneMatch(b -> "ACTIVE".equalsIgnoreCase(b.getStatus()));
-        assertThat(result.getBatches()).noneMatch(b -> b.getBatchId().equals(batchActive1.getId()));
-        assertThat(result.getDataPoints()).noneMatch(dp -> dp.getBatchId().equals(batchActive1.getId()));
+        assertThat(result.getBatches()).anyMatch(b -> "ACTIVE".equalsIgnoreCase(b.getStatus()));
+        assertThat(result.getBatches()).anyMatch(b -> b.getBatchId().equals(batchActive1.getId()));
+        assertThat(result.getDataPoints()).anyMatch(dp -> dp.getBatchId().equals(batchActive1.getId()));
     }
 
     @Test
@@ -317,7 +317,7 @@ public class HistoricalAndBatchComparisonAnalyticsIntegrationTest {
                 .map(HistoricalProgrammeAttainmentResponseDto.HistoricalBatchSummaryDto::getStartYear)
                 .toList();
 
-        assertThat(startYears).containsExactly(2019, 2020, 2021);
+        assertThat(startYears).containsExactly(2019, 2020, 2021, 2022);
     }
 
     @Test

@@ -2415,19 +2415,49 @@ public class AnalyticsService {
     // 6A. HISTORICAL PROGRAMME ATTAINMENT ENDPOINT
     // ==========================================
     public HistoricalProgrammeAttainmentResponseDto getHistoricalProgrammeAttainment(String masterProgrammeId, String outcomeCode) {
-        if (masterProgrammeId == null || masterProgrammeId.isBlank()) {
-            throw new BadRequestException("masterProgrammeId is required.");
+        return getHistoricalProgrammeAttainment(masterProgrammeId, null, outcomeCode);
+    }
+
+    public HistoricalProgrammeAttainmentResponseDto getHistoricalProgrammeAttainment(
+            String masterProgrammeId, String programmeBatchId, String outcomeCode) {
+
+        String effectiveMasterProgrammeId = (masterProgrammeId != null && !masterProgrammeId.isBlank() && !"undefined".equalsIgnoreCase(masterProgrammeId.trim()))
+                ? masterProgrammeId.trim() : null;
+
+        String resolvedCurrentBatchId = (programmeBatchId != null && !programmeBatchId.isBlank() && !"undefined".equalsIgnoreCase(programmeBatchId.trim()))
+                ? programmeBatchId.trim() : null;
+
+        if (effectiveMasterProgrammeId == null && resolvedCurrentBatchId != null) {
+            ProgrammeBatch pb = programmeBatchRepository.findById(resolvedCurrentBatchId).orElse(null);
+            if (pb != null) {
+                effectiveMasterProgrammeId = pb.getMasterProgrammeId();
+            }
         }
-        validateAndResolveScope(null, null, masterProgrammeId, null);
 
-        MasterProgramme prog = masterProgrammeRepository.findById(masterProgrammeId.trim())
-                .orElseThrow(() -> new ResourceNotFoundException("MasterProgramme not found: " + masterProgrammeId));
+        // If masterProgrammeId was actually a programmeBatchId passed by caller
+        if (effectiveMasterProgrammeId != null && !masterProgrammeRepository.existsById(effectiveMasterProgrammeId)) {
+            ProgrammeBatch pb = programmeBatchRepository.findById(effectiveMasterProgrammeId).orElse(null);
+            if (pb != null) {
+                resolvedCurrentBatchId = pb.getId();
+                effectiveMasterProgrammeId = pb.getMasterProgrammeId();
+            }
+        }
 
-        List<ProgrammeBatch> allBatches = programmeBatchRepository.findByMasterProgrammeIdAndDeletedAtIsNull(masterProgrammeId.trim());
+        if (effectiveMasterProgrammeId == null || effectiveMasterProgrammeId.isBlank()) {
+            throw new BadRequestException("masterProgrammeId or programmeBatchId is required.");
+        }
 
-        // Strictly filter to concluded batches only (COMPLETED or GRADUATED)
-        List<ProgrammeBatch> concludedBatches = allBatches.stream()
-                .filter(batchLifecycleService::isBatchConcluded)
+        final String finalMasterProgrammeId = effectiveMasterProgrammeId;
+
+        validateAndResolveScope(null, null, finalMasterProgrammeId, null);
+
+        MasterProgramme prog = masterProgrammeRepository.findById(finalMasterProgrammeId)
+                .orElseThrow(() -> new ResourceNotFoundException("MasterProgramme not found: " + finalMasterProgrammeId));
+
+        List<ProgrammeBatch> allBatches = programmeBatchRepository.findByMasterProgrammeIdAndDeletedAtIsNull(finalMasterProgrammeId);
+
+        // Include ALL batches for the programme (active, in-progress, completed, graduated) - none excluded
+        List<ProgrammeBatch> batches = allBatches.stream()
                 .sorted(Comparator.comparing((ProgrammeBatch b) -> b.getStartYear() != null ? b.getStartYear() : 0)
                         .thenComparing(b -> b.getEndYear() != null ? b.getEndYear() : 0))
                 .collect(Collectors.toList());
@@ -2436,13 +2466,13 @@ public class AnalyticsService {
         List<HistoricalProgrammeAttainmentResponseDto.HistoricalOutcomeDataPointDto> allDataPoints = new ArrayList<>();
         Set<String> distinctOutcomes = new TreeSet<>(this::compareOutcomeCodes);
 
-        if (!concludedBatches.isEmpty()) {
-            List<String> batchIds = concludedBatches.stream().map(ProgrammeBatch::getId).toList();
+        if (!batches.isEmpty()) {
+            List<String> batchIds = batches.stream().map(ProgrammeBatch::getId).toList();
             Map<String, ProgrammeBatchAttainmentReport> reportMap = programmeBatchAttainmentReportRepository
                     .findByProgrammeBatchIdIn(batchIds).stream()
                     .collect(Collectors.toMap(ProgrammeBatchAttainmentReport::getProgrammeBatchId, r -> r, (a, b) -> a));
 
-            for (ProgrammeBatch batch : concludedBatches) {
+            for (ProgrammeBatch batch : batches) {
                 batchSummaries.add(HistoricalProgrammeAttainmentResponseDto.HistoricalBatchSummaryDto.builder()
                         .batchId(batch.getId())
                         .batchName(batch.getName())
@@ -2485,6 +2515,7 @@ public class AnalyticsService {
         return HistoricalProgrammeAttainmentResponseDto.builder()
                 .masterProgrammeId(prog.getId())
                 .programmeName(prog.getName())
+                .currentBatchId(resolvedCurrentBatchId)
                 .batches(batchSummaries)
                 .outcomes(new ArrayList<>(distinctOutcomes))
                 .dataPoints(filteredDataPoints)
@@ -2589,6 +2620,356 @@ public class AnalyticsService {
                 .batch1(meta1)
                 .batch2(meta2)
                 .outcomes(comparisonItems)
+                .build();
+    }
+
+    // ==========================================
+    // 6C. HISTORICAL COURSE ATTAINMENT ENDPOINT
+    // ==========================================
+    public HistoricalCourseAttainmentResponseDto getHistoricalCourseAttainment(
+            String programmeBatchCourseId, String coCode) {
+
+        if (programmeBatchCourseId == null || programmeBatchCourseId.isBlank()) {
+            throw new BadRequestException("programmeBatchCourseId is required.");
+        }
+
+        ProgrammeBatchCourse originatingCourse = programmeBatchCourseRepository.findById(programmeBatchCourseId.trim())
+                .orElseThrow(() -> new ResourceNotFoundException("Course offering not found: " + programmeBatchCourseId));
+        if (originatingCourse.getDeletedAt() != null) {
+            throw new ResourceNotFoundException("Course offering not found: " + programmeBatchCourseId);
+        }
+
+        ProgrammeBatch originatingBatch = programmeBatchRepository.findById(originatingCourse.getProgrammeBatchId())
+                .orElseThrow(() -> new ResourceNotFoundException("Programme batch not found: " + originatingCourse.getProgrammeBatchId()));
+        if (originatingBatch.getDeletedAt() != null) {
+            throw new ResourceNotFoundException("Programme batch not found: " + originatingCourse.getProgrammeBatchId());
+        }
+
+        MasterProgramme prog = originatingBatch.getMasterProgrammeId() != null
+                ? masterProgrammeRepository.findById(originatingBatch.getMasterProgrammeId()).orElse(null)
+                : null;
+        if (prog == null) {
+            throw new ResourceNotFoundException("Master programme not found for batch: " + originatingBatch.getId());
+        }
+
+        Department dept = prog.getDepartmentId() != null
+                ? departmentRepository.findById(prog.getDepartmentId()).orElse(null)
+                : null;
+        School school = dept != null && dept.getSchoolId() != null
+                ? schoolRepository.findById(dept.getSchoolId()).orElse(null)
+                : null;
+
+        validateAndResolveScope(
+                school != null ? school.getId() : null,
+                dept != null ? dept.getId() : null,
+                prog.getId(),
+                originatingBatch.getId()
+        );
+        enforceCourseOfferingAccess(originatingCourse, originatingBatch);
+
+        String targetCourseCode = originatingCourse.getEffectiveCourseCode();
+        if (targetCourseCode == null || targetCourseCode.isBlank()) {
+            throw new BadRequestException("Course code could not be determined for course offering: " + programmeBatchCourseId);
+        }
+        targetCourseCode = targetCourseCode.trim();
+
+        List<ProgrammeBatch> allBatches = programmeBatchRepository.findByMasterProgrammeIdAndDeletedAtIsNull(prog.getId());
+        if (allBatches == null || allBatches.isEmpty()) {
+            allBatches = List.of(originatingBatch);
+        }
+
+        List<ProgrammeBatch> sortedBatches = allBatches.stream()
+                .sorted(Comparator.comparing((ProgrammeBatch b) -> b.getStartYear() != null ? b.getStartYear() : 0)
+                        .thenComparing(b -> b.getEndYear() != null ? b.getEndYear() : 0)
+                        .thenComparing(ProgrammeBatch::getId))
+                .toList();
+
+        List<String> batchIds = sortedBatches.stream().map(ProgrammeBatch::getId).toList();
+        List<ProgrammeBatchCourse> allBatchCourses = programmeBatchCourseRepository.findByProgrammeBatchIdInAndDeletedAtIsNull(batchIds);
+
+        final String courseCodeToMatch = targetCourseCode;
+        List<ProgrammeBatchCourse> matchingCourses = allBatchCourses.stream()
+                .filter(c -> c.getEffectiveCourseCode() != null && c.getEffectiveCourseCode().trim().equalsIgnoreCase(courseCodeToMatch))
+                .toList();
+
+        Map<String, ProgrammeBatchCourse> courseByBatchId = new LinkedHashMap<>();
+        for (ProgrammeBatchCourse c : matchingCourses) {
+            courseByBatchId.putIfAbsent(c.getProgrammeBatchId(), c);
+        }
+        courseByBatchId.put(originatingBatch.getId(), originatingCourse);
+
+        List<String> offeringIds = courseByBatchId.values().stream().map(ProgrammeBatchCourse::getId).toList();
+        Map<String, CourseAttainmentReport> reportMap = courseAttainmentReportRepository.findByProgrammeBatchCourseIdIn(offeringIds).stream()
+                .collect(Collectors.toMap(CourseAttainmentReport::getProgrammeBatchCourseId, r -> r, (a, b) -> a));
+        Map<String, AttainmentConfiguration> configMap = attainmentConfigurationRepository.findByProgrammeBatchCourseIdIn(offeringIds).stream()
+                .collect(Collectors.toMap(AttainmentConfiguration::getProgrammeBatchCourseId, c -> c, (a, b) -> a));
+        Map<String, List<CourseOutcome>> coMap = courseOutcomeRepository.findByProgrammeBatchCourseIdIn(offeringIds).stream()
+                .collect(Collectors.groupingBy(CourseOutcome::getProgrammeBatchCourseId));
+
+        ResolvedCourseAttainmentData originatingData = resolveCourseAttainmentData(
+                originatingCourse,
+                originatingBatch,
+                reportMap.get(originatingCourse.getId()),
+                configMap.get(originatingCourse.getId()),
+                coMap.getOrDefault(originatingCourse.getId(), Collections.emptyList())
+        );
+
+        String targetCoCode = (coCode != null && !coCode.isBlank()) ? coCode.trim().toUpperCase() : null;
+        if (targetCoCode != null && !originatingData.coMetrics().containsKey(targetCoCode)) {
+            throw new ResourceNotFoundException("Course Outcome '" + coCode + "' not found for course offering: " + programmeBatchCourseId);
+        }
+
+        List<HistoricalCourseAttainmentResponseDto.HistoricalCourseBatchDto> batchDtos = new ArrayList<>();
+        List<HistoricalCourseAttainmentResponseDto.HistoricalCoDataPointDto> coDataPoints = new ArrayList<>();
+        Set<String> distinctCoCodes = new TreeSet<>(this::compareCoCodes);
+
+        for (ProgrammeBatch batch : sortedBatches) {
+            ProgrammeBatchCourse offering = courseByBatchId.get(batch.getId());
+            if (offering == null) continue;
+
+            ResolvedCourseAttainmentData data = (offering.getId().equals(originatingCourse.getId()))
+                    ? originatingData
+                    : resolveCourseAttainmentData(
+                            offering,
+                            batch,
+                            reportMap.get(offering.getId()),
+                            configMap.get(offering.getId()),
+                            coMap.getOrDefault(offering.getId(), Collections.emptyList())
+                    );
+
+            batchDtos.add(HistoricalCourseAttainmentResponseDto.HistoricalCourseBatchDto.builder()
+                    .programmeBatchCourseId(offering.getId())
+                    .programmeBatchId(batch.getId())
+                    .batchName(batch.getName())
+                    .startYear(batch.getStartYear())
+                    .endYear(batch.getEndYear())
+                    .status(batch.getStatus())
+                    .semester(offering.getSemester())
+                    .courseCode(offering.getEffectiveCourseCode())
+                    .courseName(offering.getEffectiveCourseName())
+                    .directAttainment(data.directAttainment())
+                    .indirectAttainment(data.indirectAttainment())
+                    .overallCourseAttainment(data.overallCourseAttainment())
+                    .directWeight(data.directWeight())
+                    .indirectWeight(data.indirectWeight())
+                    .build());
+
+            for (Map.Entry<String, ResolvedCoMetricData> entry : data.coMetrics().entrySet()) {
+                String code = entry.getKey();
+                if (targetCoCode != null && !targetCoCode.equalsIgnoreCase(code)) {
+                    continue;
+                }
+                distinctCoCodes.add(code);
+                ResolvedCoMetricData metric = entry.getValue();
+                coDataPoints.add(HistoricalCourseAttainmentResponseDto.HistoricalCoDataPointDto.builder()
+                        .programmeBatchCourseId(offering.getId())
+                        .programmeBatchId(batch.getId())
+                        .batchName(batch.getName())
+                        .startYear(batch.getStartYear())
+                        .endYear(batch.getEndYear())
+                        .status(batch.getStatus())
+                        .coCode(metric.coCode())
+                        .statement(metric.statement())
+                        .directAttainment(metric.directAttainment())
+                        .indirectAttainment(metric.indirectAttainment())
+                        .overallAttainment(metric.overallAttainment())
+                        .targetLevel(metric.targetLevel())
+                        .targetMet(metric.targetMet())
+                        .build());
+            }
+        }
+
+        return HistoricalCourseAttainmentResponseDto.builder()
+                .courseCode(targetCourseCode)
+                .courseName(originatingCourse.getEffectiveCourseName())
+                .masterProgrammeId(prog.getId())
+                .programmeName(prog.getName())
+                .currentProgrammeBatchCourseId(originatingCourse.getId())
+                .currentBatchId(originatingBatch.getId())
+                .currentBatchName(originatingBatch.getName())
+                .currentBatchStatus(originatingBatch.getStatus())
+                .currentSemester(originatingCourse.getSemester())
+                .directWeight(originatingData.directWeight())
+                .indirectWeight(originatingData.indirectWeight())
+                .batches(batchDtos)
+                .courseOutcomes(new ArrayList<>(distinctCoCodes))
+                .coDataPoints(coDataPoints)
+                .build();
+    }
+
+    // ==========================================
+    // 6D. COMPARE COURSES ANALYTICS ENDPOINT
+    // ==========================================
+    public CourseComparisonAnalyticsResponseDto compareCourses(
+            String programmeBatchCourseId1, String programmeBatchCourseId2) {
+
+        if (programmeBatchCourseId1 == null || programmeBatchCourseId1.isBlank() ||
+                programmeBatchCourseId2 == null || programmeBatchCourseId2.isBlank()) {
+            throw new BadRequestException("Both programmeBatchCourseId1 and programmeBatchCourseId2 are required.");
+        }
+        String id1 = programmeBatchCourseId1.trim();
+        String id2 = programmeBatchCourseId2.trim();
+        if (id1.equalsIgnoreCase(id2)) {
+            throw new BadRequestException("Cannot compare a course offering with itself. Please select two different course offerings.");
+        }
+
+        ProgrammeBatchCourse offering1 = programmeBatchCourseRepository.findById(id1)
+                .orElseThrow(() -> new ResourceNotFoundException("Course offering not found: " + id1));
+        if (offering1.getDeletedAt() != null) {
+            throw new ResourceNotFoundException("Course offering not found: " + id1);
+        }
+
+        ProgrammeBatchCourse offering2 = programmeBatchCourseRepository.findById(id2)
+                .orElseThrow(() -> new ResourceNotFoundException("Course offering not found: " + id2));
+        if (offering2.getDeletedAt() != null) {
+            throw new ResourceNotFoundException("Course offering not found: " + id2);
+        }
+
+        ProgrammeBatch batch1 = programmeBatchRepository.findById(offering1.getProgrammeBatchId())
+                .orElseThrow(() -> new ResourceNotFoundException("Programme batch not found: " + offering1.getProgrammeBatchId()));
+        if (batch1.getDeletedAt() != null) {
+            throw new ResourceNotFoundException("Programme batch not found: " + offering1.getProgrammeBatchId());
+        }
+
+        ProgrammeBatch batch2 = programmeBatchRepository.findById(offering2.getProgrammeBatchId())
+                .orElseThrow(() -> new ResourceNotFoundException("Programme batch not found: " + offering2.getProgrammeBatchId()));
+        if (batch2.getDeletedAt() != null) {
+            throw new ResourceNotFoundException("Programme batch not found: " + offering2.getProgrammeBatchId());
+        }
+
+        MasterProgramme prog1 = batch1.getMasterProgrammeId() != null
+                ? masterProgrammeRepository.findById(batch1.getMasterProgrammeId()).orElse(null) : null;
+        Department dept1 = prog1 != null && prog1.getDepartmentId() != null
+                ? departmentRepository.findById(prog1.getDepartmentId()).orElse(null) : null;
+        School school1 = dept1 != null && dept1.getSchoolId() != null
+                ? schoolRepository.findById(dept1.getSchoolId()).orElse(null) : null;
+
+        MasterProgramme prog2 = batch2.getMasterProgrammeId() != null
+                ? masterProgrammeRepository.findById(batch2.getMasterProgrammeId()).orElse(null) : null;
+        Department dept2 = prog2 != null && prog2.getDepartmentId() != null
+                ? departmentRepository.findById(prog2.getDepartmentId()).orElse(null) : null;
+        School school2 = dept2 != null && dept2.getSchoolId() != null
+                ? schoolRepository.findById(dept2.getSchoolId()).orElse(null) : null;
+
+        // Validate security scope independently for both courses
+        validateAndResolveScope(
+                school1 != null ? school1.getId() : null,
+                dept1 != null ? dept1.getId() : null,
+                prog1 != null ? prog1.getId() : null,
+                batch1.getId()
+        );
+        enforceCourseOfferingAccess(offering1, batch1);
+
+        validateAndResolveScope(
+                school2 != null ? school2.getId() : null,
+                dept2 != null ? dept2.getId() : null,
+                prog2 != null ? prog2.getId() : null,
+                batch2.getId()
+        );
+        enforceCourseOfferingAccess(offering2, batch2);
+
+        // Batch load reports, configs, cos
+        List<String> offeringIds = List.of(offering1.getId(), offering2.getId());
+        Map<String, CourseAttainmentReport> reportMap = courseAttainmentReportRepository.findByProgrammeBatchCourseIdIn(offeringIds).stream()
+                .collect(Collectors.toMap(CourseAttainmentReport::getProgrammeBatchCourseId, r -> r, (a, b) -> a));
+        Map<String, AttainmentConfiguration> configMap = attainmentConfigurationRepository.findByProgrammeBatchCourseIdIn(offeringIds).stream()
+                .collect(Collectors.toMap(AttainmentConfiguration::getProgrammeBatchCourseId, c -> c, (a, b) -> a));
+        Map<String, List<CourseOutcome>> coMap = courseOutcomeRepository.findByProgrammeBatchCourseIdIn(offeringIds).stream()
+                .collect(Collectors.groupingBy(CourseOutcome::getProgrammeBatchCourseId));
+
+        ResolvedCourseAttainmentData data1 = resolveCourseAttainmentData(
+                offering1, batch1, reportMap.get(offering1.getId()), configMap.get(offering1.getId()), coMap.getOrDefault(offering1.getId(), Collections.emptyList()));
+        ResolvedCourseAttainmentData data2 = resolveCourseAttainmentData(
+                offering2, batch2, reportMap.get(offering2.getId()), configMap.get(offering2.getId()), coMap.getOrDefault(offering2.getId(), Collections.emptyList()));
+
+        CourseComparisonAnalyticsResponseDto.CourseMetaDto meta1 = CourseComparisonAnalyticsResponseDto.CourseMetaDto.builder()
+                .programmeBatchCourseId(offering1.getId())
+                .programmeBatchId(batch1.getId())
+                .batchName(batch1.getName())
+                .startYear(batch1.getStartYear())
+                .endYear(batch1.getEndYear())
+                .batchStatus(batch1.getStatus())
+                .masterProgrammeId(prog1 != null ? prog1.getId() : batch1.getMasterProgrammeId())
+                .programmeName(prog1 != null ? prog1.getName() : "Programme " + batch1.getMasterProgrammeId())
+                .courseCode(offering1.getEffectiveCourseCode())
+                .courseName(offering1.getEffectiveCourseName())
+                .semester(offering1.getSemester())
+                .directAttainment(data1.directAttainment())
+                .indirectAttainment(data1.indirectAttainment())
+                .overallCourseAttainment(data1.overallCourseAttainment())
+                .directWeight(data1.directWeight())
+                .indirectWeight(data1.indirectWeight())
+                .build();
+
+        CourseComparisonAnalyticsResponseDto.CourseMetaDto meta2 = CourseComparisonAnalyticsResponseDto.CourseMetaDto.builder()
+                .programmeBatchCourseId(offering2.getId())
+                .programmeBatchId(batch2.getId())
+                .batchName(batch2.getName())
+                .startYear(batch2.getStartYear())
+                .endYear(batch2.getEndYear())
+                .batchStatus(batch2.getStatus())
+                .masterProgrammeId(prog2 != null ? prog2.getId() : batch2.getMasterProgrammeId())
+                .programmeName(prog2 != null ? prog2.getName() : "Programme " + batch2.getMasterProgrammeId())
+                .courseCode(offering2.getEffectiveCourseCode())
+                .courseName(offering2.getEffectiveCourseName())
+                .semester(offering2.getSemester())
+                .directAttainment(data2.directAttainment())
+                .indirectAttainment(data2.indirectAttainment())
+                .overallCourseAttainment(data2.overallCourseAttainment())
+                .directWeight(data2.directWeight())
+                .indirectWeight(data2.indirectWeight())
+                .build();
+
+        Set<String> allCoCodes = new TreeSet<>(this::compareCoCodes);
+        allCoCodes.addAll(data1.coMetrics().keySet());
+        allCoCodes.addAll(data2.coMetrics().keySet());
+
+        List<CourseComparisonAnalyticsResponseDto.CoComparisonItemDto> coComparisons = new ArrayList<>();
+        for (String code : allCoCodes) {
+            ResolvedCoMetricData m1 = data1.coMetrics().get(code);
+            ResolvedCoMetricData m2 = data2.coMetrics().get(code);
+
+            String stmt = (m1 != null && m1.statement() != null) ? m1.statement()
+                    : (m2 != null && m2.statement() != null ? m2.statement() : "Course outcome " + code);
+
+            CourseComparisonAnalyticsResponseDto.CoMetricsDto course1Metrics = (m1 != null)
+                    ? CourseComparisonAnalyticsResponseDto.CoMetricsDto.builder()
+                            .directAttainment(m1.directAttainment())
+                            .indirectAttainment(m1.indirectAttainment())
+                            .overallAttainment(m1.overallAttainment())
+                            .targetLevel(m1.targetLevel())
+                            .targetMet(m1.targetMet())
+                            .build()
+                    : null;
+
+            CourseComparisonAnalyticsResponseDto.CoMetricsDto course2Metrics = (m2 != null)
+                    ? CourseComparisonAnalyticsResponseDto.CoMetricsDto.builder()
+                            .directAttainment(m2.directAttainment())
+                            .indirectAttainment(m2.indirectAttainment())
+                            .overallAttainment(m2.overallAttainment())
+                            .targetLevel(m2.targetLevel())
+                            .targetMet(m2.targetMet())
+                            .build()
+                    : null;
+
+            BigDecimal delta = (m1 != null && m1.overallAttainment() != null && m2 != null && m2.overallAttainment() != null)
+                    ? m1.overallAttainment().subtract(m2.overallAttainment()).setScale(2, RoundingMode.HALF_UP)
+                    : null;
+
+            coComparisons.add(CourseComparisonAnalyticsResponseDto.CoComparisonItemDto.builder()
+                    .coCode(code)
+                    .statement(stmt)
+                    .course1Metrics(course1Metrics)
+                    .course2Metrics(course2Metrics)
+                    .attainmentDelta(delta)
+                    .build());
+        }
+
+        return CourseComparisonAnalyticsResponseDto.builder()
+                .course1(meta1)
+                .course2(meta2)
+                .courseOutcomes(new ArrayList<>(allCoCodes))
+                .coComparisons(coComparisons)
                 .build();
     }
 
@@ -3710,6 +4091,179 @@ public class AnalyticsService {
             BigDecimal finalAttainment,
             BigDecimal targetLevel,
             BigDecimal gap,
+            Boolean targetMet
+    ) {}
+
+    private void enforceCourseOfferingAccess(ProgrammeBatchCourse offering, ProgrammeBatch batch) {
+        CurrentUserScope userScope = currentUserScopeService.getCurrentUserScope();
+        if (userScope == null || userScope.isIqac()) {
+            return;
+        }
+        if (userScope.isFaculty()) {
+            boolean isCoord = false;
+            if (offering.getCourseCoordinatorId() != null && userScope.getUserId() != null) {
+                isCoord = String.valueOf(offering.getCourseCoordinatorId()).equals(String.valueOf(userScope.getUserId()));
+            }
+            if (!isCoord && offering.getCourseCoordinatorEmail() != null && userScope.getEmail() != null) {
+                isCoord = offering.getCourseCoordinatorEmail().trim().equalsIgnoreCase(userScope.getEmail().trim());
+            }
+            if (!isCoord && offering.getCoordinatorEmail() != null && userScope.getEmail() != null) {
+                isCoord = offering.getCoordinatorEmail().trim().equalsIgnoreCase(userScope.getEmail().trim());
+            }
+            if (!isCoord && offering.getCourseCoordinatorName() != null && userScope.getName() != null) {
+                isCoord = offering.getCourseCoordinatorName().trim().equalsIgnoreCase(userScope.getName().trim());
+            }
+            if (!isCoord && offering.getCourseCoordinatorName() != null && userScope.getEmail() != null) {
+                isCoord = offering.getCourseCoordinatorName().trim().equalsIgnoreCase(userScope.getEmail().trim());
+            }
+            boolean isAssigned = isCoord;
+            if (!isAssigned && offering.getAssignedFaculty() != null) {
+                String assigned = offering.getAssignedFaculty().toLowerCase();
+                if (userScope.getEmail() != null && assigned.contains(userScope.getEmail().trim().toLowerCase())) {
+                    isAssigned = true;
+                } else if (userScope.getName() != null && assigned.contains(userScope.getName().trim().toLowerCase())) {
+                    isAssigned = true;
+                }
+            }
+            if (!isAssigned) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: You are not assigned to this Course Offering.");
+            }
+        }
+    }
+
+    private int compareCoCodes(String code1, String code2) {
+        if (code1 == null && code2 == null) return 0;
+        if (code1 == null) return -1;
+        if (code2 == null) return 1;
+        String c1 = code1.trim().toUpperCase();
+        String c2 = code2.trim().toUpperCase();
+        int num1 = extractOutcomeDigits(c1);
+        int num2 = extractOutcomeDigits(c2);
+        if (num1 != num2) {
+            return Integer.compare(num1, num2);
+        }
+        return c1.compareTo(c2);
+    }
+
+    private ResolvedCourseAttainmentData resolveCourseAttainmentData(
+            ProgrammeBatchCourse offering,
+            ProgrammeBatch batch,
+            CourseAttainmentReport report,
+            AttainmentConfiguration config,
+            List<CourseOutcome> cos) {
+
+        BigDecimal directWeight = config != null && config.getEffectiveApprovedDirectWeight() != null
+                ? config.getEffectiveApprovedDirectWeight()
+                : (config != null && config.getDirectWeight() != null ? config.getDirectWeight() : new BigDecimal("80.00"));
+        BigDecimal indirectWeight = config != null && config.getEffectiveApprovedIndirectWeight() != null
+                ? config.getEffectiveApprovedIndirectWeight()
+                : (config != null && config.getIndirectWeight() != null ? config.getIndirectWeight() : new BigDecimal("20.00"));
+
+        boolean isFinalized = report != null &&
+                (report.getStatus() == ReportStatus.FINALIZED || report.getStatus() == ReportStatus.APPROVED);
+
+        if (isFinalized && report.getTable3CoAttainmentJson() != null && !report.getTable3CoAttainmentJson().isBlank()) {
+            List<CourseAttainmentReportDto.Table3Row> t3Rows = parseTable3CoAttainments(report.getTable3CoAttainmentJson());
+            if (t3Rows != null && !t3Rows.isEmpty()) {
+                Map<String, ResolvedCoMetricData> coMap = new LinkedHashMap<>();
+                for (CourseAttainmentReportDto.Table3Row t3 : t3Rows) {
+                    if (t3.getCoCode() == null) continue;
+                    String code = t3.getCoCode().trim().toUpperCase();
+                    BigDecimal target = t3.getTargetLevel() != null ? t3.getTargetLevel().setScale(2, RoundingMode.HALF_UP) : new BigDecimal("2.50");
+                    BigDecimal direct = t3.getDirectLevel() != null
+                            ? BigDecimal.valueOf(t3.getDirectLevel()).setScale(2, RoundingMode.HALF_UP)
+                            : (t3.getDirectPercentage() != null ? t3.getDirectPercentage().setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO.setScale(2));
+                    BigDecimal indirect = t3.getIndirectScore() != null
+                            ? t3.getIndirectScore().setScale(2, RoundingMode.HALF_UP)
+                            : (t3.getIndirectLevel() != null ? BigDecimal.valueOf(t3.getIndirectLevel()).setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO.setScale(2));
+                    BigDecimal finalAtt = t3.getFinalAttainment() != null
+                            ? t3.getFinalAttainment().setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO.setScale(2);
+                    Boolean met = t3.getTargetMet() != null ? t3.getTargetMet() : (finalAtt.compareTo(target) >= 0);
+                    String stmt = t3.getStatement() != null && !t3.getStatement().isBlank() ? t3.getStatement() : "Course outcome " + code;
+                    coMap.put(code, new ResolvedCoMetricData(code, stmt, direct, indirect, finalAtt, target, met));
+                }
+                BigDecimal overall = report.getOverallCoAttainment() != null
+                        ? report.getOverallCoAttainment().setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO.setScale(2);
+                BigDecimal directAtt = report.getDirectAttainment() != null
+                        ? report.getDirectAttainment().setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO.setScale(2);
+                BigDecimal indirectAtt = report.getIndirectAttainment() != null
+                        ? report.getIndirectAttainment().setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO.setScale(2);
+                return new ResolvedCourseAttainmentData(directAtt, indirectAtt, overall, directWeight, indirectWeight, coMap);
+            }
+        }
+
+        // Active / in-progress or unfinalized course: calculate in-memory continuous attainment (read-only)
+        try {
+            Map<String, Object> calc = attainmentCalculationService.calculateCourseCoAttainment(offering.getId());
+            if (calc != null) {
+                BigDecimal overall = calc.get("overallCoAttainment") instanceof BigDecimal b ? b.setScale(2, RoundingMode.HALF_UP)
+                        : (calc.get("overallCoAttainment") instanceof Number n ? BigDecimal.valueOf(n.doubleValue()).setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO.setScale(2));
+                BigDecimal direct = calc.get("directAttainment") instanceof BigDecimal b ? b.setScale(2, RoundingMode.HALF_UP)
+                        : (calc.get("directAttainment") instanceof Number n ? BigDecimal.valueOf(n.doubleValue()).setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO.setScale(2));
+                BigDecimal indirect = calc.get("indirectAttainment") instanceof BigDecimal b ? b.setScale(2, RoundingMode.HALF_UP)
+                        : (calc.get("indirectAttainment") instanceof Number n ? BigDecimal.valueOf(n.doubleValue()).setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO.setScale(2));
+
+                Object coAttObj = calc.get("coAttainments");
+                if (coAttObj == null) coAttObj = calc.get("coAttainment");
+                Map<String, ResolvedCoMetricData> coMap = new LinkedHashMap<>();
+                if (coAttObj instanceof List<?> list) {
+                    for (Object o : list) {
+                        if (o instanceof Map<?, ?> m) {
+                            String code = m.get("coCode") != null ? m.get("coCode").toString().trim().toUpperCase() : null;
+                            if (code == null) continue;
+                            String stmt = m.get("statement") != null ? m.get("statement").toString() : "Course outcome " + code;
+                            BigDecimal target = m.get("target") instanceof BigDecimal b ? b.setScale(2, RoundingMode.HALF_UP)
+                                    : (m.get("target") instanceof Number n ? BigDecimal.valueOf(n.doubleValue()).setScale(2, RoundingMode.HALF_UP) : new BigDecimal("2.50"));
+                            BigDecimal dir = m.get("directScore") instanceof BigDecimal b ? b.setScale(2, RoundingMode.HALF_UP)
+                                    : (m.get("directLevel") instanceof Number n ? BigDecimal.valueOf(n.doubleValue()).setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO.setScale(2));
+                            BigDecimal ind = m.get("indirectScore") instanceof BigDecimal b ? b.setScale(2, RoundingMode.HALF_UP)
+                                    : (m.get("indirectLevel") instanceof Number n ? BigDecimal.valueOf(n.doubleValue()).setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO.setScale(2));
+                            BigDecimal finalAtt = m.get("finalAttainment") instanceof BigDecimal b ? b.setScale(2, RoundingMode.HALF_UP)
+                                    : (m.get("combinedAttainment") instanceof Number n ? BigDecimal.valueOf(n.doubleValue()).setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO.setScale(2));
+                            Boolean met = m.get("targetMet") instanceof Boolean b ? b : (finalAtt.compareTo(target) >= 0);
+                            coMap.put(code, new ResolvedCoMetricData(code, stmt, dir, ind, finalAtt, target, met));
+                        }
+                    }
+                }
+                if (!coMap.isEmpty()) {
+                    return new ResolvedCourseAttainmentData(direct, indirect, overall, directWeight, indirectWeight, coMap);
+                }
+            }
+        } catch (Exception e) {
+            log.warn("[AnalyticsService] Error calculating live continuous attainment for course offering {}: {}", offering.getId(), e.getMessage());
+        }
+
+        // Fallback: load course outcomes with default/zero values
+        Map<String, ResolvedCoMetricData> fallbackCoMap = new LinkedHashMap<>();
+        List<CourseOutcome> outcomes = (cos != null && !cos.isEmpty()) ? cos : courseOutcomeRepository.findByProgrammeBatchCourseId(offering.getId());
+        if (outcomes != null) {
+            for (CourseOutcome co : outcomes) {
+                if (co.getCode() == null) continue;
+                String code = co.getCode().trim().toUpperCase();
+                String stmt = co.getStatement() != null && !co.getStatement().isBlank() ? co.getStatement() : "Course outcome " + code;
+                BigDecimal target = co.getTargetLevel() != null ? co.getTargetLevel().setScale(2, RoundingMode.HALF_UP) : new BigDecimal("2.50");
+                fallbackCoMap.put(code, new ResolvedCoMetricData(code, stmt, BigDecimal.ZERO.setScale(2), BigDecimal.ZERO.setScale(2), BigDecimal.ZERO.setScale(2), target, false));
+            }
+        }
+        return new ResolvedCourseAttainmentData(BigDecimal.ZERO.setScale(2), BigDecimal.ZERO.setScale(2), BigDecimal.ZERO.setScale(2), directWeight, indirectWeight, fallbackCoMap);
+    }
+
+    private record ResolvedCourseAttainmentData(
+            BigDecimal directAttainment,
+            BigDecimal indirectAttainment,
+            BigDecimal overallCourseAttainment,
+            BigDecimal directWeight,
+            BigDecimal indirectWeight,
+            Map<String, ResolvedCoMetricData> coMetrics
+    ) {}
+
+    private record ResolvedCoMetricData(
+            String coCode,
+            String statement,
+            BigDecimal directAttainment,
+            BigDecimal indirectAttainment,
+            BigDecimal overallAttainment,
+            BigDecimal targetLevel,
             Boolean targetMet
     ) {}
 }
