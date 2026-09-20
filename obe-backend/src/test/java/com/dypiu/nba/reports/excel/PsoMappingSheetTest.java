@@ -48,16 +48,16 @@ class PsoMappingSheetTest {
             assertNotNull(titleBand, "Title band at row 3 must exist");
             assertEquals(expectedEndCol, titleBand.getLastColumn(), "Header width must match 16 columns (Col P)");
 
-            // 2. Column widths
-            assertWidthClose(35.0, sheet.getColumnWidth(0) / 256.0);
-            assertWidthClose(47.0, sheet.getColumnWidth(1) / 256.0);
-            assertWidthClose(1.58, sheet.getColumnWidth(2) / 256.0);
+            // 2. Column widths (+10% increased)
+            assertWidthClose(38.5, sheet.getColumnWidth(0) / 256.0);
+            assertWidthClose(51.7, sheet.getColumnWidth(1) / 256.0);
+            assertWidthClose(1.738, sheet.getColumnWidth(2) / 256.0);
             for (int c = 3; c <= 8; c++) {
-                assertWidthClose(8.58, sheet.getColumnWidth(c) / 256.0);
+                assertWidthClose(9.438, sheet.getColumnWidth(c) / 256.0);
             }
-            assertWidthClose(1.5, sheet.getColumnWidth(9) / 256.0);
+            assertWidthClose(1.65, sheet.getColumnWidth(9) / 256.0);
             for (int c = 10; c <= 15; c++) {
-                assertWidthClose(7.08, sheet.getColumnWidth(c) / 256.0);
+                assertWidthClose(7.788, sheet.getColumnWidth(c) / 256.0);
             }
 
             // 3. Banner Row (Row 5)

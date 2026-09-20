@@ -2,6 +2,7 @@ package com.dypiu.nba.reports.excel;
 
 import com.dypiu.nba.reports.model.ReportSection;
 import com.dypiu.nba.reports.model.snapshot.*;
+import com.dypiu.nba.reports.template.ReportTemplateDto;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
@@ -14,36 +15,44 @@ import java.io.IOException;
 @Slf4j
 public class ExcelReportRenderer {
 
-    public byte[] renderProgrammeAttainmentMaster(ProgrammeAttainmentSnapshot snapshot) {
+    public byte[] renderProgrammeAttainmentMaster(ProgrammeAttainmentSnapshot snapshot, byte[] logoBytes, ReportTemplateDto template) {
         try (Workbook wb = new XSSFWorkbook()) {
-            AverageMappingSheetBuilder.build(wb, "Average Mapping", snapshot);
-            AverageDirectAttainmentSheetBuilder.build(wb, "Average Direct Attainment", snapshot);
-            AverageIndirectAttainmentSheetBuilder.build(wb, "Average Indirect Attainment", snapshot);
-            OverallAttainmentSheetBuilder.build(wb, "Overall Attainment", snapshot);
+            AverageMappingSheetBuilder.build(wb, "Average Mapping", snapshot, logoBytes, template);
+            AverageDirectAttainmentSheetBuilder.build(wb, "Average Direct Attainment", snapshot, logoBytes, template);
+            AverageIndirectAttainmentSheetBuilder.build(wb, "AVERAGE ATTAINMENT (ID)", snapshot, logoBytes, template);
+            OverallAttainmentSheetBuilder.build(wb, "Overall Programme Attainment", snapshot, logoBytes, template);
             return writeToBytes(wb);
         } catch (IOException e) {
             throw new RuntimeException("Failed to render Programme Attainment Master Excel", e);
         }
     }
 
-    public byte[] renderProgrammeAttainmentSection(ProgrammeAttainmentSnapshot snapshot, ReportSection section) {
+    public byte[] renderProgrammeAttainmentMaster(ProgrammeAttainmentSnapshot snapshot) {
+        return renderProgrammeAttainmentMaster(snapshot, null, null);
+    }
+
+    public byte[] renderProgrammeAttainmentSection(ProgrammeAttainmentSnapshot snapshot, ReportSection section, byte[] logoBytes, ReportTemplateDto template) {
         try (Workbook wb = new XSSFWorkbook()) {
             switch (section) {
-                case AVERAGE_MAPPING -> AverageMappingSheetBuilder.build(wb, "Average Mapping", snapshot);
-                case AVERAGE_DIRECT -> AverageDirectAttainmentSheetBuilder.build(wb, "Average Direct Attainment", snapshot);
-                case AVERAGE_INDIRECT -> AverageIndirectAttainmentSheetBuilder.build(wb, "Average Indirect Attainment", snapshot);
-                case OVERALL -> OverallAttainmentSheetBuilder.build(wb, "Overall Attainment", snapshot);
+                case AVERAGE_MAPPING -> AverageMappingSheetBuilder.build(wb, "Average Mapping", snapshot, logoBytes, template);
+                case AVERAGE_DIRECT -> AverageDirectAttainmentSheetBuilder.build(wb, "Average Direct Attainment", snapshot, logoBytes, template);
+                case AVERAGE_INDIRECT -> AverageIndirectAttainmentSheetBuilder.build(wb, "AVERAGE ATTAINMENT (ID)", snapshot, logoBytes, template);
+                case OVERALL -> OverallAttainmentSheetBuilder.build(wb, "Overall Programme Attainment", snapshot, logoBytes, template);
                 case ALL -> {
-                    AverageMappingSheetBuilder.build(wb, "Average Mapping", snapshot);
-                    AverageDirectAttainmentSheetBuilder.build(wb, "Average Direct Attainment", snapshot);
-                    AverageIndirectAttainmentSheetBuilder.build(wb, "Average Indirect Attainment", snapshot);
-                    OverallAttainmentSheetBuilder.build(wb, "Overall Attainment", snapshot);
+                    AverageMappingSheetBuilder.build(wb, "Average Mapping", snapshot, logoBytes, template);
+                    AverageDirectAttainmentSheetBuilder.build(wb, "Average Direct Attainment", snapshot, logoBytes, template);
+                    AverageIndirectAttainmentSheetBuilder.build(wb, "AVERAGE ATTAINMENT (ID)", snapshot, logoBytes, template);
+                    OverallAttainmentSheetBuilder.build(wb, "Overall Programme Attainment", snapshot, logoBytes, template);
                 }
             }
             return writeToBytes(wb);
         } catch (IOException e) {
             throw new RuntimeException("Failed to render Programme Attainment Section Excel: " + section, e);
         }
+    }
+
+    public byte[] renderProgrammeAttainmentSection(ProgrammeAttainmentSnapshot snapshot, ReportSection section) {
+        return renderProgrammeAttainmentSection(snapshot, section, null, null);
     }
 
     public byte[] renderCourseAttainment(CourseAttainmentSnapshot snapshot, byte[] leftLogo, byte[] rightLogo) {

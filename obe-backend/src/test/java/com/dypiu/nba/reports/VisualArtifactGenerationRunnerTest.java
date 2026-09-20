@@ -40,7 +40,7 @@ public class VisualArtifactGenerationRunnerTest {
                         .build())
                 .build();
 
-        File outputDir = new File("/Users/rajshaikh/.gemini/antigravity-cli/brain/cb74ad2c-5c72-441a-b1eb-cb0c657c0804/visual_artifacts");
+        File outputDir = new File("/Users/rajshaikh/.gemini/antigravity-cli/brain/15a70cc0-2e2b-4654-ae2c-dad71a4078b1/visual_artifacts");
         outputDir.mkdirs();
 
         // 1. Programme Attainment Section 1 (Average Mapping) PDF & XLSX
@@ -148,6 +148,11 @@ public class VisualArtifactGenerationRunnerTest {
                                 ProgrammeAttainmentSnapshot.StudentSurveyRow.builder().srNo(1).prn("PRN2021001").studentName("Aditi Sharma").poRatings(valMap).psoRatings(valMap).build(),
                                 ProgrammeAttainmentSnapshot.StudentSurveyRow.builder().srNo(2).prn("PRN2021002").studentName("Rohan Verma").poRatings(valMap).psoRatings(valMap).build()
                         ))
+                        .otherAssessments(List.of(
+                                ProgrammeAttainmentSnapshot.IndirectAssessmentRow.builder().id("ind-1").eventTitle("Alumni Survey 2025").assessmentType("Survey").poValues(valMap).psoValues(valMap).build(),
+                                ProgrammeAttainmentSnapshot.IndirectAssessmentRow.builder().id("ind-2").eventTitle("Industry Interaction & Hackathon").assessmentType("Co-Curricular Event").poValues(valMap).psoValues(valMap).build(),
+                                ProgrammeAttainmentSnapshot.IndirectAssessmentRow.builder().id("ind-3").eventTitle("Employer Feedback Survey").assessmentType("Survey").poValues(valMap).psoValues(valMap).build()
+                        ))
                         .averageIndirectAttainment(valMap).overallIndirectAttainment(new BigDecimal("2.58")).build())
                 .section4OverallAttainment(ProgrammeAttainmentSnapshot.OverallAttainmentSection.builder()
                         .directWeightPercentage(new BigDecimal("80.00")).indirectWeightPercentage(new BigDecimal("20.00"))
@@ -175,7 +180,11 @@ public class VisualArtifactGenerationRunnerTest {
                 .psoCodes(List.of("PSO1", "PSO2"))
                 .table1Mapping(List.of(
                         CourseAttainmentSnapshot.CoMappingRow.builder().coCode("CO1").poMappings(Map.of("PO1", 3, "PO2", 2, "PO12", 3)).psoMappings(Map.of("PSO1", 3, "PSO2", 2)).build(),
-                        CourseAttainmentSnapshot.CoMappingRow.builder().coCode("CO2").poMappings(Map.of("PO1", 2, "PO2", 3, "PO12", 2)).psoMappings(Map.of("PSO1", 2, "PSO2", 3)).build()
+                        CourseAttainmentSnapshot.CoMappingRow.builder().coCode("CO2").poMappings(Map.of("PO1", 2, "PO2", 3, "PO12", 2)).psoMappings(Map.of("PSO1", 2, "PSO2", 3)).build(),
+                        CourseAttainmentSnapshot.CoMappingRow.builder().coCode("CO3").poMappings(Map.of("PO1", 3, "PO3", 3, "PO12", 2)).psoMappings(Map.of("PSO1", 3, "PSO2", 2)).build(),
+                        CourseAttainmentSnapshot.CoMappingRow.builder().coCode("CO4").poMappings(Map.of("PO2", 3, "PO4", 2, "PO12", 3)).psoMappings(Map.of("PSO1", 2, "PSO2", 3)).build(),
+                        CourseAttainmentSnapshot.CoMappingRow.builder().coCode("CO5").poMappings(Map.of("PO3", 2, "PO5", 3, "PO12", 2)).psoMappings(Map.of("PSO1", 3, "PSO2", 2)).build(),
+                        CourseAttainmentSnapshot.CoMappingRow.builder().coCode("CO6").poMappings(Map.of("PO1", 2, "PO6", 2, "PO12", 3)).psoMappings(Map.of("PSO1", 2, "PSO2", 3)).build()
                 ))
                 .table2DirectPO(List.of(
                         CourseAttainmentSnapshot.OutcomeContributionRow.builder().outcomeCode("PO1").averageMapping(new BigDecimal("2.50")).directContribution(new BigDecimal("2.45")).build(),
@@ -188,17 +197,90 @@ public class VisualArtifactGenerationRunnerTest {
                 .table3CoAttainments(List.of(
                         CourseAttainmentSnapshot.CoAttainmentRow.builder()
                                 .coCode("CO1")
-                                .statement("Understand core data structure primitives")
+                                .statement("Understand core data structure primitives and memory models")
                                 .targetLevel(new BigDecimal("2.50"))
-                                .directPercentage(new BigDecimal("72.5"))
+                                .directPercentage(new BigDecimal("72.50"))
                                 .directLevel(3)
-                                .indirectPercentage(new BigDecimal("80.0"))
+                                .indirectPercentage(new BigDecimal("80.00"))
                                 .indirectScore(new BigDecimal("2.60"))
                                 .indirectLevel(3)
                                 .finalAttainment(new BigDecimal("2.85"))
                                 .targetMet(true)
+                                .build(),
+                        CourseAttainmentSnapshot.CoAttainmentRow.builder()
+                                .coCode("CO2")
+                                .statement("Implement and analyze linear data structures such as stacks, queues, and linked lists")
+                                .targetLevel(new BigDecimal("2.50"))
+                                .directPercentage(new BigDecimal("75.00"))
+                                .directLevel(3)
+                                .indirectPercentage(new BigDecimal("82.00"))
+                                .indirectScore(new BigDecimal("2.70"))
+                                .indirectLevel(3)
+                                .finalAttainment(new BigDecimal("2.90"))
+                                .targetMet(true)
+                                .build(),
+                        CourseAttainmentSnapshot.CoAttainmentRow.builder()
+                                .coCode("CO3")
+                                .statement("Apply tree and graph structures for hierarchical data organization and traversal")
+                                .targetLevel(new BigDecimal("2.50"))
+                                .directPercentage(new BigDecimal("68.00"))
+                                .directLevel(2)
+                                .indirectPercentage(new BigDecimal("78.00"))
+                                .indirectScore(new BigDecimal("2.50"))
+                                .indirectLevel(3)
+                                .finalAttainment(new BigDecimal("2.70"))
+                                .targetMet(true)
+                                .build(),
+                        CourseAttainmentSnapshot.CoAttainmentRow.builder()
+                                .coCode("CO4")
+                                .statement("Analyze sorting and searching algorithm complexities")
+                                .targetLevel(new BigDecimal("2.50"))
+                                .directPercentage(new BigDecimal("80.00"))
+                                .directLevel(3)
+                                .indirectPercentage(new BigDecimal("85.00"))
+                                .indirectScore(new BigDecimal("2.80"))
+                                .indirectLevel(3)
+                                .finalAttainment(new BigDecimal("2.95"))
+                                .targetMet(true)
+                                .build(),
+                        CourseAttainmentSnapshot.CoAttainmentRow.builder()
+                                .coCode("CO5")
+                                .statement("Evaluate hashing techniques and collision resolution strategies")
+                                .targetLevel(new BigDecimal("2.50"))
+                                .directPercentage(new BigDecimal("70.00"))
+                                .directLevel(3)
+                                .indirectPercentage(new BigDecimal("75.00"))
+                                .indirectScore(new BigDecimal("2.40"))
+                                .indirectLevel(2)
+                                .finalAttainment(new BigDecimal("2.75"))
+                                .targetMet(true)
+                                .build(),
+                        CourseAttainmentSnapshot.CoAttainmentRow.builder()
+                                .coCode("CO6")
+                                .statement("Design algorithm solutions for real-world engineering problems")
+                                .targetLevel(new BigDecimal("2.50"))
+                                .directPercentage(new BigDecimal("78.00"))
+                                .directLevel(3)
+                                .indirectPercentage(new BigDecimal("84.00"))
+                                .indirectScore(new BigDecimal("2.70"))
+                                .indirectLevel(3)
+                                .finalAttainment(new BigDecimal("2.90"))
+                                .targetMet(true)
                                 .build()
                 ))
+                .examinationData(CourseAttainmentSnapshot.ExaminationSection.builder()
+                        .courseName("Data Structures & Algorithms")
+                        .className("Semester 3")
+                        .academicYear("2021-2025")
+                        .totalStudents(24)
+                        .thresholdPercentage(new BigDecimal("60.00"))
+                        .coCodes(List.of("CO1", "CO2", "CO3", "CO4", "CO5", "CO6"))
+                        .coMaxMarks(Map.of("CO1", new BigDecimal("15.00"), "CO2", new BigDecimal("15.00"), "CO3", new BigDecimal("15.00"), "CO4", new BigDecimal("15.00"), "CO5", new BigDecimal("15.00"), "CO6", new BigDecimal("15.00")))
+                        .coThresholdMarks(Map.of("CO1", new BigDecimal("9.00"), "CO2", new BigDecimal("9.00"), "CO3", new BigDecimal("9.00"), "CO4", new BigDecimal("9.00"), "CO5", new BigDecimal("9.00"), "CO6", new BigDecimal("9.00")))
+                        .studentsAboveThreshold(Map.of("CO1", 20, "CO2", 21, "CO3", 19, "CO4", 22, "CO5", 20, "CO6", 21))
+                        .percentageAboveThreshold(Map.of("CO1", new BigDecimal("83.33"), "CO2", new BigDecimal("87.50"), "CO3", new BigDecimal("79.17"), "CO4", new BigDecimal("91.67"), "CO5", new BigDecimal("83.33"), "CO6", new BigDecimal("87.50")))
+                        .students(createVisualStudentMarks(24, List.of("CO1", "CO2", "CO3", "CO4", "CO5", "CO6")))
+                        .build())
                 .surveyData(CourseAttainmentSnapshot.SurveySection.builder()
                         .totalStudents(24)
                         .coCodes(List.of("CO1", "CO2", "CO3", "CO4", "CO5", "CO6"))
@@ -214,6 +296,33 @@ public class VisualArtifactGenerationRunnerTest {
                 .generatedBy("Course Coordinator")
                 .generatedAt(ZonedDateTime.now())
                 .build();
+    }
+
+    private List<CourseAttainmentSnapshot.StudentMarksRow> createVisualStudentMarks(int count, List<String> cos) {
+        List<CourseAttainmentSnapshot.StudentMarksRow> list = new ArrayList<>();
+        String[] studentNames = {
+                "Aditi Sharma", "Rohan Verma", "Sneha Kulkarni", "Amit Patil",
+                "Pooja Deshmukh", "Rahul Shinde", "Ananya Joshi", "Kunal Pawar",
+                "Neha More", "Vikas Gaikwad", "Tanvi Jagtap", "Siddharth Shinde",
+                "Divya Kadam", "Omkar Chavan", "Ishita Rane", "Aditya Sawant",
+                "Shruti Kamble", "Pranav Mohite", "Riya Salunkhe", "Sanket Kale",
+                "Pallavi Mane", "Abhishek Gokhale", "Mrunal Thorat", "Varun Date"
+        };
+        for (int i = 1; i <= count; i++) {
+            Map<String, BigDecimal> marks = new LinkedHashMap<>();
+            for (int j = 0; j < cos.size(); j++) {
+                int m = 10 + ((i * 2 + j * 3) % 6); // marks between 10 and 15
+                marks.put(cos.get(j), BigDecimal.valueOf(m));
+            }
+            String name = (i - 1 < studentNames.length) ? studentNames[i - 1] : ("Student " + i);
+            list.add(CourseAttainmentSnapshot.StudentMarksRow.builder()
+                    .srNo(i)
+                    .prn("20210800" + (i < 10 ? "0" + i : String.valueOf(i)))
+                    .studentName(name)
+                    .coMarks(marks)
+                    .build());
+        }
+        return list;
     }
 
     private List<CourseAttainmentSnapshot.SurveyResponseRow> createVisualSurveyResponses(int count, List<String> cos) {

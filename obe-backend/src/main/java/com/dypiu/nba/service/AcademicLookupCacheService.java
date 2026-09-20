@@ -70,4 +70,9 @@ public class AcademicLookupCacheService {
     public void evictCourseCache() {
         log.debug("[AcademicLookupCacheService] Evicted all course offering cache entries");
     }
+
+    @CacheEvict(value = CacheConfig.CACHE_PROGRAMME_ATTAINMENT, allEntries = true)
+    public void evictProgrammeAttainmentCache() {
+        log.debug("[AcademicLookupCacheService] Evicted all programme attainment cache entries");
+    }
 }

@@ -50,14 +50,9 @@ public class CourseAttainmentSheetBuilder {
         List<String> poCodes = snapshot.getPoCodes() != null ? snapshot.getPoCodes() : List.of();
         List<String> psoCodes = snapshot.getPsoCodes() != null ? snapshot.getPsoCodes() : List.of();
 
-        List<CourseAttainmentSnapshot.CoAttainmentRow> coRows = snapshot.getTable3CoAttainments();
-        if ((coRows == null || coRows.isEmpty()) && snapshot.getTable1Mapping() != null) {
-            coRows = snapshot.getTable1Mapping().stream()
-                    .map(m -> CourseAttainmentSnapshot.CoAttainmentRow.builder().coCode(m.getCoCode()).statement("").build())
-                    .toList();
-        }
-        if (coRows == null) coRows = List.of();
-        int coCount = coRows.size();
+        CourseOutcomeOrderHelper.CourseOutcomeRegistry registry = CourseOutcomeOrderHelper.resolveRegistry(snapshot);
+        List<CourseOutcomeOrderHelper.CourseOutcomeItem> coItems = registry.getItems();
+        int coCount = coItems.size();
 
         // 2. Calculate dynamic dimensions (HEADER LAST COLUMN == CONTENT LAST COLUMN)
         int table1Cols = 2 + poCodes.size() + psoCodes.size();
@@ -69,12 +64,12 @@ public class CourseAttainmentSheetBuilder {
         int lastCoCol = 2 + coCount; // Col D is 3, so last CO is 2 + coCount
         int refWorkEndCol = Math.min(endCol, lastCoCol + 5);
 
-        // 3. Set authoritative column widths
-        sheet.setColumnWidth(0, (int) (8.5 * 256));
-        sheet.setColumnWidth(1, (int) (7.832 * 256));
-        sheet.setColumnWidth(2, (int) (7.832 * 256));
+        // 3. Set authoritative column widths (+10% increased)
+        sheet.setColumnWidth(0, (int) (9.35 * 256));
+        sheet.setColumnWidth(1, (int) (8.615 * 256));
+        sheet.setColumnWidth(2, (int) (8.615 * 256));
         for (int c = 3; c < totalCols; c++) {
-            sheet.setColumnWidth(c, (int) (6.75 * 256));
+            sheet.setColumnWidth(c, (int) (7.425 * 256));
         }
 
         // 4. Create CellStyles matching reference workbook
@@ -129,11 +124,11 @@ public class CourseAttainmentSheetBuilder {
         getOrCreateCell(rCoHeader, 2).setCellValue("Statement");
 
         int coSr = 1;
-        for (CourseAttainmentSnapshot.CoAttainmentRow co : coRows) {
+        for (CourseOutcomeOrderHelper.CourseOutcomeItem co : coItems) {
             Row rCo = getOrCreateRow(sheet, rowIdx++);
             rCo.setHeightInPoints(15.65f);
             setCellValAndStyle(rCo, 0, String.valueOf(coSr++), s.tableDataSrNo);
-            setCellValAndStyle(rCo, 1, co.getCoCode() != null ? co.getCoCode() : "", s.coCodeStyle);
+            setCellValAndStyle(rCo, 1, co.getActualCode() != null ? co.getActualCode() : "", s.coCodeStyle);
             mergeAndApplyStyle(sheet, rowIdx - 1, rowIdx - 1, 2, endCol, s.coStatementStyle);
             getOrCreateCell(rCo, 2).setCellValue(co.getStatement() != null ? co.getStatement() : "");
         }
@@ -175,13 +170,13 @@ public class CourseAttainmentSheetBuilder {
         }
 
         int t1Sr = 1;
-        for (CourseAttainmentSnapshot.CoAttainmentRow co : coRows) {
+        for (CourseOutcomeOrderHelper.CourseOutcomeItem co : coItems) {
             Row rT1 = getOrCreateRow(sheet, rowIdx++);
             rT1.setHeightInPoints(14.25f);
             setCellValAndStyle(rT1, 0, String.valueOf(t1Sr++), s.tableDataSrNo);
-            setCellValAndStyle(rT1, 1, co.getCoCode() != null ? co.getCoCode() : "", s.tableDataCode);
+            setCellValAndStyle(rT1, 1, co.getActualCode() != null ? co.getActualCode() : "", s.tableDataCode);
 
-            CourseAttainmentSnapshot.CoMappingRow mapRow = t1Map.get(co.getCoCode());
+            CourseAttainmentSnapshot.CoMappingRow mapRow = co.getMappingRow() != null ? co.getMappingRow() : registry.lookupValue(t1Map, co);
             int cCol = 2;
             for (String po : poCodes) {
                 Integer val = (mapRow != null && mapRow.getPoMappings() != null) ? mapRow.getPoMappings().get(po) : null;
@@ -362,9 +357,8 @@ public class CourseAttainmentSheetBuilder {
         Row rRefCo = getOrCreateRow(sheet, rowIdx++);
         rRefCo.setHeightInPoints(19.9f);
         for (int i = 0; i < coCount; i++) {
-            CourseAttainmentSnapshot.CoAttainmentRow co = coRows.get(i);
-            String label = (co.getCoCode() != null && !co.getCoCode().isBlank()) ? co.getCoCode() : ("CO" + (i + 1));
-            setCellValAndStyle(rRefCo, 3 + i, label, s.refCoHeader);
+            CourseOutcomeOrderHelper.CourseOutcomeItem co = coItems.get(i);
+            setCellValAndStyle(rRefCo, 3 + i, co.getAcronym(), s.refCoHeader);
         }
 
         // Row 41: Direct % ("% of students above threshold", "Direct through Examination", percentages)
@@ -375,8 +369,8 @@ public class CourseAttainmentSheetBuilder {
         getOrCreateCell(rRef41, 0).setCellValue("% of students above threshold");
 
         for (int i = 0; i < coCount; i++) {
-            CourseAttainmentSnapshot.CoAttainmentRow co = coRows.get(i);
-            BigDecimal pct = co.getDirectPercentage();
+            CourseOutcomeOrderHelper.CourseOutcomeItem co = coItems.get(i);
+            BigDecimal pct = co.getAttainmentRow() != null ? co.getAttainmentRow().getDirectPercentage() : null;
             if (pct != null) {
                 setCellNumAndStyle(rRef41, 3 + i, pct.doubleValue(), s.refPercentVal);
             } else {
@@ -399,8 +393,8 @@ public class CourseAttainmentSheetBuilder {
         getOrCreateCell(rRef41, 2).setCellValue("Direct through Examination");
 
         for (int i = 0; i < coCount; i++) {
-            CourseAttainmentSnapshot.CoAttainmentRow co = coRows.get(i);
-            Integer lvl = co.getDirectLevel();
+            CourseOutcomeOrderHelper.CourseOutcomeItem co = coItems.get(i);
+            Integer lvl = co.getAttainmentRow() != null ? co.getAttainmentRow().getDirectLevel() : null;
             if (lvl != null) {
                 setCellNumAndStyle(rRef42, 3 + i, lvl, s.refLevelVal);
             } else {
@@ -416,8 +410,8 @@ public class CourseAttainmentSheetBuilder {
         getOrCreateCell(rRef43, 0).setCellValue("% of students above threshold");
 
         for (int i = 0; i < coCount; i++) {
-            CourseAttainmentSnapshot.CoAttainmentRow co = coRows.get(i);
-            BigDecimal pct = co.getIndirectPercentage();
+            CourseOutcomeOrderHelper.CourseOutcomeItem co = coItems.get(i);
+            BigDecimal pct = co.getAttainmentRow() != null ? co.getAttainmentRow().getIndirectPercentage() : null;
             if (pct != null) {
                 setCellNumAndStyle(rRef43, 3 + i, pct.doubleValue(), s.refPercentVal);
             } else {
@@ -440,8 +434,8 @@ public class CourseAttainmentSheetBuilder {
         getOrCreateCell(rRef43, 2).setCellValue("Indirect through Course End Survey");
 
         for (int i = 0; i < coCount; i++) {
-            CourseAttainmentSnapshot.CoAttainmentRow co = coRows.get(i);
-            Integer lvl = co.getIndirectLevel();
+            CourseOutcomeOrderHelper.CourseOutcomeItem co = coItems.get(i);
+            Integer lvl = co.getAttainmentRow() != null ? co.getAttainmentRow().getIndirectLevel() : null;
             if (lvl != null) {
                 setCellNumAndStyle(rRef44, 3 + i, lvl, s.refLevelVal);
             } else {
@@ -461,8 +455,8 @@ public class CourseAttainmentSheetBuilder {
         getOrCreateCell(rRef46, 0).setCellValue("Attainment of CO");
 
         for (int i = 0; i < coCount; i++) {
-            CourseAttainmentSnapshot.CoAttainmentRow co = coRows.get(i);
-            BigDecimal fa = co.getFinalAttainment();
+            CourseOutcomeOrderHelper.CourseOutcomeItem co = coItems.get(i);
+            BigDecimal fa = co.getAttainmentRow() != null ? co.getAttainmentRow().getFinalAttainment() : null;
             if (fa != null) {
                 setCellNumAndStyle(rRef46, 3 + i, fa.doubleValue(), s.refAttainCoVal);
             } else {

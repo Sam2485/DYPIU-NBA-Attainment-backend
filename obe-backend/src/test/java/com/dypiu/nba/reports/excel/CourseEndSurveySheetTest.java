@@ -47,11 +47,11 @@ class CourseEndSurveySheetTest {
             assertNotNull(titleBand, "Title band at row 3 must exist");
             assertEquals(expectedEndCol, titleBand.getLastColumn(), "Header width must match 8 columns (Col H)");
 
-            // 2. Column widths
-            assertWidthClose(10.25, sheet.getColumnWidth(0) / 256.0);
-            assertWidthClose(6.25, sheet.getColumnWidth(1) / 256.0);
+            // 2. Column widths (+10% increased)
+            assertWidthClose(11.275, sheet.getColumnWidth(0) / 256.0);
+            assertWidthClose(6.875, sheet.getColumnWidth(1) / 256.0);
             for (int c = 2; c <= expectedEndCol; c++) {
-                assertWidthClose(12.75, sheet.getColumnWidth(c) / 256.0);
+                assertWidthClose(14.025, sheet.getColumnWidth(c) / 256.0);
             }
 
             // 3. Row 5 (Excel Row 6, ht = 18 pt): Summary Table 1 Header

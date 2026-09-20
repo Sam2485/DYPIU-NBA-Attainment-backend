@@ -41,23 +41,24 @@ public class ExaminationSheetBuilder {
     public static Sheet build(Workbook wb, String sheetName, CourseAttainmentSnapshot snapshot, byte[] leftLogo, byte[] rightLogo) {
         Sheet sheet = wb.createSheet(sheetName != null ? sheetName : "Examination");
 
-        // 1. Resolve Dynamic COs
-        List<String> coCodes = resolveCoCodes(snapshot);
-        int numCO = coCodes.size();
+        // 1. Resolve Dynamic COs in natural ascending order with acronyms
+        CourseOutcomeOrderHelper.CourseOutcomeRegistry registry = CourseOutcomeOrderHelper.resolveRegistry(snapshot);
+        List<CourseOutcomeOrderHelper.CourseOutcomeItem> coItems = registry.getItems();
+        int numCO = coItems.size();
         if (numCO < 1) numCO = 6;
 
         // Content columns: Col A (0), Col B (1), Col C (2), Col D (3), Col E (4) + CO columns (5 .. 4 + numCO)
         int totalCols = 5 + numCO;
         int endCol = totalCols - 1;
 
-        // 2. Set authoritative column widths matching reference sheet4.xml
-        sheet.setColumnWidth(0, (int) (7.75 * 256));   // Col A: Sr No
-        sheet.setColumnWidth(1, (int) (7.25 * 256));   // Col B: PRN No
-        sheet.setColumnWidth(2, (int) (33.75 * 256));  // Col C: Name
-        sheet.setColumnWidth(3, (int) (1.5 * 256));    // Col D: blank separator
-        sheet.setColumnWidth(4, (int) (1.082 * 256));  // Col E: blank separator
+        // 2. Set authoritative column widths (+10% increased)
+        sheet.setColumnWidth(0, (int) (8.525 * 256));  // Col A: Sr No
+        sheet.setColumnWidth(1, (int) (7.975 * 256));  // Col B: PRN No
+        sheet.setColumnWidth(2, (int) (37.125 * 256)); // Col C: Name
+        sheet.setColumnWidth(3, (int) (1.65 * 256));   // Col D: blank separator
+        sheet.setColumnWidth(4, (int) (1.19 * 256));   // Col E: blank separator
         for (int c = 5; c <= endCol; c++) {
-            sheet.setColumnWidth(c, (int) (7.582 * 256)); // Cols F..endCol: CO columns
+            sheet.setColumnWidth(c, (int) (8.34 * 256)); // Cols F..endCol: CO columns
         }
 
         // 3. Create Styles
@@ -102,55 +103,62 @@ public class ExaminationSheetBuilder {
 
         // Max marks per CO (Out Of)
         Map<String, BigDecimal> coMaxMarks = (examData != null && examData.getCoMaxMarks() != null)
-                ? examData.getCoMaxMarks()
+                ? new LinkedHashMap<>(examData.getCoMaxMarks())
                 : new LinkedHashMap<>();
 
         // Fractions per CO (maxMarks * threshold / 100)
         Map<String, BigDecimal> coThresholdMarks = (examData != null && examData.getCoThresholdMarks() != null)
-                ? examData.getCoThresholdMarks()
+                ? new LinkedHashMap<>(examData.getCoThresholdMarks())
                 : new LinkedHashMap<>();
 
         // Counts above threshold
         Map<String, Integer> studentsAboveThreshold = (examData != null && examData.getStudentsAboveThreshold() != null)
-                ? examData.getStudentsAboveThreshold()
+                ? new LinkedHashMap<>(examData.getStudentsAboveThreshold())
                 : new LinkedHashMap<>();
 
         // Percentages above threshold
         Map<String, BigDecimal> percentageAboveThreshold = (examData != null && examData.getPercentageAboveThreshold() != null)
-                ? examData.getPercentageAboveThreshold()
+                ? new LinkedHashMap<>(examData.getPercentageAboveThreshold())
                 : new LinkedHashMap<>();
 
         // Self-heal any missing values defensively
-        for (String co : coCodes) {
-            BigDecimal max = coMaxMarks.getOrDefault(co, new BigDecimal("15.00"));
-            coMaxMarks.putIfAbsent(co, max);
+        for (CourseOutcomeOrderHelper.CourseOutcomeItem item : coItems) {
+            String actual = item.getActualCode();
+            String acronym = item.getAcronym();
 
-            BigDecimal threshMark = coThresholdMarks.get(co);
+            BigDecimal max = registry.lookupValue(coMaxMarks, item);
+            if (max == null) max = new BigDecimal("15.00");
+            coMaxMarks.put(actual, max);
+            coMaxMarks.put(acronym, max);
+
+            BigDecimal threshMark = registry.lookupValue(coThresholdMarks, item);
             if (threshMark == null) {
                 threshMark = max.multiply(thresholdPct).divide(new BigDecimal("100.00"), 2, RoundingMode.HALF_UP);
-                coThresholdMarks.put(co, threshMark);
             }
+            coThresholdMarks.put(actual, threshMark);
+            coThresholdMarks.put(acronym, threshMark);
 
-            if (!studentsAboveThreshold.containsKey(co)) {
-                int count = 0;
+            Integer count = registry.lookupValue(studentsAboveThreshold, item);
+            if (count == null) {
+                count = 0;
                 for (CourseAttainmentSnapshot.StudentMarksRow st : students) {
-                    if (st.getCoMarks() != null && st.getCoMarks().containsKey(co)) {
-                        BigDecimal mark = st.getCoMarks().get(co);
-                        if (mark != null && mark.compareTo(threshMark) >= 0) {
-                            count++;
-                        }
+                    BigDecimal mark = registry.lookupValue(st.getCoMarks(), item);
+                    if (mark != null && mark.compareTo(threshMark) >= 0) {
+                        count++;
                     }
                 }
-                studentsAboveThreshold.put(co, count);
             }
+            studentsAboveThreshold.put(actual, count);
+            studentsAboveThreshold.put(acronym, count);
 
-            if (!percentageAboveThreshold.containsKey(co)) {
-                int count = studentsAboveThreshold.getOrDefault(co, 0);
-                BigDecimal pct = (studentCount > 0)
+            BigDecimal pct = registry.lookupValue(percentageAboveThreshold, item);
+            if (pct == null) {
+                pct = (studentCount > 0)
                         ? BigDecimal.valueOf(count).multiply(new BigDecimal("100.00")).divide(BigDecimal.valueOf(studentCount), 2, RoundingMode.HALF_UP)
                         : BigDecimal.ZERO;
-                percentageAboveThreshold.put(co, pct);
             }
+            percentageAboveThreshold.put(actual, pct);
+            percentageAboveThreshold.put(acronym, pct);
         }
 
         // =========================================================================
@@ -273,11 +281,12 @@ public class ExaminationSheetBuilder {
         c14.setCellValue("# of student >= of out of marks");
 
         for (int i = 0; i < numCO; i++) {
-            String co = coCodes.get(i);
+            CourseOutcomeOrderHelper.CourseOutcomeItem item = coItems.get(i);
             int col = 5 + i;
             Cell valCell = getOrCreateCell(r14, col);
             valCell.setCellStyle(s.cyanLightCountCell);
-            valCell.setCellValue(studentsAboveThreshold.getOrDefault(co, 0));
+            Integer count = registry.lookupValue(studentsAboveThreshold, item);
+            valCell.setCellValue(count != null ? count : 0);
         }
 
         // =========================================================================
@@ -305,12 +314,12 @@ public class ExaminationSheetBuilder {
         c17.setCellValue("% of students above threshhold");
 
         for (int i = 0; i < numCO; i++) {
-            String co = coCodes.get(i);
+            CourseOutcomeOrderHelper.CourseOutcomeItem item = coItems.get(i);
             int col = 5 + i;
             Cell valCell = getOrCreateCell(r17, col);
             valCell.setCellStyle(s.cyanDeepPercentCell);
-            BigDecimal pct = percentageAboveThreshold.getOrDefault(co, BigDecimal.ZERO);
-            valCell.setCellValue(pct.doubleValue());
+            BigDecimal pct = registry.lookupValue(percentageAboveThreshold, item);
+            valCell.setCellValue(pct != null ? pct.doubleValue() : 0.0);
         }
 
         // =========================================================================
@@ -330,11 +339,12 @@ public class ExaminationSheetBuilder {
         getOrCreateCell(r19, 0).setCellValue("Out of");
 
         for (int i = 0; i < numCO; i++) {
-            String co = coCodes.get(i);
+            CourseOutcomeOrderHelper.CourseOutcomeItem item = coItems.get(i);
             int col = 5 + i;
             Cell valCell = getOrCreateCell(r19, col);
             valCell.setCellStyle(s.outOfValueCell);
-            BigDecimal max = coMaxMarks.getOrDefault(co, new BigDecimal("15"));
+            BigDecimal max = registry.lookupValue(coMaxMarks, item);
+            if (max == null) max = new BigDecimal("15");
             valCell.setCellValue(max.stripTrailingZeros().toPlainString());
         }
 
@@ -371,11 +381,12 @@ public class ExaminationSheetBuilder {
         getOrCreateCell(r21, 0).setCellValue("Fraction of Out of marks with respect to Threshold ");
 
         for (int i = 0; i < numCO; i++) {
-            String co = coCodes.get(i);
+            CourseOutcomeOrderHelper.CourseOutcomeItem item = coItems.get(i);
             int col = 5 + i;
             Cell valCell = getOrCreateCell(r21, col);
             valCell.setCellStyle(s.boldCenterThin);
-            BigDecimal frac = coThresholdMarks.getOrDefault(co, BigDecimal.ZERO);
+            BigDecimal frac = registry.lookupValue(coThresholdMarks, item);
+            if (frac == null) frac = BigDecimal.ZERO;
             valCell.setCellValue(frac.stripTrailingZeros().toPlainString());
         }
 
@@ -386,11 +397,11 @@ public class ExaminationSheetBuilder {
         r22.setHeightInPoints(23.25f);
 
         for (int i = 0; i < numCO; i++) {
-            String co = coCodes.get(i);
+            CourseOutcomeOrderHelper.CourseOutcomeItem item = coItems.get(i);
             int col = 5 + i;
             Cell coCell = getOrCreateCell(r22, col);
             coCell.setCellStyle(s.coHeaderBrightBlue);
-            coCell.setCellValue(co);
+            coCell.setCellValue(item.getAcronym());
         }
 
         // =========================================================================
@@ -418,18 +429,14 @@ public class ExaminationSheetBuilder {
 
             // Cols 5..endCol: CO Marks
             for (int i = 0; i < numCO; i++) {
-                String co = coCodes.get(i);
+                CourseOutcomeOrderHelper.CourseOutcomeItem item = coItems.get(i);
                 int col = 5 + i;
                 Cell cMark = getOrCreateCell(rStudent, col);
                 cMark.setCellStyle(s.regularCenterThin);
 
-                if (st.getCoMarks() != null && st.getCoMarks().containsKey(co)) {
-                    BigDecimal mark = st.getCoMarks().get(co);
-                    if (mark != null) {
-                        cMark.setCellValue(mark.stripTrailingZeros().toPlainString());
-                    } else {
-                        cMark.setCellValue("");
-                    }
+                BigDecimal mark = registry.lookupValue(st.getCoMarks(), item);
+                if (mark != null) {
+                    cMark.setCellValue(mark.stripTrailingZeros().toPlainString());
                 } else {
                     cMark.setCellValue("");
                 }
@@ -441,27 +448,7 @@ public class ExaminationSheetBuilder {
     }
 
     private static List<String> resolveCoCodes(CourseAttainmentSnapshot snapshot) {
-        if (snapshot.getExaminationData() != null
-                && snapshot.getExaminationData().getCoCodes() != null
-                && !snapshot.getExaminationData().getCoCodes().isEmpty()) {
-            return snapshot.getExaminationData().getCoCodes();
-        }
-
-        if (snapshot.getTable3CoAttainments() != null && !snapshot.getTable3CoAttainments().isEmpty()) {
-            return snapshot.getTable3CoAttainments().stream()
-                    .map(CourseAttainmentSnapshot.CoAttainmentRow::getCoCode)
-                    .filter(Objects::nonNull)
-                    .toList();
-        }
-
-        if (snapshot.getTable1Mapping() != null && !snapshot.getTable1Mapping().isEmpty()) {
-            return snapshot.getTable1Mapping().stream()
-                    .map(CourseAttainmentSnapshot.CoMappingRow::getCoCode)
-                    .filter(Objects::nonNull)
-                    .toList();
-        }
-
-        return List.of("CO1", "CO2", "CO3", "CO4", "CO5", "CO6");
+        return CourseOutcomeOrderHelper.resolveRegistry(snapshot).getAcronyms();
     }
 
     private static void mergeAndStyle(Sheet sheet, int firstRow, int lastRow, int firstCol, int lastCol, CellStyle style) {

@@ -17,6 +17,9 @@ public interface StudentCoMarkRepository extends JpaRepository<StudentCoMark, St
     List<StudentCoMark> findByProgrammeBatchCourseIdIn(Collection<String> programmeBatchCourseIds);
     List<StudentCoMark> findByProgrammeBatchCourseIdAndStudentId(String programmeBatchCourseId, String studentId);
 
+    @Query("SELECT DISTINCT s.programmeBatchCourseId FROM StudentCoMark s WHERE s.programmeBatchCourseId IN :ids")
+    List<String> findDistinctProgrammeBatchCourseIdsByProgrammeBatchCourseIdIn(@Param("ids") Collection<String> ids);
+
     @Modifying
     @Query("DELETE FROM StudentCoMark s WHERE s.programmeBatchCourseId = :programmeBatchCourseId")
     void deleteByProgrammeBatchCourseId(@Param("programmeBatchCourseId") String programmeBatchCourseId);

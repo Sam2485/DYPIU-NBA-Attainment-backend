@@ -226,20 +226,29 @@ public class CourseExcelHeaderRendererTest {
         // Verify Programme Report header structure: Row 0 institution, Row 1 school, Row 2 report title, Row 3 metadata bar
         assertDoesNotThrow(() -> {
             Workbook wb = new XSSFWorkbook(new java.io.ByteArrayInputStream(progBytes));
-            Sheet sheet = wb.getSheet("Overall Attainment");
-            assertNotNull(sheet, "Overall Attainment sheet must exist in Programme Master report");
+            Sheet sheet = wb.getSheet("Overall Programme Attainment");
+            assertNotNull(sheet, "Overall Programme Attainment sheet must exist in Programme Master report");
 
-            // Row 0 has institution title
-            Row r0 = sheet.getRow(0);
-            assertNotNull(r0);
-            assertEquals("D. Y. PATIL INTERNATIONAL UNIVERSITY, PUNE", r0.getCell(0).getStringCellValue());
+            // Row 1 has institution title in center cell (col 1 for 16 columns)
+            Row r1 = sheet.getRow(1);
+            assertNotNull(r1);
+            assertEquals("D. Y. PATIL INTERNATIONAL UNIVERSITY, PUNE", r1.getCell(1).getStringCellValue());
 
-            // Row 3 has existing Programme metadata bar (Academic Year | Term | Report ID)
+            // Row 2 has school name
+            Row r2 = sheet.getRow(2);
+            assertNotNull(r2);
+            assertEquals("School of Engineering and Technology", r2.getCell(1).getStringCellValue());
+
+            // Row 3 has Academic Year (col 0) and Report Title (col 1)
             Row r3 = sheet.getRow(3);
             assertNotNull(r3);
-            String metaText = r3.getCell(0).getStringCellValue();
-            assertTrue(metaText.contains("Academic Year"), "Programme report must retain Row 3 metadata summary bar");
-            assertTrue(metaText.contains("Report ID"), "Programme report must retain Row 3 Report ID");
+            assertTrue(r3.getCell(0).getStringCellValue().contains("Academic Year: 2024-2028"));
+            assertEquals("Overall Attainment", r3.getCell(1).getStringCellValue());
+
+            // Row 5 has Term (col 0)
+            Row r5 = sheet.getRow(5);
+            assertNotNull(r5);
+            assertTrue(r5.getCell(0).getStringCellValue().contains("Term – I & II"));
 
             wb.close();
         });

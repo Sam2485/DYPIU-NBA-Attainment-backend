@@ -20,6 +20,7 @@ import java.util.stream.Collectors;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.dypiu.nba.reports.excel.CourseOutcomeOrderHelper;
 
 @Service
 @RequiredArgsConstructor
@@ -41,6 +42,7 @@ public class ReportSnapshotBuilder {
     private final CourseMappingKeywordRepository courseMappingKeywordRepository;
     private final ObjectMapper objectMapper;
     private final com.dypiu.nba.service.AttainmentCalculationService attainmentCalculationService;
+    private final ProgrammeBatchIndirectAssessmentRepository indirectAssessmentRepository;
 
     public ProgrammeAttainmentSnapshot buildProgrammeAttainmentSnapshot(
             String masterProgrammeId,
@@ -234,10 +236,45 @@ public class ReportSnapshotBuilder {
             }
         }
 
+        List<ProgrammeAttainmentSnapshot.IndirectAssessmentRow> otherAssessments = new ArrayList<>();
+        if (indirectAssessmentRepository != null && programmeBatchId != null) {
+            try {
+                List<ProgrammeBatchIndirectAssessment> dbAssessments = indirectAssessmentRepository.findByProgrammeBatchIdOrderByCreatedAtAsc(programmeBatchId);
+                if (dbAssessments != null) {
+                    for (ProgrammeBatchIndirectAssessment a : dbAssessments) {
+                        Map<String, BigDecimal> scores = a.getScores();
+                        Map<String, BigDecimal> poMap = new LinkedHashMap<>();
+                        Map<String, BigDecimal> psoMap = new LinkedHashMap<>();
+                        if (scores != null) {
+                            scores.forEach((code, val) -> {
+                                if (code != null && val != null) {
+                                    if (code.toUpperCase().startsWith("PSO")) {
+                                        psoMap.put(code.toUpperCase(), val);
+                                    } else {
+                                        poMap.put(code.toUpperCase(), val);
+                                    }
+                                }
+                            });
+                        }
+                        otherAssessments.add(ProgrammeAttainmentSnapshot.IndirectAssessmentRow.builder()
+                                .id(a.getId())
+                                .eventTitle(a.getName())
+                                .assessmentType(a.getType())
+                                .poValues(poMap)
+                                .psoValues(psoMap)
+                                .build());
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("Could not fetch indirect assessments for batch {}: {}", programmeBatchId, e.getMessage());
+            }
+        }
+
         ProgrammeAttainmentSnapshot.AverageIndirectSection section3 = ProgrammeAttainmentSnapshot.AverageIndirectSection.builder()
                 .surveyType("Graduate Exit Survey")
                 .totalStudents(studentResponses.size())
                 .studentResponses(studentResponses)
+                .otherAssessments(otherAssessments)
                 .averageIndirectAttainment(avgIndirectAttainment)
                 .overallIndirectAttainment(indirectCount > 0 ? indirectSum.divide(BigDecimal.valueOf(indirectCount), 2, RoundingMode.HALF_UP) : BigDecimal.ZERO)
                 .build();
@@ -273,11 +310,25 @@ public class ReportSnapshotBuilder {
                 ? (batch.getStartYear() + "-" + batch.getEndYear())
                 : batch.getName();
 
+        String deptName = null;
+        if (programme != null) {
+            deptName = (programme.getDepartmentName() != null && !programme.getDepartmentName().isBlank())
+                    ? programme.getDepartmentName()
+                    : null;
+            if (deptName == null && programme.getDepartmentId() != null) {
+                try {
+                    Department d = departmentRepository.findById(programme.getDepartmentId()).orElse(null);
+                    if (d != null) deptName = d.getName();
+                } catch (Exception ignored) {}
+            }
+        }
+
         return ProgrammeAttainmentSnapshot.builder()
                 .reportType(ReportType.PROGRAMME_ATTAINMENT)
                 .institutionId(institutionId != null ? institutionId : "DYPIU")
                 .institutionName("D. Y. PATIL INTERNATIONAL UNIVERSITY, PUNE")
                 .schoolName(schoolName)
+                .departmentName(deptName)
                 .academicYear(batchYears)
                 .generatedBy(generatedBy != null ? generatedBy : "System")
                 .generatedAt(ZonedDateTime.now())
@@ -360,6 +411,9 @@ public class ReportSnapshotBuilder {
                         .build());
             }
         }
+
+        t1.sort(Comparator.comparing(CourseAttainmentSnapshot.CoMappingRow::getCoCode, CourseOutcomeOrderHelper.NATURAL_ORDER));
+        t3.sort(Comparator.comparing(CourseAttainmentSnapshot.CoAttainmentRow::getCoCode, CourseOutcomeOrderHelper.NATURAL_ORDER));
 
         Set<String> poSet = new LinkedHashSet<>();
         Set<String> psoSet = new LinkedHashSet<>();
@@ -564,10 +618,19 @@ public class ReportSnapshotBuilder {
                         for (SurveyResponseRowDto sr : surveyDto.getSurveyResponses()) {
                             Map<String, String> feedbacks = new LinkedHashMap<>();
                             if (sr.getCoFeedbacks() != null) {
-                                feedbacks.putAll(sr.getCoFeedbacks());
-                            } else if (sr.getCoRatings() != null) {
+                                for (Map.Entry<String, String> e : sr.getCoFeedbacks().entrySet()) {
+                                    if (e.getValue() != null && !e.getValue().isBlank()) {
+                                        String val = e.getValue().trim();
+                                        if ("1".equals(val) || "1.0".equals(val)) val = "Slight";
+                                        else if ("2".equals(val) || "2.0".equals(val)) val = "Moderate";
+                                        else if ("3".equals(val) || "3.0".equals(val)) val = "Substantial";
+                                        feedbacks.put(e.getKey(), val);
+                                    }
+                                }
+                            }
+                            if (sr.getCoRatings() != null) {
                                 sr.getCoRatings().forEach((k, v) -> {
-                                    if (v != null) {
+                                    if (v != null && (!feedbacks.containsKey(k) || feedbacks.get(k).isBlank())) {
                                         int r = (int) Math.round(v.doubleValue());
                                         feedbacks.put(k, r == 3 ? "Substantial" : (r == 2 ? "Moderate" : "Slight"));
                                     }

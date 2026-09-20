@@ -17,6 +17,7 @@ public class CacheConfig {
     public static final String CACHE_MASTER_PROGRAMMES = "masterProgrammes";
     public static final String CACHE_PROGRAMME_BATCHES = "programmeBatches";
     public static final String CACHE_COURSES = "courses";
+    public static final String CACHE_PROGRAMME_ATTAINMENT = "programmeAttainment";
 
     @Bean
     public CacheManager cacheManager() {
@@ -24,7 +25,8 @@ public class CacheConfig {
                 CACHE_DEPARTMENTS,
                 CACHE_MASTER_PROGRAMMES,
                 CACHE_PROGRAMME_BATCHES,
-                CACHE_COURSES
+                CACHE_COURSES,
+                CACHE_PROGRAMME_ATTAINMENT
         );
         cacheManager.setCaffeine(Caffeine.newBuilder()
                 .expireAfterWrite(15, TimeUnit.MINUTES)

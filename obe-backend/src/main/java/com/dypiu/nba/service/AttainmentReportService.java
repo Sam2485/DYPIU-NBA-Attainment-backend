@@ -18,6 +18,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.cache.annotation.CacheEvict;
+import com.dypiu.nba.config.CacheConfig;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
@@ -72,6 +74,7 @@ public class AttainmentReportService {
     }
 
     @Transactional
+    @CacheEvict(value = CacheConfig.CACHE_PROGRAMME_ATTAINMENT, allEntries = true)
     public CourseAttainmentReportDto finalizeCourseReport(String programmeBatchCourseId, String actorName) {
         log.debug("[AttainmentReportService] finalizeCourseReport called | programmeBatchCourseId: " + programmeBatchCourseId);
         ProgrammeBatchCourse offering = programmeBatchCourseRepository.findById(programmeBatchCourseId)
@@ -105,6 +108,7 @@ public class AttainmentReportService {
     }
 
     @Transactional
+    @CacheEvict(value = CacheConfig.CACHE_PROGRAMME_ATTAINMENT, allEntries = true)
     public CourseAttainmentReportDto generateAndSaveCourseReport(ProgrammeBatchCourse offering, ReportStatus status) {
         ProgrammeBatch batch = programmeBatchRepository.findById(offering.getProgrammeBatchId()).orElse(null);
 
@@ -334,6 +338,7 @@ public class AttainmentReportService {
     }
 
     @Transactional
+    @CacheEvict(value = CacheConfig.CACHE_PROGRAMME_ATTAINMENT, allEntries = true)
     public ProgrammeBatchAttainmentReportDto finalizeProgrammeReport(String masterProgrammeId, String programmeBatchId, String actorName) {
         log.debug("[AttainmentReportService] finalizeProgrammeReport called | masterProgrammeId: " + masterProgrammeId + " | programmeBatchId: " + programmeBatchId);
         ProgrammeBatch batch = programmeBatchRepository.findById(programmeBatchId)
@@ -369,6 +374,7 @@ public class AttainmentReportService {
     }
 
     @Transactional
+    @CacheEvict(value = CacheConfig.CACHE_PROGRAMME_ATTAINMENT, allEntries = true)
     public ProgrammeBatchAttainmentReportDto generateAndSaveProgrammeReport(MasterProgramme prog, ProgrammeBatch batch, ReportStatus status) {
         ProgrammeAttainmentResultDto calcResult = calculationService.calculateProgrammeAttainment(prog.getId(), batch.getId());
 

@@ -19,12 +19,16 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class ReportOrchestrationService {
+
+    private final Map<String, byte[]> logoBytesCache = new ConcurrentHashMap<>();
 
     private final ReportSnapshotBuilder snapshotBuilder;
     private final ReportTemplateService templateService;
@@ -44,6 +48,17 @@ public class ReportOrchestrationService {
             ReportSection section,
             String generatedBy,
             String institutionId) {
+        return generateProgrammeAttainmentReport(masterProgrammeId, programmeBatchId, section, generatedBy, institutionId, null);
+    }
+
+    @Transactional
+    public GeneratedReportDto generateProgrammeAttainmentReport(
+            String masterProgrammeId,
+            String programmeBatchId,
+            ReportSection section,
+            String generatedBy,
+            String institutionId,
+            ArtifactType targetArtifactType) {
 
         ReportSection targetSection = (section != null) ? section : ReportSection.ALL;
         ReportType reportType = resolveProgrammeReportType(targetSection);
@@ -57,11 +72,14 @@ public class ReportOrchestrationService {
 
         ReportTemplateDto template = templateService.resolveTemplate(reportType, institutionId);
 
-        byte[] leftLogo = loadLogoBytes(template.getHeaderConfig() != null ? template.getHeaderConfig().getEffectiveLeftLogoAssetId() : null);
-        byte[] rightLogo = loadLogoBytes(template.getHeaderConfig() != null ? template.getHeaderConfig().getEffectiveRightLogoAssetId() : null);
+        boolean needExcel = targetArtifactType == null || targetArtifactType == ArtifactType.EXCEL;
+        boolean needPdf = targetArtifactType == null || targetArtifactType == ArtifactType.PDF;
 
-        byte[] excelBytes;
-        byte[] pdfBytes;
+        byte[] leftLogo = needExcel || needPdf ? loadLogoBytes(template.getHeaderConfig() != null ? template.getHeaderConfig().getEffectiveLeftLogoAssetId() : null) : null;
+        byte[] rightLogo = needPdf ? loadLogoBytes(template.getHeaderConfig() != null ? template.getHeaderConfig().getEffectiveRightLogoAssetId() : null) : null;
+
+        byte[] excelBytes = null;
+        byte[] pdfBytes = null;
         String baseFilename;
 
         String progCode = snapshot.getMasterProgrammeCode() != null && !snapshot.getMasterProgrammeCode().isBlank()
@@ -70,12 +88,12 @@ public class ReportOrchestrationService {
                 ? snapshot.getAcademicBatchYears().replace("–", "-") : "BATCH";
 
         if (targetSection == ReportSection.ALL) {
-            excelBytes = excelRenderer.renderProgrammeAttainmentMaster(snapshot);
-            pdfBytes = pdfRenderer.renderProgrammeAttainmentMaster(snapshot, template, leftLogo, rightLogo);
+            if (needExcel) excelBytes = excelRenderer.renderProgrammeAttainmentMaster(snapshot, leftLogo, template);
+            if (needPdf) pdfBytes = pdfRenderer.renderProgrammeAttainmentMaster(snapshot, template, leftLogo, rightLogo);
             baseFilename = "PROGRAMME_ATTAINMENT_MASTER_" + progCode + "_" + batchYears;
         } else {
-            excelBytes = excelRenderer.renderProgrammeAttainmentSection(snapshot, targetSection);
-            pdfBytes = pdfRenderer.renderProgrammeAttainmentSection(snapshot, targetSection, template, leftLogo, rightLogo);
+            if (needExcel) excelBytes = excelRenderer.renderProgrammeAttainmentSection(snapshot, targetSection, leftLogo, template);
+            if (needPdf) pdfBytes = pdfRenderer.renderProgrammeAttainmentSection(snapshot, targetSection, template, leftLogo, rightLogo);
             baseFilename = "PROGRAMME_ATTAINMENT_" + targetSection.name() + "_" + progCode + "_" + batchYears;
         }
 
@@ -102,6 +120,15 @@ public class ReportOrchestrationService {
             String programmeBatchCourseId,
             String generatedBy,
             String institutionId) {
+        return generateCourseAttainmentReport(programmeBatchCourseId, generatedBy, institutionId, null);
+    }
+
+    @Transactional
+    public GeneratedReportDto generateCourseAttainmentReport(
+            String programmeBatchCourseId,
+            String generatedBy,
+            String institutionId,
+            ArtifactType targetArtifactType) {
 
         CourseAttainmentSnapshot snapshot = snapshotBuilder.buildCourseAttainmentSnapshot(
                 programmeBatchCourseId, generatedBy, institutionId);
@@ -112,11 +139,14 @@ public class ReportOrchestrationService {
 
         ReportTemplateDto template = templateService.resolveTemplate(ReportType.COURSE_ATTAINMENT, institutionId);
 
-        byte[] leftLogo = loadLogoBytes(template.getHeaderConfig() != null ? template.getHeaderConfig().getEffectiveLeftLogoAssetId() : null);
-        byte[] rightLogo = loadLogoBytes(template.getHeaderConfig() != null ? template.getHeaderConfig().getEffectiveRightLogoAssetId() : null);
+        boolean needExcel = targetArtifactType == null || targetArtifactType == ArtifactType.EXCEL;
+        boolean needPdf = targetArtifactType == null || targetArtifactType == ArtifactType.PDF;
 
-        byte[] excelBytes = excelRenderer.renderCourseAttainment(snapshot, leftLogo, rightLogo);
-        byte[] pdfBytes = pdfRenderer.renderCourseAttainment(snapshot, template, leftLogo, rightLogo);
+        byte[] leftLogo = needExcel || needPdf ? loadLogoBytes(template.getHeaderConfig() != null ? template.getHeaderConfig().getEffectiveLeftLogoAssetId() : null) : null;
+        byte[] rightLogo = needExcel || needPdf ? loadLogoBytes(template.getHeaderConfig() != null ? template.getHeaderConfig().getEffectiveRightLogoAssetId() : null) : null;
+
+        byte[] excelBytes = needExcel ? excelRenderer.renderCourseAttainment(snapshot, leftLogo, rightLogo) : null;
+        byte[] pdfBytes = needPdf ? pdfRenderer.renderCourseAttainment(snapshot, template, leftLogo, rightLogo) : null;
 
         String courseCode = snapshot.getCourseCode() != null ? snapshot.getCourseCode() : "COURSE";
         String baseFilename = "COURSE_ATTAINMENT_" + courseCode + "_SEM" + (snapshot.getSemester() != null ? snapshot.getSemester() : "X");
@@ -144,6 +174,15 @@ public class ReportOrchestrationService {
             String programmeBatchId,
             String generatedBy,
             String institutionId) {
+        return generateProgrammeAtrReport(programmeBatchId, generatedBy, institutionId, null);
+    }
+
+    @Transactional
+    public GeneratedReportDto generateProgrammeAtrReport(
+            String programmeBatchId,
+            String generatedBy,
+            String institutionId,
+            ArtifactType targetArtifactType) {
 
         ProgrammeAtrSnapshot snapshot = snapshotBuilder.buildProgrammeAtrSnapshot(
                 null, programmeBatchId, generatedBy, institutionId);
@@ -154,11 +193,14 @@ public class ReportOrchestrationService {
 
         ReportTemplateDto template = templateService.resolveTemplate(ReportType.PROGRAMME_ATR, institutionId);
 
-        byte[] leftLogo = loadLogoBytes(template.getHeaderConfig() != null ? template.getHeaderConfig().getEffectiveLeftLogoAssetId() : null);
-        byte[] rightLogo = loadLogoBytes(template.getHeaderConfig() != null ? template.getHeaderConfig().getEffectiveRightLogoAssetId() : null);
+        boolean needExcel = targetArtifactType == null || targetArtifactType == ArtifactType.EXCEL;
+        boolean needPdf = targetArtifactType == null || targetArtifactType == ArtifactType.PDF;
 
-        byte[] excelBytes = excelRenderer.renderProgrammeAtr(snapshot);
-        byte[] pdfBytes = pdfRenderer.renderProgrammeAtr(snapshot, template, leftLogo, rightLogo);
+        byte[] leftLogo = needExcel || needPdf ? loadLogoBytes(template.getHeaderConfig() != null ? template.getHeaderConfig().getEffectiveLeftLogoAssetId() : null) : null;
+        byte[] rightLogo = needPdf ? loadLogoBytes(template.getHeaderConfig() != null ? template.getHeaderConfig().getEffectiveRightLogoAssetId() : null) : null;
+
+        byte[] excelBytes = needExcel ? excelRenderer.renderProgrammeAtr(snapshot) : null;
+        byte[] pdfBytes = needPdf ? pdfRenderer.renderProgrammeAtr(snapshot, template, leftLogo, rightLogo) : null;
 
         String progCode = snapshot.getMasterProgrammeCode() != null ? snapshot.getMasterProgrammeCode() : "PROG";
         String baseFilename = "PROGRAMME_ATR_" + progCode + "_" + (snapshot.getBatchName() != null ? snapshot.getBatchName().replace(" ", "_") : "BATCH");
@@ -186,6 +228,15 @@ public class ReportOrchestrationService {
             String programmeBatchCourseId,
             String generatedBy,
             String institutionId) {
+        return generateCourseAtrReport(programmeBatchCourseId, generatedBy, institutionId, null);
+    }
+
+    @Transactional
+    public GeneratedReportDto generateCourseAtrReport(
+            String programmeBatchCourseId,
+            String generatedBy,
+            String institutionId,
+            ArtifactType targetArtifactType) {
 
         CourseAtrSnapshot snapshot = snapshotBuilder.buildCourseAtrSnapshot(
                 programmeBatchCourseId, generatedBy, institutionId);
@@ -196,11 +247,14 @@ public class ReportOrchestrationService {
 
         ReportTemplateDto template = templateService.resolveTemplate(ReportType.COURSE_ATR, institutionId);
 
-        byte[] leftLogo = loadLogoBytes(template.getHeaderConfig() != null ? template.getHeaderConfig().getEffectiveLeftLogoAssetId() : null);
-        byte[] rightLogo = loadLogoBytes(template.getHeaderConfig() != null ? template.getHeaderConfig().getEffectiveRightLogoAssetId() : null);
+        boolean needExcel = targetArtifactType == null || targetArtifactType == ArtifactType.EXCEL;
+        boolean needPdf = targetArtifactType == null || targetArtifactType == ArtifactType.PDF;
 
-        byte[] excelBytes = excelRenderer.renderCourseAtr(snapshot, leftLogo, rightLogo);
-        byte[] pdfBytes = pdfRenderer.renderCourseAtr(snapshot, template, leftLogo, rightLogo);
+        byte[] leftLogo = needExcel || needPdf ? loadLogoBytes(template.getHeaderConfig() != null ? template.getHeaderConfig().getEffectiveLeftLogoAssetId() : null) : null;
+        byte[] rightLogo = needPdf ? loadLogoBytes(template.getHeaderConfig() != null ? template.getHeaderConfig().getEffectiveRightLogoAssetId() : null) : null;
+
+        byte[] excelBytes = needExcel ? excelRenderer.renderCourseAtr(snapshot, leftLogo, rightLogo) : null;
+        byte[] pdfBytes = needPdf ? pdfRenderer.renderCourseAtr(snapshot, template, leftLogo, rightLogo) : null;
 
         String courseCode = snapshot.getCourseCode() != null ? snapshot.getCourseCode() : "COURSE";
         String baseFilename = "COURSE_ATR_" + courseCode + "_SEM" + (snapshot.getSemester() != null ? snapshot.getSemester() : "X");
@@ -283,15 +337,17 @@ public class ReportOrchestrationService {
 
     private byte[] loadLogoBytes(String assetId) {
         if (assetId == null || assetId.isBlank()) return null;
-        try {
-            ReportAssetEntity asset = assetRepository.findById(assetId).orElse(null);
-            if (asset != null && asset.getStoragePath() != null) {
-                return storageService.loadReportArtifact(asset.getStoragePath());
+        return logoBytesCache.computeIfAbsent(assetId, id -> {
+            try {
+                ReportAssetEntity asset = assetRepository.findById(id).orElse(null);
+                if (asset != null && asset.getStoragePath() != null) {
+                    return storageService.loadReportArtifact(asset.getStoragePath());
+                }
+            } catch (Exception e) {
+                log.warn("Failed to load logo asset {}: {}", id, e.getMessage());
             }
-        } catch (Exception e) {
-            log.warn("Failed to load logo asset {}: {}", assetId, e.getMessage());
-        }
-        return null;
+            return null;
+        });
     }
 
     private GeneratedReportDto persistAndBuildReport(
@@ -336,53 +392,55 @@ public class ReportOrchestrationService {
                 .artifacts(new ArrayList<>())
                 .build();
 
-        // 1. PDF Artifact
-        String pdfFilename = baseFilename + ".pdf";
-        String pdfSha = integrityService.calculateSha256(pdfBytes);
-        String pdfHmac = integrityService.calculateHmac(pdfBytes);
-        String pdfRef = storageService.storeReportArtifact(reportId, pdfFilename, pdfBytes, "application/pdf");
+        List<GeneratedReportDto.ArtifactSummaryDto> artifactSummaries = new ArrayList<>();
 
-        ReportArtifactEntity pdfArtifact = ReportArtifactEntity.builder()
-                .id("art-pdf-" + UUID.randomUUID().toString().substring(0, 8))
-                .report(reportEntity)
-                .artifactType(ArtifactType.PDF)
-                .fileReference(pdfRef)
-                .originalFilename(pdfFilename)
-                .mimeType("application/pdf")
-                .fileSize((long) pdfBytes.length)
-                .sha256Checksum(pdfSha)
-                .hmacSignature(pdfHmac)
-                .generatedAt(now)
-                .build();
+        // 1. PDF Artifact
+        if (pdfBytes != null) {
+            String pdfFilename = baseFilename + ".pdf";
+            String pdfSha = integrityService.calculateSha256(pdfBytes);
+            String pdfHmac = integrityService.calculateHmac(pdfBytes);
+            String pdfRef = storageService.storeReportArtifact(reportId, pdfFilename, pdfBytes, "application/pdf");
+
+            ReportArtifactEntity pdfArtifact = ReportArtifactEntity.builder()
+                    .id("art-pdf-" + UUID.randomUUID().toString().substring(0, 8))
+                    .report(reportEntity)
+                    .artifactType(ArtifactType.PDF)
+                    .fileReference(pdfRef)
+                    .originalFilename(pdfFilename)
+                    .mimeType("application/pdf")
+                    .fileSize((long) pdfBytes.length)
+                    .sha256Checksum(pdfSha)
+                    .hmacSignature(pdfHmac)
+                    .generatedAt(now)
+                    .build();
+            reportEntity.getArtifacts().add(pdfArtifact);
+            artifactSummaries.add(toArtifactSummary(pdfArtifact));
+        }
 
         // 2. Excel Artifact
-        String xlsxFilename = baseFilename + ".xlsx";
-        String xlsxSha = integrityService.calculateSha256(excelBytes);
-        String xlsxHmac = integrityService.calculateHmac(excelBytes);
-        String xlsxRef = storageService.storeReportArtifact(reportId, xlsxFilename, excelBytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        if (excelBytes != null) {
+            String xlsxFilename = baseFilename + ".xlsx";
+            String xlsxSha = integrityService.calculateSha256(excelBytes);
+            String xlsxHmac = integrityService.calculateHmac(excelBytes);
+            String xlsxRef = storageService.storeReportArtifact(reportId, xlsxFilename, excelBytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
 
-        ReportArtifactEntity xlsxArtifact = ReportArtifactEntity.builder()
-                .id("art-xls-" + UUID.randomUUID().toString().substring(0, 8))
-                .report(reportEntity)
-                .artifactType(ArtifactType.EXCEL)
-                .fileReference(xlsxRef)
-                .originalFilename(xlsxFilename)
-                .mimeType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-                .fileSize((long) excelBytes.length)
-                .sha256Checksum(xlsxSha)
-                .hmacSignature(xlsxHmac)
-                .generatedAt(now)
-                .build();
-
-        reportEntity.getArtifacts().add(pdfArtifact);
-        reportEntity.getArtifacts().add(xlsxArtifact);
+            ReportArtifactEntity xlsxArtifact = ReportArtifactEntity.builder()
+                    .id("art-xls-" + UUID.randomUUID().toString().substring(0, 8))
+                    .report(reportEntity)
+                    .artifactType(ArtifactType.EXCEL)
+                    .fileReference(xlsxRef)
+                    .originalFilename(xlsxFilename)
+                    .mimeType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+                    .fileSize((long) excelBytes.length)
+                    .sha256Checksum(xlsxSha)
+                    .hmacSignature(xlsxHmac)
+                    .generatedAt(now)
+                    .build();
+            reportEntity.getArtifacts().add(xlsxArtifact);
+            artifactSummaries.add(toArtifactSummary(xlsxArtifact));
+        }
 
         reportRepository.save(reportEntity);
-
-        List<GeneratedReportDto.ArtifactSummaryDto> artifactSummaries = List.of(
-                toArtifactSummary(pdfArtifact),
-                toArtifactSummary(xlsxArtifact)
-        );
 
         return GeneratedReportDto.builder()
                 .reportId(reportId)

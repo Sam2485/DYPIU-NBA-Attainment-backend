@@ -43,7 +43,7 @@ public interface ProgrammeBatchRepository extends JpaRepository<ProgrammeBatch, 
           AND (
                (cast(:status as String) IS NULL AND (b.status IS NULL OR UPPER(b.status) <> 'INACTIVE'))
                OR (cast(:status as String) = 'ALL')
-               OR (b.status = cast(:status as String))
+               OR (b.status IS NOT NULL AND UPPER(b.status) = UPPER(cast(:status as String)))
               )
           AND (cast(:masterProgrammeId as String) IS NULL OR b.masterProgrammeId = cast(:masterProgrammeId as String))
           AND (cast(:departmentId as String) IS NULL OR mp.departmentId = cast(:departmentId as String))
@@ -68,7 +68,7 @@ public interface ProgrammeBatchRepository extends JpaRepository<ProgrammeBatch, 
           AND (
                (cast(:status as String) IS NULL AND (b.status IS NULL OR UPPER(b.status) <> 'INACTIVE'))
                OR (cast(:status as String) = 'ALL')
-               OR (b.status = cast(:status as String))
+               OR (b.status IS NOT NULL AND UPPER(b.status) = UPPER(cast(:status as String)))
               )
           AND (mp.departmentId IN :departmentIds)
           AND (cast(:coordinatorEmail as String) IS NULL 

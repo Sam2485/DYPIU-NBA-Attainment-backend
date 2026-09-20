@@ -732,8 +732,30 @@ public class AnalyticsService {
             Department dept = prog != null && prog.getDepartmentId() != null ? deptMap.get(prog.getDepartmentId()) : null;
             ProgrammeAtr atr = atrMap.get(batch.getId());
 
-            // Process PO deficits
-            if (outcomeType == null || outcomeType.equalsIgnoreCase("ALL") || outcomeType.equalsIgnoreCase("PO")) {
+            extractBatchDeficits(batch, bData, prog, dept, atr, outcomeType, allDeficits);
+        }
+
+        // Rank by gap ascending (most negative first)
+        allDeficits.sort(Comparator.comparing(AttentionAreaItemDto::getGap));
+
+        int safeLimit = Math.max(1, Math.min(50, limit));
+        List<AttentionAreaItemDto> topDeficits = allDeficits.stream().limit(safeLimit).collect(Collectors.toList());
+
+        // Attach contributing course evidence for the top deficits
+        for (AttentionAreaItemDto item : topDeficits) {
+            List<CourseAssessmentEvidenceDto> evidenceList = findContributingCourseEvidence(item.getProgrammeBatchId(), item.getOutcomeCode(), item.getOutcomeType());
+            item.setContributingCourseEvidence(evidenceList);
+        }
+
+        return topDeficits;
+    }
+
+    private void extractBatchDeficits(ProgrammeBatch batch, ResolvedBatchAnalyticsData bData,
+                                     MasterProgramme prog, Department dept, ProgrammeAtr atr,
+                                     String outcomeType, List<AttentionAreaItemDto> allDeficits) {
+        // Process PO deficits
+        if (outcomeType == null || outcomeType.equalsIgnoreCase("ALL") || outcomeType.equalsIgnoreCase("PO")) {
+            if (bData.pos != null) {
                 for (ProgrammeBatchAttainmentReportDto.Report4PoRow po : bData.pos) {
                     if (po.getFinalAttainment() != null && po.getTargetLevel() != null) {
                         BigDecimal gap = po.getFinalAttainment().subtract(po.getTargetLevel()).setScale(2, RoundingMode.HALF_UP);
@@ -760,15 +782,17 @@ public class AnalyticsService {
                                     .hasRecordedAtr(atr != null)
                                     .atrStatus(atr != null && atr.getStatus() != null ? atr.getStatus().name() : null)
                                     .recordedAtrObservations(atr != null ? (atr.getObservationsJson() != null ? atr.getObservationsJson() : atr.getVerificationComments()) : null)
-                                    .contributingCourseEvidence(Collections.emptyList()) // populated for top items below
+                                    .contributingCourseEvidence(Collections.emptyList())
                                     .build());
                         }
                     }
                 }
             }
+        }
 
-            // Process PSO deficits
-            if (outcomeType == null || outcomeType.equalsIgnoreCase("ALL") || outcomeType.equalsIgnoreCase("PSO")) {
+        // Process PSO deficits
+        if (outcomeType == null || outcomeType.equalsIgnoreCase("ALL") || outcomeType.equalsIgnoreCase("PSO")) {
+            if (bData.psos != null) {
                 for (ProgrammeBatchAttainmentReportDto.Report4PsoRow pso : bData.psos) {
                     if (pso.getFinalAttainment() != null && pso.getTargetLevel() != null) {
                         BigDecimal gap = pso.getFinalAttainment().subtract(pso.getTargetLevel()).setScale(2, RoundingMode.HALF_UP);
@@ -802,20 +826,6 @@ public class AnalyticsService {
                 }
             }
         }
-
-        // Rank by gap ascending (most negative first)
-        allDeficits.sort(Comparator.comparing(AttentionAreaItemDto::getGap));
-
-        int safeLimit = Math.max(1, Math.min(50, limit));
-        List<AttentionAreaItemDto> topDeficits = allDeficits.stream().limit(safeLimit).collect(Collectors.toList());
-
-        // Attach contributing course evidence for the top deficits
-        for (AttentionAreaItemDto item : topDeficits) {
-            List<CourseAssessmentEvidenceDto> evidenceList = findContributingCourseEvidence(item.getProgrammeBatchId(), item.getOutcomeCode(), item.getOutcomeType());
-            item.setContributingCourseEvidence(evidenceList);
-        }
-
-        return topDeficits;
     }
 
     private List<CourseAssessmentEvidenceDto> findContributingCourseEvidence(String programmeBatchId, String outcomeCode, String outcomeType) {
@@ -3350,7 +3360,17 @@ public class AnalyticsService {
                 .build();
 
         // 4. Attention Areas (limit 5, negative gap ordered, with contributing course evidence)
-        List<AttentionAreaItemDto> attentionAreas = getAttentionAreas(null, null, null, batch.getId(), 5, "ALL");
+        ProgrammeAtr batchAtr = programmeAtrRepository.findByProgrammeBatchId(batch.getId()).orElse(null);
+        List<AttentionAreaItemDto> allBatchDeficits = new ArrayList<>();
+        if (bData.hasActiveData) {
+            extractBatchDeficits(batch, bData, prog, dept, batchAtr, "ALL", allBatchDeficits);
+        }
+        allBatchDeficits.sort(Comparator.comparing(AttentionAreaItemDto::getGap));
+        List<AttentionAreaItemDto> attentionAreas = allBatchDeficits.stream().limit(5).collect(Collectors.toList());
+        for (AttentionAreaItemDto item : attentionAreas) {
+            List<CourseAssessmentEvidenceDto> evidenceList = findContributingCourseEvidence(item.getProgrammeBatchId(), item.getOutcomeCode(), item.getOutcomeType());
+            item.setContributingCourseEvidence(evidenceList);
+        }
 
         // 5. Direct vs Indirect picture
         BigDecimal directSum = BigDecimal.ZERO;
@@ -3431,7 +3451,8 @@ public class AnalyticsService {
             }
         } else if (!courses.isEmpty() && bData.totalEvaluatedCourses > 0) {
             try {
-                ProgrammeAttainmentResultDto calcResult = attainmentCalculationService.calculateProgrammeAttainment(batch.getMasterProgrammeId(), batch.getId());
+                ProgrammeAttainmentResultDto calcResult = bData.calcResult() != null ? bData.calcResult() :
+                        attainmentCalculationService.calculateProgrammeAttainment(batch.getMasterProgrammeId(), batch.getId());
                 if (calcResult != null) {
                     if (calcResult.getCourseMappingRows() != null) {
                         for (ProgrammeAttainmentResultDto.CourseContributionRow row : calcResult.getCourseMappingRows()) {
@@ -3539,18 +3560,16 @@ public class AnalyticsService {
                 .build();
 
         // 8. Programme ATR Indication
-        Optional<ProgrammeAtr> optAtr = programmeAtrRepository.findByProgrammeBatchId(batch.getId());
         BatchOverviewResponseDto.ProgrammeAtrSummaryDto programmeAtrSummary;
-        if (optAtr.isPresent()) {
-            ProgrammeAtr atr = optAtr.get();
-            ProgrammeAtrStatus status = atr.getStatus();
+        if (batchAtr != null) {
+            ProgrammeAtrStatus status = batchAtr.getStatus();
             boolean revisionRequired = status == ProgrammeAtrStatus.NEEDS_REVISION || status == ProgrammeAtrStatus.REVISION_REQUESTED;
             programmeAtrSummary = BatchOverviewResponseDto.ProgrammeAtrSummaryDto.builder()
                     .exists(true)
                     .status(status != null ? status.name() : null)
                     .revisionRequired(revisionRequired)
-                    .verificationComments(atr.getVerificationComments())
-                    .observations(atr.getObservationsJson())
+                    .verificationComments(batchAtr.getVerificationComments())
+                    .observations(batchAtr.getObservationsJson())
                     .build();
         } else {
             programmeAtrSummary = BatchOverviewResponseDto.ProgrammeAtrSummaryDto.builder()
@@ -3779,10 +3798,8 @@ public class AnalyticsService {
             int evaluatedCourses = 0;
             if (!offeringIds.isEmpty()) {
                 Set<String> evaluatedSet = new HashSet<>();
-                courseAttainmentReportRepository.findByProgrammeBatchCourseIdIn(offeringIds)
-                        .forEach(r -> evaluatedSet.add(r.getProgrammeBatchCourseId()));
-                studentCoMarkRepository.findByProgrammeBatchCourseIdIn(offeringIds)
-                        .forEach(m -> evaluatedSet.add(m.getProgrammeBatchCourseId()));
+                evaluatedSet.addAll(courseAttainmentReportRepository.findDistinctProgrammeBatchCourseIdsByProgrammeBatchCourseIdIn(offeringIds));
+                evaluatedSet.addAll(studentCoMarkRepository.findDistinctProgrammeBatchCourseIdsByProgrammeBatchCourseIdIn(offeringIds));
                 evaluatedCourses = evaluatedSet.size();
                 if (evaluatedCourses == 0 && hasData) {
                     evaluatedCourses = totalCourses;
@@ -3824,10 +3841,8 @@ public class AnalyticsService {
 
         List<String> offeringIds = courses.stream().map(ProgrammeBatchCourse::getId).toList();
         Set<String> evaluatedOfferingIds = new HashSet<>();
-        courseAttainmentReportRepository.findByProgrammeBatchCourseIdIn(offeringIds)
-                .forEach(r -> evaluatedOfferingIds.add(r.getProgrammeBatchCourseId()));
-        studentCoMarkRepository.findByProgrammeBatchCourseIdIn(offeringIds)
-                .forEach(m -> evaluatedOfferingIds.add(m.getProgrammeBatchCourseId()));
+        evaluatedOfferingIds.addAll(courseAttainmentReportRepository.findDistinctProgrammeBatchCourseIdsByProgrammeBatchCourseIdIn(offeringIds));
+        evaluatedOfferingIds.addAll(studentCoMarkRepository.findDistinctProgrammeBatchCourseIdsByProgrammeBatchCourseIdIn(offeringIds));
 
         int totalEvaluatedCourses = evaluatedOfferingIds.size();
 
@@ -3903,7 +3918,8 @@ public class AnalyticsService {
                     psoRows,
                     totalEvaluatedCourses,
                     totalCourses,
-                    hasData
+                    hasData,
+                    calcResult
             );
         } catch (Exception e) {
             log.warn("[AnalyticsService] Error calculating live continuous attainment for batch {}: {}", batch.getId(), e.getMessage());
@@ -3979,8 +3995,26 @@ public class AnalyticsService {
             List<ProgrammeBatchAttainmentReportDto.Report4PsoRow> psos,
             int totalEvaluatedCourses,
             int totalCoursesInBatch,
-            boolean hasActiveData
-    ) {}
+            boolean hasActiveData,
+            ProgrammeAttainmentResultDto calcResult
+    ) {
+        public ResolvedBatchAnalyticsData(
+                String batchId,
+                String masterProgrammeId,
+                String batchName,
+                Integer startYear,
+                Integer endYear,
+                boolean isFinalized,
+                ReportStatus reportStatus,
+                List<ProgrammeBatchAttainmentReportDto.Report4PoRow> pos,
+                List<ProgrammeBatchAttainmentReportDto.Report4PsoRow> psos,
+                int totalEvaluatedCourses,
+                int totalCoursesInBatch,
+                boolean hasActiveData
+        ) {
+            this(batchId, masterProgrammeId, batchName, startYear, endYear, isFinalized, reportStatus, pos, psos, totalEvaluatedCourses, totalCoursesInBatch, hasActiveData, null);
+        }
+    }
 
     private Map<String, OutcomeItemMetrics> resolveBatchOutcomeMetrics(
             ProgrammeBatch batch,
