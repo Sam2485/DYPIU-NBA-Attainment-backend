@@ -115,7 +115,7 @@ public class ReportOrchestrationService {
         byte[] leftLogo = loadLogoBytes(template.getHeaderConfig() != null ? template.getHeaderConfig().getEffectiveLeftLogoAssetId() : null);
         byte[] rightLogo = loadLogoBytes(template.getHeaderConfig() != null ? template.getHeaderConfig().getEffectiveRightLogoAssetId() : null);
 
-        byte[] excelBytes = excelRenderer.renderCourseAttainment(snapshot);
+        byte[] excelBytes = excelRenderer.renderCourseAttainment(snapshot, leftLogo, rightLogo);
         byte[] pdfBytes = pdfRenderer.renderCourseAttainment(snapshot, template, leftLogo, rightLogo);
 
         String courseCode = snapshot.getCourseCode() != null ? snapshot.getCourseCode() : "COURSE";
@@ -199,7 +199,7 @@ public class ReportOrchestrationService {
         byte[] leftLogo = loadLogoBytes(template.getHeaderConfig() != null ? template.getHeaderConfig().getEffectiveLeftLogoAssetId() : null);
         byte[] rightLogo = loadLogoBytes(template.getHeaderConfig() != null ? template.getHeaderConfig().getEffectiveRightLogoAssetId() : null);
 
-        byte[] excelBytes = excelRenderer.renderCourseAtr(snapshot);
+        byte[] excelBytes = excelRenderer.renderCourseAtr(snapshot, leftLogo, rightLogo);
         byte[] pdfBytes = pdfRenderer.renderCourseAtr(snapshot, template, leftLogo, rightLogo);
 
         String courseCode = snapshot.getCourseCode() != null ? snapshot.getCourseCode() : "COURSE";

@@ -370,4 +370,45 @@ public class Phase55ReportManagementApiIntegrationTest {
                 .andExpect(content().contentType("application/pdf"))
                 .andExpect(header().exists("Content-Disposition"));
     }
+
+    @Test
+    @DisplayName("Course Attainment Excel download returns ONE complete workbook with exactly 5 sheets in exact order")
+    @WithMockUser(username = "iqac_user", roles = {"IQAC"})
+    void testDownloadCourseAttainmentExcelEndpoints() throws Exception {
+        CurrentUserScope iqacScope = CurrentUserScope.builder()
+                .role(UserRole.IQAC)
+                .build();
+        when(currentUserScopeService.getCurrentUserScope()).thenReturn(iqacScope);
+
+        // 1. Test /reports/course-attainment/{id}/export/excel (used by frontend)
+        byte[] excelBytes = mockMvc.perform(get("/reports/course-attainment/" + offering.getId() + "/export/excel"))
+                .andExpect(status().isOk())
+                .andExpect(content().contentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .andExpect(header().string("Content-Disposition", org.hamcrest.Matchers.containsString(".xlsx")))
+                .andReturn().getResponse().getContentAsByteArray();
+
+        assertNotNull(excelBytes);
+        assertTrue(excelBytes.length > 0);
+
+        try (org.apache.poi.ss.usermodel.Workbook wb = new org.apache.poi.xssf.usermodel.XSSFWorkbook(new java.io.ByteArrayInputStream(excelBytes))) {
+            assertEquals(5, wb.getNumberOfSheets(), "Downloaded Course Attainment workbook must contain EXACTLY 5 sheets");
+            assertEquals("Attainment-main", wb.getSheetAt(0).getSheetName());
+            assertEquals("PO mapping", wb.getSheetAt(1).getSheetName());
+            assertEquals("PSO mapping", wb.getSheetAt(2).getSheetName());
+            assertEquals("Examination", wb.getSheetAt(3).getSheetName());
+            assertEquals("Course End Survey", wb.getSheetAt(4).getSheetName());
+        }
+
+        // 2. Test /api/v1/reports/course-attainment/{id}/excel
+        byte[] excelBytesAlt = mockMvc.perform(get("/api/v1/reports/course-attainment/" + offering.getId() + "/excel"))
+                .andExpect(status().isOk())
+                .andExpect(content().contentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .andExpect(header().string("Content-Disposition", org.hamcrest.Matchers.containsString(".xlsx")))
+                .andReturn().getResponse().getContentAsByteArray();
+
+        assertNotNull(excelBytesAlt);
+        try (org.apache.poi.ss.usermodel.Workbook wb = new org.apache.poi.xssf.usermodel.XSSFWorkbook(new java.io.ByteArrayInputStream(excelBytesAlt))) {
+            assertEquals(5, wb.getNumberOfSheets());
+        }
+    }
 }

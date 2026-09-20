@@ -199,9 +199,37 @@ public class VisualArtifactGenerationRunnerTest {
                                 .targetMet(true)
                                 .build()
                 ))
+                .surveyData(CourseAttainmentSnapshot.SurveySection.builder()
+                        .totalStudents(24)
+                        .coCodes(List.of("CO1", "CO2", "CO3", "CO4", "CO5", "CO6"))
+                        .level1Counts(Map.of("CO1", 2, "CO2", 2, "CO3", 3, "CO4", 2, "CO5", 1, "CO6", 2))
+                        .level2Counts(Map.of("CO1", 5, "CO2", 5, "CO3", 3, "CO4", 3, "CO5", 6, "CO6", 4))
+                        .level3Counts(Map.of("CO1", 17, "CO2", 17, "CO3", 18, "CO4", 19, "CO5", 17, "CO6", 18))
+                        .level1Percentages(Map.of("CO1", new BigDecimal("8.33"), "CO2", new BigDecimal("8.33"), "CO3", new BigDecimal("12.50"), "CO4", new BigDecimal("8.33"), "CO5", new BigDecimal("4.17"), "CO6", new BigDecimal("8.33")))
+                        .level2Percentages(Map.of("CO1", new BigDecimal("20.83"), "CO2", new BigDecimal("20.83"), "CO3", new BigDecimal("12.50"), "CO4", new BigDecimal("12.50"), "CO5", new BigDecimal("25.00"), "CO6", new BigDecimal("16.67")))
+                        .level3Percentages(Map.of("CO1", new BigDecimal("70.83"), "CO2", new BigDecimal("70.83"), "CO3", new BigDecimal("75.00"), "CO4", new BigDecimal("79.17"), "CO5", new BigDecimal("70.83"), "CO6", new BigDecimal("75.00")))
+                        .overallIndirectPercentages(Map.of("CO1", new BigDecimal("87.63"), "CO2", new BigDecimal("87.63"), "CO3", new BigDecimal("88.88"), "CO4", new BigDecimal("90.25"), "CO5", new BigDecimal("88.75"), "CO6", new BigDecimal("88.88")))
+                        .responses(createVisualSurveyResponses(24, List.of("CO1", "CO2", "CO3", "CO4", "CO5", "CO6")))
+                        .build())
                 .generatedBy("Course Coordinator")
                 .generatedAt(ZonedDateTime.now())
                 .build();
+    }
+
+    private List<CourseAttainmentSnapshot.SurveyResponseRow> createVisualSurveyResponses(int count, List<String> cos) {
+        List<CourseAttainmentSnapshot.SurveyResponseRow> list = new ArrayList<>();
+        String[] opts = {"Slight", "Moderate", "Substantial"};
+        for (int i = 1; i <= count; i++) {
+            Map<String, String> fb = new LinkedHashMap<>();
+            for (int j = 0; j < cos.size(); j++) {
+                fb.put(cos.get(j), opts[(i + j) % 3]);
+            }
+            list.add(CourseAttainmentSnapshot.SurveyResponseRow.builder()
+                    .srNo(i)
+                    .coFeedbacks(fb)
+                    .build());
+        }
+        return list;
     }
 
     private ProgrammeAtrSnapshot buildProgrammeAtrSnapshot() {

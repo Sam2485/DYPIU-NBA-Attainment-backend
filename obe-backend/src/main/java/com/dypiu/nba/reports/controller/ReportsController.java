@@ -129,7 +129,10 @@ public class ReportsController {
 
     // --- 3. Course Attainment Downloads ---
 
-    @GetMapping("/course-attainment/{programmeBatchCourseId}/excel")
+    @GetMapping({
+            "/course-attainment/{programmeBatchCourseId}/excel",
+            "/course-attainment/{programmeBatchCourseId}/export/excel"
+    })
     public ResponseEntity<byte[]> downloadCourseAttainmentExcel(
             @PathVariable String programmeBatchCourseId,
             Principal principal) {
@@ -147,7 +150,10 @@ public class ReportsController {
         return createDownloadResponse(bytes, artifact.getOriginalFilename(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     }
 
-    @GetMapping("/course-attainment/{programmeBatchCourseId}/pdf")
+    @GetMapping({
+            "/course-attainment/{programmeBatchCourseId}/pdf",
+            "/course-attainment/{programmeBatchCourseId}/export/pdf"
+    })
     public ResponseEntity<byte[]> downloadCourseAttainmentPdf(
             @PathVariable String programmeBatchCourseId,
             Principal principal) {

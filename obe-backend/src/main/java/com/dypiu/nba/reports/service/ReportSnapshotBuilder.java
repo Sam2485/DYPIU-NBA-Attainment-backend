@@ -18,6 +18,9 @@ import java.time.ZonedDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -31,6 +34,13 @@ public class ReportSnapshotBuilder {
     private final ProgrammeBatchCourseRepository programmeBatchCourseRepository;
     private final DepartmentRepository departmentRepository;
     private final SchoolRepository schoolRepository;
+    private final ProgrammeOutcomeRepository programmeOutcomeRepository;
+    private final PoCompetencyRepository poCompetencyRepository;
+    private final ProgrammeSpecificOutcomeRepository programmeSpecificOutcomeRepository;
+    private final PsoCompetencyRepository psoCompetencyRepository;
+    private final CourseMappingKeywordRepository courseMappingKeywordRepository;
+    private final ObjectMapper objectMapper;
+    private final com.dypiu.nba.service.AttainmentCalculationService attainmentCalculationService;
 
     public ProgrammeAttainmentSnapshot buildProgrammeAttainmentSnapshot(
             String masterProgrammeId,
@@ -361,9 +371,252 @@ public class ReportSnapshotBuilder {
         List<String> sortedPo = poSet.stream().sorted((a, b) -> extractNumber(a) - extractNumber(b)).toList();
         List<String> sortedPso = psoSet.stream().sorted((a, b) -> extractNumber(a) - extractNumber(b)).toList();
 
+        // Resolve POs, competencies, and keywords
+        List<ProgrammeOutcome> pos = Collections.emptyList();
+        if (batch != null && batch.getId() != null) {
+            pos = programmeOutcomeRepository.findByProgrammeBatchIdOrderByCodeAsc(batch.getId());
+        }
+        if (pos.isEmpty() && batch != null && batch.getMasterProgrammeId() != null) {
+            pos = programmeOutcomeRepository.findByProgrammeBatchIdOrderByCodeAsc(batch.getMasterProgrammeId());
+        }
+
+        Map<String, Object> poKwStore = Collections.emptyMap();
+        try {
+            Optional<CourseMappingKeyword> poKwOpt = courseMappingKeywordRepository
+                    .findByProgrammeBatchCourseIdAndKeywordType(programmeBatchCourseId, "PO");
+            if (poKwOpt.isPresent() && poKwOpt.get().getKeywordsJson() != null) {
+                poKwStore = objectMapper.readValue(poKwOpt.get().getKeywordsJson(), new TypeReference<Map<String, Object>>() {});
+            }
+        } catch (Exception e) {
+            log.warn("Failed to load PO keywords for offering: {}", programmeBatchCourseId, e);
+        }
+
+        List<CourseAttainmentSnapshot.PoDetailRow> poDetails = new ArrayList<>();
+        for (ProgrammeOutcome po : pos) {
+            List<PoCompetency> comps = poCompetencyRepository.findByPoIdOrderByCodeAsc(po.getId());
+            comps.sort(Comparator.comparing(PoCompetency::getCode, (a, b) -> extractNumber(a) - extractNumber(b)));
+
+            Object kwObj = poKwStore.get(po.getCode());
+            List<?> kwList = (kwObj instanceof List<?>) ? (List<?>) kwObj : Collections.emptyList();
+
+            List<CourseAttainmentSnapshot.CompetencyDetailRow> compRows = new ArrayList<>();
+            for (int i = 0; i < comps.size(); i++) {
+                PoCompetency comp = comps.get(i);
+                Map<String, String> coKeywords = new LinkedHashMap<>();
+                Map<String, String> coMappings = new LinkedHashMap<>();
+
+                Map<?, ?> kwEntry = null;
+                if (i < kwList.size() && kwList.get(i) instanceof Map<?, ?> m) {
+                    kwEntry = m;
+                }
+
+                if (kwEntry != null && kwEntry.get("keywords") instanceof Map<?, ?> kmap) {
+                    kmap.forEach((k, v) -> {
+                        if (k != null && v != null) {
+                            String sVal = v.toString().trim();
+                            if (!sVal.isEmpty()) {
+                                coKeywords.put(k.toString(), sVal);
+                                coMappings.put(k.toString(), "Y");
+                            }
+                        }
+                    });
+                }
+
+                compRows.add(CourseAttainmentSnapshot.CompetencyDetailRow.builder()
+                        .competencyCode(comp.getCode())
+                        .statement(comp.getStatement())
+                        .coKeywords(coKeywords)
+                        .coMappings(coMappings)
+                        .build());
+            }
+
+            poDetails.add(CourseAttainmentSnapshot.PoDetailRow.builder()
+                    .poCode(po.getCode())
+                    .statement(po.getStatement())
+                    .competencies(compRows)
+                    .build());
+        }
+
+        // Resolve PSOs, competencies, and keywords
+        List<ProgrammeSpecificOutcome> psos = Collections.emptyList();
+        if (batch != null && batch.getId() != null) {
+            psos = programmeSpecificOutcomeRepository.findByProgrammeBatchIdOrderByCodeAsc(batch.getId());
+        }
+        if (psos.isEmpty() && batch != null && batch.getMasterProgrammeId() != null) {
+            psos = programmeSpecificOutcomeRepository.findByProgrammeBatchIdOrderByCodeAsc(batch.getMasterProgrammeId());
+        }
+
+        Map<String, Object> psoKwStore = Collections.emptyMap();
+        try {
+            Optional<CourseMappingKeyword> psoKwOpt = courseMappingKeywordRepository
+                    .findByProgrammeBatchCourseIdAndKeywordType(programmeBatchCourseId, "PSO");
+            if (psoKwOpt.isPresent() && psoKwOpt.get().getKeywordsJson() != null) {
+                psoKwStore = objectMapper.readValue(psoKwOpt.get().getKeywordsJson(), new TypeReference<Map<String, Object>>() {});
+            }
+        } catch (Exception e) {
+            log.warn("Failed to load PSO keywords for offering: {}", programmeBatchCourseId, e);
+        }
+
+        List<CourseAttainmentSnapshot.PsoDetailRow> psoDetails = new ArrayList<>();
+        for (ProgrammeSpecificOutcome pso : psos) {
+            List<PsoCompetency> comps = psoCompetencyRepository.findByPsoIdOrderByCodeAsc(pso.getId());
+            comps.sort(Comparator.comparing(PsoCompetency::getCode, (a, b) -> extractNumber(a) - extractNumber(b)));
+
+            Object kwObj = psoKwStore.get(pso.getCode());
+            List<?> kwList = (kwObj instanceof List<?>) ? (List<?>) kwObj : Collections.emptyList();
+
+            List<CourseAttainmentSnapshot.CompetencyDetailRow> compRows = new ArrayList<>();
+            for (int i = 0; i < comps.size(); i++) {
+                PsoCompetency comp = comps.get(i);
+                Map<String, String> coKeywords = new LinkedHashMap<>();
+                Map<String, String> coMappings = new LinkedHashMap<>();
+
+                Map<?, ?> kwEntry = null;
+                if (i < kwList.size() && kwList.get(i) instanceof Map<?, ?> m) {
+                    kwEntry = m;
+                }
+
+                if (kwEntry != null && kwEntry.get("keywords") instanceof Map<?, ?> kmap) {
+                    kmap.forEach((k, v) -> {
+                        if (k != null && v != null) {
+                            String sVal = v.toString().trim();
+                            if (!sVal.isEmpty()) {
+                                coKeywords.put(k.toString(), sVal);
+                                coMappings.put(k.toString(), "Y");
+                            }
+                        }
+                    });
+                }
+
+                compRows.add(CourseAttainmentSnapshot.CompetencyDetailRow.builder()
+                        .competencyCode(comp.getCode())
+                        .statement(comp.getStatement())
+                        .coKeywords(coKeywords)
+                        .coMappings(coMappings)
+                        .build());
+            }
+
+            psoDetails.add(CourseAttainmentSnapshot.PsoDetailRow.builder()
+                    .psoCode(pso.getCode())
+                    .statement(pso.getStatement())
+                    .competencies(compRows)
+                    .build());
+        }
+
         String batchYears = (batch != null && batch.getStartYear() != null && batch.getEndYear() != null)
                 ? batch.getStartYear() + "-" + batch.getEndYear()
                 : (batch != null ? batch.getName() : "");
+
+        CourseAttainmentSnapshot.ExaminationSection examSection = null;
+        try {
+            if (attainmentCalculationService != null) {
+                ExaminationAttainmentResultDto examDto = attainmentCalculationService.getExaminationAttainment(programmeBatchCourseId);
+                if (examDto != null) {
+                    List<CourseAttainmentSnapshot.StudentMarksRow> studentRows = new ArrayList<>();
+                    if (examDto.getStudentMarks() != null) {
+                        for (StudentMarksRowDto sm : examDto.getStudentMarks()) {
+                            studentRows.add(CourseAttainmentSnapshot.StudentMarksRow.builder()
+                                    .srNo(sm.getSrNo())
+                                    .prn(sm.getPrn())
+                                    .studentName(sm.getStudentName())
+                                    .coMarks(sm.getCoMarks() != null ? new LinkedHashMap<>(sm.getCoMarks()) : new LinkedHashMap<>())
+                                    .build());
+                        }
+                    }
+
+                    List<String> examCoCodes = new ArrayList<>();
+                    if (dto.getTable3CoAttainments() != null && !dto.getTable3CoAttainments().isEmpty()) {
+                        examCoCodes = dto.getTable3CoAttainments().stream()
+                                .map(CourseAttainmentReportDto.Table3Row::getCoCode)
+                                .toList();
+                    } else if (examDto.getCoMaxMarks() != null && !examDto.getCoMaxMarks().isEmpty()) {
+                        examCoCodes = new ArrayList<>(examDto.getCoMaxMarks().keySet());
+                    }
+
+                    String className = (pbc.getSemester() != null ? "Semester " + pbc.getSemester() : "Class");
+
+                    examSection = CourseAttainmentSnapshot.ExaminationSection.builder()
+                            .courseName(pbc.getEffectiveCourseName())
+                            .className(className)
+                            .academicYear(batchYears)
+                            .totalStudents(examDto.getTotalStudents() != null && examDto.getTotalStudents() > 0 ? examDto.getTotalStudents() : studentRows.size())
+                            .thresholdPercentage(examDto.getThresholdPercentage() != null ? examDto.getThresholdPercentage() : new BigDecimal("60.00"))
+                            .coCodes(examCoCodes)
+                            .coMaxMarks(examDto.getCoMaxMarks() != null ? new LinkedHashMap<>(examDto.getCoMaxMarks()) : new LinkedHashMap<>())
+                            .coThresholdMarks(examDto.getCoThresholdMarks() != null ? new LinkedHashMap<>(examDto.getCoThresholdMarks()) : new LinkedHashMap<>())
+                            .studentsAboveThreshold(examDto.getStudentsAboveThreshold() != null ? new LinkedHashMap<>(examDto.getStudentsAboveThreshold()) : new LinkedHashMap<>())
+                            .percentageAboveThreshold(examDto.getPercentageAboveThreshold() != null ? new LinkedHashMap<>(examDto.getPercentageAboveThreshold()) : new LinkedHashMap<>())
+                            .students(studentRows)
+                            .build();
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to load examination attainment data for offering: {}", programmeBatchCourseId, e);
+        }
+
+        CourseAttainmentSnapshot.SurveySection surveySection = null;
+        try {
+            if (attainmentCalculationService != null) {
+                SurveyAttainmentResultDto surveyDto = attainmentCalculationService.getSurveyAttainment(programmeBatchCourseId);
+                if (surveyDto != null) {
+                    List<CourseAttainmentSnapshot.SurveyResponseRow> respRows = new ArrayList<>();
+                    if (surveyDto.getSurveyResponses() != null) {
+                        for (SurveyResponseRowDto sr : surveyDto.getSurveyResponses()) {
+                            Map<String, String> feedbacks = new LinkedHashMap<>();
+                            if (sr.getCoFeedbacks() != null) {
+                                feedbacks.putAll(sr.getCoFeedbacks());
+                            } else if (sr.getCoRatings() != null) {
+                                sr.getCoRatings().forEach((k, v) -> {
+                                    if (v != null) {
+                                        int r = (int) Math.round(v.doubleValue());
+                                        feedbacks.put(k, r == 3 ? "Substantial" : (r == 2 ? "Moderate" : "Slight"));
+                                    }
+                                });
+                            }
+                            respRows.add(CourseAttainmentSnapshot.SurveyResponseRow.builder()
+                                    .srNo(sr.getSrNo())
+                                    .coFeedbacks(feedbacks)
+                                    .build());
+                        }
+                    }
+
+                    List<String> surveyCoCodes = new ArrayList<>();
+                    if (dto.getTable3CoAttainments() != null && !dto.getTable3CoAttainments().isEmpty()) {
+                        surveyCoCodes = dto.getTable3CoAttainments().stream()
+                                .map(CourseAttainmentReportDto.Table3Row::getCoCode)
+                                .toList();
+                    } else if (surveyDto.getLevel1Counts() != null && !surveyDto.getLevel1Counts().isEmpty()) {
+                        surveyCoCodes = new ArrayList<>(surveyDto.getLevel1Counts().keySet());
+                    }
+
+                    Map<String, BigDecimal> overallIndirectPct = new LinkedHashMap<>();
+                    if (surveyDto.getOverallIndirectPercentages() != null && !surveyDto.getOverallIndirectPercentages().isEmpty()) {
+                        overallIndirectPct.putAll(surveyDto.getOverallIndirectPercentages());
+                    } else if (dto.getTable3CoAttainments() != null) {
+                        for (CourseAttainmentReportDto.Table3Row r : dto.getTable3CoAttainments()) {
+                            if (r.getIndirectPercentage() != null) {
+                                overallIndirectPct.put(r.getCoCode(), r.getIndirectPercentage());
+                            }
+                        }
+                    }
+
+                    surveySection = CourseAttainmentSnapshot.SurveySection.builder()
+                            .totalStudents(surveyDto.getTotalStudents() != null && surveyDto.getTotalStudents() > 0 ? surveyDto.getTotalStudents() : respRows.size())
+                            .coCodes(surveyCoCodes)
+                            .level1Counts(surveyDto.getLevel1Counts() != null ? new LinkedHashMap<>(surveyDto.getLevel1Counts()) : new LinkedHashMap<>())
+                            .level2Counts(surveyDto.getLevel2Counts() != null ? new LinkedHashMap<>(surveyDto.getLevel2Counts()) : new LinkedHashMap<>())
+                            .level3Counts(surveyDto.getLevel3Counts() != null ? new LinkedHashMap<>(surveyDto.getLevel3Counts()) : new LinkedHashMap<>())
+                            .level1Percentages(surveyDto.getLevel1Percentages() != null ? new LinkedHashMap<>(surveyDto.getLevel1Percentages()) : new LinkedHashMap<>())
+                            .level2Percentages(surveyDto.getLevel2Percentages() != null ? new LinkedHashMap<>(surveyDto.getLevel2Percentages()) : new LinkedHashMap<>())
+                            .level3Percentages(surveyDto.getLevel3Percentages() != null ? new LinkedHashMap<>(surveyDto.getLevel3Percentages()) : new LinkedHashMap<>())
+                            .overallIndirectPercentages(overallIndirectPct)
+                            .responses(respRows)
+                            .build();
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to load survey attainment data for offering: {}", programmeBatchCourseId, e);
+        }
 
         return CourseAttainmentSnapshot.builder()
                 .reportType(ReportType.COURSE_ATTAINMENT)
@@ -385,10 +638,14 @@ public class ReportSnapshotBuilder {
                 .indirectAttainment(dto.getIndirectAttainment())
                 .poCodes(sortedPo)
                 .psoCodes(sortedPso)
+                .poDetails(poDetails)
+                .psoDetails(psoDetails)
                 .table1Mapping(t1)
                 .table2DirectPO(t2Po)
                 .table2DirectPSO(t2Pso)
                 .table3CoAttainments(t3)
+                .examinationData(examSection)
+                .surveyData(surveySection)
                 .build();
     }
 
