@@ -1678,9 +1678,10 @@ public class AnalyticsService {
         CurrentUserScope userScope = currentUserScopeService.getCurrentUserScope();
         if (userScope != null && userScope.isFaculty()) {
             boolean isCoord = (offering.getCourseCoordinatorId() != null && Objects.equals(offering.getCourseCoordinatorId(), userScope.getUserId()))
-                    || (offering.getCourseCoordinatorEmail() != null && offering.getCourseCoordinatorEmail().equalsIgnoreCase(userScope.getEmail()));
+                    || (offering.getCourseCoordinatorEmail() != null && userScope.getEmail() != null && offering.getCourseCoordinatorEmail().equalsIgnoreCase(userScope.getEmail()));
             boolean isAssigned = isCoord || (offering.getAssignedFaculty() != null
-                    && (offering.getAssignedFaculty().contains(userScope.getEmail()) || offering.getAssignedFaculty().contains(userScope.getName())));
+                    && ((userScope.getEmail() != null && offering.getAssignedFaculty().contains(userScope.getEmail()))
+                    || (userScope.getName() != null && offering.getAssignedFaculty().contains(userScope.getName()))));
             if (!isAssigned) {
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: You are not assigned to this Course Offering.");
             }
@@ -1700,9 +1701,12 @@ public class AnalyticsService {
         // 6. Authoritative Course Attainment Report
         CourseAttainmentReportDto reportDto = null;
         try {
-            reportDto = attainmentReportService.getOrCreateCourseAttainmentReport(offering.getId());
+            Optional<CourseAttainmentReport> existingOpt = courseAttainmentReportRepository.findByProgrammeBatchCourseId(offering.getId());
+            if (existingOpt.isPresent()) {
+                reportDto = attainmentReportService.mapToDto(existingOpt.get(), offering);
+            }
         } catch (Exception ex) {
-            log.warn("[AnalyticsService] Could not get or create course attainment report for offering {}: {}", offering.getId(), ex.getMessage());
+            log.warn("[AnalyticsService] Could not resolve existing course attainment report for offering {}: {}", offering.getId(), ex.getMessage());
         }
         BigDecimal overallCourseAttainment = reportDto != null && reportDto.getOverallCoAttainment() != null
                 ? reportDto.getOverallCoAttainment() : BigDecimal.ZERO;
@@ -2042,9 +2046,10 @@ public class AnalyticsService {
         CurrentUserScope userScope = currentUserScopeService.getCurrentUserScope();
         if (userScope != null && userScope.isFaculty()) {
             boolean isCoord = (offering.getCourseCoordinatorId() != null && Objects.equals(offering.getCourseCoordinatorId(), userScope.getUserId()))
-                    || (offering.getCourseCoordinatorEmail() != null && offering.getCourseCoordinatorEmail().equalsIgnoreCase(userScope.getEmail()));
+                    || (offering.getCourseCoordinatorEmail() != null && userScope.getEmail() != null && offering.getCourseCoordinatorEmail().equalsIgnoreCase(userScope.getEmail()));
             boolean isAssigned = isCoord || (offering.getAssignedFaculty() != null
-                    && (offering.getAssignedFaculty().contains(userScope.getEmail()) || offering.getAssignedFaculty().contains(userScope.getName())));
+                    && ((userScope.getEmail() != null && offering.getAssignedFaculty().contains(userScope.getEmail()))
+                    || (userScope.getName() != null && offering.getAssignedFaculty().contains(userScope.getName()))));
             if (!isAssigned) {
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: You are not assigned to this Course Offering.");
             }
@@ -2061,12 +2066,15 @@ public class AnalyticsService {
         BigDecimal defaultThreshold = config != null && config.getEffectiveApprovedDirectThreshold() != null
                 ? config.getEffectiveApprovedDirectThreshold() : new BigDecimal("60.00");
 
-        // 5. Course Attainment Report for Table 3 CO details
+        // 5. Course Attainment Report for Table 3 CO details (Read-only lookup)
         CourseAttainmentReportDto reportDto = null;
         try {
-            reportDto = attainmentReportService.getOrCreateCourseAttainmentReport(offering.getId());
+            Optional<CourseAttainmentReport> existingOpt = courseAttainmentReportRepository.findByProgrammeBatchCourseId(offering.getId());
+            if (existingOpt.isPresent()) {
+                reportDto = attainmentReportService.mapToDto(existingOpt.get(), offering);
+            }
         } catch (Exception ex) {
-            log.warn("[AnalyticsService] Could not get or create course attainment report for offering {}: {}", offering.getId(), ex.getMessage());
+            log.warn("[AnalyticsService] Could not resolve existing course attainment report for offering {}: {}", offering.getId(), ex.getMessage());
         }
 
         CourseAttainmentReportDto.Table3Row t3 = null;
@@ -2103,10 +2111,25 @@ public class AnalyticsService {
                 }
             }
         }
+
         CourseOutcome coDef = cos.stream()
-                .filter(c -> c.getCode() != null && c.getCode().equalsIgnoreCase(targetCo))
+                .filter(c -> c.getCode() != null && c.getCode().trim().equalsIgnoreCase(targetCo))
                 .findFirst()
-                .orElseThrow(() -> new ResourceNotFoundException("Course Outcome '" + targetCo + "' not found for course: " + offering.getId()));
+                .orElse(null);
+
+        if (coDef == null) {
+            String digits = targetCo.replaceAll("\\D+", "");
+            if (!digits.isEmpty()) {
+                coDef = cos.stream()
+                        .filter(c -> c.getCode() != null && c.getCode().replaceAll("\\D+", "").equals(digits))
+                        .findFirst()
+                        .orElse(null);
+            }
+        }
+
+        if (coDef == null) {
+            throw new ResourceNotFoundException("Course outcome '" + targetCo + "' not found for course offering: " + offering.getId());
+        }
 
         String statement = (t3 != null && t3.getStatement() != null && !t3.getStatement().isBlank())
                 ? t3.getStatement()
@@ -2129,9 +2152,9 @@ public class AnalyticsService {
         Map<String, Integer> poMappings = new LinkedHashMap<>();
         Map<String, Integer> psoMappings = new LinkedHashMap<>();
         for (Map.Entry<String, Integer> entry : coMappings.entrySet()) {
-            if (entry.getKey().toUpperCase().startsWith("PSO")) {
+            if (entry.getKey() != null && entry.getKey().toUpperCase().startsWith("PSO")) {
                 psoMappings.put(entry.getKey(), entry.getValue());
-            } else {
+            } else if (entry.getKey() != null) {
                 poMappings.put(entry.getKey(), entry.getValue());
             }
         }
@@ -2151,13 +2174,13 @@ public class AnalyticsService {
         BigDecimal directThreshold = examResult != null && examResult.getThresholdPercentage() != null
                 ? examResult.getThresholdPercentage()
                 : defaultThreshold;
-        BigDecimal directPct = (examResult != null && examResult.getPercentageAboveThreshold() != null && examResult.getPercentageAboveThreshold().containsKey(targetCo))
+        BigDecimal directPct = (examResult != null && examResult.getPercentageAboveThreshold() != null && examResult.getPercentageAboveThreshold().containsKey(targetCo) && examResult.getPercentageAboveThreshold().get(targetCo) != null)
                 ? examResult.getPercentageAboveThreshold().get(targetCo)
                 : (t3 != null && t3.getDirectPercentage() != null ? t3.getDirectPercentage() : BigDecimal.ZERO);
-        Integer directLvl = (examResult != null && examResult.getCoAttainmentLevels() != null && examResult.getCoAttainmentLevels().containsKey(targetCo))
+        Integer directLvl = (examResult != null && examResult.getCoAttainmentLevels() != null && examResult.getCoAttainmentLevels().containsKey(targetCo) && examResult.getCoAttainmentLevels().get(targetCo) != null)
                 ? examResult.getCoAttainmentLevels().get(targetCo)
                 : (t3 != null && t3.getDirectLevel() != null ? t3.getDirectLevel() : 0);
-        Integer studentsMeeting = (examResult != null && examResult.getStudentsAboveThreshold() != null && examResult.getStudentsAboveThreshold().containsKey(targetCo))
+        Integer studentsMeeting = (examResult != null && examResult.getStudentsAboveThreshold() != null && examResult.getStudentsAboveThreshold().containsKey(targetCo) && examResult.getStudentsAboveThreshold().get(targetCo) != null)
                 ? examResult.getStudentsAboveThreshold().get(targetCo)
                 : (totalStudents > 0 && directPct != null
                         ? BigDecimal.valueOf(totalStudents).multiply(directPct).divide(new BigDecimal("100.00"), 0, RoundingMode.HALF_UP).intValue()
@@ -2174,20 +2197,20 @@ public class AnalyticsService {
         int responseCount = surveyResult != null && surveyResult.getTotalStudents() != null ? surveyResult.getTotalStudents() : 0;
         Map<String, Integer> levelDist = new LinkedHashMap<>();
         if (surveyResult != null) {
-            Integer l1 = surveyResult.getLevel1Counts() != null ? surveyResult.getLevel1Counts().get(targetCo) : 0;
-            Integer l2 = surveyResult.getLevel2Counts() != null ? surveyResult.getLevel2Counts().get(targetCo) : 0;
-            Integer l3 = surveyResult.getLevel3Counts() != null ? surveyResult.getLevel3Counts().get(targetCo) : 0;
+            Integer l1 = (surveyResult.getLevel1Counts() != null && surveyResult.getLevel1Counts().containsKey(targetCo)) ? surveyResult.getLevel1Counts().get(targetCo) : 0;
+            Integer l2 = (surveyResult.getLevel2Counts() != null && surveyResult.getLevel2Counts().containsKey(targetCo)) ? surveyResult.getLevel2Counts().get(targetCo) : 0;
+            Integer l3 = (surveyResult.getLevel3Counts() != null && surveyResult.getLevel3Counts().containsKey(targetCo)) ? surveyResult.getLevel3Counts().get(targetCo) : 0;
             levelDist.put("Slight (Level 1)", l1 != null ? l1 : 0);
             levelDist.put("Moderate (Level 2)", l2 != null ? l2 : 0);
             levelDist.put("Substantial (Level 3)", l3 != null ? l3 : 0);
         }
-        BigDecimal indirectScore = (surveyResult != null && surveyResult.getIndirectAttainmentScores() != null && surveyResult.getIndirectAttainmentScores().containsKey(targetCo))
+        BigDecimal indirectScore = (surveyResult != null && surveyResult.getIndirectAttainmentScores() != null && surveyResult.getIndirectAttainmentScores().containsKey(targetCo) && surveyResult.getIndirectAttainmentScores().get(targetCo) != null)
                 ? surveyResult.getIndirectAttainmentScores().get(targetCo)
                 : (t3 != null && t3.getIndirectScore() != null ? t3.getIndirectScore() : BigDecimal.ZERO);
-        Integer indirectLvl = (surveyResult != null && surveyResult.getCoAttainmentLevels() != null && surveyResult.getCoAttainmentLevels().containsKey(targetCo))
+        Integer indirectLvl = (surveyResult != null && surveyResult.getCoAttainmentLevels() != null && surveyResult.getCoAttainmentLevels().containsKey(targetCo) && surveyResult.getCoAttainmentLevels().get(targetCo) != null)
                 ? surveyResult.getCoAttainmentLevels().get(targetCo)
                 : (t3 != null && t3.getIndirectLevel() != null ? t3.getIndirectLevel() : 0);
-        BigDecimal indirectPct = (surveyResult != null && surveyResult.getOverallIndirectPercentages() != null && surveyResult.getOverallIndirectPercentages().containsKey(targetCo))
+        BigDecimal indirectPct = (surveyResult != null && surveyResult.getOverallIndirectPercentages() != null && surveyResult.getOverallIndirectPercentages().containsKey(targetCo) && surveyResult.getOverallIndirectPercentages().get(targetCo) != null)
                 ? surveyResult.getOverallIndirectPercentages().get(targetCo)
                 : (t3 != null && t3.getIndirectPercentage() != null ? t3.getIndirectPercentage() : BigDecimal.ZERO);
 
@@ -2212,7 +2235,7 @@ public class AnalyticsService {
 
         String observation = (t3 != null && t3.getObservation() != null)
                 ? t3.getObservation()
-                : (targetMet ? "Target achieved (" + overallAttainment + " >= " + target + ")" : "Target not achieved (" + overallAttainment + " < " + target + ")");
+                : (targetMet != null && targetMet ? "Target achieved (" + overallAttainment + " >= " + target + ")" : "Target not achieved (" + overallAttainment + " < " + target + ")");
 
         CoDirectEvidenceSummaryDto directSummary = CoDirectEvidenceSummaryDto.builder()
                 .totalStudents(totalStudents)
