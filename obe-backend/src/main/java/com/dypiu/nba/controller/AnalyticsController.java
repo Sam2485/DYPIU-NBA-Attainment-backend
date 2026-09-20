@@ -159,18 +159,24 @@ public class AnalyticsController {
 
     @GetMapping("/historical-programme-attainment")
     public ResponseEntity<ApiResponse<HistoricalProgrammeAttainmentResponseDto>> getHistoricalProgrammeAttainment(
-            @RequestParam String masterProgrammeId,
+            @RequestParam(required = false) String masterProgrammeId,
+            @RequestParam(required = false) String programmeBatchId,
             @RequestParam(required = false) String outcomeCode) {
 
-        log.debug("[AnalyticsController] getHistoricalProgrammeAttainment: masterProgrammeId={}, outcomeCode={}",
-                masterProgrammeId, outcomeCode);
+        log.debug("[AnalyticsController] getHistoricalProgrammeAttainment: masterProgrammeId={}, programmeBatchId={}, outcomeCode={}",
+                masterProgrammeId, programmeBatchId, outcomeCode);
 
-        HistoricalProgrammeAttainmentResponseDto data = analyticsService.getHistoricalProgrammeAttainment(masterProgrammeId, outcomeCode);
+        HistoricalProgrammeAttainmentResponseDto data = analyticsService.getHistoricalProgrammeAttainment(masterProgrammeId, programmeBatchId, outcomeCode);
         return ResponseEntity.ok(ApiResponse.<HistoricalProgrammeAttainmentResponseDto>builder()
                 .success(true)
                 .message("Historical programme attainment retrieved successfully")
                 .data(data)
                 .build());
+    }
+
+    public ResponseEntity<ApiResponse<HistoricalProgrammeAttainmentResponseDto>> getHistoricalProgrammeAttainment(
+            String masterProgrammeId, String outcomeCode) {
+        return getHistoricalProgrammeAttainment(masterProgrammeId, null, outcomeCode);
     }
 
     @GetMapping("/compare-batches")
@@ -310,6 +316,40 @@ public class AnalyticsController {
         return ResponseEntity.ok(ApiResponse.<CoAnalyticsResponseDto>builder()
                 .success(true)
                 .message("CO analytics detail retrieved successfully")
+                .data(data)
+                .build());
+    }
+
+    @GetMapping("/historical-course-attainment")
+    public ResponseEntity<ApiResponse<HistoricalCourseAttainmentResponseDto>> getHistoricalCourseAttainment(
+            @RequestParam String programmeBatchCourseId,
+            @RequestParam(required = false) String coCode) {
+
+        log.debug("[AnalyticsController] getHistoricalCourseAttainment: programmeBatchCourseId={}, coCode={}",
+                programmeBatchCourseId, coCode);
+
+        HistoricalCourseAttainmentResponseDto data = analyticsService.getHistoricalCourseAttainment(
+                programmeBatchCourseId, coCode);
+        return ResponseEntity.ok(ApiResponse.<HistoricalCourseAttainmentResponseDto>builder()
+                .success(true)
+                .message("Historical course attainment retrieved successfully")
+                .data(data)
+                .build());
+    }
+
+    @GetMapping("/compare-courses")
+    public ResponseEntity<ApiResponse<CourseComparisonAnalyticsResponseDto>> compareCourses(
+            @RequestParam String programmeBatchCourseId1,
+            @RequestParam String programmeBatchCourseId2) {
+
+        log.debug("[AnalyticsController] compareCourses: programmeBatchCourseId1={}, programmeBatchCourseId2={}",
+                programmeBatchCourseId1, programmeBatchCourseId2);
+
+        CourseComparisonAnalyticsResponseDto data = analyticsService.compareCourses(
+                programmeBatchCourseId1, programmeBatchCourseId2);
+        return ResponseEntity.ok(ApiResponse.<CourseComparisonAnalyticsResponseDto>builder()
+                .success(true)
+                .message("Course comparison analytics retrieved successfully")
                 .data(data)
                 .build());
     }
