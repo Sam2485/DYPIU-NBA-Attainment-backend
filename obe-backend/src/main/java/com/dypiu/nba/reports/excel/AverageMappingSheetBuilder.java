@@ -12,10 +12,14 @@ import java.util.*;
 public class AverageMappingSheetBuilder {
 
     public static Sheet build(Workbook wb, String sheetName, ProgrammeAttainmentSnapshot snapshot) {
-        return build(wb, sheetName, snapshot, null, null);
+        return build(wb, sheetName, snapshot, null, null, null);
     }
 
     public static Sheet build(Workbook wb, String sheetName, ProgrammeAttainmentSnapshot snapshot, byte[] logoBytes, ReportTemplateDto template) {
+        return build(wb, sheetName, snapshot, logoBytes, null, template);
+    }
+
+    public static Sheet build(Workbook wb, String sheetName, ProgrammeAttainmentSnapshot snapshot, byte[] leftLogo, byte[] rightLogo, ReportTemplateDto template) {
         Sheet sheet = wb.createSheet(sheetName != null ? sheetName : "Average Mapping");
 
         CellStyle headerStyle = ExcelStyles.createHeaderStyle(wb, false);
@@ -33,8 +37,16 @@ public class AverageMappingSheetBuilder {
         psoCodes.sort(ExcelStyles.NATURAL_NUMERICAL_COMPARATOR);
         int totalCols = 3 + poCodes.size() + psoCodes.size();
 
+        // Set column widths before header rendering so physical width geometry is accurate
+        sheet.setColumnWidth(0, (int) (15.82 * 256));
+        sheet.setColumnWidth(1, (int) (14.18 * 256));
+        sheet.setColumnWidth(2, (int) (41.00 * 256));
+        for (int i = 3; i < totalCols; i++) {
+            sheet.setColumnWidth(i, (int) (7.50 * 256));
+        }
+
         int startRow = CommonExcelHeaderRenderer.renderProgrammeHeader(
-                wb, sheet, snapshot, "Average Mapping Strength", totalCols, logoBytes, template, "Term – I & II", true);
+                wb, sheet, snapshot, "Average Mapping Strength", totalCols, leftLogo, rightLogo, template, "Term – I & II", true);
 
         // Table Header (Excel Row 9, startRow index 8)
         Row headerRow = sheet.createRow(startRow);

@@ -19,6 +19,7 @@ public class CourseAttainmentSnapshot extends ReportSnapshot {
     private String courseCode;
     private String courseName;
     private Integer semester;
+    private String courseCoordinatorName;
 
     private String programmeBatchId;
     private String batchName;

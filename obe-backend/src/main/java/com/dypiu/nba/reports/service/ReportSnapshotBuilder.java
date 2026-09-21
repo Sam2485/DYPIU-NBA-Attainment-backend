@@ -43,6 +43,7 @@ public class ReportSnapshotBuilder {
     private final ObjectMapper objectMapper;
     private final com.dypiu.nba.service.AttainmentCalculationService attainmentCalculationService;
     private final ProgrammeBatchIndirectAssessmentRepository indirectAssessmentRepository;
+    private final UserRepository userRepository;
 
     public ProgrammeAttainmentSnapshot buildProgrammeAttainmentSnapshot(
             String masterProgrammeId,
@@ -681,6 +682,51 @@ public class ReportSnapshotBuilder {
             log.warn("Failed to load survey attainment data for offering: {}", programmeBatchCourseId, e);
         }
 
+        // Resolve Course Coordinator Name (strictly user's real name instead of username)
+        String coordinatorName = null;
+        if (pbc.getCourseCoordinatorId() != null && userRepository != null) {
+            coordinatorName = userRepository.findById(pbc.getCourseCoordinatorId())
+                    .map(User::getName)
+                    .filter(n -> !n.isBlank())
+                    .orElse(null);
+        }
+        if (coordinatorName == null && pbc.getCourseCoordinatorName() != null && !pbc.getCourseCoordinatorName().isBlank()) {
+            String rawCoord = pbc.getCourseCoordinatorName().trim();
+            if (userRepository != null) {
+                coordinatorName = userRepository.findByUsernameIgnoreCaseOrEmailIgnoreCase(rawCoord, rawCoord)
+                        .map(User::getName)
+                        .filter(n -> !n.isBlank())
+                        .orElse(rawCoord);
+            } else {
+                coordinatorName = rawCoord;
+            }
+        }
+        if (coordinatorName == null && pbc.getAssignedFaculty() != null && !pbc.getAssignedFaculty().isBlank()) {
+            String rawFaculty = pbc.getAssignedFaculty().trim();
+            if (userRepository != null) {
+                coordinatorName = userRepository.findByUsernameIgnoreCaseOrEmailIgnoreCase(rawFaculty, rawFaculty)
+                        .map(User::getName)
+                        .filter(n -> !n.isBlank())
+                        .orElse(rawFaculty);
+            } else {
+                coordinatorName = rawFaculty;
+            }
+        }
+        if (coordinatorName == null && generatedBy != null && !generatedBy.isBlank()) {
+            String rawGen = generatedBy.trim();
+            if (userRepository != null) {
+                coordinatorName = userRepository.findByUsernameIgnoreCaseOrEmailIgnoreCase(rawGen, rawGen)
+                        .map(User::getName)
+                        .filter(n -> !n.isBlank())
+                        .orElse(null);
+            }
+        }
+        if (coordinatorName == null || coordinatorName.isBlank()) {
+            coordinatorName = (pbc.getCourseCoordinatorName() != null && !pbc.getCourseCoordinatorName().isBlank())
+                    ? pbc.getCourseCoordinatorName()
+                    : "Course Coordinator";
+        }
+
         return CourseAttainmentSnapshot.builder()
                 .reportType(ReportType.COURSE_ATTAINMENT)
                 .institutionId(institutionId != null ? institutionId : "DYPIU")
@@ -688,6 +734,7 @@ public class ReportSnapshotBuilder {
                 .schoolName(schoolName)
                 .academicYear(batchYears)
                 .generatedBy(generatedBy != null ? generatedBy : "Course Coordinator")
+                .courseCoordinatorName(coordinatorName)
                 .generatedAt(ZonedDateTime.now())
                 .programmeBatchCourseId(programmeBatchCourseId)
                 .masterCourseId(pbc.getMasterCourseId())

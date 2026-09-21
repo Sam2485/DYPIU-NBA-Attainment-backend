@@ -41,8 +41,19 @@ public class CommonExcelHeaderRenderer {
     // Lower region: reference grey #D9D9D9 (FFD9D9D9)
     public static final Color COLOR_GREY_HEADER = new Color(217, 217, 217);
 
+    // Authoritative fixed logo physical dimensions from reference template:
+    // cx = 1402080 EMUs (110.4 pt = 147.2 px), cy = 524269 EMUs (41.28 pt = 55.0 px)
+    public static final long FIXED_LOGO_WIDTH_EMU = 1402080L;
+    public static final long FIXED_LOGO_HEIGHT_EMU = 524269L;
+
+    // Target physical width for the left logo region (approx 110 pt = 147 px = 1,402,080 EMUs)
+    public static final long TARGET_LOGO_REGION_WIDTH_EMU = 1402080L;
+
+    // Target physical width for the right reserved metadata region (approx 140 pt = 188 px = 1,800,000 EMUs)
+    public static final long TARGET_RIGHT_REGION_WIDTH_EMU = 1800000L;
+
     /**
-     * Primary shared renderer method for Programme Attainment sheets.
+     * Primary shared renderer method for Programme Attainment sheets with both left and right logos.
      */
     public static int renderProgrammeHeader(
             Workbook wb,
@@ -51,6 +62,7 @@ public class CommonExcelHeaderRenderer {
             String reportTitle,
             int totalColumns,
             byte[] leftLogoBytes,
+            byte[] rightLogoBytes,
             ReportTemplateDto template,
             String term,
             boolean isLandscape) {
@@ -101,11 +113,28 @@ public class CommonExcelHeaderRenderer {
                 institution, school, reportTitle,
                 ay, term != null ? term : "Term – I & II", deptOrProg,
                 revision, dated, dateOfPrep,
-                totalColumns, leftLogoBytes, isLandscape);
+                totalColumns, leftLogoBytes, rightLogoBytes, isLandscape);
     }
 
     /**
-     * Parameterized renderer accepting all discrete dynamic values.
+     * Backward-compatible method accepting single left logo bytes.
+     */
+    public static int renderProgrammeHeader(
+            Workbook wb,
+            Sheet sheet,
+            ProgrammeAttainmentSnapshot snapshot,
+            String reportTitle,
+            int totalColumns,
+            byte[] leftLogoBytes,
+            ReportTemplateDto template,
+            String term,
+            boolean isLandscape) {
+        return renderProgrammeHeader(
+                wb, sheet, snapshot, reportTitle, totalColumns, leftLogoBytes, null, template, term, isLandscape);
+    }
+
+    /**
+     * Parameterized renderer accepting all discrete dynamic values including both left and right logos.
      */
     public static int renderProgrammeHeader(
             Workbook wb,
@@ -121,16 +150,43 @@ public class CommonExcelHeaderRenderer {
             String dateOfPrep,
             int totalColumns,
             byte[] leftLogoBytes,
+            byte[] rightLogoBytes,
             boolean isLandscape) {
 
         int endCol = Math.max(totalColumns - 1, 5);
 
-        // 1. Calculate dynamic zone column boundaries
-        int rightCols = 4;
-        int colRightStart = Math.max(endCol - rightCols + 1, 3);
-        int colRightEnd = endCol;
+        // Ensure sheet has reasonable column widths if not yet configured by caller
+        ensureDefaultColumnWidths(sheet, totalColumns);
+
+        // 1. Determine Left and Right Logo Regions based on FIXED PHYSICAL WIDTH (never fixed column counts)
+        // Center flexible region must always retain sufficient space and absorb width variations
+        int minCenterCols = (totalColumns >= 8) ? 3 : (totalColumns >= 6 ? 2 : 1);
+        int maxSideCols = Math.max(1, (totalColumns - minCenterCols) / 2);
+
         int colLeftStart = 0;
-        int colLeftEnd = (totalColumns > 16 ? 1 : 0);
+        int colLeftEnd = 0;
+        long leftRegionWidthEmu = 0;
+        while (colLeftEnd < maxSideCols - 1) {
+            long w = Units.columnWidthToEMU(sheet.getColumnWidth(colLeftEnd));
+            leftRegionWidthEmu += w;
+            if (leftRegionWidthEmu >= TARGET_LOGO_REGION_WIDTH_EMU) {
+                break;
+            }
+            colLeftEnd++;
+        }
+
+        int colRightEnd = endCol;
+        int colRightStart = endCol;
+        long rightRegionWidthEmu = 0;
+        while (colRightStart > endCol - (maxSideCols - 1)) {
+            long w = Units.columnWidthToEMU(sheet.getColumnWidth(colRightStart));
+            rightRegionWidthEmu += w;
+            if (rightRegionWidthEmu >= TARGET_RIGHT_REGION_WIDTH_EMU) {
+                break;
+            }
+            colRightStart--;
+        }
+
         int colCenterStart = colLeftEnd + 1;
         int colCenterEnd = colRightStart - 1;
 
@@ -160,7 +216,7 @@ public class CommonExcelHeaderRenderer {
         // Upper Center Bottom: School Name (C3:M3 or B3:L3)
         styleRegion(sheet, 2, 2, colCenterStart, colCenterEnd, styleSchool, schoolName != null ? schoolName : "");
 
-        // Upper Right: Reserved Metadata Area (N2:Q3 or M2:P3)
+        // Upper Right: Reserved Metadata Area / Right Logo Area (N2:Q3 or M2:P3)
         styleRegion(sheet, 1, 2, colRightStart, colRightEnd, styleUpperBox, null);
 
         // Row 3 (Excel Row 4, ht=15.75 pt) & Row 4 (Excel Row 5, ht=15.75 pt)
@@ -205,44 +261,14 @@ public class CommonExcelHeaderRenderer {
         Row r7 = sheet.createRow(7);
         r7.setHeightInPoints(15.75f);
 
-        // 3. Embed Logo into Left Area if available
+        // 3. Embed Logo into Left Area centered with FIXED Physical Size
         if (leftLogoBytes != null && leftLogoBytes.length > 0) {
-            try {
-                int picType = (leftLogoBytes.length > 3 && (leftLogoBytes[0] & 0xFF) == 0xFF && (leftLogoBytes[1] & 0xFF) == 0xD8)
-                        ? Workbook.PICTURE_TYPE_JPEG : Workbook.PICTURE_TYPE_PNG;
-                int pictureIdx = wb.addPicture(leftLogoBytes, picType);
-                Drawing<?> drawing = sheet.getDrawingPatriarch();
-                if (drawing == null) {
-                    drawing = sheet.createDrawingPatriarch();
-                }
-                CreationHelper helper = wb.getCreationHelper();
-                ClientAnchor anchor = helper.createClientAnchor();
-                anchor.setCol1(colLeftStart);
-                anchor.setRow1(1);
-                anchor.setCol2(colLeftEnd + 1);
-                anchor.setRow2(3);
-                anchor.setDx1(Units.toEMU(6));
-                anchor.setDy1(Units.toEMU(4));
-                anchor.setDx2(-Units.toEMU(6));
-                anchor.setDy2(-Units.toEMU(4));
-                anchor.setAnchorType(ClientAnchor.AnchorType.MOVE_DONT_RESIZE);
-                Picture picture = drawing.createPicture(anchor, pictureIdx);
-                if (picture instanceof org.apache.poi.xssf.usermodel.XSSFPicture xPic) {
-                    try {
-                        if (xPic.getCTPicture() != null && xPic.getCTPicture().getNvPicPr() != null) {
-                            var nvPr = xPic.getCTPicture().getNvPicPr();
-                            var cNvPr = nvPr.getCNvPicPr();
-                            if (cNvPr != null) {
-                                var locks = cNvPr.isSetPicLocks() ? cNvPr.getPicLocks() : cNvPr.addNewPicLocks();
-                                locks.setNoChangeAspect(true);
-                            }
-                        }
-                    } catch (Exception ignored) {
-                    }
-                }
-            } catch (Exception e) {
-                log.warn("Failed to embed logo into Programme Excel header", e);
-            }
+            embedCenteredLogo(wb, sheet, leftLogoBytes, colLeftStart, colLeftEnd, 1, 2, FIXED_LOGO_WIDTH_EMU, FIXED_LOGO_HEIGHT_EMU);
+        }
+
+        // 4. Embed Logo into Right Area centered with FIXED Physical Size
+        if (rightLogoBytes != null && rightLogoBytes.length > 0) {
+            embedCenteredLogo(wb, sheet, rightLogoBytes, colRightStart, colRightEnd, 1, 2, FIXED_LOGO_WIDTH_EMU, FIXED_LOGO_HEIGHT_EMU);
         }
 
         // Configure Sheet Print & Page setup
@@ -253,6 +279,32 @@ public class CommonExcelHeaderRenderer {
         sheet.setDisplayGridlines(true);
 
         return 8; // Next row index for table headers (Excel Row 9)
+    }
+
+    /**
+     * Backward-compatible parameterized renderer accepting single left logo bytes.
+     */
+    public static int renderProgrammeHeader(
+            Workbook wb,
+            Sheet sheet,
+            String institutionName,
+            String schoolName,
+            String reportTitle,
+            String academicYear,
+            String term,
+            String departmentOrProgramme,
+            String revision,
+            String dated,
+            String dateOfPrep,
+            int totalColumns,
+            byte[] leftLogoBytes,
+            boolean isLandscape) {
+        return renderProgrammeHeader(
+                wb, sheet,
+                institutionName, schoolName, reportTitle,
+                academicYear, term, departmentOrProgramme,
+                revision, dated, dateOfPrep,
+                totalColumns, leftLogoBytes, null, isLandscape);
     }
 
     /**
@@ -469,5 +521,159 @@ public class CommonExcelHeaderRenderer {
         style.setBottomBorderColor(IndexedColors.BLACK.getIndex());
         style.setLeftBorderColor(IndexedColors.BLACK.getIndex());
         style.setRightBorderColor(IndexedColors.BLACK.getIndex());
+    }
+
+    private static void embedCenteredLogo(
+            Workbook wb,
+            Sheet sheet,
+            byte[] logoBytes,
+            int startCol,
+            int endCol,
+            int startRow,
+            int endRow,
+            long maxWEmu,
+            long maxHEmu) {
+
+        if (logoBytes == null || logoBytes.length == 0) {
+            return;
+        }
+
+        try {
+            // 1. Calculate physical region width
+            long regionWidthEmu = 0;
+            for (int c = startCol; c <= endCol; c++) {
+                regionWidthEmu += Units.columnWidthToEMU(sheet.getColumnWidth(c));
+            }
+
+            // 2. Calculate physical region height
+            long regionHeightEmu = 0;
+            for (int r = startRow; r <= endRow; r++) {
+                Row row = sheet.getRow(r);
+                float hPt = (row != null) ? row.getHeightInPoints() : sheet.getDefaultRowHeightInPoints();
+                regionHeightEmu += Units.toEMU(hPt);
+            }
+
+            // 3. Determine actual image dimensions preserving aspect ratio
+            long[] fittedDims = calculateFittedDimensions(logoBytes, maxWEmu, maxHEmu);
+            long targetWEmu = fittedDims[0];
+            long targetHEmu = Math.min(fittedDims[1], regionHeightEmu);
+
+            // 4. Calculate centering margins (equal padding on both sides)
+            long marginXEmu = Math.max(0, (regionWidthEmu - targetWEmu) / 2);
+            long marginYEmu = Math.max(0, (regionHeightEmu - targetHEmu) / 2);
+
+            // 5. Convert horizontal coordinates (targetX1, targetX2) to (col1, dx1) and (col2, dx2)
+            int[] fromX = findCellAndOffset(sheet, startCol, marginXEmu, false);
+            int[] toX = findCellAndOffset(sheet, startCol, marginXEmu + targetWEmu, false);
+
+            // 6. Convert vertical coordinates (targetY1, targetY2) to (row1, dy1) and (row2, dy2)
+            int[] fromY = findCellAndOffset(sheet, startRow, marginYEmu, true);
+            int[] toY = findCellAndOffset(sheet, startRow, marginYEmu + targetHEmu, true);
+
+            // 7. Add picture to workbook
+            int pictureType = (logoBytes.length > 2 && (logoBytes[0] & 0xFF) == 0xFF && (logoBytes[1] & 0xFF) == 0xD8)
+                    ? Workbook.PICTURE_TYPE_JPEG : Workbook.PICTURE_TYPE_PNG;
+            int pictureIdx = wb.addPicture(logoBytes, pictureType);
+
+            Drawing<?> drawing = sheet.getDrawingPatriarch();
+            if (drawing == null) {
+                drawing = sheet.createDrawingPatriarch();
+            }
+
+            CreationHelper helper = wb.getCreationHelper();
+            ClientAnchor anchor = helper.createClientAnchor();
+            anchor.setCol1(fromX[0]);
+            anchor.setDx1(fromX[1]);
+            anchor.setRow1(fromY[0]);
+            anchor.setDy1(fromY[1]);
+            anchor.setCol2(toX[0]);
+            anchor.setDx2(toX[1]);
+            anchor.setRow2(toY[0]);
+            anchor.setDy2(toY[1]);
+
+            Picture picture = drawing.createPicture(anchor, pictureIdx);
+            if (picture.getClientAnchor() != null) {
+                picture.getClientAnchor().setAnchorType(ClientAnchor.AnchorType.MOVE_DONT_RESIZE);
+            }
+
+            if (picture instanceof org.apache.poi.xssf.usermodel.XSSFPicture xPic) {
+                try {
+                    org.apache.xmlbeans.XmlCursor cursor = xPic.getCTPicture().newCursor();
+                    if (cursor.toParent()) {
+                        org.apache.xmlbeans.XmlObject parent = cursor.getObject();
+                        if (parent instanceof org.openxmlformats.schemas.drawingml.x2006.spreadsheetDrawing.CTTwoCellAnchor ctAnchor) {
+                            ctAnchor.setEditAs(org.openxmlformats.schemas.drawingml.x2006.spreadsheetDrawing.STEditAs.ONE_CELL);
+                        }
+                    }
+                    cursor.dispose();
+
+                    if (xPic.getCTPicture() != null && xPic.getCTPicture().getNvPicPr() != null) {
+                        var nvPr = xPic.getCTPicture().getNvPicPr();
+                        var cNvPr = nvPr.getCNvPicPr();
+                        if (cNvPr != null) {
+                            var locks = cNvPr.isSetPicLocks() ? cNvPr.getPicLocks() : cNvPr.addNewPicLocks();
+                            locks.setNoChangeAspect(true);
+                        }
+                    }
+                } catch (Exception ignored) {}
+            }
+        } catch (Exception e) {
+            log.warn("Failed to embed centered logo into Programme Excel header: {}", e.getMessage());
+        }
+    }
+
+    private static int[] findCellAndOffset(Sheet sheet, int startIdx, long targetOffsetEmu, boolean isRow) {
+        if (targetOffsetEmu <= 0) {
+            return new int[]{startIdx, 0};
+        }
+        long accum = 0;
+        int maxIdx = isRow ? 100 : Math.max(100, sheet.getRow(0) != null ? sheet.getRow(0).getLastCellNum() : 50);
+        for (int i = startIdx; i <= maxIdx; i++) {
+            long dim = isRow
+                    ? Units.toEMU(sheet.getRow(i) != null ? sheet.getRow(i).getHeightInPoints() : sheet.getDefaultRowHeightInPoints())
+                    : Units.columnWidthToEMU(sheet.getColumnWidth(i));
+            if (accum + dim > targetOffsetEmu) {
+                return new int[]{i, (int) (targetOffsetEmu - accum)};
+            }
+            accum += dim;
+        }
+        return new int[]{startIdx, 0};
+    }
+
+    private static long[] calculateFittedDimensions(byte[] logoBytes, long maxWEmu, long maxHEmu) {
+        if (logoBytes == null || logoBytes.length == 0) {
+            return new long[]{maxWEmu, maxHEmu};
+        }
+        try {
+            java.awt.image.BufferedImage img = javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(logoBytes));
+            if (img != null && img.getWidth() > 0 && img.getHeight() > 0) {
+                double scaleW = (double) maxWEmu / img.getWidth();
+                double scaleH = (double) maxHEmu / img.getHeight();
+                double scale = Math.min(scaleW, scaleH);
+                long fitW = Math.round(img.getWidth() * scale);
+                long fitH = Math.round(img.getHeight() * scale);
+                return new long[]{fitW, fitH};
+            }
+        } catch (Exception ignored) {}
+        return new long[]{maxWEmu, maxHEmu};
+    }
+
+    private static void ensureDefaultColumnWidths(Sheet sheet, int totalColumns) {
+        if (sheet.getColumnWidth(0) <= 2048) {
+            if ("Overall Programme Attainment".equalsIgnoreCase(sheet.getSheetName()) || totalColumns <= 16) {
+                sheet.setColumnWidth(0, (int) (22.0 * 256));
+                sheet.setColumnWidth(1, (int) (38.0 * 256));
+                for (int i = 2; i < totalColumns; i++) {
+                    sheet.setColumnWidth(i, (int) (7.50 * 256));
+                }
+            } else {
+                sheet.setColumnWidth(0, (int) (15.82 * 256));
+                sheet.setColumnWidth(1, (int) (14.18 * 256));
+                sheet.setColumnWidth(2, (int) (41.00 * 256));
+                for (int i = 3; i < totalColumns; i++) {
+                    sheet.setColumnWidth(i, (int) (7.50 * 256));
+                }
+            }
+        }
     }
 }

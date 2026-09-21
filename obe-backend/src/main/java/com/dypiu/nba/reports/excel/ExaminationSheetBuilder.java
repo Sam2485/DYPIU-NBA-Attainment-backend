@@ -85,9 +85,10 @@ public class ExaminationSheetBuilder {
         String className = (examData != null && examData.getClassName() != null && !examData.getClassName().isBlank())
                 ? examData.getClassName()
                 : (snapshot.getSemester() != null ? "Semester " + snapshot.getSemester() : "TY B.Tech");
-        String academicYear = (examData != null && examData.getAcademicYear() != null && !examData.getAcademicYear().isBlank())
+        String rawAy = (examData != null && examData.getAcademicYear() != null && !examData.getAcademicYear().isBlank())
                 ? examData.getAcademicYear()
                 : (snapshot.getAcademicYear() != null ? snapshot.getAcademicYear() : "");
+        String academicYear = CourseExcelHeaderRenderer.calculateCourseAcademicYear(rawAy, snapshot.getSemester());
 
         BigDecimal thresholdPct = (examData != null && examData.getThresholdPercentage() != null)
                 ? examData.getThresholdPercentage()

@@ -253,4 +253,39 @@ public class CourseExcelHeaderRendererTest {
             wb.close();
         });
     }
+
+    @Test
+    @DisplayName("Calculate Course Academic Year: Converts multi-year batch span to 1-year course academic year based on semester")
+    void testCalculateCourseAcademicYear() {
+        // User example: batch 2025-2029, semester 3 -> 2026-2027
+        assertEquals("2026-2027", CourseExcelHeaderRenderer.calculateCourseAcademicYear("2025-2029", 3));
+
+        // Semesters 1 and 2: Year 1 (2024-2025 for 2024-2028 batch)
+        assertEquals("2024-2025", CourseExcelHeaderRenderer.calculateCourseAcademicYear("2024-2028", 1));
+        assertEquals("2024-2025", CourseExcelHeaderRenderer.calculateCourseAcademicYear("2024-2028", 2));
+
+        // Semesters 3 and 4: Year 2 (2025-2026 for 2024-2028 batch)
+        assertEquals("2025-2026", CourseExcelHeaderRenderer.calculateCourseAcademicYear("2024-2028", 3));
+        assertEquals("2025-2026", CourseExcelHeaderRenderer.calculateCourseAcademicYear("2024-2028", 4));
+
+        // Semesters 5 and 6: Year 3 (2026-2027 for 2024-2028 batch)
+        assertEquals("2026-2027", CourseExcelHeaderRenderer.calculateCourseAcademicYear("2024-2028", 5));
+        assertEquals("2026-2027", CourseExcelHeaderRenderer.calculateCourseAcademicYear("2024-2028", 6));
+
+        // Semesters 7 and 8: Year 4 (2027-2028 for 2024-2028 batch)
+        assertEquals("2027-2028", CourseExcelHeaderRenderer.calculateCourseAcademicYear("2024-2028", 7));
+        assertEquals("2027-2028", CourseExcelHeaderRenderer.calculateCourseAcademicYear("2024-2028", 8));
+
+        // AY prefix preservation
+        assertEquals("AY 2026-2027", CourseExcelHeaderRenderer.calculateCourseAcademicYear("AY 2025-2029", 3));
+
+        // Already 1-year academic year should be preserved
+        assertEquals("2023-24", CourseExcelHeaderRenderer.calculateCourseAcademicYear("2023-24", 5));
+        assertEquals("2025-26", CourseExcelHeaderRenderer.calculateCourseAcademicYear("2025-26", 3));
+        assertEquals("2025-2026", CourseExcelHeaderRenderer.calculateCourseAcademicYear("2025-2026", 3));
+
+        // Null and blank handling
+        assertEquals("", CourseExcelHeaderRenderer.calculateCourseAcademicYear(null, 3));
+        assertEquals("", CourseExcelHeaderRenderer.calculateCourseAcademicYear("", 3));
+    }
 }
