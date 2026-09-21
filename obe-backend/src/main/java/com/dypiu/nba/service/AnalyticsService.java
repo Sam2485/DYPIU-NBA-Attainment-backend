@@ -9,7 +9,9 @@ import com.dypiu.nba.dto.ProgrammeAttainmentResultDto;
 import com.dypiu.nba.dto.ProgrammeBatchAttainmentReportDto;
 import com.dypiu.nba.dto.ProgrammeSurveyResultDto;
 import com.dypiu.nba.dto.ExaminationAttainmentResultDto;
+import com.dypiu.nba.dto.StudentMarksRowDto;
 import com.dypiu.nba.dto.SurveyAttainmentResultDto;
+import com.dypiu.nba.dto.SurveyResponseRowDto;
 import com.dypiu.nba.dto.analytics.*;
 import com.dypiu.nba.entity.*;
 import com.dypiu.nba.exception.BadRequestException;
@@ -60,6 +62,7 @@ public class AnalyticsService {
     private final AttainmentReportService attainmentReportService;
     private final AttainmentConfigurationRepository attainmentConfigurationRepository;
     private final BatchLifecycleService batchLifecycleService;
+    private final StudentRepository studentRepository;
 
     // ==========================================
     // 1. KPI ENDPOINT
@@ -1513,12 +1516,37 @@ public class AnalyticsService {
         // Enforce role and hierarchy scope authorization
         validateAndResolveScope(null, null, null, course.getProgrammeBatchId());
 
+        CurrentUserScope userScope = currentUserScopeService != null ? currentUserScopeService.getCurrentUserScope() : null;
+        if (userScope != null && userScope.isFaculty()) {
+            boolean isCoord = (course.getCourseCoordinatorId() != null && Objects.equals(course.getCourseCoordinatorId(), userScope.getUserId()))
+                    || (course.getCourseCoordinatorEmail() != null && userScope.getEmail() != null && course.getCourseCoordinatorEmail().equalsIgnoreCase(userScope.getEmail()));
+            boolean isAssigned = isCoord || (course.getAssignedFaculty() != null
+                    && ((userScope.getEmail() != null && course.getAssignedFaculty().contains(userScope.getEmail()))
+                    || (userScope.getName() != null && course.getAssignedFaculty().contains(userScope.getName()))));
+            if (!isAssigned) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: You are not assigned to this Course Offering.");
+            }
+        }
+
         String targetCo = coCode.toUpperCase().trim();
 
-        // 1. Fetch Course Attainment Report for Table 3 metadata
+        // 1. Fetch configured Course Outcomes
+        List<CourseOutcome> configuredCos = courseOutcomeRepository.findByProgrammeBatchCourseId(programmeBatchCourseId);
+        if ((configuredCos == null || configuredCos.isEmpty()) && course.getMasterCourseId() != null) {
+            List<ProgrammeBatchCourse> relatedOfferings = programmeBatchCourseRepository.findByMasterCourseId(course.getMasterCourseId());
+            if (relatedOfferings != null && !relatedOfferings.isEmpty()) {
+                List<String> offIds = relatedOfferings.stream().map(ProgrammeBatchCourse::getId).toList();
+                configuredCos = courseOutcomeRepository.findByProgrammeBatchCourseIdIn(offIds);
+            }
+        }
+        if (configuredCos == null) {
+            configuredCos = Collections.emptyList();
+        }
+
+        // 2. Fetch Course Attainment Report for Table 3 metadata
         CourseAttainmentReport cReport = courseAttainmentReportRepository.findByProgrammeBatchCourseId(programmeBatchCourseId).orElse(null);
         String coStatement = null;
-        BigDecimal coTargetLevel = BigDecimal.valueOf(2.00);
+        BigDecimal coTargetLevel = BigDecimal.valueOf(2.50);
         BigDecimal coDirectAttainment = BigDecimal.ZERO;
         BigDecimal coIndirectAttainment = BigDecimal.ZERO;
         BigDecimal coOverallAttainment = BigDecimal.ZERO;
@@ -1530,8 +1558,14 @@ public class AnalyticsService {
             coOverallAttainment = cReport.getOverallCoAttainment() != null ? cReport.getOverallCoAttainment() : BigDecimal.ZERO;
 
             List<CourseAttainmentReportDto.Table3Row> table3 = parseTable3CoAttainments(cReport.getTable3CoAttainmentJson());
+            Set<String> table3Keys = table3.stream()
+                    .map(CourseAttainmentReportDto.Table3Row::getCoCode)
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toCollection(LinkedHashSet::new));
+            String matchedT3Key = resolveMatchedCoKey(table3Keys, targetCo, configuredCos);
+
             for (CourseAttainmentReportDto.Table3Row t3 : table3) {
-                if (t3.getCoCode() != null && t3.getCoCode().equalsIgnoreCase(targetCo)) {
+                if (t3.getCoCode() != null && (t3.getCoCode().equalsIgnoreCase(targetCo) || (matchedT3Key != null && t3.getCoCode().equalsIgnoreCase(matchedT3Key)))) {
                     coStatement = t3.getStatement();
                     if (t3.getTargetLevel() != null) coTargetLevel = t3.getTargetLevel();
                     if (t3.getFinalAttainment() != null) coOverallAttainment = t3.getFinalAttainment();
@@ -1543,16 +1577,182 @@ public class AnalyticsService {
             }
         }
 
-        // 2. Fetch Student CO Marks
-        List<StudentCoMark> marks = studentCoMarkRepository.findByProgrammeBatchCourseIdAndCoCode(programmeBatchCourseId, targetCo);
-        if (marks.isEmpty()) {
-            List<StudentCoMark> allMarks = studentCoMarkRepository.findByProgrammeBatchCourseId(programmeBatchCourseId);
-            marks = allMarks.stream()
-                    .filter(m -> m.getCoCode() != null && m.getCoCode().equalsIgnoreCase(targetCo))
-                    .toList();
+        if (coStatement == null && !configuredCos.isEmpty()) {
+            Set<String> coKeys = configuredCos.stream()
+                    .map(CourseOutcome::getCode)
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toCollection(LinkedHashSet::new));
+            String matchedCoKey = resolveMatchedCoKey(coKeys, targetCo, configuredCos);
+            for (CourseOutcome co : configuredCos) {
+                if (co.getCode() != null && (co.getCode().equalsIgnoreCase(targetCo) || (matchedCoKey != null && co.getCode().equalsIgnoreCase(matchedCoKey)))) {
+                    coStatement = co.getStatement();
+                    if (co.getTargetLevel() != null) coTargetLevel = co.getTargetLevel();
+                    break;
+                }
+            }
         }
 
-        int totalStudents = marks.size();
+        // 3. Fetch authoritative Examination Evidence via AttainmentCalculationService
+        ExaminationAttainmentResultDto examResult = null;
+        try {
+            examResult = attainmentCalculationService.getExaminationAttainment(programmeBatchCourseId);
+        } catch (Exception ex) {
+            log.warn("[AnalyticsService] Could not resolve examination attainment for offering {}: {}", programmeBatchCourseId, ex.getMessage());
+        }
+
+        Set<String> examCoKeys = new LinkedHashSet<>();
+        if (examResult != null) {
+            if (examResult.getCoMaxMarks() != null) {
+                examCoKeys.addAll(examResult.getCoMaxMarks().keySet());
+            }
+            if (examResult.getStudentMarks() != null) {
+                for (StudentMarksRowDto sm : examResult.getStudentMarks()) {
+                    if (sm.getCoMarks() != null) {
+                        examCoKeys.addAll(sm.getCoMarks().keySet());
+                    }
+                }
+            }
+        }
+
+        List<StudentCoMark> dbMarks = null;
+        if (examCoKeys.isEmpty()) {
+            dbMarks = studentCoMarkRepository.findByProgrammeBatchCourseId(programmeBatchCourseId);
+            for (StudentCoMark dm : dbMarks) {
+                if (dm.getCoCode() != null) {
+                    examCoKeys.add(dm.getCoCode());
+                }
+            }
+        }
+
+        String matchedExamCoKey = resolveMatchedCoKey(examCoKeys, targetCo, configuredCos);
+
+        if (examResult != null && matchedExamCoKey != null) {
+            if (coDirectAttainment == null || coDirectAttainment.compareTo(BigDecimal.ZERO) == 0) {
+                if (examResult.getCoAttainmentLevels() != null && examResult.getCoAttainmentLevels().containsKey(matchedExamCoKey)) {
+                    Integer lvl = examResult.getCoAttainmentLevels().get(matchedExamCoKey);
+                    if (lvl != null) {
+                        coDirectAttainment = BigDecimal.valueOf(lvl);
+                    }
+                }
+            }
+        }
+
+        // 4. Extract Student-level Marks for the requested CO
+        List<StudentEvidenceRowDto> studentRows = new ArrayList<>();
+        BigDecimal activeThreshold = getStudentEvidenceThreshold();
+        if (activeThreshold == null) {
+            activeThreshold = new BigDecimal("50.00");
+        }
+
+        if (matchedExamCoKey != null) {
+            if (dbMarks == null) {
+                dbMarks = studentCoMarkRepository.findByProgrammeBatchCourseId(programmeBatchCourseId);
+            }
+            if (dbMarks != null && !dbMarks.isEmpty()) {
+                BigDecimal resolvedMaxMarks = (examResult != null && examResult.getCoMaxMarks() != null && examResult.getCoMaxMarks().get(matchedExamCoKey) != null)
+                        ? examResult.getCoMaxMarks().get(matchedExamCoKey)
+                        : null;
+
+                for (StudentCoMark dm : dbMarks) {
+                    if (dm.getCoCode() == null || !dm.getCoCode().equalsIgnoreCase(matchedExamCoKey)) {
+                        continue;
+                    }
+                    BigDecimal marksObtained = dm.getMarksObtained();
+                    if (marksObtained == null) {
+                        continue;
+                    }
+                    BigDecimal maxMarks = (dm.getMaxMarks() != null && dm.getMaxMarks().compareTo(BigDecimal.ZERO) > 0)
+                            ? dm.getMaxMarks()
+                            : (resolvedMaxMarks != null && resolvedMaxMarks.compareTo(BigDecimal.ZERO) > 0
+                            ? resolvedMaxMarks
+                            : BigDecimal.valueOf(100.00));
+
+                    if (marksObtained.compareTo(BigDecimal.ZERO) < 0) {
+                        marksObtained = BigDecimal.ZERO;
+                    }
+                    if (marksObtained.compareTo(maxMarks) > 0) {
+                        marksObtained = maxMarks;
+                    }
+
+                    BigDecimal pct = marksObtained.divide(maxMarks, 4, RoundingMode.HALF_UP)
+                            .multiply(BigDecimal.valueOf(100))
+                            .setScale(2, RoundingMode.HALF_UP);
+
+                    boolean met = pct.compareTo(activeThreshold) >= 0;
+                    String prn = dm.getPrn();
+                    String studentName = dm.getStudentName();
+
+                    studentRows.add(StudentEvidenceRowDto.builder()
+                            .studentIdentifier("Student " + (studentRows.size() + 1))
+                            .maskedPrn(maskPrn(prn))
+                            .prn(prn)
+                            .studentName(studentName)
+                            .coCode(targetCo)
+                            .marksObtained(marksObtained.setScale(2, RoundingMode.HALF_UP))
+                            .maxMarks(maxMarks.setScale(2, RoundingMode.HALF_UP))
+                            .percentage(pct)
+                            .threshold(activeThreshold)
+                            .thresholdMet(met)
+                            .evaluationStatus(met ? "MET" : "BELOW")
+                            .build());
+                }
+            } else if (examResult != null && examResult.getStudentMarks() != null && !examResult.getStudentMarks().isEmpty()) {
+                BigDecimal maxMarks = (examResult.getCoMaxMarks() != null && examResult.getCoMaxMarks().get(matchedExamCoKey) != null)
+                        ? examResult.getCoMaxMarks().get(matchedExamCoKey)
+                        : BigDecimal.valueOf(100.00);
+                if (maxMarks.compareTo(BigDecimal.ZERO) <= 0) {
+                    maxMarks = BigDecimal.valueOf(100.00);
+                }
+
+                for (StudentMarksRowDto sm : examResult.getStudentMarks()) {
+                    if (sm.getCoMarks() == null) continue;
+                    BigDecimal marksObtained = sm.getCoMarks().get(matchedExamCoKey);
+                    if (marksObtained == null) {
+                        for (Map.Entry<String, BigDecimal> e : sm.getCoMarks().entrySet()) {
+                            if (e.getKey() != null && e.getKey().equalsIgnoreCase(matchedExamCoKey)) {
+                                marksObtained = e.getValue();
+                                break;
+                            }
+                        }
+                    }
+                    if (marksObtained == null) {
+                        continue;
+                    }
+
+                    if (marksObtained.compareTo(BigDecimal.ZERO) < 0) {
+                        marksObtained = BigDecimal.ZERO;
+                    }
+                    if (marksObtained.compareTo(maxMarks) > 0) {
+                        marksObtained = maxMarks;
+                    }
+
+                    BigDecimal pct = marksObtained.divide(maxMarks, 4, RoundingMode.HALF_UP)
+                            .multiply(BigDecimal.valueOf(100))
+                            .setScale(2, RoundingMode.HALF_UP);
+
+                    boolean met = pct.compareTo(activeThreshold) >= 0;
+                    String prn = sm.getPrn();
+                    String studentName = sm.getStudentName();
+
+                    studentRows.add(StudentEvidenceRowDto.builder()
+                            .studentIdentifier("Student " + (studentRows.size() + 1))
+                            .maskedPrn(maskPrn(prn))
+                            .prn(prn)
+                            .studentName(studentName)
+                            .coCode(targetCo)
+                            .marksObtained(marksObtained.setScale(2, RoundingMode.HALF_UP))
+                            .maxMarks(maxMarks.setScale(2, RoundingMode.HALF_UP))
+                            .percentage(pct)
+                            .threshold(activeThreshold)
+                            .thresholdMet(met)
+                            .evaluationStatus(met ? "MET" : "BELOW")
+                            .build());
+                }
+            }
+        }
+
+        // 5. Calculate Summary Metrics from the Evaluated Student Set
+        int totalStudents = studentRows.size();
         int studentsAbove = 0;
         int studentsBelow = 0;
         BigDecimal sumPct = BigDecimal.ZERO;
@@ -1560,37 +1760,25 @@ public class AnalyticsService {
         BigDecimal lowestPct = totalStudents > 0 ? BigDecimal.valueOf(100) : BigDecimal.ZERO;
 
         Map<String, Integer> scoreDistribution = new LinkedHashMap<>();
-        scoreDistribution.put("90-100%", 0);
-        scoreDistribution.put("80-89%", 0);
-        scoreDistribution.put("70-79%", 0);
-        scoreDistribution.put("60-69%", 0);
-        scoreDistribution.put("50-59%", 0);
         scoreDistribution.put("<50%", 0);
+        scoreDistribution.put("50-59%", 0);
+        scoreDistribution.put("60-69%", 0);
+        scoreDistribution.put("70-79%", 0);
+        scoreDistribution.put("80-89%", 0);
+        scoreDistribution.put("90-100%", 0);
 
-        List<StudentEvidenceRowDto> studentRows = new ArrayList<>();
-
-        BigDecimal activeThreshold = getStudentEvidenceThreshold();
-
-        for (int i = 0; i < marks.size(); i++) {
-            StudentCoMark m = marks.get(i);
-            BigDecimal marksObtained = m.getMarksObtained() != null ? m.getMarksObtained() : BigDecimal.ZERO;
-            BigDecimal maxMarks = m.getMaxMarks() != null && m.getMaxMarks().compareTo(BigDecimal.ZERO) > 0 ? m.getMaxMarks() : BigDecimal.valueOf(100.00);
-
-            BigDecimal pct = marksObtained.divide(maxMarks, 4, RoundingMode.HALF_UP).multiply(BigDecimal.valueOf(100)).setScale(2, RoundingMode.HALF_UP);
-
+        for (StudentEvidenceRowDto r : studentRows) {
+            BigDecimal pct = r.getPercentage();
             sumPct = sumPct.add(pct);
             if (pct.compareTo(highestPct) > 0) highestPct = pct;
             if (pct.compareTo(lowestPct) < 0) lowestPct = pct;
 
-            // Student Performance Evidence Threshold (Authoritative IQAC Configured)
-            boolean met = pct.compareTo(activeThreshold) >= 0;
-            if (met) {
+            if (r.isThresholdMet()) {
                 studentsAbove++;
             } else {
                 studentsBelow++;
             }
 
-            // Bucketing
             if (pct.compareTo(BigDecimal.valueOf(90.00)) >= 0) {
                 scoreDistribution.put("90-100%", scoreDistribution.get("90-100%") + 1);
             } else if (pct.compareTo(BigDecimal.valueOf(80.00)) >= 0) {
@@ -1604,15 +1792,6 @@ public class AnalyticsService {
             } else {
                 scoreDistribution.put("<50%", scoreDistribution.get("<50%") + 1);
             }
-
-            studentRows.add(StudentEvidenceRowDto.builder()
-                    .studentIdentifier("Student " + (i + 1))
-                    .maskedPrn(maskPrn(m.getPrn()))
-                    .marksObtained(marksObtained.setScale(2, RoundingMode.HALF_UP))
-                    .maxMarks(maxMarks.setScale(2, RoundingMode.HALF_UP))
-                    .percentage(pct)
-                    .thresholdMet(met)
-                    .build());
         }
 
         BigDecimal avgPct = totalStudents > 0
@@ -1622,6 +1801,16 @@ public class AnalyticsService {
         BigDecimal attainmentRate = totalStudents > 0
                 ? BigDecimal.valueOf(studentsAbove).multiply(BigDecimal.valueOf(100.00)).divide(BigDecimal.valueOf(totalStudents), 2, RoundingMode.HALF_UP)
                 : BigDecimal.ZERO;
+
+        Integer totalEnrolled = null;
+        if (studentRepository != null && course.getProgrammeBatchId() != null) {
+            try {
+                totalEnrolled = studentRepository.findByProgrammeBatchId(course.getProgrammeBatchId()).size();
+            } catch (Exception ignored) {}
+        }
+        if (totalEnrolled == null && examResult != null && examResult.getTotalStudents() != null && examResult.getTotalStudents() > 0) {
+            totalEnrolled = examResult.getTotalStudents();
+        }
 
         return StudentCoEvidenceResponseDto.builder()
                 .programmeBatchCourseId(programmeBatchCourseId)
@@ -1637,6 +1826,7 @@ public class AnalyticsService {
                 .coOverallAttainment(coOverallAttainment)
                 .coTargetMet(coTargetMet)
                 .configuredThresholdPercentage(activeThreshold)
+                .totalStudentsEnrolled(totalEnrolled)
                 .totalStudentsEvaluated(totalStudents)
                 .studentsMeetingThreshold(studentsAbove)
                 .studentsBelowThreshold(studentsBelow)
@@ -1646,6 +1836,442 @@ public class AnalyticsService {
                 .lowestPercentage(totalStudents > 0 ? lowestPct : BigDecimal.ZERO)
                 .scoreDistribution(scoreDistribution)
                 .studentRecords(studentRows)
+                .build();
+    }
+
+    // ==========================================
+    // 8B. CO INDIRECT EVIDENCE ENDPOINT
+    // ==========================================
+    private final Map<String, CoIndirectEvidenceResponseDto> coIndirectEvidenceCache = new java.util.concurrent.ConcurrentHashMap<>();
+
+    public void invalidateCoIndirectEvidenceCache(String programmeBatchCourseId) {
+        if (programmeBatchCourseId != null && !programmeBatchCourseId.isBlank()) {
+            coIndirectEvidenceCache.remove(programmeBatchCourseId);
+        } else {
+            coIndirectEvidenceCache.clear();
+        }
+    }
+
+    public CoIndirectEvidenceResponseDto getCoIndirectEvidence(String programmeBatchCourseId, String coCode) {
+        if (programmeBatchCourseId == null || programmeBatchCourseId.isBlank()) {
+            throw new BadRequestException("programmeBatchCourseId is required");
+        }
+
+        ProgrammeBatchCourse course = programmeBatchCourseRepository.findById(programmeBatchCourseId.trim())
+                .orElseThrow(() -> new ResourceNotFoundException("Course offering not found: " + programmeBatchCourseId));
+
+        // Enforce role and hierarchy scope authorization
+        validateAndResolveScope(null, null, null, course.getProgrammeBatchId());
+
+        CurrentUserScope userScope = currentUserScopeService != null ? currentUserScopeService.getCurrentUserScope() : null;
+        if (userScope != null && userScope.isFaculty()) {
+            boolean isCoord = (course.getCourseCoordinatorId() != null && Objects.equals(course.getCourseCoordinatorId(), userScope.getUserId()))
+                    || (course.getCourseCoordinatorEmail() != null && userScope.getEmail() != null && course.getCourseCoordinatorEmail().equalsIgnoreCase(userScope.getEmail()));
+            boolean isAssigned = isCoord || (course.getAssignedFaculty() != null
+                    && ((userScope.getEmail() != null && course.getAssignedFaculty().contains(userScope.getEmail()))
+                    || (userScope.getName() != null && course.getAssignedFaculty().contains(userScope.getName()))));
+            if (!isAssigned) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: You are not assigned to this Course Offering.");
+            }
+        }
+
+        CoIndirectEvidenceResponseDto canonicalResponse = coIndirectEvidenceCache.computeIfAbsent(
+                programmeBatchCourseId.trim(), this::buildCanonicalCoIndirectEvidence);
+
+        String cleanCo = coCode != null ? coCode.trim() : null;
+        boolean isAll = cleanCo == null || cleanCo.isEmpty() || "ALL".equalsIgnoreCase(cleanCo);
+
+        if (isAll) {
+            return CoIndirectEvidenceResponseDto.builder()
+                    .programmeBatchCourseId(canonicalResponse.getProgrammeBatchCourseId())
+                    .courseCode(canonicalResponse.getCourseCode())
+                    .courseName(canonicalResponse.getCourseName())
+                    .semester(canonicalResponse.getSemester())
+                    .batchName(canonicalResponse.getBatchName())
+                    .programmeName(canonicalResponse.getProgrammeName())
+                    .departmentName(canonicalResponse.getDepartmentName())
+                    .schoolName(canonicalResponse.getSchoolName())
+                    .courseCoordinatorName(canonicalResponse.getCourseCoordinatorName())
+                    .assessmentMethod(canonicalResponse.getAssessmentMethod())
+                    .totalSurveyResponses(canonicalResponse.getTotalSurveyResponses())
+                    .indirectWeight(canonicalResponse.getIndirectWeight())
+                    .overallIndirectAttainment(canonicalResponse.getOverallIndirectAttainment())
+                    .selectedCoCode("ALL")
+                    .coEvidence(canonicalResponse.getCoEvidence())
+                    .build();
+        }
+
+        List<CourseOutcome> configuredCos = courseOutcomeRepository.findByProgrammeBatchCourseId(programmeBatchCourseId.trim());
+        List<String> availableCoCodes = canonicalResponse.getCoEvidence().stream()
+                .map(CoIndirectEvidenceItemDto::getCoCode)
+                .toList();
+
+        String matchedKey = resolveMatchedCoKey(availableCoCodes, cleanCo, configuredCos);
+        if (matchedKey == null) {
+            throw new ResourceNotFoundException("Course outcome '" + cleanCo + "' does not belong to course offering: " + programmeBatchCourseId);
+        }
+
+        CoIndirectEvidenceItemDto matchedItem = canonicalResponse.getCoEvidence().stream()
+                .filter(item -> item.getCoCode().equalsIgnoreCase(matchedKey))
+                .findFirst()
+                .orElseThrow(() -> new ResourceNotFoundException("Course outcome '" + cleanCo + "' does not belong to course offering: " + programmeBatchCourseId));
+
+        return CoIndirectEvidenceResponseDto.builder()
+                .programmeBatchCourseId(canonicalResponse.getProgrammeBatchCourseId())
+                .courseCode(canonicalResponse.getCourseCode())
+                .courseName(canonicalResponse.getCourseName())
+                .semester(canonicalResponse.getSemester())
+                .batchName(canonicalResponse.getBatchName())
+                .programmeName(canonicalResponse.getProgrammeName())
+                .departmentName(canonicalResponse.getDepartmentName())
+                .schoolName(canonicalResponse.getSchoolName())
+                .courseCoordinatorName(canonicalResponse.getCourseCoordinatorName())
+                .assessmentMethod(canonicalResponse.getAssessmentMethod())
+                .totalSurveyResponses(canonicalResponse.getTotalSurveyResponses())
+                .indirectWeight(canonicalResponse.getIndirectWeight())
+                .overallIndirectAttainment(canonicalResponse.getOverallIndirectAttainment())
+                .selectedCoCode(cleanCo.toUpperCase())
+                .coEvidence(List.of(matchedItem))
+                .build();
+    }
+
+    private CoIndirectEvidenceResponseDto buildCanonicalCoIndirectEvidence(String programmeBatchCourseId) {
+        ProgrammeBatchCourse course = programmeBatchCourseRepository.findById(programmeBatchCourseId)
+                .orElseThrow(() -> new ResourceNotFoundException("Course offering not found: " + programmeBatchCourseId));
+
+        String batchName = null;
+        String programmeName = null;
+        String departmentName = null;
+        String schoolName = null;
+
+        if (course.getProgrammeBatchId() != null) {
+            ProgrammeBatch batch = programmeBatchRepository.findById(course.getProgrammeBatchId()).orElse(null);
+            if (batch != null) {
+                batchName = batch.getName();
+                if (batch.getMasterProgrammeId() != null) {
+                    MasterProgramme mp = masterProgrammeRepository.findById(batch.getMasterProgrammeId()).orElse(null);
+                    if (mp != null) {
+                        programmeName = mp.getName();
+                        if (mp.getDepartmentId() != null) {
+                            Department dept = departmentRepository.findById(mp.getDepartmentId()).orElse(null);
+                            if (dept != null) {
+                                departmentName = dept.getName();
+                                if (dept.getSchoolId() != null) {
+                                    School sch = schoolRepository.findById(dept.getSchoolId()).orElse(null);
+                                    if (sch != null) {
+                                        schoolName = sch.getName();
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        List<CourseOutcome> configuredCos = courseOutcomeRepository.findByProgrammeBatchCourseId(programmeBatchCourseId);
+        if ((configuredCos == null || configuredCos.isEmpty()) && course.getMasterCourseId() != null) {
+            List<ProgrammeBatchCourse> relatedOfferings = programmeBatchCourseRepository.findByMasterCourseId(course.getMasterCourseId());
+            if (relatedOfferings != null && !relatedOfferings.isEmpty()) {
+                List<String> offIds = relatedOfferings.stream().map(ProgrammeBatchCourse::getId).toList();
+                configuredCos = courseOutcomeRepository.findByProgrammeBatchCourseIdIn(offIds);
+            }
+        }
+        if (configuredCos == null) {
+            configuredCos = Collections.emptyList();
+        }
+
+        AttainmentConfiguration config = null;
+        try {
+            config = attainmentCalculationService.getApprovedAttainmentConfig(programmeBatchCourseId);
+        } catch (Exception ex) {
+            log.debug("[AnalyticsService] Attainment config not found for offering {}: {}", programmeBatchCourseId, ex.getMessage());
+        }
+        BigDecimal indirectWeight = (config != null && config.getIndirectWeight() != null)
+                ? config.getIndirectWeight()
+                : new BigDecimal("20.00");
+
+        CourseAttainmentReport cReport = courseAttainmentReportRepository.findByProgrammeBatchCourseId(programmeBatchCourseId).orElse(null);
+        List<CourseAttainmentReportDto.Table3Row> table3 = (cReport != null)
+                ? parseTable3CoAttainments(cReport.getTable3CoAttainmentJson())
+                : Collections.emptyList();
+        Set<String> table3Keys = table3.stream()
+                .map(CourseAttainmentReportDto.Table3Row::getCoCode)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+
+        SurveyAttainmentResultDto surveyResult = null;
+        try {
+            surveyResult = attainmentCalculationService.getSurveyAttainment(programmeBatchCourseId);
+        } catch (Exception ex) {
+            log.warn("[AnalyticsService] Error fetching survey attainment for {}: {}", programmeBatchCourseId, ex.getMessage());
+        }
+
+        BigDecimal overallIndirectAttainment = BigDecimal.ZERO;
+        if (cReport != null && cReport.getIndirectAttainment() != null) {
+            overallIndirectAttainment = cReport.getIndirectAttainment();
+        } else if (surveyResult != null && surveyResult.getOverallIndirectCoAttainment() != null) {
+            overallIndirectAttainment = surveyResult.getOverallIndirectCoAttainment();
+        }
+
+        int totalSurveyResponses = 0;
+        if (surveyResult != null && surveyResult.getTotalStudents() != null && surveyResult.getTotalStudents() > 0) {
+            totalSurveyResponses = surveyResult.getTotalStudents();
+        } else if (surveyResult != null && surveyResult.getSurveyResponses() != null) {
+            totalSurveyResponses = surveyResult.getSurveyResponses().size();
+        }
+
+        Set<String> surveyCoKeys = new LinkedHashSet<>();
+        if (surveyResult != null) {
+            if (surveyResult.getLevel1Counts() != null) {
+                surveyCoKeys.addAll(surveyResult.getLevel1Counts().keySet());
+            }
+            if (surveyResult.getSurveyResponses() != null) {
+                for (SurveyResponseRowDto r : surveyResult.getSurveyResponses()) {
+                    if (r.getCoRatings() != null) {
+                        surveyCoKeys.addAll(r.getCoRatings().keySet());
+                    }
+                }
+            }
+        }
+
+        List<CoIndirectEvidenceItemDto> evidenceItems = new ArrayList<>();
+
+        if (!configuredCos.isEmpty()) {
+            for (CourseOutcome co : configuredCos) {
+                String coCode = co.getCode();
+                String statement = co.getStatement() != null ? co.getStatement() : "Course outcome " + coCode;
+                BigDecimal targetLevel = co.getTargetLevel() != null ? co.getTargetLevel() : new BigDecimal("2.50");
+
+                String matchedT3 = resolveMatchedCoKey(table3Keys, coCode, configuredCos);
+                if (matchedT3 != null) {
+                    for (CourseAttainmentReportDto.Table3Row t3 : table3) {
+                        if (t3.getCoCode() != null && t3.getCoCode().equalsIgnoreCase(matchedT3)) {
+                            if (t3.getStatement() != null && !t3.getStatement().isBlank()) statement = t3.getStatement();
+                            if (t3.getTargetLevel() != null) targetLevel = t3.getTargetLevel();
+                            break;
+                        }
+                    }
+                }
+
+                String matchedSurveyKey = resolveMatchedCoKey(surveyCoKeys, coCode, configuredCos);
+                CoIndirectEvidenceItemDto item = buildCoIndirectEvidenceItem(
+                        coCode, statement, targetLevel, matchedSurveyKey, surveyResult, configuredCos, totalSurveyResponses);
+                evidenceItems.add(item);
+            }
+        } else if (!surveyCoKeys.isEmpty()) {
+            List<String> sortedKeys = new ArrayList<>(surveyCoKeys);
+            sortedKeys.sort((a, b) -> {
+                int na = extractOutcomeDigits(a);
+                int nb = extractOutcomeDigits(b);
+                if (na != nb && na > 0 && nb > 0) return Integer.compare(na, nb);
+                return a.compareToIgnoreCase(b);
+            });
+
+            for (String coCode : sortedKeys) {
+                String statement = "Course outcome " + coCode;
+                BigDecimal targetLevel = new BigDecimal("2.50");
+                CoIndirectEvidenceItemDto item = buildCoIndirectEvidenceItem(
+                        coCode, statement, targetLevel, coCode, surveyResult, Collections.emptyList(), totalSurveyResponses);
+                evidenceItems.add(item);
+            }
+        }
+
+        return CoIndirectEvidenceResponseDto.builder()
+                .programmeBatchCourseId(programmeBatchCourseId)
+                .courseCode(course.getEffectiveCourseCode() != null ? course.getEffectiveCourseCode() : course.getCode())
+                .courseName(course.getEffectiveCourseName() != null ? course.getEffectiveCourseName() : course.getName())
+                .semester(course.getSemester())
+                .batchName(batchName)
+                .programmeName(programmeName)
+                .departmentName(departmentName)
+                .schoolName(schoolName)
+                .courseCoordinatorName(course.getCourseCoordinatorName() != null ? course.getCourseCoordinatorName() : course.getAssignedFaculty())
+                .assessmentMethod("Course End Survey")
+                .totalSurveyResponses(totalSurveyResponses)
+                .indirectWeight(indirectWeight)
+                .overallIndirectAttainment(overallIndirectAttainment)
+                .selectedCoCode("ALL")
+                .coEvidence(evidenceItems)
+                .build();
+    }
+
+    private CoIndirectEvidenceItemDto buildCoIndirectEvidenceItem(
+            String coCode,
+            String statement,
+            BigDecimal targetLevel,
+            String matchedSurveyKey,
+            SurveyAttainmentResultDto surveyResult,
+            List<CourseOutcome> configuredCos,
+            int totalSurveyResponses) {
+
+        int count1 = 0;
+        int count2 = 0;
+        int count3 = 0;
+        BigDecimal pct1 = null;
+        BigDecimal pct2 = null;
+        BigDecimal pct3 = null;
+        BigDecimal overallPct = null;
+        Integer indLevel = null;
+        BigDecimal indScore = null;
+
+        if (surveyResult != null && matchedSurveyKey != null) {
+            if (surveyResult.getLevel1Counts() != null && surveyResult.getLevel1Counts().containsKey(matchedSurveyKey)) {
+                count1 = surveyResult.getLevel1Counts().get(matchedSurveyKey);
+            }
+            if (surveyResult.getLevel2Counts() != null && surveyResult.getLevel2Counts().containsKey(matchedSurveyKey)) {
+                count2 = surveyResult.getLevel2Counts().get(matchedSurveyKey);
+            }
+            if (surveyResult.getLevel3Counts() != null && surveyResult.getLevel3Counts().containsKey(matchedSurveyKey)) {
+                count3 = surveyResult.getLevel3Counts().get(matchedSurveyKey);
+            }
+            if (surveyResult.getLevel1Percentages() != null && surveyResult.getLevel1Percentages().containsKey(matchedSurveyKey)) {
+                pct1 = surveyResult.getLevel1Percentages().get(matchedSurveyKey);
+            }
+            if (surveyResult.getLevel2Percentages() != null && surveyResult.getLevel2Percentages().containsKey(matchedSurveyKey)) {
+                pct2 = surveyResult.getLevel2Percentages().get(matchedSurveyKey);
+            }
+            if (surveyResult.getLevel3Percentages() != null && surveyResult.getLevel3Percentages().containsKey(matchedSurveyKey)) {
+                pct3 = surveyResult.getLevel3Percentages().get(matchedSurveyKey);
+            }
+            if (surveyResult.getOverallIndirectPercentages() != null && surveyResult.getOverallIndirectPercentages().containsKey(matchedSurveyKey)) {
+                overallPct = surveyResult.getOverallIndirectPercentages().get(matchedSurveyKey);
+            }
+            if (surveyResult.getCoAttainmentLevels() != null && surveyResult.getCoAttainmentLevels().containsKey(matchedSurveyKey)) {
+                indLevel = surveyResult.getCoAttainmentLevels().get(matchedSurveyKey);
+            }
+            if (surveyResult.getIndirectAttainmentScores() != null && surveyResult.getIndirectAttainmentScores().containsKey(matchedSurveyKey)) {
+                indScore = surveyResult.getIndirectAttainmentScores().get(matchedSurveyKey);
+            }
+        }
+
+        // Build individual privacy-preserved response records
+        List<CoIndirectResponseRecordDto> records = new ArrayList<>();
+        if (surveyResult != null && surveyResult.getSurveyResponses() != null) {
+            int respNum = 1;
+            for (SurveyResponseRowDto r : surveyResult.getSurveyResponses()) {
+                if (r == null || r.getCoRatings() == null) continue;
+                BigDecimal rating = null;
+                if (matchedSurveyKey != null && r.getCoRatings().containsKey(matchedSurveyKey)) {
+                    rating = r.getCoRatings().get(matchedSurveyKey);
+                } else {
+                    String rKey = resolveMatchedCoKey(r.getCoRatings().keySet(), coCode, configuredCos);
+                    if (rKey != null) {
+                        rating = r.getCoRatings().get(rKey);
+                    }
+                }
+                if (rating == null) continue;
+
+                int rInt = (int) Math.round(rating.doubleValue());
+                if (rInt < 1 || rInt > 3) {
+                    continue; // invalid rating does not count
+                }
+
+                String feedback = null;
+                if (r.getCoFeedbacks() != null) {
+                    if (matchedSurveyKey != null) {
+                        feedback = r.getCoFeedbacks().get(matchedSurveyKey);
+                    }
+                    if (feedback == null) {
+                        String fKey = resolveMatchedCoKey(r.getCoFeedbacks().keySet(), coCode, configuredCos);
+                        if (fKey != null) {
+                            feedback = r.getCoFeedbacks().get(fKey);
+                        }
+                    }
+                }
+                if (feedback == null || feedback.isBlank()) {
+                    if (rInt == 1) feedback = "Slight";
+                    else if (rInt == 2) feedback = "Moderate";
+                    else if (rInt == 3) feedback = "Substantial";
+                }
+
+                records.add(CoIndirectResponseRecordDto.builder()
+                        .responseNumber(respNum++)
+                        .responseIdentifier("Response " + (r.getSrNo() != null ? r.getSrNo() : records.size() + 1))
+                        .maskedPrn(maskPrn(r.getPrn()))
+                        .rating(BigDecimal.valueOf(rInt).setScale(2, RoundingMode.HALF_UP))
+                        .ratingLevel(rInt)
+                        .feedback(feedback)
+                        .build());
+            }
+        }
+
+        // Fallback calculation from records if counts were 0 but records exist
+        if (count1 == 0 && count2 == 0 && count3 == 0 && !records.isEmpty()) {
+            for (CoIndirectResponseRecordDto rec : records) {
+                if (rec.getRatingLevel() == 1) count1++;
+                else if (rec.getRatingLevel() == 2) count2++;
+                else if (rec.getRatingLevel() == 3) count3++;
+            }
+        }
+
+        int validResponses = count1 + count2 + count3;
+        int divisor = validResponses > 0 ? validResponses : (totalSurveyResponses > 0 ? totalSurveyResponses : 1);
+
+        if (pct1 == null) {
+            pct1 = validResponses > 0
+                    ? BigDecimal.valueOf((double) count1 * 100.0 / divisor).setScale(2, RoundingMode.HALF_UP)
+                    : BigDecimal.ZERO.setScale(2);
+        }
+        if (pct2 == null) {
+            pct2 = validResponses > 0
+                    ? BigDecimal.valueOf((double) count2 * 100.0 / divisor).setScale(2, RoundingMode.HALF_UP)
+                    : BigDecimal.ZERO.setScale(2);
+        }
+        if (pct3 == null) {
+            pct3 = validResponses > 0
+                    ? BigDecimal.valueOf((double) count3 * 100.0 / divisor).setScale(2, RoundingMode.HALF_UP)
+                    : BigDecimal.ZERO.setScale(2);
+        }
+
+        if (overallPct == null) {
+            if (validResponses > 0) {
+                double pct1Raw = (double) count1 * 100.0 / divisor;
+                double pct2Raw = (double) count2 * 100.0 / divisor;
+                double pct3Raw = (double) count3 * 100.0 / divisor;
+                double overallRaw = (pct1Raw * 0.33) + (pct2Raw * 0.67) + (pct3Raw * 1.0);
+                overallPct = BigDecimal.valueOf(overallRaw).setScale(2, RoundingMode.HALF_UP);
+            } else {
+                overallPct = BigDecimal.ZERO.setScale(2);
+            }
+        }
+
+        if (indLevel == null) {
+            if (overallPct.compareTo(new BigDecimal("60.00")) >= 0) indLevel = 3;
+            else if (overallPct.compareTo(new BigDecimal("50.00")) >= 0) indLevel = 2;
+            else if (overallPct.compareTo(new BigDecimal("40.00")) >= 0) indLevel = 1;
+            else indLevel = 0;
+        }
+
+        if (indScore == null) {
+            indScore = BigDecimal.valueOf(indLevel).setScale(2, RoundingMode.HALF_UP);
+        }
+
+        boolean targetMet = indLevel > 0 && targetLevel != null && BigDecimal.valueOf(indLevel).compareTo(targetLevel) >= 0;
+
+        Map<String, Integer> levelDistribution = new LinkedHashMap<>();
+        levelDistribution.put("Level 1 (Slight)", count1);
+        levelDistribution.put("Level 2 (Moderate)", count2);
+        levelDistribution.put("Level 3 (Substantial)", count3);
+
+        return CoIndirectEvidenceItemDto.builder()
+                .coCode(coCode)
+                .coStatement(statement)
+                .coTargetLevel(targetLevel)
+                .coTargetMet(targetMet)
+                .indirectAttainment(indLevel)
+                .indirectScore(indScore)
+                .overallIndirectPercentage(overallPct)
+                .level1Count(count1)
+                .level1Percentage(pct1)
+                .level2Count(count2)
+                .level2Percentage(pct2)
+                .level3Count(count3)
+                .level3Percentage(pct3)
+                .validResponseCount(validResponses)
+                .totalResponses(totalSurveyResponses > 0 ? totalSurveyResponses : validResponses)
+                .levelDistribution(levelDistribution)
+                .responseRecords(records)
                 .build();
     }
 
@@ -2178,22 +2804,45 @@ public class AnalyticsService {
         }
 
         int totalStudents = examResult != null && examResult.getTotalStudents() != null ? examResult.getTotalStudents() : 0;
-        int evaluatedStudents = (examResult != null && examResult.getStudentMarks() != null && !examResult.getStudentMarks().isEmpty())
-                ? examResult.getStudentMarks().size()
-                : totalStudents;
+
+        // Resolve matching exam CO key for targetCo
+        Set<String> examKeys = new LinkedHashSet<>();
+        if (examResult != null) {
+            if (examResult.getCoAttainmentLevels() != null) examKeys.addAll(examResult.getCoAttainmentLevels().keySet());
+            if (examResult.getPercentageAboveThreshold() != null) examKeys.addAll(examResult.getPercentageAboveThreshold().keySet());
+            if (examResult.getStudentsAboveThreshold() != null) examKeys.addAll(examResult.getStudentsAboveThreshold().keySet());
+            if (examResult.getCoMaxMarks() != null) examKeys.addAll(examResult.getCoMaxMarks().keySet());
+        }
+        String matchedExamKey = resolveMatchedCoKey(examKeys, targetCo, cos);
+        String lookupExamKey = matchedExamKey != null ? matchedExamKey : targetCo;
+
+        int evaluatedForThisCo = 0;
+        if (examResult != null && examResult.getStudentMarks() != null) {
+            for (StudentMarksRowDto sm : examResult.getStudentMarks()) {
+                if (sm.getCoMarks() != null) {
+                    if (sm.getCoMarks().containsKey(lookupExamKey) && sm.getCoMarks().get(lookupExamKey) != null) {
+                        evaluatedForThisCo++;
+                    } else if (matchedExamKey != null && sm.getCoMarks().containsKey(matchedExamKey) && sm.getCoMarks().get(matchedExamKey) != null) {
+                        evaluatedForThisCo++;
+                    }
+                }
+            }
+        }
+        int evaluatedStudents = evaluatedForThisCo > 0 ? evaluatedForThisCo : (examResult != null && examResult.getStudentMarks() != null && !examResult.getStudentMarks().isEmpty() ? examResult.getStudentMarks().size() : totalStudents);
+
         BigDecimal directThreshold = examResult != null && examResult.getThresholdPercentage() != null
                 ? examResult.getThresholdPercentage()
                 : defaultThreshold;
-        BigDecimal directPct = (examResult != null && examResult.getPercentageAboveThreshold() != null && examResult.getPercentageAboveThreshold().containsKey(targetCo) && examResult.getPercentageAboveThreshold().get(targetCo) != null)
-                ? examResult.getPercentageAboveThreshold().get(targetCo)
+        BigDecimal directPct = (examResult != null && examResult.getPercentageAboveThreshold() != null && examResult.getPercentageAboveThreshold().containsKey(lookupExamKey) && examResult.getPercentageAboveThreshold().get(lookupExamKey) != null)
+                ? examResult.getPercentageAboveThreshold().get(lookupExamKey)
                 : (t3 != null && t3.getDirectPercentage() != null ? t3.getDirectPercentage() : BigDecimal.ZERO);
-        Integer directLvl = (examResult != null && examResult.getCoAttainmentLevels() != null && examResult.getCoAttainmentLevels().containsKey(targetCo) && examResult.getCoAttainmentLevels().get(targetCo) != null)
-                ? examResult.getCoAttainmentLevels().get(targetCo)
+        Integer directLvl = (examResult != null && examResult.getCoAttainmentLevels() != null && examResult.getCoAttainmentLevels().containsKey(lookupExamKey) && examResult.getCoAttainmentLevels().get(lookupExamKey) != null)
+                ? examResult.getCoAttainmentLevels().get(lookupExamKey)
                 : (t3 != null && t3.getDirectLevel() != null ? t3.getDirectLevel() : 0);
-        Integer studentsMeeting = (examResult != null && examResult.getStudentsAboveThreshold() != null && examResult.getStudentsAboveThreshold().containsKey(targetCo) && examResult.getStudentsAboveThreshold().get(targetCo) != null)
-                ? examResult.getStudentsAboveThreshold().get(targetCo)
-                : (totalStudents > 0 && directPct != null
-                        ? BigDecimal.valueOf(totalStudents).multiply(directPct).divide(new BigDecimal("100.00"), 0, RoundingMode.HALF_UP).intValue()
+        Integer studentsMeeting = (examResult != null && examResult.getStudentsAboveThreshold() != null && examResult.getStudentsAboveThreshold().containsKey(lookupExamKey) && examResult.getStudentsAboveThreshold().get(lookupExamKey) != null)
+                ? examResult.getStudentsAboveThreshold().get(lookupExamKey)
+                : (evaluatedStudents > 0 && directPct != null
+                        ? BigDecimal.valueOf(evaluatedStudents).multiply(directPct).divide(new BigDecimal("100.00"), 0, RoundingMode.HALF_UP).intValue()
                         : 0);
 
         // 9. Indirect Evidence Summary
@@ -2204,24 +2853,33 @@ public class AnalyticsService {
             log.warn("[AnalyticsService] Could not resolve survey attainment for offering {}: {}", offering.getId(), ex.getMessage());
         }
 
+        Set<String> surveyKeys = new LinkedHashSet<>();
+        if (surveyResult != null) {
+            if (surveyResult.getCoAttainmentLevels() != null) surveyKeys.addAll(surveyResult.getCoAttainmentLevels().keySet());
+            if (surveyResult.getIndirectAttainmentScores() != null) surveyKeys.addAll(surveyResult.getIndirectAttainmentScores().keySet());
+            if (surveyResult.getLevel1Counts() != null) surveyKeys.addAll(surveyResult.getLevel1Counts().keySet());
+        }
+        String matchedSurveyKey = resolveMatchedCoKey(surveyKeys, targetCo, cos);
+        String lookupSurveyKey = matchedSurveyKey != null ? matchedSurveyKey : targetCo;
+
         int responseCount = surveyResult != null && surveyResult.getTotalStudents() != null ? surveyResult.getTotalStudents() : 0;
         Map<String, Integer> levelDist = new LinkedHashMap<>();
         if (surveyResult != null) {
-            Integer l1 = (surveyResult.getLevel1Counts() != null && surveyResult.getLevel1Counts().containsKey(targetCo)) ? surveyResult.getLevel1Counts().get(targetCo) : 0;
-            Integer l2 = (surveyResult.getLevel2Counts() != null && surveyResult.getLevel2Counts().containsKey(targetCo)) ? surveyResult.getLevel2Counts().get(targetCo) : 0;
-            Integer l3 = (surveyResult.getLevel3Counts() != null && surveyResult.getLevel3Counts().containsKey(targetCo)) ? surveyResult.getLevel3Counts().get(targetCo) : 0;
+            Integer l1 = (surveyResult.getLevel1Counts() != null && surveyResult.getLevel1Counts().containsKey(lookupSurveyKey)) ? surveyResult.getLevel1Counts().get(lookupSurveyKey) : 0;
+            Integer l2 = (surveyResult.getLevel2Counts() != null && surveyResult.getLevel2Counts().containsKey(lookupSurveyKey)) ? surveyResult.getLevel2Counts().get(lookupSurveyKey) : 0;
+            Integer l3 = (surveyResult.getLevel3Counts() != null && surveyResult.getLevel3Counts().containsKey(lookupSurveyKey)) ? surveyResult.getLevel3Counts().get(lookupSurveyKey) : 0;
             levelDist.put("Slight (Level 1)", l1 != null ? l1 : 0);
             levelDist.put("Moderate (Level 2)", l2 != null ? l2 : 0);
             levelDist.put("Substantial (Level 3)", l3 != null ? l3 : 0);
         }
-        BigDecimal indirectScore = (surveyResult != null && surveyResult.getIndirectAttainmentScores() != null && surveyResult.getIndirectAttainmentScores().containsKey(targetCo) && surveyResult.getIndirectAttainmentScores().get(targetCo) != null)
-                ? surveyResult.getIndirectAttainmentScores().get(targetCo)
+        BigDecimal indirectScore = (surveyResult != null && surveyResult.getIndirectAttainmentScores() != null && surveyResult.getIndirectAttainmentScores().containsKey(lookupSurveyKey) && surveyResult.getIndirectAttainmentScores().get(lookupSurveyKey) != null)
+                ? surveyResult.getIndirectAttainmentScores().get(lookupSurveyKey)
                 : (t3 != null && t3.getIndirectScore() != null ? t3.getIndirectScore() : BigDecimal.ZERO);
-        Integer indirectLvl = (surveyResult != null && surveyResult.getCoAttainmentLevels() != null && surveyResult.getCoAttainmentLevels().containsKey(targetCo) && surveyResult.getCoAttainmentLevels().get(targetCo) != null)
-                ? surveyResult.getCoAttainmentLevels().get(targetCo)
+        Integer indirectLvl = (surveyResult != null && surveyResult.getCoAttainmentLevels() != null && surveyResult.getCoAttainmentLevels().containsKey(lookupSurveyKey) && surveyResult.getCoAttainmentLevels().get(lookupSurveyKey) != null)
+                ? surveyResult.getCoAttainmentLevels().get(lookupSurveyKey)
                 : (t3 != null && t3.getIndirectLevel() != null ? t3.getIndirectLevel() : 0);
-        BigDecimal indirectPct = (surveyResult != null && surveyResult.getOverallIndirectPercentages() != null && surveyResult.getOverallIndirectPercentages().containsKey(targetCo) && surveyResult.getOverallIndirectPercentages().get(targetCo) != null)
-                ? surveyResult.getOverallIndirectPercentages().get(targetCo)
+        BigDecimal indirectPct = (surveyResult != null && surveyResult.getOverallIndirectPercentages() != null && surveyResult.getOverallIndirectPercentages().containsKey(lookupSurveyKey) && surveyResult.getOverallIndirectPercentages().get(lookupSurveyKey) != null)
+                ? surveyResult.getOverallIndirectPercentages().get(lookupSurveyKey)
                 : (t3 != null && t3.getIndirectPercentage() != null ? t3.getIndirectPercentage() : BigDecimal.ZERO);
 
         // Compute Direct, Indirect, and Overall Attainment Levels reliably
@@ -4193,7 +4851,7 @@ public class AnalyticsService {
         return trimmed;
     }
 
-    private int extractOutcomeDigits(String s) {
+    public static int extractOutcomeDigits(String s) {
         if (s == null || s.isBlank()) return 0;
         String norm = normalizeCoCode(s);
         try {
@@ -4202,6 +4860,64 @@ public class AnalyticsService {
         } catch (Exception e) {
             return 0;
         }
+    }
+
+    public static String resolveMatchedCoKey(Collection<String> availableKeys, String targetCo, List<CourseOutcome> configuredCos) {
+        if (availableKeys == null || availableKeys.isEmpty() || targetCo == null) {
+            return null;
+        }
+        String cleanTarget = targetCo.trim().toUpperCase();
+
+        // 1. Exact case-insensitive match
+        for (String k : availableKeys) {
+            if (k != null && k.trim().equalsIgnoreCase(cleanTarget)) {
+                return k;
+            }
+        }
+
+        // 2. Normalized match (e.g. C321.6 -> CO6, CO6 -> CO6, CO 6 -> CO6)
+        String normTarget = normalizeCoCode(cleanTarget);
+        for (String k : availableKeys) {
+            if (k != null && normalizeCoCode(k).equalsIgnoreCase(normTarget)) {
+                return k;
+            }
+        }
+
+        // 3. Digits match (e.g. 6)
+        int targetDigits = extractOutcomeDigits(cleanTarget);
+        if (targetDigits > 0) {
+            for (String k : availableKeys) {
+                if (k != null && extractOutcomeDigits(k) == targetDigits) {
+                    return k;
+                }
+            }
+        }
+
+        // 4. Index match against configuredCos if targetCo matches an outcome in configuredCos
+        if (configuredCos != null && !configuredCos.isEmpty()) {
+            int targetIdx = -1;
+            for (int i = 0; i < configuredCos.size(); i++) {
+                CourseOutcome co = configuredCos.get(i);
+                if (co != null && co.getCode() != null) {
+                    if (co.getCode().trim().equalsIgnoreCase(cleanTarget)
+                            || normalizeCoCode(co.getCode()).equalsIgnoreCase(normTarget)
+                            || (targetDigits > 0 && extractOutcomeDigits(co.getCode()) == targetDigits)) {
+                        targetIdx = i;
+                        break;
+                    }
+                }
+            }
+            if (targetIdx >= 0) {
+                int expectedNum = targetIdx + 1;
+                for (String k : availableKeys) {
+                    if (k != null && extractOutcomeDigits(k) == expectedNum) {
+                        return k;
+                    }
+                }
+            }
+        }
+
+        return null;
     }
 
     private record OutcomeItemMetrics(

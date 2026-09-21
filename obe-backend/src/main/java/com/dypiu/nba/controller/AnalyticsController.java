@@ -285,6 +285,23 @@ public class AnalyticsController {
                 .build());
     }
 
+    @GetMapping("/co-indirect-evidence")
+    public ResponseEntity<ApiResponse<CoIndirectEvidenceResponseDto>> getCoIndirectEvidence(
+            @RequestParam String programmeBatchCourseId,
+            @RequestParam(required = false, defaultValue = "ALL") String coCode) {
+
+        log.debug("[AnalyticsController] getCoIndirectEvidence: programmeBatchCourseId={}, coCode={}",
+                programmeBatchCourseId, coCode);
+
+        CoIndirectEvidenceResponseDto data = analyticsService.getCoIndirectEvidence(
+                programmeBatchCourseId, coCode);
+        return ResponseEntity.ok(ApiResponse.<CoIndirectEvidenceResponseDto>builder()
+                .success(true)
+                .message("CO indirect attainment evidence retrieved successfully")
+                .data(data)
+                .build());
+    }
+
     @GetMapping("/course-analytics")
     public ResponseEntity<ApiResponse<CourseAnalyticsResponseDto>> getCourseAnalytics(
             @RequestParam String programmeBatchCourseId,

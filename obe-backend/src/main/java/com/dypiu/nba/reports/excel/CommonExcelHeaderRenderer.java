@@ -41,10 +41,11 @@ public class CommonExcelHeaderRenderer {
     // Lower region: reference grey #D9D9D9 (FFD9D9D9)
     public static final Color COLOR_GREY_HEADER = new Color(217, 217, 217);
 
-    // Authoritative fixed logo physical dimensions from reference template:
-    // cx = 1402080 EMUs (110.4 pt = 147.2 px), cy = 524269 EMUs (41.28 pt = 55.0 px)
-    public static final long FIXED_LOGO_WIDTH_EMU = 1402080L;
-    public static final long FIXED_LOGO_HEIGHT_EMU = 524269L;
+    // Authoritative fixed logo physical dimensions for Programme Attainment (increased by 40%):
+    // cx = 1402080 * 1.4 = 1962912 EMUs (154.56 pt = 206.08 px)
+    // cy = 524269 * 1.4 = 733977 EMUs (57.79 pt = 77.06 px)
+    public static final long FIXED_LOGO_WIDTH_EMU = 1962912L;
+    public static final long FIXED_LOGO_HEIGHT_EMU = 733977L;
 
     // Target physical width for the left logo region (approx 110 pt = 147 px = 1,402,080 EMUs)
     public static final long TARGET_LOGO_REGION_WIDTH_EMU = 1402080L;

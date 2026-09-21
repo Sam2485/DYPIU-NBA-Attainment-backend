@@ -15,4 +15,11 @@ public class StudentEvidenceRowDto {
     private BigDecimal maxMarks;
     private BigDecimal percentage;
     private boolean thresholdMet;
+
+    // Detailed evidence fields
+    private String prn;
+    private String studentName;
+    private String coCode;
+    private BigDecimal threshold;
+    private String evaluationStatus;
 }
