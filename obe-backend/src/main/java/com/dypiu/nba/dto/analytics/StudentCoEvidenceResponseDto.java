@@ -28,6 +28,7 @@ public class StudentCoEvidenceResponseDto {
     private BigDecimal configuredThresholdPercentage;
 
     // Aggregated Student Evidence Metrics
+    private Integer totalStudentsEnrolled;
     private int totalStudentsEvaluated;
     private int studentsMeetingThreshold;
     private int studentsBelowThreshold;

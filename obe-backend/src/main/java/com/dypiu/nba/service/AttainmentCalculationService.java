@@ -61,6 +61,10 @@ public class AttainmentCalculationService {
     private final BatchLifecycleService batchLifecycleService;
     private final IndirectAssessmentService indirectAssessmentService;
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    @org.springframework.context.annotation.Lazy
+    private AnalyticsService analyticsService;
+
     @org.springframework.beans.factory.annotation.Value("${app.upload-dir:${app.upload.dir:${UPLOAD_STORAGE_PATH:${APP_UPLOAD_DIR:/app/uploads}}}}")
     private String baseUploadDir;
 
@@ -913,6 +917,9 @@ public class AttainmentCalculationService {
 
         // 3. Clear in-memory store
         surveyAttainmentStore.remove(offeringId);
+        if (analyticsService != null) {
+            analyticsService.invalidateCoIndirectEvidenceCache(offeringId);
+        }
 
         // 4. Reset approval to DRAFT if applicable
         if (approvalService != null) {
@@ -1363,6 +1370,9 @@ public class AttainmentCalculationService {
                 .build();
 
         surveyAttainmentStore.put(offeringId, result);
+        if (analyticsService != null) {
+            analyticsService.invalidateCoIndirectEvidenceCache(offeringId);
+        }
         return result;
     }
 
