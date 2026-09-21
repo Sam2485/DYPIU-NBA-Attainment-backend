@@ -7,6 +7,8 @@ import org.apache.poi.util.Units;
 import org.apache.poi.xssf.usermodel.*;
 
 import java.awt.Color;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Authoritative Excel Header Renderer for COURSE-LEVEL Reports.
@@ -29,6 +31,61 @@ public class CourseExcelHeaderRenderer {
     // Cyan / Aqua title band fill: #8EC9DA (theme 8, tint 0.4 from reference)
     public static final Color COLOR_TITLE_BAND_CYAN = new Color(142, 201, 218);
     public static final Color COLOR_HEADER_TEXT = new Color(0, 0, 0);
+
+    // Authoritative fixed logo physical dimensions from reference template:
+    // cx = 1402080 EMUs (110.4 pt = 147.2 px), cy = 524269 EMUs (41.28 pt = 55.0 px)
+    public static final long FIXED_LOGO_WIDTH_EMU = 1402080L;
+    public static final long FIXED_LOGO_HEIGHT_EMU = 524269L;
+
+    // Target physical width for the fixed logo region (approx 78 pt = 1,000,000 EMUs)
+    public static final long TARGET_LOGO_REGION_WIDTH_EMU = 1000000L;
+
+    /**
+     * Calculates the display academic year for Course Attainment sheets.
+     * <p>
+     * When a batch duration arrives (e.g. "2024-2028", "2025-2029"), converts it
+     * into the single-year academic year corresponding to the course's semester of offering.
+     * Each academic year consists of 2 semesters:
+     * - Semester 1 or 2 -> Year 1 (offset 0): 2025 -> 2025-2026
+     * - Semester 3 or 4 -> Year 2 (offset 1): 2025 -> 2026-2027
+     * - Semester 5 or 6 -> Year 3 (offset 2): 2025 -> 2027-2028
+     * - Semester 7 or 8 -> Year 4 (offset 3): 2025 -> 2028-2029
+     * <p>
+     * If the academic year is already a 1-year span (e.g. "2023-24", "2025-26", "2025-2026"),
+     * it is preserved as-is.
+     */
+    public static String calculateCourseAcademicYear(String rawAcademicYear, Integer semester) {
+        if (rawAcademicYear == null || rawAcademicYear.isBlank()) {
+            return "";
+        }
+        String trimmed = rawAcademicYear.trim();
+        String prefix = "";
+        String yearSpan = trimmed;
+        if (trimmed.toUpperCase().startsWith("AY ")) {
+            prefix = trimmed.substring(0, 3);
+            yearSpan = trimmed.substring(3).trim();
+        } else if (trimmed.toUpperCase().startsWith("AY")) {
+            prefix = trimmed.substring(0, 2) + " ";
+            yearSpan = trimmed.substring(2).trim();
+        }
+
+        Pattern pattern = Pattern.compile("^(\\d{4})\\s*-\\s*(\\d{4})$");
+        Matcher matcher = pattern.matcher(yearSpan);
+        if (matcher.matches()) {
+            int startYear = Integer.parseInt(matcher.group(1));
+            int endYear = Integer.parseInt(matcher.group(2));
+            if (endYear - startYear > 1) {
+                int sem = (semester != null && semester > 0) ? semester : 1;
+                int yearOffset = (sem - 1) / 2;
+                int calcStart = startYear + yearOffset;
+                int calcEnd = calcStart + 1;
+                return prefix + calcStart + "-" + calcEnd;
+            }
+            return trimmed;
+        }
+
+        return trimmed;
+    }
 
     public static int renderHeader(
             Workbook wb,
@@ -60,23 +117,37 @@ public class CourseExcelHeaderRenderer {
         }
         int endCol = totalColumns - 1;
 
-        // 1. Calculate dynamic logo and center column boundaries
-        int leftColCount = (totalColumns >= 12) ? 2 : 1;
-        int rightColCount = (totalColumns >= 12) ? 2 : 1;
+        // 1. Determine Left and Right Logo Regions based on FIXED PHYSICAL WIDTH (never fixed column counts)
+        // Center flexible region must always retain sufficient space and absorb width
+        int minCenterCols = (totalColumns >= 6) ? 2 : 1;
+        int maxSideCols = Math.max(1, (totalColumns - minCenterCols) / 2);
 
         int leftStartCol = 0;
-        int leftEndCol = leftColCount - 1;
+        int leftEndCol = 0;
+        long leftRegionWidthEmu = 0;
+        while (leftEndCol < maxSideCols - 1) {
+            long w = Units.columnWidthToEMU(sheet.getColumnWidth(leftEndCol));
+            leftRegionWidthEmu += w;
+            if (leftRegionWidthEmu >= TARGET_LOGO_REGION_WIDTH_EMU) {
+                break;
+            }
+            leftEndCol++;
+        }
 
-        int rightStartCol = totalColumns - rightColCount;
         int rightEndCol = endCol;
+        int rightStartCol = endCol;
+        long rightRegionWidthEmu = 0;
+        while (rightStartCol > endCol - (maxSideCols - 1)) {
+            long w = Units.columnWidthToEMU(sheet.getColumnWidth(rightStartCol));
+            rightRegionWidthEmu += w;
+            if (rightRegionWidthEmu >= TARGET_LOGO_REGION_WIDTH_EMU) {
+                break;
+            }
+            rightStartCol--;
+        }
 
         int centerStartCol = leftEndCol + 1;
         int centerEndCol = rightStartCol - 1;
-
-        if (centerEndCol < centerStartCol) {
-            centerStartCol = 0;
-            centerEndCol = endCol;
-        }
 
         // 2. Prepare cell styles matching the reference template
         CellStyle uniStyle = createUniversityStyle(wb);
@@ -177,9 +248,9 @@ public class CourseExcelHeaderRenderer {
             sheet.addMergedRegion(new CellRangeAddress(0, 2, rightStartCol, rightEndCol));
         }
 
-        // 6. Embed Logos using Apache POI Drawing Patriarch
-        embedLogo(wb, sheet, leftLogoBytes, leftStartCol, 0, leftEndCol + 1, 3);
-        embedLogo(wb, sheet, rightLogoBytes, rightStartCol, 0, rightEndCol + 1, 3);
+        // 6. Embed Logos Centered with FIXED Physical Size inside the fixed regions
+        embedCenteredLogo(wb, sheet, leftLogoBytes, leftStartCol, leftEndCol, 0, 2, FIXED_LOGO_WIDTH_EMU, FIXED_LOGO_HEIGHT_EMU);
+        embedCenteredLogo(wb, sheet, rightLogoBytes, rightStartCol, rightEndCol, 0, 2, FIXED_LOGO_WIDTH_EMU, FIXED_LOGO_HEIGHT_EMU);
 
         // 7. Row 3: Title Band (ht = 20.5 pt, full width 0 to endCol)
         Row r3 = getOrCreateRow(sheet, 3);
@@ -214,51 +285,90 @@ public class CourseExcelHeaderRenderer {
         }
     }
 
-    private static void embedLogo(
+    private static void embedCenteredLogo(
             Workbook wb,
             Sheet sheet,
             byte[] logoBytes,
-            int col1,
-            int row1,
-            int col2,
-            int row2) {
+            int startCol,
+            int endCol,
+            int startRow,
+            int endRow,
+            long maxWEmu,
+            long maxHEmu) {
 
         if (logoBytes == null || logoBytes.length == 0) {
             return;
         }
 
         try {
-            int pictureType = Workbook.PICTURE_TYPE_PNG;
-            if (logoBytes.length > 2 && (logoBytes[0] & 0xFF) == 0xFF && (logoBytes[1] & 0xFF) == 0xD8) {
-                pictureType = Workbook.PICTURE_TYPE_JPEG;
+            // 1. Calculate physical region width
+            long regionWidthEmu = 0;
+            for (int c = startCol; c <= endCol; c++) {
+                regionWidthEmu += Units.columnWidthToEMU(sheet.getColumnWidth(c));
             }
 
+            // 2. Calculate physical region height
+            long regionHeightEmu = 0;
+            for (int r = startRow; r <= endRow; r++) {
+                Row row = sheet.getRow(r);
+                float hPt = (row != null) ? row.getHeightInPoints() : sheet.getDefaultRowHeightInPoints();
+                regionHeightEmu += Units.toEMU(hPt);
+            }
+
+            // 3. Determine actual image dimensions preserving aspect ratio
+            long[] fittedDims = calculateFittedDimensions(logoBytes, maxWEmu, maxHEmu);
+            long targetWEmu = fittedDims[0];
+            long targetHEmu = Math.min(fittedDims[1], regionHeightEmu);
+
+            // 4. Calculate centering margins (equal padding on both sides)
+            long marginXEmu = Math.max(0, (regionWidthEmu - targetWEmu) / 2);
+            long marginYEmu = Math.max(0, (regionHeightEmu - targetHEmu) / 2);
+
+            // 5. Convert horizontal coordinates (targetX1, targetX2) to (col1, dx1) and (col2, dx2)
+            int[] fromX = findCellAndOffset(sheet, startCol, marginXEmu, false);
+            int[] toX = findCellAndOffset(sheet, startCol, marginXEmu + targetWEmu, false);
+
+            // 6. Convert vertical coordinates (targetY1, targetY2) to (row1, dy1) and (row2, dy2)
+            int[] fromY = findCellAndOffset(sheet, startRow, marginYEmu, true);
+            int[] toY = findCellAndOffset(sheet, startRow, marginYEmu + targetHEmu, true);
+
+            // 7. Add picture to workbook
+            int pictureType = (logoBytes.length > 2 && (logoBytes[0] & 0xFF) == 0xFF && (logoBytes[1] & 0xFF) == 0xD8)
+                    ? Workbook.PICTURE_TYPE_JPEG : Workbook.PICTURE_TYPE_PNG;
             int pictureIdx = wb.addPicture(logoBytes, pictureType);
-            CreationHelper helper = wb.getCreationHelper();
 
             Drawing<?> drawing = sheet.getDrawingPatriarch();
             if (drawing == null) {
                 drawing = sheet.createDrawingPatriarch();
             }
 
+            CreationHelper helper = wb.getCreationHelper();
             ClientAnchor anchor = helper.createClientAnchor();
-            anchor.setCol1(col1);
-            anchor.setRow1(row1);
-            anchor.setCol2(col2);
-            anchor.setRow2(row2);
+            anchor.setCol1(fromX[0]);
+            anchor.setDx1(fromX[1]);
+            anchor.setRow1(fromY[0]);
+            anchor.setDy1(fromY[1]);
+            anchor.setCol2(toX[0]);
+            anchor.setDx2(toX[1]);
+            anchor.setRow2(toY[0]);
+            anchor.setDy2(toY[1]);
 
-            // Subtle padding so logo does not touch the cell edges
-            if (anchor instanceof XSSFClientAnchor xAnchor) {
-                xAnchor.setDx1(Units.pixelToEMU(4));
-                xAnchor.setDy1(Units.pixelToEMU(2));
-                xAnchor.setDx2(-Units.pixelToEMU(4));
-                xAnchor.setDy2(-Units.pixelToEMU(2));
+            Picture picture = drawing.createPicture(anchor, pictureIdx);
+            if (picture.getClientAnchor() != null) {
+                picture.getClientAnchor().setAnchorType(ClientAnchor.AnchorType.MOVE_DONT_RESIZE);
             }
 
-            anchor.setAnchorType(ClientAnchor.AnchorType.MOVE_DONT_RESIZE);
-            Picture picture = drawing.createPicture(anchor, pictureIdx);
             if (picture instanceof XSSFPicture xPic) {
                 try {
+                    org.apache.xmlbeans.XmlCursor cursor = xPic.getCTPicture().newCursor();
+                    if (cursor.toParent()) {
+                        org.apache.xmlbeans.XmlObject parent = cursor.getObject();
+                        if (parent instanceof org.openxmlformats.schemas.drawingml.x2006.spreadsheetDrawing.CTTwoCellAnchor ctAnchor) {
+                            ctAnchor.setEditAs(org.openxmlformats.schemas.drawingml.x2006.spreadsheetDrawing.STEditAs.ONE_CELL);
+                        }
+                    }
+                    cursor.dispose();
+
                     if (xPic.getCTPicture() != null && xPic.getCTPicture().getNvPicPr() != null) {
                         var nvPr = xPic.getCTPicture().getNvPicPr();
                         var cNvPr = nvPr.getCNvPicPr();
@@ -267,13 +377,47 @@ public class CourseExcelHeaderRenderer {
                             locks.setNoChangeAspect(true);
                         }
                     }
-                } catch (Exception ignored) {
-                }
+                } catch (Exception ignored) {}
             }
-
         } catch (Exception e) {
-            log.warn("Failed to embed logo into Course Excel header: {}", e.getMessage());
+            log.warn("Failed to embed centered logo into Course Excel header: {}", e.getMessage());
         }
+    }
+
+    private static int[] findCellAndOffset(Sheet sheet, int startIdx, long targetOffsetEmu, boolean isRow) {
+        if (targetOffsetEmu <= 0) {
+            return new int[]{startIdx, 0};
+        }
+        long accum = 0;
+        int maxIdx = isRow ? 100 : Math.max(100, sheet.getRow(0) != null ? sheet.getRow(0).getLastCellNum() : 50);
+        for (int i = startIdx; i <= maxIdx; i++) {
+            long dim = isRow
+                    ? Units.toEMU(sheet.getRow(i) != null ? sheet.getRow(i).getHeightInPoints() : sheet.getDefaultRowHeightInPoints())
+                    : Units.columnWidthToEMU(sheet.getColumnWidth(i));
+            if (accum + dim > targetOffsetEmu) {
+                return new int[]{i, (int) (targetOffsetEmu - accum)};
+            }
+            accum += dim;
+        }
+        return new int[]{startIdx, 0};
+    }
+
+    private static long[] calculateFittedDimensions(byte[] logoBytes, long maxWEmu, long maxHEmu) {
+        if (logoBytes == null || logoBytes.length == 0) {
+            return new long[]{maxWEmu, maxHEmu};
+        }
+        try {
+            java.awt.image.BufferedImage img = javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(logoBytes));
+            if (img != null && img.getWidth() > 0 && img.getHeight() > 0) {
+                double scaleW = (double) maxWEmu / img.getWidth();
+                double scaleH = (double) maxHEmu / img.getHeight();
+                double scale = Math.min(scaleW, scaleH);
+                long fitW = Math.round(img.getWidth() * scale);
+                long fitH = Math.round(img.getHeight() * scale);
+                return new long[]{fitW, fitH};
+            }
+        } catch (Exception ignored) {}
+        return new long[]{maxWEmu, maxHEmu};
     }
 
     private static CellStyle createUniversityStyle(Workbook wb) {

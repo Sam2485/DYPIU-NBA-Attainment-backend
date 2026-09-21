@@ -20,14 +20,18 @@ public class OverallAttainmentSheetBuilder {
     public static final String DEFAULT_SHEET_NAME = "Overall Programme Attainment";
 
     public static Sheet build(Workbook wb, ProgrammeAttainmentSnapshot snapshot) {
-        return build(wb, DEFAULT_SHEET_NAME, snapshot, null, null);
+        return build(wb, DEFAULT_SHEET_NAME, snapshot, null, null, null);
     }
 
     public static Sheet build(Workbook wb, String sheetName, ProgrammeAttainmentSnapshot snapshot) {
-        return build(wb, sheetName, snapshot, null, null);
+        return build(wb, sheetName, snapshot, null, null, null);
     }
 
     public static Sheet build(Workbook wb, String sheetName, ProgrammeAttainmentSnapshot snapshot, byte[] logoBytes, ReportTemplateDto template) {
+        return build(wb, sheetName, snapshot, logoBytes, null, template);
+    }
+
+    public static Sheet build(Workbook wb, String sheetName, ProgrammeAttainmentSnapshot snapshot, byte[] leftLogo, byte[] rightLogo, ReportTemplateDto template) {
         String resolvedSheetName = (sheetName != null && !sheetName.isBlank()) ? sheetName : DEFAULT_SHEET_NAME;
         Sheet sheet = wb.createSheet(resolvedSheetName);
 
@@ -48,8 +52,15 @@ public class OverallAttainmentSheetBuilder {
         psoCodes.sort(ExcelStyles.NATURAL_NUMERICAL_COMPARATOR);
         int totalCols = 2 + poCodes.size() + psoCodes.size();
 
+        // Set column widths before header rendering so physical width geometry is accurate
+        sheet.setColumnWidth(0, (int) (22.0 * 256));
+        sheet.setColumnWidth(1, (int) (38.0 * 256));
+        for (int i = 2; i < totalCols; i++) {
+            sheet.setColumnWidth(i, (int) (7.50 * 256));
+        }
+
         int startRow = CommonExcelHeaderRenderer.renderProgrammeHeader(
-                wb, sheet, snapshot, "Overall Attainment", totalCols, logoBytes, template, "Term – I & II", true);
+                wb, sheet, snapshot, "Overall Attainment", totalCols, leftLogo, rightLogo, template, "Term – I & II", true);
 
         // Table Header (Excel Row 9, startRow index 8)
         Row headerRow = sheet.createRow(startRow);

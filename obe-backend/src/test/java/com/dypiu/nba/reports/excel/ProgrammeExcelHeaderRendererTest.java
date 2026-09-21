@@ -6,11 +6,22 @@ import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.util.CellRangeAddress;
+import org.apache.poi.util.Units;
+import org.apache.poi.xssf.usermodel.XSSFDrawing;
+import org.apache.poi.xssf.usermodel.XSSFPicture;
+import org.apache.poi.xssf.usermodel.XSSFShape;
+import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
+import javax.imageio.ImageIO;
+import java.awt.Color;
+import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
@@ -183,6 +194,216 @@ class ProgrammeExcelHeaderRendererTest {
                 assertNotNull(r8, "Row 8 (table header) must exist in sheet " + i);
             }
         }
+    }
+
+    private static byte[] createTestPng(int width, int height, Color color) throws Exception {
+        BufferedImage img = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
+        java.awt.Graphics2D g = img.createGraphics();
+        g.setColor(color);
+        g.fillRect(0, 0, width, height);
+        g.dispose();
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        ImageIO.write(img, "png", baos);
+        return baos.toByteArray();
+    }
+
+    @Test
+    @DisplayName("Configuration Case 1: Both Left and Right logos configured -> Both appear")
+    void testBothLogosConfigured() throws Exception {
+        byte[] leftLogo = createTestPng(270, 100, Color.RED);
+        byte[] rightLogo = createTestPng(270, 100, Color.BLUE);
+
+        try (XSSFWorkbook wb = new XSSFWorkbook()) {
+            XSSFSheet sheet = wb.createSheet("BothLogos");
+            CommonExcelHeaderRenderer.renderProgrammeHeader(
+                    wb, sheet, "Uni", "School", "Report", "2024-25", "Term 1", "Dept", "00", "01/01/2025", "01/01/2025",
+                    17, leftLogo, rightLogo, false);
+
+            XSSFDrawing drawing = sheet.getDrawingPatriarch();
+            assertNotNull(drawing);
+            List<XSSFShape> shapes = drawing.getShapes();
+            assertEquals(2, shapes.size(), "Both left and right logos must be embedded");
+
+            XSSFPicture p1 = (XSSFPicture) shapes.get(0);
+            XSSFPicture p2 = (XSSFPicture) shapes.get(1);
+            assertEquals(CommonExcelHeaderRenderer.FIXED_LOGO_WIDTH_EMU, calculateAnchorWidthEmu(sheet, p1.getClientAnchor()));
+            assertEquals(CommonExcelHeaderRenderer.FIXED_LOGO_WIDTH_EMU, calculateAnchorWidthEmu(sheet, p2.getClientAnchor()));
+        }
+    }
+
+    @Test
+    @DisplayName("Configuration Case 2: Left logo configured, Right not configured -> Left appears, Right clean")
+    void testLeftOnlyConfigured() throws Exception {
+        byte[] leftLogo = createTestPng(100, 50, Color.RED);
+
+        try (XSSFWorkbook wb = new XSSFWorkbook()) {
+            XSSFSheet sheet = wb.createSheet("LeftOnly");
+            CommonExcelHeaderRenderer.renderProgrammeHeader(
+                    wb, sheet, "Uni", "School", "Report", "2024-25", "Term 1", "Dept", "00", "01/01/2025", "01/01/2025",
+                    17, leftLogo, null, false);
+
+            XSSFDrawing drawing = sheet.getDrawingPatriarch();
+            assertNotNull(drawing);
+            List<XSSFShape> shapes = drawing.getShapes();
+            assertEquals(1, shapes.size(), "Only left logo should be embedded");
+        }
+    }
+
+    @Test
+    @DisplayName("Configuration Case 3: Left logo not configured, Right configured -> Right appears, Left clean")
+    void testRightOnlyConfigured() throws Exception {
+        byte[] rightLogo = createTestPng(100, 50, Color.BLUE);
+
+        try (XSSFWorkbook wb = new XSSFWorkbook()) {
+            XSSFSheet sheet = wb.createSheet("RightOnly");
+            CommonExcelHeaderRenderer.renderProgrammeHeader(
+                    wb, sheet, "Uni", "School", "Report", "2024-25", "Term 1", "Dept", "00", "01/01/2025", "01/01/2025",
+                    17, null, rightLogo, false);
+
+            XSSFDrawing drawing = sheet.getDrawingPatriarch();
+            assertNotNull(drawing);
+            List<XSSFShape> shapes = drawing.getShapes();
+            assertEquals(1, shapes.size(), "Only right logo should be embedded");
+        }
+    }
+
+    @Test
+    @DisplayName("Configuration Case 4: Neither logo configured -> Clean regions, no exceptions")
+    void testNeitherLogoConfigured() throws Exception {
+        try (XSSFWorkbook wb = new XSSFWorkbook()) {
+            XSSFSheet sheet = wb.createSheet("NoLogo");
+            assertDoesNotThrow(() -> CommonExcelHeaderRenderer.renderProgrammeHeader(
+                    wb, sheet, "Uni", "School", "Report", "2024-25", "Term 1", "Dept", "00", "01/01/2025", "01/01/2025",
+                    17, null, null, false));
+
+            XSSFDrawing drawing = sheet.getDrawingPatriarch();
+            if (drawing != null) {
+                assertEquals(0, drawing.getShapes().size());
+            }
+        }
+    }
+
+    @Test
+    @DisplayName("Configuration Case 5: Both configured with distinct images -> Distinct pictures embedded")
+    void testDistinctImagesConfigured() throws Exception {
+        byte[] leftLogo = createTestPng(80, 40, Color.RED);
+        byte[] rightLogo = createTestPng(120, 60, Color.GREEN);
+
+        try (XSSFWorkbook wb = new XSSFWorkbook()) {
+            XSSFSheet sheet = wb.createSheet("DistinctLogos");
+            CommonExcelHeaderRenderer.renderProgrammeHeader(
+                    wb, sheet, "Uni", "School", "Report", "2024-25", "Term 1", "Dept", "00", "01/01/2025", "01/01/2025",
+                    17, leftLogo, rightLogo, false);
+
+            assertEquals(2, wb.getAllPictures().size(), "Workbook must contain exactly 2 distinct picture assets");
+            assertNotEquals(wb.getAllPictures().get(0).getData().length, wb.getAllPictures().get(1).getData().length,
+                    "Left and right images must be separate distinct byte payloads");
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {8, 12, 16, 17, 24, 35, 42})
+    @DisplayName("Physical Width Invariance & Center Region Expansion across 8 to 42 columns")
+    void testWidthInvarianceAcrossColumnCounts(int totalCols) throws Exception {
+        byte[] leftLogo = createTestPng(270, 100, Color.RED);
+        byte[] rightLogo = createTestPng(270, 100, Color.BLUE);
+
+        try (XSSFWorkbook wb = new XSSFWorkbook()) {
+            XSSFSheet sheet = wb.createSheet("Cols_" + totalCols);
+            for (int c = 0; c < totalCols; c++) {
+                sheet.setColumnWidth(c, 8 * 256);
+            }
+
+            int nextRow = CommonExcelHeaderRenderer.renderProgrammeHeader(
+                    wb, sheet, "Uni", "School", "Report", "2024-25", "Term 1", "Dept", "00", "01/01/2025", "01/01/2025",
+                    totalCols, leftLogo, rightLogo, false);
+
+            assertEquals(8, nextRow);
+
+            XSSFDrawing drawing = sheet.getDrawingPatriarch();
+            assertNotNull(drawing);
+            List<XSSFShape> shapes = drawing.getShapes();
+            assertEquals(2, shapes.size());
+
+            XSSFPicture p1 = (XSSFPicture) shapes.get(0);
+            XSSFPicture p2 = (XSSFPicture) shapes.get(1);
+
+            assertEquals(CommonExcelHeaderRenderer.FIXED_LOGO_WIDTH_EMU, calculateAnchorWidthEmu(sheet, p1.getClientAnchor()),
+                    "Left logo width must remain invariant for " + totalCols + " columns");
+            assertEquals(CommonExcelHeaderRenderer.FIXED_LOGO_WIDTH_EMU, calculateAnchorWidthEmu(sheet, p2.getClientAnchor()),
+                    "Right logo width must remain invariant for " + totalCols + " columns");
+
+            // Verify header ends exactly at totalCols - 1
+            int maxMergedCol = 0;
+            for (CellRangeAddress r : sheet.getMergedRegions()) {
+                if (r.getLastColumn() > maxMergedCol) {
+                    maxMergedCol = r.getLastColumn();
+                }
+            }
+            assertEquals(totalCols - 1, maxMergedCol, "Header last column must equal totalCols - 1");
+        }
+    }
+
+    @Test
+    @DisplayName("All four Programme sheet builders correctly accept and render both configured logos")
+    void testAllFourProgrammeSheetBuilders() throws Exception {
+        byte[] leftLogo = createTestPng(100, 50, Color.RED);
+        byte[] rightLogo = createTestPng(100, 50, Color.BLUE);
+        ProgrammeAttainmentSnapshot snapshot = createSampleSnapshot(12, 2);
+
+        try (XSSFWorkbook wb = new XSSFWorkbook()) {
+            Sheet s1 = AverageMappingSheetBuilder.build(wb, "S1", snapshot, leftLogo, rightLogo, null);
+            Sheet s2 = AverageDirectAttainmentSheetBuilder.build(wb, "S2", snapshot, leftLogo, rightLogo, null);
+            Sheet s3 = AverageIndirectAttainmentSheetBuilder.build(wb, "S3", snapshot, leftLogo, rightLogo, null);
+            Sheet s4 = OverallAttainmentSheetBuilder.build(wb, "S4", snapshot, leftLogo, rightLogo, null);
+
+            for (Sheet s : List.of(s1, s2, s3, s4)) {
+                XSSFSheet xs = (XSSFSheet) s;
+                XSSFDrawing drawing = xs.getDrawingPatriarch();
+                assertNotNull(drawing);
+                assertEquals(2, drawing.getShapes().size(), "Sheet " + s.getSheetName() + " must have both logos");
+            }
+        }
+    }
+
+    @Test
+    @DisplayName("Master Programme Attainment Excel with both logos renders all 4 sheets with both logos")
+    void testMasterWorkbookWithBothLogos() throws Exception {
+        byte[] leftLogo = createTestPng(100, 50, Color.RED);
+        byte[] rightLogo = createTestPng(100, 50, Color.BLUE);
+        ProgrammeAttainmentSnapshot snapshot = createSampleSnapshot(12, 2);
+        ExcelReportRenderer renderer = new ExcelReportRenderer();
+
+        byte[] masterExcel = renderer.renderProgrammeAttainmentMaster(snapshot, leftLogo, rightLogo, null);
+        assertNotNull(masterExcel);
+
+        try (XSSFWorkbook wb = new XSSFWorkbook(new ByteArrayInputStream(masterExcel))) {
+            assertEquals(4, wb.getNumberOfSheets());
+            for (int i = 0; i < 4; i++) {
+                XSSFSheet sheet = wb.getSheetAt(i);
+                XSSFDrawing drawing = sheet.getDrawingPatriarch();
+                assertNotNull(drawing, "Drawing must exist on sheet " + i);
+                assertEquals(2, drawing.getShapes().size(), "Both logos must be embedded on sheet " + i);
+            }
+        }
+    }
+
+    private static long calculateAnchorWidthEmu(XSSFSheet sheet, org.apache.poi.xssf.usermodel.XSSFClientAnchor anchor) {
+        int col1 = anchor.getCol1();
+        int col2 = anchor.getCol2();
+        long dx1 = anchor.getDx1();
+        long dx2 = anchor.getDx2();
+
+        if (col1 == col2) {
+            return dx2 - dx1;
+        }
+
+        long widthEmu = Units.columnWidthToEMU(sheet.getColumnWidth(col1)) - dx1;
+        for (int c = col1 + 1; c < col2; c++) {
+            widthEmu += Units.columnWidthToEMU(sheet.getColumnWidth(c));
+        }
+        widthEmu += dx2;
+        return widthEmu;
     }
 
     private boolean hasMergedRegion(List<CellRangeAddress> regions, int firstRow, int lastRow, int firstCol, int lastCol) {

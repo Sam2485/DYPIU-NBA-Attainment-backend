@@ -15,34 +15,38 @@ import java.io.IOException;
 @Slf4j
 public class ExcelReportRenderer {
 
-    public byte[] renderProgrammeAttainmentMaster(ProgrammeAttainmentSnapshot snapshot, byte[] logoBytes, ReportTemplateDto template) {
+    public byte[] renderProgrammeAttainmentMaster(ProgrammeAttainmentSnapshot snapshot, byte[] leftLogo, byte[] rightLogo, ReportTemplateDto template) {
         try (Workbook wb = new XSSFWorkbook()) {
-            AverageMappingSheetBuilder.build(wb, "Average Mapping", snapshot, logoBytes, template);
-            AverageDirectAttainmentSheetBuilder.build(wb, "Average Direct Attainment", snapshot, logoBytes, template);
-            AverageIndirectAttainmentSheetBuilder.build(wb, "AVERAGE ATTAINMENT (ID)", snapshot, logoBytes, template);
-            OverallAttainmentSheetBuilder.build(wb, "Overall Programme Attainment", snapshot, logoBytes, template);
+            AverageMappingSheetBuilder.build(wb, "Average Mapping", snapshot, leftLogo, rightLogo, template);
+            AverageDirectAttainmentSheetBuilder.build(wb, "Average Direct Attainment", snapshot, leftLogo, rightLogo, template);
+            AverageIndirectAttainmentSheetBuilder.build(wb, "AVERAGE ATTAINMENT (ID)", snapshot, leftLogo, rightLogo, template);
+            OverallAttainmentSheetBuilder.build(wb, "Overall Programme Attainment", snapshot, leftLogo, rightLogo, template);
             return writeToBytes(wb);
         } catch (IOException e) {
             throw new RuntimeException("Failed to render Programme Attainment Master Excel", e);
         }
     }
 
-    public byte[] renderProgrammeAttainmentMaster(ProgrammeAttainmentSnapshot snapshot) {
-        return renderProgrammeAttainmentMaster(snapshot, null, null);
+    public byte[] renderProgrammeAttainmentMaster(ProgrammeAttainmentSnapshot snapshot, byte[] logoBytes, ReportTemplateDto template) {
+        return renderProgrammeAttainmentMaster(snapshot, logoBytes, null, template);
     }
 
-    public byte[] renderProgrammeAttainmentSection(ProgrammeAttainmentSnapshot snapshot, ReportSection section, byte[] logoBytes, ReportTemplateDto template) {
+    public byte[] renderProgrammeAttainmentMaster(ProgrammeAttainmentSnapshot snapshot) {
+        return renderProgrammeAttainmentMaster(snapshot, null, null, null);
+    }
+
+    public byte[] renderProgrammeAttainmentSection(ProgrammeAttainmentSnapshot snapshot, ReportSection section, byte[] leftLogo, byte[] rightLogo, ReportTemplateDto template) {
         try (Workbook wb = new XSSFWorkbook()) {
             switch (section) {
-                case AVERAGE_MAPPING -> AverageMappingSheetBuilder.build(wb, "Average Mapping", snapshot, logoBytes, template);
-                case AVERAGE_DIRECT -> AverageDirectAttainmentSheetBuilder.build(wb, "Average Direct Attainment", snapshot, logoBytes, template);
-                case AVERAGE_INDIRECT -> AverageIndirectAttainmentSheetBuilder.build(wb, "AVERAGE ATTAINMENT (ID)", snapshot, logoBytes, template);
-                case OVERALL -> OverallAttainmentSheetBuilder.build(wb, "Overall Programme Attainment", snapshot, logoBytes, template);
+                case AVERAGE_MAPPING -> AverageMappingSheetBuilder.build(wb, "Average Mapping", snapshot, leftLogo, rightLogo, template);
+                case AVERAGE_DIRECT -> AverageDirectAttainmentSheetBuilder.build(wb, "Average Direct Attainment", snapshot, leftLogo, rightLogo, template);
+                case AVERAGE_INDIRECT -> AverageIndirectAttainmentSheetBuilder.build(wb, "AVERAGE ATTAINMENT (ID)", snapshot, leftLogo, rightLogo, template);
+                case OVERALL -> OverallAttainmentSheetBuilder.build(wb, "Overall Programme Attainment", snapshot, leftLogo, rightLogo, template);
                 case ALL -> {
-                    AverageMappingSheetBuilder.build(wb, "Average Mapping", snapshot, logoBytes, template);
-                    AverageDirectAttainmentSheetBuilder.build(wb, "Average Direct Attainment", snapshot, logoBytes, template);
-                    AverageIndirectAttainmentSheetBuilder.build(wb, "AVERAGE ATTAINMENT (ID)", snapshot, logoBytes, template);
-                    OverallAttainmentSheetBuilder.build(wb, "Overall Programme Attainment", snapshot, logoBytes, template);
+                    AverageMappingSheetBuilder.build(wb, "Average Mapping", snapshot, leftLogo, rightLogo, template);
+                    AverageDirectAttainmentSheetBuilder.build(wb, "Average Direct Attainment", snapshot, leftLogo, rightLogo, template);
+                    AverageIndirectAttainmentSheetBuilder.build(wb, "AVERAGE ATTAINMENT (ID)", snapshot, leftLogo, rightLogo, template);
+                    OverallAttainmentSheetBuilder.build(wb, "Overall Programme Attainment", snapshot, leftLogo, rightLogo, template);
                 }
             }
             return writeToBytes(wb);
@@ -51,8 +55,12 @@ public class ExcelReportRenderer {
         }
     }
 
+    public byte[] renderProgrammeAttainmentSection(ProgrammeAttainmentSnapshot snapshot, ReportSection section, byte[] logoBytes, ReportTemplateDto template) {
+        return renderProgrammeAttainmentSection(snapshot, section, logoBytes, null, template);
+    }
+
     public byte[] renderProgrammeAttainmentSection(ProgrammeAttainmentSnapshot snapshot, ReportSection section) {
-        return renderProgrammeAttainmentSection(snapshot, section, null, null);
+        return renderProgrammeAttainmentSection(snapshot, section, null, null, null);
     }
 
     public byte[] renderCourseAttainment(CourseAttainmentSnapshot snapshot, byte[] leftLogo, byte[] rightLogo) {

@@ -76,7 +76,7 @@ public class ReportOrchestrationService {
         boolean needPdf = targetArtifactType == null || targetArtifactType == ArtifactType.PDF;
 
         byte[] leftLogo = needExcel || needPdf ? loadLogoBytes(template.getHeaderConfig() != null ? template.getHeaderConfig().getEffectiveLeftLogoAssetId() : null) : null;
-        byte[] rightLogo = needPdf ? loadLogoBytes(template.getHeaderConfig() != null ? template.getHeaderConfig().getEffectiveRightLogoAssetId() : null) : null;
+        byte[] rightLogo = needExcel || needPdf ? loadLogoBytes(template.getHeaderConfig() != null ? template.getHeaderConfig().getEffectiveRightLogoAssetId() : null) : null;
 
         byte[] excelBytes = null;
         byte[] pdfBytes = null;
@@ -88,11 +88,11 @@ public class ReportOrchestrationService {
                 ? snapshot.getAcademicBatchYears().replace("–", "-") : "BATCH";
 
         if (targetSection == ReportSection.ALL) {
-            if (needExcel) excelBytes = excelRenderer.renderProgrammeAttainmentMaster(snapshot, leftLogo, template);
+            if (needExcel) excelBytes = excelRenderer.renderProgrammeAttainmentMaster(snapshot, leftLogo, rightLogo, template);
             if (needPdf) pdfBytes = pdfRenderer.renderProgrammeAttainmentMaster(snapshot, template, leftLogo, rightLogo);
             baseFilename = "PROGRAMME_ATTAINMENT_MASTER_" + progCode + "_" + batchYears;
         } else {
-            if (needExcel) excelBytes = excelRenderer.renderProgrammeAttainmentSection(snapshot, targetSection, leftLogo, template);
+            if (needExcel) excelBytes = excelRenderer.renderProgrammeAttainmentSection(snapshot, targetSection, leftLogo, rightLogo, template);
             if (needPdf) pdfBytes = pdfRenderer.renderProgrammeAttainmentSection(snapshot, targetSection, template, leftLogo, rightLogo);
             baseFilename = "PROGRAMME_ATTAINMENT_" + targetSection.name() + "_" + progCode + "_" + batchYears;
         }

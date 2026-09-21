@@ -200,6 +200,25 @@ class CourseAttainmentMainSheetTest {
         }
     }
 
+    @Test
+    @DisplayName("Attainment-main sheet strictly displays courseCoordinatorName instead of username")
+    void testCoordinatorNameUsedInsteadOfUsername() throws Exception {
+        CourseAttainmentSnapshot snapshot = createSnapshot(6, 12, 3);
+        snapshot.setGeneratedBy("rajshaikh_username");
+        snapshot.setCourseCoordinatorName("Dr. Raj Shaikh (Course Coordinator)");
+
+        byte[] bytes = renderer.renderCourseAttainment(snapshot);
+        try (Workbook wb = new XSSFWorkbook(new ByteArrayInputStream(bytes))) {
+            Sheet sheet = wb.getSheet("Attainment-main");
+            assertNotNull(sheet);
+
+            // Row 9 is Faculty Name row
+            assertEquals("Faculty Name:", getCellString(sheet, 9, 0));
+            assertEquals("Dr. Raj Shaikh (Course Coordinator)", getCellString(sheet, 9, 2));
+            assertNotEquals("rajshaikh_username", getCellString(sheet, 9, 2));
+        }
+    }
+
     // --- Test Data Builder ---
 
     private CourseAttainmentSnapshot createSnapshot(int numCos, int numPos, int numPsos) {

@@ -202,10 +202,13 @@ class OverallAttainmentSheetTest {
         assertNotNull(th);
         assertEquals("Year", th.getCell(0).getStringCellValue());
 
-        // For 17 columns (0..16), colLeftEnd is 1, so institution starts at col 2
+        // Header center region contains institution name
         Row row1 = sheet.getRow(1);
         assertNotNull(row1);
-        assertEquals("D. Y. PATIL INTERNATIONAL UNIVERSITY, PUNE", row1.getCell(2).getStringCellValue());
+        String instName = (row1.getCell(1) != null && !row1.getCell(1).getStringCellValue().isBlank())
+                ? row1.getCell(1).getStringCellValue()
+                : row1.getCell(2).getStringCellValue();
+        assertEquals("D. Y. PATIL INTERNATIONAL UNIVERSITY, PUNE", instName);
 
         // Right metadata columns start at col 13 (colRightStart = 17 - 4 = 13)
         Row row3 = sheet.getRow(3);

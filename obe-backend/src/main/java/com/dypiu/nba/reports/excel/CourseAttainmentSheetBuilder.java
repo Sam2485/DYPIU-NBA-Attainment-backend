@@ -90,13 +90,16 @@ public class CourseAttainmentSheetBuilder {
         // SECTION A: COURSE INFORMATION (Rows 5 to 9, Excel rows 6 to 10)
         // =========================================================================
         String courseName = snapshot.getCourseName() != null ? snapshot.getCourseName() : "";
-        String ay = snapshot.getAcademicYear() != null ? snapshot.getAcademicYear() : "";
+        String rawAy = snapshot.getAcademicYear() != null ? snapshot.getAcademicYear() : "";
+        String ay = CourseExcelHeaderRenderer.calculateCourseAcademicYear(rawAy, snapshot.getSemester());
         if (!ay.isBlank() && !ay.startsWith("AY")) {
             ay = "AY " + ay;
         }
         String semesterStr = formatSemester(snapshot.getSemester());
         String courseCode = snapshot.getCourseCode() != null ? snapshot.getCourseCode() : "";
-        String facultyName = snapshot.getGeneratedBy() != null ? snapshot.getGeneratedBy() : "";
+        String facultyName = (snapshot.getCourseCoordinatorName() != null && !snapshot.getCourseCoordinatorName().isBlank())
+                ? snapshot.getCourseCoordinatorName()
+                : (snapshot.getGeneratedBy() != null ? snapshot.getGeneratedBy() : "");
 
         renderInfoRow(sheet, rowIdx++, "Subject Name : ", courseName, endCol, s.infoLabel, s.infoValue);
         renderInfoRow(sheet, rowIdx++, "Academic Year : ", ay, endCol, s.infoLabel, s.infoValue);
