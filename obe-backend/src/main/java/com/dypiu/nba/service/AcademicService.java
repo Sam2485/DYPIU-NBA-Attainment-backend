@@ -175,7 +175,7 @@ public class AcademicService {
         }
     }
 
-    private void enforceBatchScope(String programmeBatchId) {
+    public void enforceBatchScope(String programmeBatchId) {
         CurrentUserScope scope = getScope();
         if (scope == null || scope.isIqac()) return;
         if (programmeBatchId == null || programmeBatchId.isBlank()) return;
