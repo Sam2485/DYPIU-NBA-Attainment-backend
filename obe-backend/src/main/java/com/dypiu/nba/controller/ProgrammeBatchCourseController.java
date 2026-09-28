@@ -27,6 +27,7 @@ public class ProgrammeBatchCourseController {
     private final AttainmentCalculationService calculationService;
     private final AttainmentReportService attainmentReportService;
     private final AtrService atrService;
+    private final com.dypiu.nba.service.CourseExcelImportService courseExcelImportService;
 
     @GetMapping
     public ResponseEntity<ApiResponse<List<ProgrammeBatchCourse>>> getAllProgrammeBatchCourses(
@@ -116,6 +117,44 @@ public class ProgrammeBatchCourseController {
         return ResponseEntity.ok(ApiResponse.<Void>builder()
                 .success(true)
                 .message("ProgrammeBatchCourse deleted successfully")
+                .build());
+    }
+
+    // --- Excel Bulk Import ---
+    @GetMapping(value = {"/template/{programmeBatchId}", "/batch/{programmeBatchId}/template"}, produces = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    public ResponseEntity<byte[]> downloadTemplate(@PathVariable String programmeBatchId) {
+        byte[] bytes = courseExcelImportService.generateTemplate(programmeBatchId);
+        return ResponseEntity.ok()
+                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"Course_Import_Template.xlsx\"")
+                .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .body(bytes);
+    }
+
+    @PostMapping(value = {"/import-excel/preview", "/batch/{programmeBatchId}/import-excel/preview"}, consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<ApiResponse<CourseImportPreviewDto>> previewImport(
+            @PathVariable(required = false) String programmeBatchId,
+            @RequestParam(value = "programmeBatchId", required = false) String paramBatchId,
+            @RequestParam("file") MultipartFile file) {
+        String effectiveBatchId = (programmeBatchId != null && !programmeBatchId.isBlank()) ? programmeBatchId : paramBatchId;
+        CourseImportPreviewDto preview = courseExcelImportService.previewImport(effectiveBatchId, file);
+        return ResponseEntity.ok(ApiResponse.<CourseImportPreviewDto>builder()
+                .success(true)
+                .message("Excel parsed successfully.")
+                .data(preview)
+                .build());
+    }
+
+    @PostMapping(value = {"/import-excel", "/batch/{programmeBatchId}/import-excel"}, consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<ApiResponse<CourseImportResultDto>> commitImport(
+            @PathVariable(required = false) String programmeBatchId,
+            @RequestParam(value = "programmeBatchId", required = false) String paramBatchId,
+            @RequestParam("file") MultipartFile file) {
+        String effectiveBatchId = (programmeBatchId != null && !programmeBatchId.isBlank()) ? programmeBatchId : paramBatchId;
+        CourseImportResultDto result = courseExcelImportService.commitImport(effectiveBatchId, file);
+        return ResponseEntity.ok(ApiResponse.<CourseImportResultDto>builder()
+                .success(true)
+                .message("Courses imported successfully.")
+                .data(result)
                 .build());
     }
 

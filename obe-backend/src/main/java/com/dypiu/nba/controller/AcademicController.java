@@ -39,6 +39,8 @@ public class AcademicController {
     private final com.dypiu.nba.service.AtrService atrService;
     private final RequestScopeAuthorizer requestScopeAuthorizer;
     private final com.dypiu.nba.repository.ProgrammeBatchCourseRepository programmeBatchCourseRepository;
+    private final com.dypiu.nba.service.CourseExcelImportService courseExcelImportService;
+    private final com.dypiu.nba.service.OutcomeExcelImportService outcomeExcelImportService;
 
 
     // --- Users by Role ---
@@ -696,6 +698,84 @@ public class AcademicController {
                 .success(true)
                 .message("Programme batch course created successfully")
                 .data(saved)
+                .build());
+    }
+
+    @GetMapping(value = "/programme-batches/{programmeBatchId}/courses/template", produces = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    public ResponseEntity<byte[]> downloadCourseImportTemplate(@PathVariable String programmeBatchId) {
+        byte[] bytes = courseExcelImportService.generateTemplate(programmeBatchId);
+        return ResponseEntity.ok()
+                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"Course_Import_Template.xlsx\"")
+                .contentType(org.springframework.http.MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .body(bytes);
+    }
+
+    @PostMapping(value = "/programme-batches/{programmeBatchId}/courses/import-excel/preview", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<ApiResponse<com.dypiu.nba.dto.CourseImportPreviewDto>> previewCourseImport(
+            @PathVariable String programmeBatchId,
+            @RequestParam("file") org.springframework.web.multipart.MultipartFile file) {
+        com.dypiu.nba.dto.CourseImportPreviewDto preview = courseExcelImportService.previewImport(programmeBatchId, file);
+        return ResponseEntity.ok(ApiResponse.<com.dypiu.nba.dto.CourseImportPreviewDto>builder()
+                .success(true)
+                .message("Excel parsed successfully. Please review the courses before importing.")
+                .data(preview)
+                .build());
+    }
+
+    @PostMapping(value = "/programme-batches/{programmeBatchId}/courses/import-excel", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<ApiResponse<com.dypiu.nba.dto.CourseImportResultDto>> commitCourseImport(
+            @PathVariable String programmeBatchId,
+            @RequestParam("file") org.springframework.web.multipart.MultipartFile file) {
+        com.dypiu.nba.dto.CourseImportResultDto result = courseExcelImportService.commitImport(programmeBatchId, file);
+        return ResponseEntity.ok(ApiResponse.<com.dypiu.nba.dto.CourseImportResultDto>builder()
+                .success(true)
+                .message("Courses imported successfully from Excel.")
+                .data(result)
+                .build());
+    }
+
+    @GetMapping(value = "/programme-batches/{programmeBatchId}/outcomes/template", produces = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    public ResponseEntity<byte[]> downloadOutcomeImportTemplate(@PathVariable String programmeBatchId) {
+        byte[] bytes = outcomeExcelImportService.generateTemplate(programmeBatchId);
+        return ResponseEntity.ok()
+                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"PO_PSO_Competency_Template.xlsx\"")
+                .contentType(org.springframework.http.MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .body(bytes);
+    }
+
+    @PostMapping(value = "/programme-batches/{programmeBatchId}/outcomes/import-excel/preview", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<ApiResponse<com.dypiu.nba.dto.OutcomeImportPreviewDto>> previewOutcomeImport(
+            @PathVariable String programmeBatchId,
+            @RequestParam("file") org.springframework.web.multipart.MultipartFile file) {
+        com.dypiu.nba.dto.OutcomeImportPreviewDto preview = outcomeExcelImportService.previewImport(programmeBatchId, file);
+        return ResponseEntity.ok(ApiResponse.<com.dypiu.nba.dto.OutcomeImportPreviewDto>builder()
+                .success(true)
+                .message("Excel parsed successfully. Please review the outcomes and competencies before importing.")
+                .data(preview)
+                .build());
+    }
+
+    @PostMapping(value = "/programme-batches/{programmeBatchId}/outcomes/import-excel", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<ApiResponse<com.dypiu.nba.dto.OutcomeImportResultDto>> commitOutcomeImportMultipart(
+            @PathVariable String programmeBatchId,
+            @RequestParam("file") org.springframework.web.multipart.MultipartFile file) {
+        com.dypiu.nba.dto.OutcomeImportResultDto result = outcomeExcelImportService.commitImport(programmeBatchId, file);
+        return ResponseEntity.ok(ApiResponse.<com.dypiu.nba.dto.OutcomeImportResultDto>builder()
+                .success(true)
+                .message("Outcomes and competencies imported successfully from Excel.")
+                .data(result)
+                .build());
+    }
+
+    @PostMapping(value = "/programme-batches/{programmeBatchId}/outcomes/import-excel", consumes = org.springframework.http.MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<ApiResponse<com.dypiu.nba.dto.OutcomeImportResultDto>> commitOutcomeImportJson(
+            @PathVariable String programmeBatchId,
+            @RequestBody com.dypiu.nba.dto.OutcomeImportCommitRequestDto request) {
+        com.dypiu.nba.dto.OutcomeImportResultDto result = outcomeExcelImportService.commitImport(programmeBatchId, request);
+        return ResponseEntity.ok(ApiResponse.<com.dypiu.nba.dto.OutcomeImportResultDto>builder()
+                .success(true)
+                .message("Outcomes and competencies imported successfully from Excel.")
+                .data(result)
                 .build());
     }
 
