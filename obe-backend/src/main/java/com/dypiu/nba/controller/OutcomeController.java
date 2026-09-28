@@ -175,4 +175,59 @@ public class OutcomeController {
                 .data(outcomeService.saveProgrammeBatchOutcomeBundle(programmeBatchId, bundle))
                 .build());
     }
+
+    @GetMapping({
+            "/programme-batches/{programmeBatchId}/available-outcome-sources",
+            "/batches/{programmeBatchId}/available-outcome-sources",
+            "/master-programmes/{programmeBatchId}/available-outcome-sources"
+    })
+    public ResponseEntity<ApiResponse<List<java.util.Map<String, Object>>>> getAvailableOutcomeSourceBatches(
+            @PathVariable String programmeBatchId) {
+        return ResponseEntity.ok(ApiResponse.<List<java.util.Map<String, Object>>>builder()
+                .success(true)
+                .data(outcomeService.getAvailableOutcomeSourceBatches(programmeBatchId))
+                .build());
+    }
+
+    @PostMapping({
+            "/programme-batches/{programmeBatchId}/copy-outcomes-from/{sourceBatchId}",
+            "/batches/{programmeBatchId}/copy-outcomes-from/{sourceBatchId}",
+            "/master-programmes/{programmeBatchId}/copy-outcomes-from/{sourceBatchId}"
+    })
+    public ResponseEntity<ApiResponse<com.dypiu.nba.dto.ProgrammeBatchOutcomeBundleDto>> copyBatchOutcomes(
+            @PathVariable String programmeBatchId,
+            @PathVariable String sourceBatchId) {
+        return ResponseEntity.ok(ApiResponse.<com.dypiu.nba.dto.ProgrammeBatchOutcomeBundleDto>builder()
+                .success(true)
+                .message("Outcomes copied from previous batch successfully")
+                .data(outcomeService.copyBatchOutcomes(programmeBatchId, sourceBatchId))
+                .build());
+    }
+
+    @GetMapping({
+            "/programme-batch-courses/{offeringId}/available-co-sources",
+            "/course-offerings/{offeringId}/available-co-sources"
+    })
+    public ResponseEntity<ApiResponse<List<java.util.Map<String, Object>>>> getAvailableCoSources(
+            @PathVariable String offeringId) {
+        return ResponseEntity.ok(ApiResponse.<List<java.util.Map<String, Object>>>builder()
+                .success(true)
+                .data(outcomeService.getAvailableCoSources(offeringId))
+                .build());
+    }
+
+    @PostMapping({
+            "/programme-batch-courses/{offeringId}/copy-cos-from/{sourceOfferingId}",
+            "/course-offerings/{offeringId}/copy-cos-from/{sourceOfferingId}"
+    })
+    public ResponseEntity<ApiResponse<List<CourseOutcome>>> copyCourseOutcomes(
+            @PathVariable String offeringId,
+            @PathVariable String sourceOfferingId,
+            @RequestParam(required = false, defaultValue = "true") Boolean includeMappings) {
+        return ResponseEntity.ok(ApiResponse.<List<CourseOutcome>>builder()
+                .success(true)
+                .message("Course outcomes copied successfully from previous batch")
+                .data(outcomeService.copyCourseOutcomes(offeringId, sourceOfferingId, includeMappings))
+                .build());
+    }
 }

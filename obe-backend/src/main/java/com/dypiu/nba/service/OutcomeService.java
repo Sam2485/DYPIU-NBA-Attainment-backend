@@ -1482,6 +1482,269 @@ public class OutcomeService {
                 .peos(savedPeos)
                 .poTargets(targetDto != null ? targetDto.getPoTargets() : null)
                 .psoTargets(targetDto != null ? targetDto.getPsoTargets() : null)
+                .status("DRAFT")
                 .build();
+    }
+
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> getAvailableOutcomeSourceBatches(String programmeOrProgrammeBatchId) {
+        enforceBatchOrProgrammeScope(programmeOrProgrammeBatchId);
+        String currentBatchId = resolveProgrammeBatchId(programmeOrProgrammeBatchId);
+        ProgrammeBatch currentBatch = programmeBatchRepository.findById(currentBatchId)
+                .orElseThrow(() -> new ResourceNotFoundException("Current batch not found: " + currentBatchId));
+
+        String masterProgId = currentBatch.getMasterProgrammeId();
+        List<ProgrammeBatch> allBatches = programmeBatchRepository.findByMasterProgrammeIdAndDeletedAtIsNullOrderByStartYearDesc(masterProgId);
+
+        List<Map<String, Object>> results = new ArrayList<>();
+        ProgrammeBatch directPredecessor = null;
+
+        for (ProgrammeBatch b : allBatches) {
+            if (b.getId().equals(currentBatchId)) continue;
+
+            int poCount = poRepository.findByProgrammeBatchId(b.getId()).size();
+            int psoCount = psoRepository.findByProgrammeBatchId(b.getId()).size();
+            int peoCount = peoRepository.findByProgrammeBatchId(b.getId()).size();
+
+            if (poCount > 0 || psoCount > 0 || peoCount > 0) {
+                boolean isPredecessorCandidate = currentBatch.getStartYear() != null && b.getStartYear() != null && b.getStartYear() < currentBatch.getStartYear();
+                if (isPredecessorCandidate && directPredecessor == null) {
+                    directPredecessor = b;
+                }
+
+                Map<String, Object> map = new LinkedHashMap<>();
+                map.put("batchId", b.getId());
+                map.put("name", b.getName());
+                map.put("startYear", b.getStartYear());
+                map.put("endYear", b.getEndYear());
+                map.put("poCount", poCount);
+                map.put("psoCount", psoCount);
+                map.put("peoCount", peoCount);
+                results.add(map);
+            }
+        }
+
+        final String predId = directPredecessor != null ? directPredecessor.getId() : null;
+        for (Map<String, Object> m : results) {
+            m.put("isDirectPredecessor", Objects.equals(m.get("batchId"), predId));
+        }
+
+        return results;
+    }
+
+    @Transactional
+    public com.dypiu.nba.dto.ProgrammeBatchOutcomeBundleDto copyBatchOutcomes(String targetBatchId, String sourceBatchId) {
+        enforceBatchOrProgrammeScope(targetBatchId);
+        enforceProgrammeCoordinatorMutation(targetBatchId);
+        batchLifecycleService.enforceBatchEditability(targetBatchId);
+
+        ProgrammeBatch targetBatch = programmeBatchRepository.findById(targetBatchId)
+                .orElseThrow(() -> new ResourceNotFoundException("Target batch not found: " + targetBatchId));
+        ProgrammeBatch sourceBatch = programmeBatchRepository.findById(sourceBatchId)
+                .orElseThrow(() -> new ResourceNotFoundException("Source batch not found: " + sourceBatchId));
+
+        if (!Objects.equals(targetBatch.getMasterProgrammeId(), sourceBatch.getMasterProgrammeId())) {
+            throw new BadRequestException("Source batch and target batch must belong to the same programme.");
+        }
+
+        List<ProgrammeOutcome> srcPos = getPOsByProgramme(sourceBatchId);
+        List<ProgrammeSpecificOutcome> srcPsos = getPSOsByProgramme(sourceBatchId);
+        List<PeoOutcome> srcPeos = getPEOsByProgramme(sourceBatchId);
+        ProgrammeTargetDto srcTargets = getProgrammeTargets(sourceBatchId);
+
+        List<ProgrammeOutcome> clonedPos = new ArrayList<>();
+        if (srcPos != null) {
+            for (ProgrammeOutcome src : srcPos) {
+                ProgrammeOutcome po = ProgrammeOutcome.builder()
+                        .code(src.getCode())
+                        .statement(src.getStatement())
+                        .target(src.getTarget())
+                        .status(ApprovalStatus.DRAFT)
+                        .competencies(src.getCompetencies() != null ? new ArrayList<>(src.getCompetencies()) : new ArrayList<>())
+                        .build();
+                clonedPos.add(po);
+            }
+        }
+
+        List<ProgrammeSpecificOutcome> clonedPsos = new ArrayList<>();
+        if (srcPsos != null) {
+            for (ProgrammeSpecificOutcome src : srcPsos) {
+                ProgrammeSpecificOutcome pso = ProgrammeSpecificOutcome.builder()
+                        .code(src.getCode())
+                        .statement(src.getStatement())
+                        .target(src.getTarget())
+                        .status(ApprovalStatus.DRAFT)
+                        .competencies(src.getCompetencies() != null ? new ArrayList<>(src.getCompetencies()) : new ArrayList<>())
+                        .build();
+                clonedPsos.add(pso);
+            }
+        }
+
+        List<PeoOutcome> clonedPeos = new ArrayList<>();
+        if (srcPeos != null) {
+            for (PeoOutcome src : srcPeos) {
+                PeoOutcome peo = PeoOutcome.builder()
+                        .code(src.getCode())
+                        .statement(src.getStatement())
+                        .build();
+                clonedPeos.add(peo);
+            }
+        }
+
+        com.dypiu.nba.dto.ProgrammeBatchOutcomeBundleDto bundleToSave = com.dypiu.nba.dto.ProgrammeBatchOutcomeBundleDto.builder()
+                .programmeBatchId(targetBatchId)
+                .masterProgrammeId(targetBatch.getMasterProgrammeId())
+                .pos(clonedPos)
+                .psos(clonedPsos)
+                .peos(clonedPeos)
+                .poTargets(srcTargets != null ? srcTargets.getPoTargets() : null)
+                .psoTargets(srcTargets != null ? srcTargets.getPsoTargets() : null)
+                .build();
+
+        log.info("[OutcomeService] Copying batch outcomes from source {} to target {}", sourceBatchId, targetBatchId);
+        return saveProgrammeBatchOutcomeBundle(targetBatchId, bundleToSave);
+    }
+
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> getAvailableCoSources(String programmeBatchCourseId) {
+        String targetOfferingId = resolveOfferingId(programmeBatchCourseId);
+        ProgrammeBatchCourse targetOffering = programmeBatchCourseRepository.findById(targetOfferingId)
+                .orElseThrow(() -> new ResourceNotFoundException("Target course offering not found: " + targetOfferingId));
+
+        if (targetOffering.getCode() == null || targetOffering.getCode().trim().isBlank()) {
+            return Collections.emptyList();
+        }
+
+        ProgrammeBatch currentBatch = programmeBatchRepository.findById(targetOffering.getProgrammeBatchId()).orElse(null);
+        String currentCode = targetOffering.getCode().trim();
+
+        List<ProgrammeBatchCourse> allSameCodeOfferings = programmeBatchCourseRepository.findByCodeIgnoreCase(currentCode);
+
+        List<Map<String, Object>> results = new ArrayList<>();
+        for (ProgrammeBatchCourse offering : allSameCodeOfferings) {
+            if (offering.getId().equals(targetOfferingId)) continue;
+
+            List<CourseOutcome> cos = coRepository.findByProgrammeBatchCourseId(offering.getId());
+            if (cos.isEmpty()) continue;
+
+            ProgrammeBatch batch = programmeBatchRepository.findById(offering.getProgrammeBatchId()).orElse(null);
+
+            Map<String, Object> map = new LinkedHashMap<>();
+            map.put("offeringId", offering.getId());
+            map.put("courseCode", offering.getCode());
+            map.put("courseName", offering.getName());
+            map.put("semester", offering.getSemester());
+            map.put("batchId", offering.getProgrammeBatchId());
+            map.put("batchName", batch != null ? batch.getName() : offering.getProgrammeBatchId());
+            map.put("startYear", batch != null ? batch.getStartYear() : null);
+            map.put("endYear", batch != null ? batch.getEndYear() : null);
+            map.put("coCount", cos.size());
+            map.put("sameProgramme", currentBatch != null && batch != null && Objects.equals(currentBatch.getMasterProgrammeId(), batch.getMasterProgrammeId()));
+            results.add(map);
+        }
+
+        // Sort by sameProgramme first, then startYear descending
+        results.sort((a, b) -> {
+            boolean sameA = Boolean.TRUE.equals(a.get("sameProgramme"));
+            boolean sameB = Boolean.TRUE.equals(b.get("sameProgramme"));
+            if (sameA != sameB) return sameA ? -1 : 1;
+            Integer yA = (Integer) a.get("startYear");
+            Integer yB = (Integer) b.get("startYear");
+            if (yA != null && yB != null) return yB.compareTo(yA);
+            return 0;
+        });
+
+        return results;
+    }
+
+    @Transactional
+    public List<CourseOutcome> copyCourseOutcomes(String targetOfferingId, String sourceOfferingId, Boolean includeMappings) {
+        String resolvedTargetId = resolveOfferingId(targetOfferingId);
+        String resolvedSourceId = resolveOfferingId(sourceOfferingId);
+
+        enforceCourseOrOfferingScope(resolvedTargetId);
+        enforceCourseCoordinatorMutation(resolvedTargetId);
+        enforceOfferingEditability(resolvedTargetId);
+
+        ProgrammeBatchCourse targetOffering = programmeBatchCourseRepository.findById(resolvedTargetId)
+                .orElseThrow(() -> new ResourceNotFoundException("Target course offering not found: " + resolvedTargetId));
+        ProgrammeBatchCourse sourceOffering = programmeBatchCourseRepository.findById(resolvedSourceId)
+                .orElseThrow(() -> new ResourceNotFoundException("Source course offering not found: " + resolvedSourceId));
+
+        List<CourseOutcome> srcCos = coRepository.findByProgrammeBatchCourseIdOrderByCodeAsc(resolvedSourceId);
+        if (srcCos.isEmpty()) {
+            throw new BadRequestException("Source offering has no Course Outcomes to copy.");
+        }
+
+        List<CourseOutcome> newCos = new ArrayList<>();
+        Map<String, String> srcCoIdToCode = new HashMap<>();
+        for (CourseOutcome src : srcCos) {
+            srcCoIdToCode.put(src.getId(), src.getCode());
+            CourseOutcome co = CourseOutcome.builder()
+                    .code(src.getCode())
+                    .statement(src.getStatement())
+                    .bloomsLevel(src.getBloomsLevel())
+                    .targetLevel(src.getTargetLevel())
+                    .status(ApprovalStatus.DRAFT)
+                    .build();
+            newCos.add(co);
+        }
+
+        List<CourseOutcome> savedCos = saveCOs(resolvedTargetId, newCos);
+
+        // Optionally copy mappings
+        if (Boolean.TRUE.equals(includeMappings)) {
+            try {
+                Map<String, String> codeToNewCoId = savedCos.stream()
+                        .collect(Collectors.toMap(c -> c.getCode().toLowerCase(), CourseOutcome::getId, (a, b) -> a));
+
+                List<String> srcCoIds = new ArrayList<>(srcCoIdToCode.keySet());
+                List<CoPoMapping> srcPoMaps = coPoMappingRepository.findByCourseOutcomeIdIn(srcCoIds);
+                List<CoPsoMapping> srcPsoMaps = coPsoMappingRepository.findByCourseOutcomeIdIn(srcCoIds);
+
+                List<CoPoMapping> newPoMaps = new ArrayList<>();
+                for (CoPoMapping m : srcPoMaps) {
+                    String srcCode = srcCoIdToCode.get(m.getCourseOutcomeId());
+                    if (srcCode != null && codeToNewCoId.containsKey(srcCode.toLowerCase())) {
+                        newPoMaps.add(CoPoMapping.builder()
+                                .id("copomap-" + UUID.randomUUID().toString().substring(0, 8))
+                                .courseOutcomeId(codeToNewCoId.get(srcCode.toLowerCase()))
+                                .poCode(m.getPoCode())
+                                .mappingLevel(m.getMappingLevel())
+                                .build());
+                    }
+                }
+
+                List<CoPsoMapping> newPsoMaps = new ArrayList<>();
+                for (CoPsoMapping m : srcPsoMaps) {
+                    String srcCode = srcCoIdToCode.get(m.getCourseOutcomeId());
+                    if (srcCode != null && codeToNewCoId.containsKey(srcCode.toLowerCase())) {
+                        newPsoMaps.add(CoPsoMapping.builder()
+                                .id("copsomap-" + UUID.randomUUID().toString().substring(0, 8))
+                                .courseOutcomeId(codeToNewCoId.get(srcCode.toLowerCase()))
+                                .psoCode(m.getPsoCode())
+                                .mappingLevel(m.getMappingLevel())
+                                .build());
+                    }
+                }
+
+                // Delete existing mappings for target COs
+                List<String> targetCoIds = savedCos.stream().map(CourseOutcome::getId).toList();
+                List<CoPoMapping> existingTargetPoMaps = coPoMappingRepository.findByCourseOutcomeIdIn(targetCoIds);
+                if (!existingTargetPoMaps.isEmpty()) coPoMappingRepository.deleteAllInBatch(existingTargetPoMaps);
+                if (!newPoMaps.isEmpty()) coPoMappingRepository.saveAll(newPoMaps);
+
+                List<CoPsoMapping> existingTargetPsoMaps = coPsoMappingRepository.findByCourseOutcomeIdIn(targetCoIds);
+                if (!existingTargetPsoMaps.isEmpty()) coPsoMappingRepository.deleteAllInBatch(existingTargetPsoMaps);
+                if (!newPsoMaps.isEmpty()) coPsoMappingRepository.saveAll(newPsoMaps);
+
+                log.info("[OutcomeService] Copied mappings from source offering {} to target offering {}", resolvedSourceId, resolvedTargetId);
+            } catch (Exception e) {
+                log.warn("[OutcomeService] Failed to copy mappings (non-fatal): {}", e.getMessage());
+            }
+        }
+
+        log.info("[OutcomeService] Successfully copied {} Course Outcomes from source offering {} to target offering {}", savedCos.size(), resolvedSourceId, resolvedTargetId);
+        return savedCos;
     }
 }

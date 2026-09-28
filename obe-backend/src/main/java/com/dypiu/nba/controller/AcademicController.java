@@ -1046,6 +1046,33 @@ public class AcademicController {
                 .build());
     }
 
+    @GetMapping({
+            "/programme-batch-courses/{offeringId}/available-co-sources",
+            "/course-offerings/{offeringId}/available-co-sources"
+    })
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getAvailableCoSources(
+            @PathVariable String offeringId) {
+        return ResponseEntity.ok(ApiResponse.<List<Map<String, Object>>>builder()
+                .success(true)
+                .data(outcomeService.getAvailableCoSources(offeringId))
+                .build());
+    }
+
+    @PostMapping({
+            "/programme-batch-courses/{offeringId}/copy-cos-from/{sourceOfferingId}",
+            "/course-offerings/{offeringId}/copy-cos-from/{sourceOfferingId}"
+    })
+    public ResponseEntity<ApiResponse<List<CourseOutcome>>> copyCourseOutcomes(
+            @PathVariable String offeringId,
+            @PathVariable String sourceOfferingId,
+            @RequestParam(required = false, defaultValue = "true") Boolean includeMappings) {
+        return ResponseEntity.ok(ApiResponse.<List<CourseOutcome>>builder()
+                .success(true)
+                .message("Course outcomes copied successfully from previous batch")
+                .data(outcomeService.copyCourseOutcomes(offeringId, sourceOfferingId, includeMappings))
+                .build());
+    }
+
     @GetMapping({"/programme-batch-courses/{offeringId}/mappings", "/programme-batch-courses/{offeringId}/co-po-pso-mappings"})
     public ResponseEntity<ApiResponse<com.dypiu.nba.dto.CourseMappingMatrixDto>> getOfferingMappings(@PathVariable String offeringId) {
         return ResponseEntity.ok(ApiResponse.<com.dypiu.nba.dto.CourseMappingMatrixDto>builder()
