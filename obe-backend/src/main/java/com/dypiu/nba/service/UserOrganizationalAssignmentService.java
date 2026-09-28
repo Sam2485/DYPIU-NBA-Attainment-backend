@@ -195,6 +195,21 @@ public class UserOrganizationalAssignmentService {
     }
 
     @Transactional
+    public void deactivateAssignmentsForUser(Long userId) {
+        if (userId == null) {
+            return;
+        }
+        List<UserOrganizationalAssignment> assignments = assignmentRepository.findByUserIdAndIsActiveTrue(userId);
+        if (assignments != null && !assignments.isEmpty()) {
+            for (UserOrganizationalAssignment a : assignments) {
+                a.setIsActive(false);
+            }
+            assignmentRepository.saveAll(assignments);
+            log.info("Deactivated {} assignments for user ID {}", assignments.size(), userId);
+        }
+    }
+
+    @Transactional
     public void syncUserIdentityColumns(User user) {
         if (user == null || user.getId() == null) {
             return;
@@ -346,6 +361,24 @@ public class UserOrganizationalAssignmentService {
         }
 
         String schoolId = req.getSchoolId() != null && !req.getSchoolId().isBlank() ? req.getSchoolId().trim() : null;
+        if (schoolId == null && req.getSchoolName() != null && !req.getSchoolName().isBlank()) {
+            schoolId = req.getSchoolName().trim();
+        }
+
+        if (schoolId != null && !schoolRepository.existsById(schoolId)) {
+            final String targetSchoolId = schoolId;
+            Optional<School> matched = schoolRepository.findAll().stream()
+                    .filter(s -> (s.getId() != null && s.getId().equalsIgnoreCase(targetSchoolId))
+                            || (s.getCode() != null && s.getCode().equalsIgnoreCase(targetSchoolId))
+                            || (s.getName() != null && s.getName().equalsIgnoreCase(targetSchoolId)))
+                    .findFirst();
+            if (matched.isPresent()) {
+                schoolId = matched.get().getId();
+            } else {
+                throw new BadRequestException("Invalid School ID: " + schoolId);
+            }
+        }
+
         String deptId = req.getDepartmentId() != null && !req.getDepartmentId().isBlank() ? req.getDepartmentId().trim() : null;
         String progId = req.getMasterProgrammeId() != null && !req.getMasterProgrammeId().isBlank() ? req.getMasterProgrammeId().trim() : null;
 
@@ -358,9 +391,6 @@ public class UserOrganizationalAssignmentService {
         if ("DIRECTOR".equals(role)) {
             if (schoolId == null) {
                 throw new BadRequestException("School is required for Director assignment.");
-            }
-            if (!schoolRepository.existsById(schoolId)) {
-                throw new BadRequestException("Invalid School ID: " + schoolId);
             }
             return new ValidatedScope("DIRECTOR", schoolId, null, null);
         }
@@ -380,9 +410,6 @@ public class UserOrganizationalAssignmentService {
             }
             if (schoolId == null) {
                 throw new BadRequestException("School is required for HOD assignment.");
-            }
-            if (!schoolRepository.existsById(schoolId)) {
-                throw new BadRequestException("Invalid School ID: " + schoolId);
             }
             return new ValidatedScope("HOD", schoolId, deptId, null);
         }
@@ -415,9 +442,6 @@ public class UserOrganizationalAssignmentService {
 
             if (schoolId == null) {
                 throw new BadRequestException("School is required for Programme Coordinator assignment.");
-            }
-            if (!schoolRepository.existsById(schoolId)) {
-                throw new BadRequestException("Invalid School ID: " + schoolId);
             }
 
             return new ValidatedScope("PROGRAMME_COORDINATOR", schoolId, deptId, progId);

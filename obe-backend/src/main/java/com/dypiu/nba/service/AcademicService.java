@@ -1568,11 +1568,15 @@ public class AcademicService {
         CurrentUserScope scope = getScope();
         List<User> users;
 
+        List<User> allActiveUsers = userRepository.findAll().stream()
+                .filter(u -> u.getIsActive() == null || Boolean.TRUE.equals(u.getIsActive()))
+                .collect(Collectors.toList());
+
         if (role == null || role.isBlank() || role.equalsIgnoreCase("ALL")) {
-            users = userRepository.findAll();
+            users = allActiveUsers;
         } else {
             String searchRole = role.trim().toUpperCase().replace("-", "_");
-            users = userRepository.findAll().stream().filter(u -> {
+            users = allActiveUsers.stream().filter(u -> {
                 if (u.getRole() != null && (
                         u.getRole().name().equalsIgnoreCase(searchRole)
                         || ((u.getRole() == UserRole.FACULTY || u.getRole() == UserRole.PROGRAMME_COORDINATOR || u.getRole() == UserRole.HOD) && (searchRole.equals("COURSE_COORDINATOR") || searchRole.equals("CC") || searchRole.equals("FACULTY")))
@@ -1647,6 +1651,7 @@ public class AcademicService {
                             .masterProgrammeId(u.getMasterProgrammeId())
                             .department(u.getDepartment())
                             .programme(u.getProgramme())
+                            .isActive(u.getIsActive() == null || Boolean.TRUE.equals(u.getIsActive()))
                             .build();
                 })
                 .toList();

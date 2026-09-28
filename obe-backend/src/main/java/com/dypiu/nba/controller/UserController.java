@@ -494,6 +494,38 @@ public class UserController {
         user.setIsActive(false);
         userRepository.save(user);
 
+        if (assignmentService != null) {
+            assignmentService.deactivateAssignmentsForUser(id);
+        }
+
+        // Clean any director references pointing to this user
+        if (schoolRepository != null) {
+            List<School> schoolsWithDirector = schoolRepository.findAll().stream()
+                    .filter(s -> Objects.equals(s.getDirectorId(), user.getId())
+                            || (user.getEmail() != null && s.getDirectorEmail() != null && s.getDirectorEmail().equalsIgnoreCase(user.getEmail())))
+                    .collect(Collectors.toList());
+            for (School s : schoolsWithDirector) {
+                s.setDirectorId(null);
+                s.setDirectorName(null);
+                s.setDirectorEmail(null);
+                schoolRepository.save(s);
+            }
+        }
+
+        // Clean any HOD references pointing to this user
+        if (departmentRepository != null) {
+            List<Department> deptsWithHod = departmentRepository.findAll().stream()
+                    .filter(d -> (user.getEmail() != null && d.getHodEmail() != null && d.getHodEmail().equalsIgnoreCase(user.getEmail()))
+                            || (user.getName() != null && d.getHodName() != null && d.getHodName().equalsIgnoreCase(user.getName())))
+                    .collect(Collectors.toList());
+            for (Department d : deptsWithHod) {
+                d.setHodEmail(null);
+                d.setHodName(null);
+                d.setHod(null);
+                departmentRepository.save(d);
+            }
+        }
+
         if (auditLogService != null) {
             auditLogService.recordSuccess(com.dypiu.nba.audit.AuditAction.DELETE, com.dypiu.nba.audit.ResourceType.USER, String.valueOf(user.getId()), "ACTIVE", "INACTIVE", "Deactivated/Deleted User " + user.getName(), java.util.Map.of("username", user.getUsername(), "role", user.getRole() != null ? user.getRole().name() : ""));
         }
@@ -539,13 +571,15 @@ public class UserController {
             for (Object item : list) {
                 if (item instanceof Map<?, ?> map) {
                     String role = map.get("role") != null ? map.get("role").toString() : (user.getRole() != null ? user.getRole().name() : "FACULTY");
-                    String schoolId = map.get("schoolId") != null ? map.get("schoolId").toString() : null;
+                    String schoolId = map.get("schoolId") != null ? map.get("schoolId").toString() : (map.get("schoolName") != null ? map.get("schoolName").toString() : null);
+                    String schoolName = map.get("schoolName") != null ? map.get("schoolName").toString() : null;
                     String departmentId = map.get("departmentId") != null ? map.get("departmentId").toString() : null;
                     String masterProgrammeId = map.get("masterProgrammeId") != null ? map.get("masterProgrammeId").toString() : null;
 
                     assignmentService.addAssignment(user.getId(), AssignmentRequestDto.builder()
                             .role(role)
                             .schoolId(schoolId)
+                            .schoolName(schoolName)
                             .departmentId(departmentId)
                             .masterProgrammeId(masterProgrammeId)
                             .build());
