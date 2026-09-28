@@ -16,6 +16,7 @@ public class AssignmentRequestDto implements Serializable {
 
     private String role;
     private String schoolId;
+    private String schoolName;
     private String departmentId;
     private String masterProgrammeId;
 }
