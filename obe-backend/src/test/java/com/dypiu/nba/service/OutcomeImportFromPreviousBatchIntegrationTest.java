@@ -50,7 +50,13 @@ public class OutcomeImportFromPreviousBatchIntegrationTest {
     private ProgrammeOutcomeRepository poRepository;
 
     @Autowired
+    private PoCompetencyRepository poCompetencyRepository;
+
+    @Autowired
     private ProgrammeSpecificOutcomeRepository psoRepository;
+
+    @Autowired
+    private PsoCompetencyRepository psoCompetencyRepository;
 
     @Autowired
     private CourseOutcomeRepository coRepository;
@@ -73,6 +79,8 @@ public class OutcomeImportFromPreviousBatchIntegrationTest {
 
     @BeforeEach
     void setUp() {
+        poCompetencyRepository.deleteAll();
+        psoCompetencyRepository.deleteAll();
         coRepository.deleteAll();
         poRepository.deleteAll();
         psoRepository.deleteAll();
@@ -207,21 +215,32 @@ public class OutcomeImportFromPreviousBatchIntegrationTest {
     @Test
     @DisplayName("PO/PSO Import: discovers source batches and copies outcomes cleanly")
     void testDiscoverAndCopyBatchOutcomes() {
-        // 1. Populate Batch 2022 with POs and PSOs
+        // 1. Populate Batch 2022 with POs, PSOs and Competencies
+        PoCompetency po1Comp = PoCompetency.builder()
+                .code("PO1.1")
+                .statement("Apply mathematical principles to solve computing problems.")
+                .build();
         ProgrammeOutcome po1 = ProgrammeOutcome.builder()
                 .code("PO1")
                 .statement("Engineering Knowledge: Apply knowledge of mathematics and science.")
                 .target(new BigDecimal("2.60"))
+                .competencies(List.of(po1Comp))
                 .build();
         ProgrammeOutcome po2 = ProgrammeOutcome.builder()
                 .code("PO2")
                 .statement("Problem Analysis: Identify, formulate, and analyze complex problems.")
                 .target(new BigDecimal("2.70"))
                 .build();
+
+        PsoCompetency pso1Comp = PsoCompetency.builder()
+                .code("PSO1.1")
+                .statement("Design modular enterprise software architectures.")
+                .build();
         ProgrammeSpecificOutcome pso1 = ProgrammeSpecificOutcome.builder()
                 .code("PSO1")
                 .statement("Develop efficient software solutions.")
                 .target(new BigDecimal("2.50"))
+                .competencies(List.of(pso1Comp))
                 .build();
 
         ProgrammeBatchOutcomeBundleDto bundle2022 = ProgrammeBatchOutcomeBundleDto.builder()
@@ -252,14 +271,34 @@ public class OutcomeImportFromPreviousBatchIntegrationTest {
         assertEquals(2, copied.getPos().size());
         assertEquals(1, copied.getPsos().size());
 
+        // Verify Competencies copied
+        ProgrammeOutcome copiedPo1 = copied.getPos().stream().filter(p -> "PO1".equals(p.getCode())).findFirst().orElseThrow();
+        assertNotNull(copiedPo1.getCompetencies());
+        assertEquals(1, copiedPo1.getCompetencies().size());
+        assertEquals("Apply mathematical principles to solve computing problems.", copiedPo1.getCompetencies().get(0).getStatement());
+
+        ProgrammeSpecificOutcome copiedPso1 = copied.getPsos().stream().filter(p -> "PSO1".equals(p.getCode())).findFirst().orElseThrow();
+        assertNotNull(copiedPso1.getCompetencies());
+        assertEquals(1, copiedPso1.getCompetencies().size());
+        assertEquals("Design modular enterprise software architectures.", copiedPso1.getCompetencies().get(0).getStatement());
+
         // Verify DB persistence in Batch 2023
         List<ProgrammeOutcome> batch2023Pos = poRepository.findByProgrammeBatchId(batch2023.getId());
         assertEquals(2, batch2023Pos.size());
         assertTrue(batch2023Pos.stream().anyMatch(p -> "PO1".equals(p.getCode())));
         assertTrue(batch2023Pos.stream().anyMatch(p -> "PO2".equals(p.getCode())));
 
+        ProgrammeOutcome persistedTargetPo1 = batch2023Pos.stream().filter(p -> "PO1".equals(p.getCode())).findFirst().orElseThrow();
+        List<PoCompetency> targetPo1Comps = poCompetencyRepository.findByPoIdOrderByCodeAsc(persistedTargetPo1.getId());
+        assertEquals(1, targetPo1Comps.size());
+        assertEquals("Apply mathematical principles to solve computing problems.", targetPo1Comps.get(0).getStatement());
+
         // Verify original Batch 2022 is unmodified
         assertEquals(2, poRepository.findByProgrammeBatchId(batch2022.getId()).size());
+        ProgrammeOutcome persistedSrcPo1 = poRepository.findByProgrammeBatchId(batch2022.getId()).stream().filter(p -> "PO1".equals(p.getCode())).findFirst().orElseThrow();
+        List<PoCompetency> srcPo1Comps = poCompetencyRepository.findByPoIdOrderByCodeAsc(persistedSrcPo1.getId());
+        assertEquals(1, srcPo1Comps.size());
+        assertNotEquals(srcPo1Comps.get(0).getId(), targetPo1Comps.get(0).getId(), "Target competency must have its own distinct ID");
     }
 
     @Test

@@ -513,7 +513,7 @@ public class OutcomeService {
                         cCode = po.getCode() + "." + cIdx;
                     }
                     String cId = c.getId();
-                    if (cId == null || cId.isBlank() || cId.startsWith("comp-")) {
+                    if (cId == null || cId.isBlank() || cId.startsWith("comp-") || cId.startsWith("pocomp-")) {
                         cId = "pocomp-" + UUID.randomUUID().toString().substring(0, 8);
                     }
                     cIdx++;
@@ -1555,12 +1555,21 @@ public class OutcomeService {
         List<ProgrammeOutcome> clonedPos = new ArrayList<>();
         if (srcPos != null) {
             for (ProgrammeOutcome src : srcPos) {
+                List<PoCompetency> clonedComps = new ArrayList<>();
+                if (src.getCompetencies() != null) {
+                    for (PoCompetency sc : src.getCompetencies()) {
+                        clonedComps.add(PoCompetency.builder()
+                                .code(sc.getCode())
+                                .statement(sc.getStatement())
+                                .build());
+                    }
+                }
                 ProgrammeOutcome po = ProgrammeOutcome.builder()
                         .code(src.getCode())
                         .statement(src.getStatement())
                         .target(src.getTarget())
                         .status(ApprovalStatus.DRAFT)
-                        .competencies(src.getCompetencies() != null ? new ArrayList<>(src.getCompetencies()) : new ArrayList<>())
+                        .competencies(clonedComps)
                         .build();
                 clonedPos.add(po);
             }
@@ -1569,12 +1578,21 @@ public class OutcomeService {
         List<ProgrammeSpecificOutcome> clonedPsos = new ArrayList<>();
         if (srcPsos != null) {
             for (ProgrammeSpecificOutcome src : srcPsos) {
+                List<PsoCompetency> clonedComps = new ArrayList<>();
+                if (src.getCompetencies() != null) {
+                    for (PsoCompetency sc : src.getCompetencies()) {
+                        clonedComps.add(PsoCompetency.builder()
+                                .code(sc.getCode())
+                                .statement(sc.getStatement())
+                                .build());
+                    }
+                }
                 ProgrammeSpecificOutcome pso = ProgrammeSpecificOutcome.builder()
                         .code(src.getCode())
                         .statement(src.getStatement())
                         .target(src.getTarget())
                         .status(ApprovalStatus.DRAFT)
-                        .competencies(src.getCompetencies() != null ? new ArrayList<>(src.getCompetencies()) : new ArrayList<>())
+                        .competencies(clonedComps)
                         .build();
                 clonedPsos.add(pso);
             }

@@ -741,9 +741,46 @@ public class AuthService {
             targetRole = "COURSE_COORDINATOR";
         }
 
-        String schoolId = request.getSchoolId() != null && !request.getSchoolId().isBlank() ? request.getSchoolId() : user.getSchoolId();
-        String departmentId = request.getDepartmentId() != null && !request.getDepartmentId().isBlank() ? request.getDepartmentId() : user.getDepartmentId();
-        String masterProgrammeId = request.getMasterProgrammeId() != null && !request.getMasterProgrammeId().isBlank() ? request.getMasterProgrammeId() : user.getMasterProgrammeId();
+        List<com.dypiu.nba.entity.UserOrganizationalAssignment> orgAssignments =
+                userOrganizationalAssignmentRepository != null
+                        ? userOrganizationalAssignmentRepository.findByUserIdAndIsActiveTrue(user.getId())
+                        : Collections.emptyList();
+
+        String schoolId = request.getSchoolId() != null && !request.getSchoolId().isBlank() ? request.getSchoolId().trim() : user.getSchoolId();
+        String departmentId = request.getDepartmentId() != null && !request.getDepartmentId().isBlank() ? request.getDepartmentId().trim() : null;
+        String masterProgrammeId = request.getMasterProgrammeId() != null && !request.getMasterProgrammeId().isBlank() ? request.getMasterProgrammeId().trim() : null;
+
+        // If specific assignment matches targetSchool and targetRole, use its scoped department/programme
+        if (!orgAssignments.isEmpty()) {
+            for (com.dypiu.nba.entity.UserOrganizationalAssignment a : orgAssignments) {
+                boolean matchRole = a.getRole() != null && (a.getRole().equalsIgnoreCase(targetRole)
+                        || ("COURSE_COORDINATOR".equalsIgnoreCase(targetRole) && "FACULTY".equalsIgnoreCase(a.getRole()))
+                        || ("FACULTY".equalsIgnoreCase(targetRole) && "COURSE_COORDINATOR".equalsIgnoreCase(a.getRole())));
+                boolean matchSchool = (schoolId == null && a.getSchoolId() == null)
+                        || (schoolId != null && schoolId.equalsIgnoreCase(a.getSchoolId()));
+
+                if (matchRole && matchSchool) {
+                    if (departmentId == null && a.getDepartmentId() != null) {
+                        departmentId = a.getDepartmentId();
+                    }
+                    if (masterProgrammeId == null && a.getMasterProgrammeId() != null) {
+                        masterProgrammeId = a.getMasterProgrammeId();
+                    }
+                    break;
+                }
+            }
+        }
+
+        // If DIRECTOR or IQAC, department and programme should be null to avoid cross-school bleed
+        if ("DIRECTOR".equalsIgnoreCase(targetRole) || "IQAC".equalsIgnoreCase(targetRole)) {
+            departmentId = null;
+            masterProgrammeId = null;
+        } else if (departmentId == null && schoolId != null && schoolId.equalsIgnoreCase(user.getSchoolId())) {
+            departmentId = user.getDepartmentId();
+            if (masterProgrammeId == null) {
+                masterProgrammeId = user.getMasterProgrammeId();
+            }
+        }
 
         String accessToken = tokenProvider.generateTokenForUser(user.getUsername(), targetRole, schoolId, departmentId, masterProgrammeId);
         String refreshToken = tokenProvider.generateRefreshToken(user.getUsername());
@@ -754,19 +791,7 @@ public class AuthService {
                 .refreshToken(refreshToken)
                 .tokenType("Bearer")
                 .expiresIn(tokenProvider.getJwtExpirationInMs())
-                .user(AuthResponse.UserDto.builder()
-                        .id(user.getId())
-                        .name(user.getName())
-                        .email(user.getEmail())
-                        .username(user.getUsername())
-                        .role(targetRole)
-                        .schoolId(schoolId)
-                        .departmentId(departmentId)
-                        .masterProgrammeId(masterProgrammeId)
-                        .programmeBatchId(request.getProgrammeBatchId())
-                        .department(user.getDepartment())
-                        .programme(user.getProgramme())
-                        .build())
+                .user(buildEnrichedAuthUserDto(user, targetRole, schoolId, departmentId, masterProgrammeId, request.getProgrammeBatchId()))
                 .build();
     }
 
@@ -811,19 +836,87 @@ public class AuthService {
                 .refreshToken(refreshToken)
                 .tokenType("Bearer")
                 .expiresIn(tokenProvider.getJwtExpirationInMs())
-                .user(AuthResponse.UserDto.builder()
-                        .id(user.getId())
-                        .name(user.getName())
-                        .email(user.getEmail())
-                        .username(user.getUsername())
-                        .role(activeRole)
-                        .schoolId(schoolId)
-                        .departmentId(departmentId)
-                        .masterProgrammeId(masterProgrammeId)
-                        .programmeBatchId(programmeBatchId)
-                        .department(user.getDepartment())
-                        .programme(user.getProgramme())
-                        .build())
+                .user(buildEnrichedAuthUserDto(user, activeRole, schoolId, departmentId, masterProgrammeId, programmeBatchId))
+                .build();
+    }
+
+    private AuthResponse.UserDto buildEnrichedAuthUserDto(User user, String role, String schoolId, String departmentId, String masterProgrammeId, String programmeBatchId) {
+        List<com.dypiu.nba.entity.UserOrganizationalAssignment> orgAssignments =
+                userOrganizationalAssignmentRepository != null
+                        ? userOrganizationalAssignmentRepository.findByUserIdAndIsActiveTrue(user.getId())
+                        : Collections.emptyList();
+
+        Map<String, String> schoolIdToName = new LinkedHashMap<>();
+        for (com.dypiu.nba.entity.UserOrganizationalAssignment a : orgAssignments) {
+            if (a.getSchoolId() != null) {
+                String sName = schoolRepository.findById(a.getSchoolId()).map(com.dypiu.nba.entity.School::getName).orElse(a.getSchoolId());
+                schoolIdToName.put(a.getSchoolId(), sName);
+            }
+        }
+        if (schoolIdToName.isEmpty() && user.getSchoolId() != null) {
+            String sName = schoolRepository.findById(user.getSchoolId()).map(com.dypiu.nba.entity.School::getName).orElse(user.getSchoolId());
+            schoolIdToName.put(user.getSchoolId(), sName);
+        }
+
+        List<Map<String, String>> schoolsList = new ArrayList<>();
+        for (Map.Entry<String, String> entry : schoolIdToName.entrySet()) {
+            schoolsList.add(Map.of("id", entry.getKey(), "name", entry.getValue()));
+        }
+
+        Set<String> allRoles = new LinkedHashSet<>();
+        allRoles.addAll(user.getRoleList());
+        for (com.dypiu.nba.entity.UserOrganizationalAssignment a : orgAssignments) {
+            if (a.getRole() != null) {
+                allRoles.add(a.getRole().toUpperCase());
+            }
+        }
+        if (allRoles.isEmpty()) {
+            allRoles.add(role != null ? role : (user.getRole() != null ? user.getRole().name() : "FACULTY"));
+        }
+
+        List<UserOrganizationalAssignmentDto> assignmentDtos = new ArrayList<>();
+        for (com.dypiu.nba.entity.UserOrganizationalAssignment a : orgAssignments) {
+            String assignSchoolName = a.getSchoolId() != null ? schoolIdToName.get(a.getSchoolId()) : null;
+            String assignDeptName = a.getDepartmentId() != null ? departmentRepository.findById(a.getDepartmentId()).map(com.dypiu.nba.entity.Department::getName).orElse(a.getDepartmentId()) : null;
+            String assignProgName = a.getMasterProgrammeId() != null ? masterProgrammeRepository.findById(a.getMasterProgrammeId()).map(com.dypiu.nba.entity.MasterProgramme::getName).orElse(a.getMasterProgrammeId()) : null;
+            assignmentDtos.add(UserOrganizationalAssignmentDto.builder()
+                    .id(a.getId())
+                    .userId(a.getUserId())
+                    .role(a.getRole())
+                    .schoolId(a.getSchoolId())
+                    .schoolName(assignSchoolName)
+                    .departmentId(a.getDepartmentId())
+                    .departmentName(assignDeptName)
+                    .masterProgrammeId(a.getMasterProgrammeId())
+                    .masterProgrammeName(assignProgName)
+                    .isActive(a.getIsActive())
+                    .build());
+        }
+
+        String sName = schoolId != null ? schoolRepository.findById(schoolId).map(com.dypiu.nba.entity.School::getName).orElse(schoolId) : null;
+        String dName = departmentId != null ? departmentRepository.findById(departmentId).map(com.dypiu.nba.entity.Department::getName).orElse(departmentId) : user.getDepartment();
+        String pName = masterProgrammeId != null ? masterProgrammeRepository.findById(masterProgrammeId).map(com.dypiu.nba.entity.MasterProgramme::getName).orElse(masterProgrammeId) : user.getProgramme();
+
+        return AuthResponse.UserDto.builder()
+                .id(user.getId())
+                .name(user.getName())
+                .email(user.getEmail())
+                .username(user.getUsername())
+                .role(role)
+                .roles(new ArrayList<>(allRoles))
+                .schoolId(schoolId)
+                .schoolName(sName)
+                .departmentId(departmentId)
+                .departmentName(dName)
+                .masterProgrammeId(masterProgrammeId)
+                .masterProgrammeName(pName)
+                .programmeBatchId(programmeBatchId)
+                .department(dName)
+                .programme(pName)
+                .schools(schoolsList)
+                .schoolIds(new ArrayList<>(schoolIdToName.keySet()))
+                .schoolNames(new ArrayList<>(schoolIdToName.values()))
+                .assignments(assignmentDtos)
                 .build();
     }
 

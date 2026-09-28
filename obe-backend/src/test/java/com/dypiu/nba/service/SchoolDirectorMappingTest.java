@@ -23,8 +23,13 @@ import static org.mockito.Mockito.*;
 
 import com.dypiu.nba.entity.MasterProgramme;
 import com.dypiu.nba.entity.Department;
+import com.dypiu.nba.entity.UserOrganizationalAssignment;
 import com.dypiu.nba.repository.DepartmentRepository;
 import com.dypiu.nba.repository.MasterProgrammeRepository;
+import com.dypiu.nba.repository.UserOrganizationalAssignmentRepository;
+import com.dypiu.nba.security.CurrentUserScope;
+import com.dypiu.nba.security.CurrentUserScopeService;
+import java.util.List;
 
 @ExtendWith(MockitoExtension.class)
 @WithMockUser(roles = "IQAC")
@@ -44,6 +49,15 @@ public class SchoolDirectorMappingTest {
 
     @Mock
     private AcademicLookupCacheService academicLookupCacheService;
+
+    @Mock
+    private CurrentUserScopeService currentUserScopeService;
+
+    @Mock
+    private AuditLogService auditLogService;
+
+    @Mock
+    private UserOrganizationalAssignmentRepository userOrganizationalAssignmentRepository;
 
     @InjectMocks
     private AcademicService academicService;
@@ -179,5 +193,132 @@ public class SchoolDirectorMappingTest {
         verify(userRepository).save(pcUser);
         assertEquals(UserRole.PROGRAMME_COORDINATOR, pcUser.getRole());
         assertEquals("prog-1a1b6c2e", pcUser.getMasterProgrammeId());
+    }
+
+    @Test
+    @DisplayName("Successfully create school when only directorId is provided (IQAC Assign Director)")
+    void testSaveSchool_AssignDirectorByIdOnly_Success() {
+        School newSchool = School.builder()
+                .code("SBL")
+                .name("School of Biosciences and Bioengineering")
+                .directorId(15L)
+                .build();
+
+        User directorUser = User.builder()
+                .id(15L)
+                .name("Dr. Bio Director")
+                .email("bio.director@dypiu.ac.in")
+                .role(UserRole.DIRECTOR)
+                .build();
+
+        when(userRepository.findById(15L)).thenReturn(Optional.of(directorUser));
+        when(schoolRepository.findByDirectorId(15L)).thenReturn(Optional.empty());
+        when(schoolRepository.findByDirectorEmailIgnoreCase("bio.director@dypiu.ac.in")).thenReturn(Optional.empty());
+        when(schoolRepository.save(any(School.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        School saved = academicService.saveSchool(newSchool);
+
+        assertNotNull(saved);
+        assertNotNull(saved.getId());
+        assertEquals("SBL", saved.getCode());
+        assertEquals(15L, saved.getDirectorId());
+        assertEquals("Dr. Bio Director", saved.getDirectorName());
+        assertEquals("bio.director@dypiu.ac.in", saved.getDirectorEmail());
+        verify(userRepository, atLeastOnce()).save(directorUser);
+        assertEquals(saved.getId(), directorUser.getSchoolId());
+    }
+
+    @Test
+    @DisplayName("Successfully update school assigning director by directorId only")
+    void testUpdateSchool_AssignDirectorByIdOnly_Success() {
+        School existingSchool = School.builder()
+                .id("sch-sbl")
+                .code("SBL")
+                .name("School of Biosciences")
+                .build();
+
+        School updatePayload = School.builder()
+                .code("SBL")
+                .name("School of Biosciences and Bioengineering")
+                .directorId(20L)
+                .build();
+
+        User newDirector = User.builder()
+                .id(20L)
+                .name("Dr. New Director")
+                .email("new.director@dypiu.ac.in")
+                .role(UserRole.DIRECTOR)
+                .build();
+
+        when(schoolRepository.findById("sch-sbl")).thenReturn(Optional.of(existingSchool));
+        when(userRepository.findById(20L)).thenReturn(Optional.of(newDirector));
+        when(schoolRepository.findByDirectorId(20L)).thenReturn(Optional.empty());
+        when(schoolRepository.findByDirectorEmailIgnoreCase("new.director@dypiu.ac.in")).thenReturn(Optional.empty());
+        when(schoolRepository.save(any(School.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        School updated = academicService.updateSchool("sch-sbl", updatePayload);
+
+        assertNotNull(updated);
+        assertEquals(20L, updated.getDirectorId());
+        assertEquals("Dr. New Director", updated.getDirectorName());
+        assertEquals("new.director@dypiu.ac.in", updated.getDirectorEmail());
+        verify(userRepository, atLeastOnce()).save(newDirector);
+        assertEquals("sch-sbl", newDirector.getSchoolId());
+    }
+
+    @Test
+    @DisplayName("Successfully soft delete school as IQAC and deactivate assignments")
+    void testDeleteSchool_Success() {
+        School school = School.builder()
+                .id("sch-soe")
+                .code("SOE")
+                .name("School of Engineering")
+                .build();
+
+        CurrentUserScope iqacScope = CurrentUserScope.builder()
+                .userId(1L)
+                .email("iqac@dypiu.ac.in")
+                .role(UserRole.IQAC)
+                .build();
+
+        UserOrganizationalAssignment assignment = UserOrganizationalAssignment.builder()
+                .id(100L)
+                .schoolId("sch-soe")
+                .role("DIRECTOR")
+                .isActive(true)
+                .build();
+
+        when(currentUserScopeService.getCurrentUserScope()).thenReturn(iqacScope);
+        when(schoolRepository.findById("sch-soe")).thenReturn(Optional.of(school));
+        when(userOrganizationalAssignmentRepository.findBySchoolIdAndIsActiveTrue("sch-soe")).thenReturn(List.of(assignment));
+
+        academicService.deleteSchool("sch-soe");
+
+        assertNotNull(school.getDeletedAt());
+        assertEquals("iqac@dypiu.ac.in", school.getDeletedBy());
+        verify(schoolRepository).save(school);
+        assertFalse(assignment.getIsActive());
+        verify(userOrganizationalAssignmentRepository).saveAll(any());
+        verify(academicLookupCacheService).evictDepartmentCache();
+        verify(auditLogService).recordSuccess(any(), any(), eq("sch-soe"), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("Fail to delete school if user is not IQAC")
+    void testDeleteSchool_ForbiddenWhenNotIqac() {
+        CurrentUserScope directorScope = CurrentUserScope.builder()
+                .userId(2L)
+                .email("director@dypiu.ac.in")
+                .role(UserRole.DIRECTOR)
+                .build();
+
+        when(currentUserScopeService.getCurrentUserScope()).thenReturn(directorScope);
+
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class, () ->
+                academicService.deleteSchool("sch-soe")
+        );
+
+        assertEquals(HttpStatus.FORBIDDEN, ex.getStatusCode());
+        verify(schoolRepository, never()).save(any());
     }
 }

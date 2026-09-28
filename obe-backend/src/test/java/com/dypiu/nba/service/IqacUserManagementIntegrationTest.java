@@ -289,13 +289,14 @@ public class IqacUserManagementIntegrationTest {
         assertNotNull(dto);
         assertEquals(deptA.getId(), dto.getDepartmentId());
 
-        // Invalid: missing department
-        assertThrows(BadRequestException.class, () -> {
-            assignmentService.addAssignment(user.getId(), AssignmentRequestDto.builder()
-                    .role("HOD")
-                    .schoolId(schoolA.getId())
-                    .build());
-        });
+        // Valid: with school only (no department required)
+        UserOrganizationalAssignmentDto dtoNoDept = assignmentService.addAssignment(user.getId(), AssignmentRequestDto.builder()
+                .role("HOD")
+                .schoolId(schoolA.getId())
+                .build());
+        assertNotNull(dtoNoDept);
+        assertEquals(schoolA.getId(), dtoNoDept.getSchoolId());
+        assertNull(dtoNoDept.getDepartmentId());
 
         // Invalid: department belongs to School B but schoolId specified is School A
         assertThrows(BadRequestException.class, () -> {
@@ -311,7 +312,7 @@ public class IqacUserManagementIntegrationTest {
     // Scenario 6: Programme Coordinator with programme scope
     // -------------------------------------------------------------------------
     @Test
-    @DisplayName("Scenario 6: Programme Coordinator requires programme scope")
+    @DisplayName("Scenario 6: Programme Coordinator supports school-only scope or with programme scope")
     void testProgrammeCoordinatorWithProgrammeScope() {
         User user = userRepository.save(User.builder()
                 .name("Dr. Frank")
@@ -332,14 +333,14 @@ public class IqacUserManagementIntegrationTest {
         assertNotNull(dto);
         assertEquals(progA.getId(), dto.getMasterProgrammeId());
 
-        // Missing programme throws BadRequestException
-        assertThrows(BadRequestException.class, () -> {
-            assignmentService.addAssignment(user.getId(), AssignmentRequestDto.builder()
-                    .role("PROGRAMME_COORDINATOR")
-                    .schoolId(schoolA.getId())
-                    .departmentId(deptA.getId())
-                    .build());
-        });
+        // Valid PC assignment with school only (no programme required)
+        UserOrganizationalAssignmentDto dtoNoProg = assignmentService.addAssignment(user.getId(), AssignmentRequestDto.builder()
+                .role("PROGRAMME_COORDINATOR")
+                .schoolId(schoolA.getId())
+                .build());
+        assertNotNull(dtoNoProg);
+        assertEquals(schoolA.getId(), dtoNoProg.getSchoolId());
+        assertNull(dtoNoProg.getMasterProgrammeId());
     }
 
     // -------------------------------------------------------------------------

@@ -7,8 +7,11 @@ import java.time.ZonedDateTime;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 
+import org.hibernate.annotations.SQLRestriction;
+
 @Entity
 @Table(name = "schools")
+@SQLRestriction("deleted_at IS NULL")
 @Getter
 @Setter
 @NoArgsConstructor
@@ -20,7 +23,7 @@ public class School {
     @JsonProperty("schoolId")
     private String id;
 
-    @Column(nullable = false, unique = true, length = 20)
+    @Column(nullable = false, length = 20)
     private String code;
 
     @Column(nullable = false, length = 255)
@@ -37,6 +40,12 @@ public class School {
 
     @Column(name = "est_year")
     private String estYear;
+
+    @Column(name = "deleted_at")
+    private ZonedDateTime deletedAt;
+
+    @Column(name = "deleted_by")
+    private String deletedBy;
 
     @Column(name = "created_at", insertable = false, updatable = false)
     private ZonedDateTime createdAt;

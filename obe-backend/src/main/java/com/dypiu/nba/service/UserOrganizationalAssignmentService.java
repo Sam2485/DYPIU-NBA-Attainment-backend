@@ -366,43 +366,11 @@ public class UserOrganizationalAssignmentService {
         }
 
         if ("HOD".equals(role)) {
-            if (deptId == null) {
-                throw new BadRequestException("Department is required for HOD assignment.");
-            }
-            final String targetDeptId = deptId;
-            Department dept = departmentRepository.findById(targetDeptId)
-                    .orElseThrow(() -> new BadRequestException("Invalid Department ID: " + targetDeptId));
-
-            if (dept.getSchoolId() != null) {
-                if (schoolId != null && !dept.getSchoolId().equalsIgnoreCase(schoolId)) {
-                    throw new BadRequestException("Department '" + dept.getName() + "' does not belong to the selected School.");
-                }
-                schoolId = dept.getSchoolId();
-            } else if (schoolId == null) {
-                throw new BadRequestException("School is required for HOD assignment.");
-            }
-            return new ValidatedScope("HOD", schoolId, deptId, null);
-        }
-
-        if ("PROGRAMME_COORDINATOR".equals(role)) {
-            if (progId == null) {
-                throw new BadRequestException("Programme is required for Programme Coordinator assignment.");
-            }
-            final String targetProgId = progId;
-            MasterProgramme prog = masterProgrammeRepository.findById(targetProgId)
-                    .orElseThrow(() -> new BadRequestException("Invalid MasterProgramme ID: " + targetProgId));
-
-            if (prog.getDepartmentId() != null) {
-                if (deptId != null && !prog.getDepartmentId().equalsIgnoreCase(deptId)) {
-                    throw new BadRequestException("Programme '" + prog.getName() + "' does not belong to the selected Department.");
-                }
-                deptId = prog.getDepartmentId();
-            }
-
             if (deptId != null) {
                 final String targetDeptId = deptId;
                 Department dept = departmentRepository.findById(targetDeptId)
                         .orElseThrow(() -> new BadRequestException("Invalid Department ID: " + targetDeptId));
+
                 if (dept.getSchoolId() != null) {
                     if (schoolId != null && !dept.getSchoolId().equalsIgnoreCase(schoolId)) {
                         throw new BadRequestException("Department '" + dept.getName() + "' does not belong to the selected School.");
@@ -410,9 +378,46 @@ public class UserOrganizationalAssignmentService {
                     schoolId = dept.getSchoolId();
                 }
             }
+            if (schoolId == null) {
+                throw new BadRequestException("School is required for HOD assignment.");
+            }
+            if (!schoolRepository.existsById(schoolId)) {
+                throw new BadRequestException("Invalid School ID: " + schoolId);
+            }
+            return new ValidatedScope("HOD", schoolId, deptId, null);
+        }
+
+        if ("PROGRAMME_COORDINATOR".equals(role)) {
+            if (progId != null) {
+                final String targetProgId = progId;
+                MasterProgramme prog = masterProgrammeRepository.findById(targetProgId)
+                        .orElseThrow(() -> new BadRequestException("Invalid MasterProgramme ID: " + targetProgId));
+
+                if (prog.getDepartmentId() != null) {
+                    if (deptId != null && !prog.getDepartmentId().equalsIgnoreCase(deptId)) {
+                        throw new BadRequestException("Programme '" + prog.getName() + "' does not belong to the selected Department.");
+                    }
+                    deptId = prog.getDepartmentId();
+                }
+
+                if (deptId != null) {
+                    final String targetDeptId = deptId;
+                    Department dept = departmentRepository.findById(targetDeptId)
+                            .orElseThrow(() -> new BadRequestException("Invalid Department ID: " + targetDeptId));
+                    if (dept.getSchoolId() != null) {
+                        if (schoolId != null && !dept.getSchoolId().equalsIgnoreCase(schoolId)) {
+                            throw new BadRequestException("Department '" + dept.getName() + "' does not belong to the selected School.");
+                        }
+                        schoolId = dept.getSchoolId();
+                    }
+                }
+            }
 
             if (schoolId == null) {
                 throw new BadRequestException("School is required for Programme Coordinator assignment.");
+            }
+            if (!schoolRepository.existsById(schoolId)) {
+                throw new BadRequestException("Invalid School ID: " + schoolId);
             }
 
             return new ValidatedScope("PROGRAMME_COORDINATOR", schoolId, deptId, progId);

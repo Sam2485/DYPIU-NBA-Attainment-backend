@@ -455,6 +455,15 @@ public class AcademicController {
                 .build());
     }
 
+    @DeleteMapping("/schools/{id}")
+    public ResponseEntity<ApiResponse<Void>> deleteSchool(@PathVariable String id) {
+        academicService.deleteSchool(id);
+        return ResponseEntity.ok(ApiResponse.<Void>builder()
+                .success(true)
+                .message("School deleted successfully")
+                .build());
+    }
+
     // --- Departments ---
     @GetMapping("/departments")
     public ResponseEntity<ApiResponse<List<Department>>> getDepartments(@RequestParam(required = false) String schoolId) {
