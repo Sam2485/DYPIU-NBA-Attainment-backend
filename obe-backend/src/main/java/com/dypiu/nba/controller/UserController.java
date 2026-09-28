@@ -1,7 +1,9 @@
 package com.dypiu.nba.controller;
 
 import com.dypiu.nba.dto.ApiResponse;
+import com.dypiu.nba.dto.AssignmentRequestDto;
 import com.dypiu.nba.dto.UserDto;
+import com.dypiu.nba.dto.UserOrganizationalAssignmentDto;
 import com.dypiu.nba.entity.Department;
 import com.dypiu.nba.entity.MasterProgramme;
 import com.dypiu.nba.entity.School;
@@ -18,6 +20,7 @@ import com.dypiu.nba.security.CurrentUserScopeService;
 import com.dypiu.nba.service.AcademicService;
 import com.dypiu.nba.service.AuditLogService;
 import com.dypiu.nba.service.AuthService;
+import com.dypiu.nba.service.UserOrganizationalAssignmentService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -42,6 +45,7 @@ public class UserController {
     private final PasswordEncoder passwordEncoder;
     private final AuditLogService auditLogService;
     private final AuthService authService;
+    private final UserOrganizationalAssignmentService assignmentService;
 
     private CurrentUserScope getScope() {
         try {
@@ -101,9 +105,54 @@ public class UserController {
 
     @GetMapping
     public ResponseEntity<ApiResponse<List<UserDto>>> getUsers(@RequestParam(required = false) String role) {
+        List<UserDto> baseDtos = academicService.getUsersByRole(role);
+        List<Long> userIds = baseDtos.stream().map(UserDto::getId).filter(Objects::nonNull).toList();
+        Map<Long, List<UserOrganizationalAssignmentDto>> assignmentsMap = assignmentService != null
+                ? assignmentService.getAssignmentsForUsers(userIds)
+                : Collections.emptyMap();
+
+        Map<String, String> schoolCache = schoolRepository.findAll().stream()
+                .filter(s -> s.getId() != null)
+                .collect(Collectors.toMap(School::getId, School::getName, (a, b) -> a));
+
+        List<UserDto> enriched = baseDtos.stream().map(dto -> {
+            List<UserOrganizationalAssignmentDto> userAssignments = assignmentsMap.getOrDefault(dto.getId(), Collections.emptyList());
+            Map<String, String> schoolIdToName = new LinkedHashMap<>();
+            for (UserOrganizationalAssignmentDto a : userAssignments) {
+                if (a.getSchoolId() != null) {
+                    schoolIdToName.put(a.getSchoolId(), a.getSchoolName() != null ? a.getSchoolName() : schoolCache.getOrDefault(a.getSchoolId(), a.getSchoolId()));
+                }
+            }
+            if (dto.getSchoolId() != null && !schoolIdToName.containsKey(dto.getSchoolId())) {
+                schoolIdToName.put(dto.getSchoolId(), schoolCache.getOrDefault(dto.getSchoolId(), dto.getSchoolId()));
+            }
+
+            Set<String> allRoles = new LinkedHashSet<>();
+            if (dto.getRoles() != null) {
+                allRoles.addAll(dto.getRoles());
+            }
+            if (dto.getRole() != null) {
+                allRoles.add(dto.getRole());
+            }
+            for (UserOrganizationalAssignmentDto a : userAssignments) {
+                if (a.getRole() != null) {
+                    allRoles.add(a.getRole().toUpperCase());
+                }
+            }
+
+            dto.setAssignments(userAssignments);
+            dto.setSchools(schoolIdToName.entrySet().stream()
+                    .map(e -> Map.of("id", e.getKey(), "name", e.getValue()))
+                    .collect(Collectors.toList()));
+            dto.setSchoolIds(new ArrayList<>(schoolIdToName.keySet()));
+            dto.setSchoolNames(new ArrayList<>(schoolIdToName.values()));
+            dto.setRoles(new ArrayList<>(allRoles));
+            return dto;
+        }).collect(Collectors.toList());
+
         return ResponseEntity.ok(ApiResponse.<List<UserDto>>builder()
                 .success(true)
-                .data(academicService.getUsersByRole(role))
+                .data(enriched)
                 .build());
     }
 
@@ -112,6 +161,24 @@ public class UserController {
         String email = body.get("email") != null ? body.get("email").toString().trim() : "";
         if (email.isBlank()) {
             throw new BadRequestException("Email address is required.");
+        }
+
+        // Check uniqueness or extend existing user (Requirement 10: ADD EXISTING USER for IQAC)
+        Optional<User> existingUserOpt = userRepository.findByEmail(email);
+        if (existingUserOpt.isPresent()) {
+            CurrentUserScope currentScope = getScope();
+            if (currentScope != null && currentScope.isIqac()) {
+                User existingUser = existingUserOpt.get();
+                attachAssignmentsFromPayload(existingUser, body);
+                List<UserOrganizationalAssignmentDto> assignments = assignmentService.getAssignmentsForUser(existingUser.getId());
+                return ResponseEntity.ok(ApiResponse.<UserDto>builder()
+                        .success(true)
+                        .message("Existing user found. Organizational access extended successfully.")
+                        .data(toEnrichedDto(existingUser, assignments))
+                        .build());
+            } else {
+                throw new BadRequestException("Email address '" + email + "' is already registered to another user.");
+            }
         }
 
         String name = body.get("name") != null ? body.get("name").toString().trim() : "";
@@ -138,10 +205,6 @@ public class UserController {
             role = UserRole.FACULTY;
         }
 
-        // Check uniqueness
-        if (userRepository.existsByEmail(email)) {
-            throw new BadRequestException("Email address '" + email + "' is already registered to another user.");
-        }
         if (userRepository.existsByUsername(username)) {
             throw new BadRequestException("Username '" + username + "' is already taken.");
         }
@@ -181,14 +244,20 @@ public class UserController {
         }
 
         User saved = userRepository.save(user);
+
+        // Attach assignments (multi-school or multi-assignment support)
+        attachAssignmentsFromPayload(saved, body);
+
         if (auditLogService != null) {
             auditLogService.recordSuccess(com.dypiu.nba.audit.AuditAction.CREATE, com.dypiu.nba.audit.ResourceType.USER, String.valueOf(saved.getId()), null, "ACTIVE", "Created User " + saved.getName(), java.util.Map.of("username", saved.getUsername(), "role", saved.getRole() != null ? saved.getRole().name() : ""));
         }
 
+        List<UserOrganizationalAssignmentDto> assignments = assignmentService.getAssignmentsForUser(saved.getId());
+
         return ResponseEntity.ok(ApiResponse.<UserDto>builder()
                 .success(true)
                 .message("Academic member registered successfully.")
-                .data(toDto(saved))
+                .data(toEnrichedDto(saved, assignments))
                 .build());
     }
 
@@ -327,10 +396,91 @@ public class UserController {
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with ID: " + id));
 
         enforceUserScope(user);
+        List<UserOrganizationalAssignmentDto> assignments = assignmentService != null
+                ? assignmentService.getAssignmentsForUser(id)
+                : Collections.emptyList();
 
         return ResponseEntity.ok(ApiResponse.<UserDto>builder()
                 .success(true)
-                .data(toDto(user))
+                .data(toEnrichedDto(user, assignments))
+                .build());
+    }
+
+    @GetMapping("/{id}/assignments")
+    public ResponseEntity<ApiResponse<List<UserOrganizationalAssignmentDto>>> getUserAssignments(@PathVariable Long id) {
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with ID: " + id));
+        enforceUserScope(user);
+        return ResponseEntity.ok(ApiResponse.<List<UserOrganizationalAssignmentDto>>builder()
+                .success(true)
+                .data(assignmentService != null ? assignmentService.getAssignmentsForUser(id) : Collections.emptyList())
+                .build());
+    }
+
+    @PostMapping("/{id}/assignments")
+    public ResponseEntity<ApiResponse<UserOrganizationalAssignmentDto>> addAssignment(
+            @PathVariable Long id,
+            @RequestBody AssignmentRequestDto request) {
+        CurrentUserScope scope = getScope();
+        if (scope == null || !scope.isIqac()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: IQAC authority required to manage organizational assignments.");
+        }
+        UserOrganizationalAssignmentDto created = assignmentService.addAssignment(id, request);
+        return ResponseEntity.ok(ApiResponse.<UserOrganizationalAssignmentDto>builder()
+                .success(true)
+                .message("Organizational assignment saved successfully.")
+                .data(created)
+                .build());
+    }
+
+    @PutMapping(value = {"/assignments/{assignmentId}", "/{userId}/assignments/{assignmentId}"})
+    public ResponseEntity<ApiResponse<UserOrganizationalAssignmentDto>> updateAssignment(
+            @PathVariable(required = false) Long userId,
+            @PathVariable Long assignmentId,
+            @RequestBody AssignmentRequestDto request) {
+        CurrentUserScope scope = getScope();
+        if (scope == null || !scope.isIqac()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: IQAC authority required to manage organizational assignments.");
+        }
+        UserOrganizationalAssignmentDto updated = assignmentService.updateAssignment(assignmentId, request);
+        return ResponseEntity.ok(ApiResponse.<UserOrganizationalAssignmentDto>builder()
+                .success(true)
+                .message("Organizational assignment updated successfully.")
+                .data(updated)
+                .build());
+    }
+
+    @DeleteMapping(value = {"/assignments/{assignmentId}", "/{userId}/assignments/{assignmentId}"})
+    public ResponseEntity<ApiResponse<Void>> removeAssignment(
+            @PathVariable(required = false) Long userId,
+            @PathVariable Long assignmentId) {
+        CurrentUserScope scope = getScope();
+        if (scope == null || !scope.isIqac()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: IQAC authority required to manage organizational assignments.");
+        }
+        assignmentService.removeAssignment(assignmentId);
+        return ResponseEntity.ok(ApiResponse.<Void>builder()
+                .success(true)
+                .message("Organizational assignment removed successfully.")
+                .build());
+    }
+
+    @GetMapping("/check-email")
+    public ResponseEntity<ApiResponse<UserDto>> checkEmail(@RequestParam String email) {
+        if (email == null || email.isBlank()) {
+            return ResponseEntity.ok(ApiResponse.<UserDto>builder().success(true).data(null).build());
+        }
+        Optional<User> userOpt = userRepository.findByEmail(email.trim());
+        if (userOpt.isEmpty()) {
+            return ResponseEntity.ok(ApiResponse.<UserDto>builder().success(true).data(null).build());
+        }
+        User user = userOpt.get();
+        List<UserOrganizationalAssignmentDto> assignments = assignmentService != null
+                ? assignmentService.getAssignmentsForUser(user.getId())
+                : Collections.emptyList();
+        return ResponseEntity.ok(ApiResponse.<UserDto>builder()
+                .success(true)
+                .data(toEnrichedDto(user, assignments))
                 .build());
     }
 
@@ -380,12 +530,87 @@ public class UserController {
         return Collections.emptyList();
     }
 
+    @SuppressWarnings("unchecked")
+    private void attachAssignmentsFromPayload(User user, Map<String, Object> body) {
+        if (user == null || body == null) return;
+
+        // 1. Explicit assignments array (Requirement 9)
+        if (body.containsKey("assignments") && body.get("assignments") instanceof List<?> list) {
+            for (Object item : list) {
+                if (item instanceof Map<?, ?> map) {
+                    String role = map.get("role") != null ? map.get("role").toString() : (user.getRole() != null ? user.getRole().name() : "FACULTY");
+                    String schoolId = map.get("schoolId") != null ? map.get("schoolId").toString() : null;
+                    String departmentId = map.get("departmentId") != null ? map.get("departmentId").toString() : null;
+                    String masterProgrammeId = map.get("masterProgrammeId") != null ? map.get("masterProgrammeId").toString() : null;
+
+                    assignmentService.addAssignment(user.getId(), AssignmentRequestDto.builder()
+                            .role(role)
+                            .schoolId(schoolId)
+                            .departmentId(departmentId)
+                            .masterProgrammeId(masterProgrammeId)
+                            .build());
+                }
+            }
+            return;
+        }
+
+        // 2. Multi-school selection (Requirement 8)
+        List<String> schoolIdsList = new ArrayList<>();
+        if (body.containsKey("schools") && body.get("schools") instanceof List<?> list) {
+            for (Object s : list) {
+                if (s != null && !s.toString().isBlank()) schoolIdsList.add(s.toString().trim());
+            }
+        } else if (body.containsKey("schoolIds") && body.get("schoolIds") instanceof List<?> list) {
+            for (Object s : list) {
+                if (s != null && !s.toString().isBlank()) schoolIdsList.add(s.toString().trim());
+            }
+        } else if (body.get("schoolId") != null && !body.get("schoolId").toString().isBlank()) {
+            schoolIdsList.add(body.get("schoolId").toString().trim());
+        }
+
+        String roleStr = body.get("role") != null ? body.get("role").toString() : (user.getRole() != null ? user.getRole().name() : "FACULTY");
+        String deptId = body.get("departmentId") != null && !body.get("departmentId").toString().isBlank() ? body.get("departmentId").toString().trim() : null;
+        String progId = body.get("masterProgrammeId") != null && !body.get("masterProgrammeId").toString().isBlank() ? body.get("masterProgrammeId").toString().trim() : null;
+
+        if (!schoolIdsList.isEmpty()) {
+            for (String sId : schoolIdsList) {
+                assignmentService.addAssignment(user.getId(), AssignmentRequestDto.builder()
+                        .role(roleStr)
+                        .schoolId(sId)
+                        .departmentId(deptId)
+                        .masterProgrammeId(progId)
+                        .build());
+            }
+        } else if ("IQAC".equalsIgnoreCase(roleStr)) {
+            assignmentService.addAssignment(user.getId(), AssignmentRequestDto.builder()
+                    .role("IQAC")
+                    .schoolId(null)
+                    .departmentId(null)
+                    .masterProgrammeId(null)
+                    .build());
+        } else if (deptId != null || progId != null) {
+            assignmentService.addAssignment(user.getId(), AssignmentRequestDto.builder()
+                    .role(roleStr)
+                    .schoolId(null)
+                    .departmentId(deptId)
+                    .masterProgrammeId(progId)
+                    .build());
+        }
+    }
+
     private record ResolvedScope(String schoolId, String departmentId, String masterProgrammeId) {}
 
     private ResolvedScope validateAndResolveScope(Map<String, Object> body, UserRole role) {
-        String rawSchoolId = (body.get("schoolId") != null && !body.get("schoolId").toString().isBlank())
-                ? body.get("schoolId").toString().trim()
-                : null;
+        String rawSchoolId = null;
+        if (body.get("schoolId") != null && !body.get("schoolId").toString().isBlank()) {
+            rawSchoolId = body.get("schoolId").toString().trim();
+        } else if (body.get("schools") instanceof List<?> list && !list.isEmpty() && list.get(0) != null) {
+            rawSchoolId = list.get(0).toString().trim();
+        } else if (body.get("schoolIds") instanceof List<?> list && !list.isEmpty() && list.get(0) != null) {
+            rawSchoolId = list.get(0).toString().trim();
+        } else if (body.get("assignments") instanceof List<?> list && !list.isEmpty() && list.get(0) instanceof Map<?, ?> map && map.get("schoolId") != null) {
+            rawSchoolId = map.get("schoolId").toString().trim();
+        }
         String rawDeptId = (body.get("departmentId") != null && !body.get("departmentId").toString().isBlank())
                 ? body.get("departmentId").toString().trim()
                 : null;
@@ -399,17 +624,17 @@ public class UserController {
 
         // 1. Validate School if provided
         if (schoolId != null) {
+            final String targetSchoolId = rawSchoolId;
             if (!schoolRepository.existsById(schoolId)) {
-                // Check if schoolId matches code or name
                 Optional<School> matched = schoolRepository.findAll().stream()
-                        .filter(s -> (s.getCode() != null && s.getCode().equalsIgnoreCase(rawSchoolId))
-                                || (s.getName() != null && s.getName().equalsIgnoreCase(rawSchoolId))
-                                || (s.getId() != null && s.getId().equalsIgnoreCase(rawSchoolId)))
+                        .filter(s -> (s.getCode() != null && s.getCode().equalsIgnoreCase(targetSchoolId))
+                                || (s.getName() != null && s.getName().equalsIgnoreCase(targetSchoolId))
+                                || (s.getId() != null && s.getId().equalsIgnoreCase(targetSchoolId)))
                         .findFirst();
                 if (matched.isPresent()) {
                     schoolId = matched.get().getId();
                 } else {
-                    throw new BadRequestException("Invalid School: School with ID '" + rawSchoolId + "' does not exist.");
+                    throw new BadRequestException("Invalid School: School with ID '" + targetSchoolId + "' does not exist.");
                 }
             }
         }
@@ -425,12 +650,10 @@ public class UserController {
 
             departmentId = dept.getId();
 
-            // Check School-Department relationship integrity
             if (dept.getSchoolId() != null) {
                 if (schoolId != null && !dept.getSchoolId().equals(schoolId)) {
                     throw new BadRequestException("Department '" + dept.getName() + "' does not belong to the selected School.");
                 }
-                // If schoolId was not set, automatically resolve it from the department
                 schoolId = dept.getSchoolId();
             }
         }
@@ -446,15 +669,12 @@ public class UserController {
 
             masterProgrammeId = prog.getId();
 
-            // Check Department-MasterProgramme relationship integrity
             if (prog.getDepartmentId() != null) {
                 if (departmentId != null && !prog.getDepartmentId().equals(departmentId)) {
                     throw new BadRequestException("MasterProgramme '" + prog.getName() + "' does not belong to the selected Department.");
                 }
-                // If departmentId was not set, automatically resolve it from the programme
                 departmentId = prog.getDepartmentId();
 
-                // If schoolId was not set, resolve from department
                 final String finalDeptId = departmentId;
                 if (schoolId == null) {
                     schoolId = departmentRepository.findById(finalDeptId)
@@ -468,6 +688,14 @@ public class UserController {
     }
 
     private UserDto toDto(User user) {
+        if (user == null) return null;
+        List<UserOrganizationalAssignmentDto> assignments = assignmentService != null
+                ? assignmentService.getAssignmentsForUser(user.getId())
+                : Collections.emptyList();
+        return toEnrichedDto(user, assignments);
+    }
+
+    private UserDto toEnrichedDto(User user, List<UserOrganizationalAssignmentDto> assignments) {
         String deptName = null;
         if (user.getDepartmentId() != null) {
             deptName = departmentRepository.findById(user.getDepartmentId())
@@ -482,17 +710,49 @@ public class UserController {
                     .orElse(user.getMasterProgrammeId());
         }
 
+        List<UserOrganizationalAssignmentDto> safeAssignments = assignments != null ? assignments : Collections.emptyList();
+
+        Map<String, String> schoolIdToName = new LinkedHashMap<>();
+        for (UserOrganizationalAssignmentDto a : safeAssignments) {
+            if (a.getSchoolId() != null) {
+                schoolIdToName.put(a.getSchoolId(), a.getSchoolName() != null ? a.getSchoolName() : a.getSchoolId());
+            }
+        }
+        if (schoolIdToName.isEmpty() && user.getSchoolId() != null) {
+            String sName = schoolRepository.findById(user.getSchoolId()).map(School::getName).orElse(user.getSchoolId());
+            schoolIdToName.put(user.getSchoolId(), sName);
+        }
+
+        Set<String> allRoles = new LinkedHashSet<>();
+        allRoles.addAll(user.getRoleList());
+        for (UserOrganizationalAssignmentDto a : safeAssignments) {
+            if (a.getRole() != null) {
+                allRoles.add(a.getRole().toUpperCase());
+            }
+        }
+        if (allRoles.isEmpty()) {
+            allRoles.add(user.getRole() != null ? user.getRole().name() : "FACULTY");
+        }
+
         return UserDto.builder()
                 .id(user.getId())
                 .username(user.getUsername())
                 .name(user.getName())
                 .email(user.getEmail())
                 .role(user.getRole() != null ? user.getRole().name() : "FACULTY")
+                .roles(new ArrayList<>(allRoles))
                 .schoolId(user.getSchoolId())
                 .departmentId(user.getDepartmentId())
                 .masterProgrammeId(user.getMasterProgrammeId())
                 .department(deptName)
                 .programme(progName)
+                .assignments(safeAssignments)
+                .schools(schoolIdToName.entrySet().stream()
+                        .map(e -> Map.of("id", e.getKey(), "name", e.getValue()))
+                        .collect(Collectors.toList()))
+                .schoolIds(new ArrayList<>(schoolIdToName.keySet()))
+                .schoolNames(new ArrayList<>(schoolIdToName.values()))
+                .isActive(user.getIsActive())
                 .build();
     }
 }
