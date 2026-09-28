@@ -10,4 +10,5 @@ import java.util.Optional;
 public interface SchoolRepository extends JpaRepository<School, String> {
     Optional<School> findByDirectorEmailIgnoreCase(String directorEmail);
     Optional<School> findByDirectorId(Long directorId);
+    Optional<School> findByIdAndDeletedAtIsNull(String id);
 }

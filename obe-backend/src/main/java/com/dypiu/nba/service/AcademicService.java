@@ -61,6 +61,7 @@ public class AcademicService {
     private final ApprovalHistoryRepository approvalHistoryRepository;
     private final com.dypiu.nba.security.RequestScopeAuthorizer requestScopeAuthorizer;
     private final AcademicLookupCacheService academicLookupCacheService;
+    private final com.dypiu.nba.repository.UserOrganizationalAssignmentRepository userOrganizationalAssignmentRepository;
 
     private static final Comparator<String> NATURAL_CODE_COMPARATOR = (c1, c2) -> {
         if (c1 == null) return -1;
@@ -1207,7 +1208,30 @@ public class AcademicService {
             enforceSchoolScope(school.getId());
         }
 
-        // 1. Check if directorId is already mapped to another school
+        // 1. Sync director info from User entity if directorId or directorEmail is provided
+        if (school.getDirectorId() != null) {
+            userRepository.findById(school.getDirectorId()).ifPresent(u -> {
+                if (school.getDirectorEmail() == null || school.getDirectorEmail().isBlank()) {
+                    school.setDirectorEmail(u.getEmail());
+                }
+                if (school.getDirectorName() == null || school.getDirectorName().isBlank()) {
+                    school.setDirectorName(u.getName());
+                }
+            });
+        }
+        if (school.getDirectorEmail() != null && !school.getDirectorEmail().isBlank()) {
+            String cleanEmail = school.getDirectorEmail().trim();
+            userRepository.findByEmail(cleanEmail).ifPresent(u -> {
+                if (school.getDirectorId() == null) {
+                    school.setDirectorId(u.getId());
+                }
+                if (school.getDirectorName() == null || school.getDirectorName().isBlank()) {
+                    school.setDirectorName(u.getName());
+                }
+            });
+        }
+
+        // 2. Check if directorId is already mapped to another school
         if (school.getDirectorId() != null) {
             Optional<School> existingByDirectorId = schoolRepository.findByDirectorId(school.getDirectorId());
             if (existingByDirectorId.isPresent()) {
@@ -1219,7 +1243,7 @@ public class AcademicService {
             }
         }
 
-        // 2. Check if directorEmail is already mapped to another school
+        // 3. Check if directorEmail is already mapped to another school
         if (school.getDirectorEmail() != null && !school.getDirectorEmail().isBlank()) {
             String cleanEmail = school.getDirectorEmail().trim();
             Optional<School> existingByEmail = schoolRepository.findByDirectorEmailIgnoreCase(cleanEmail);
@@ -1230,16 +1254,6 @@ public class AcademicService {
                             "Director Email '" + cleanEmail + "' is already assigned to School: " + existing.getName() + " (" + existing.getCode() + "). A Director can only manage one school.");
                 }
             }
-
-            // Sync directorId and directorName from User entity if available
-            userRepository.findByEmail(cleanEmail).ifPresent(u -> {
-                if (school.getDirectorId() == null) {
-                    school.setDirectorId(u.getId());
-                }
-                if (school.getDirectorName() == null || school.getDirectorName().isBlank()) {
-                    school.setDirectorName(u.getName());
-                }
-            });
         }
 
         // Auto-generate school ID if missing
@@ -1250,13 +1264,17 @@ public class AcademicService {
         boolean isNewSchool = !schoolRepository.existsById(school.getId());
         School saved = schoolRepository.save(school);
 
-        if (saved.getDirectorEmail() != null && !saved.getDirectorEmail().isBlank()) {
-            String cleanEmail = saved.getDirectorEmail().trim();
-            userRepository.findByEmail(cleanEmail).ifPresent(u -> {
-                u.setSchoolId(saved.getId());
-                userRepository.save(u);
-            });
+        Optional<User> dirUserOpt = Optional.empty();
+        if (saved.getDirectorId() != null) {
+            dirUserOpt = userRepository.findById(saved.getDirectorId());
         }
+        if (dirUserOpt.isEmpty() && saved.getDirectorEmail() != null && !saved.getDirectorEmail().isBlank()) {
+            dirUserOpt = userRepository.findByEmail(saved.getDirectorEmail().trim());
+        }
+        dirUserOpt.ifPresent(u -> {
+            u.setSchoolId(saved.getId());
+            userRepository.save(u);
+        });
 
         if (auditLogService != null) {
             auditLogService.recordSuccess(
@@ -1281,7 +1299,30 @@ public class AcademicService {
         School existing = schoolRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("School not found with id: " + id));
 
-        // 1. Check if directorId is already mapped to another school
+        // 1. Sync director info from User entity if directorId or directorEmail is provided
+        if (school.getDirectorId() != null) {
+            userRepository.findById(school.getDirectorId()).ifPresent(u -> {
+                if (school.getDirectorEmail() == null || school.getDirectorEmail().isBlank()) {
+                    school.setDirectorEmail(u.getEmail());
+                }
+                if (school.getDirectorName() == null || school.getDirectorName().isBlank()) {
+                    school.setDirectorName(u.getName());
+                }
+            });
+        }
+        if (school.getDirectorEmail() != null && !school.getDirectorEmail().isBlank()) {
+            String cleanEmail = school.getDirectorEmail().trim();
+            userRepository.findByEmail(cleanEmail).ifPresent(u -> {
+                if (school.getDirectorId() == null) {
+                    school.setDirectorId(u.getId());
+                }
+                if (school.getDirectorName() == null || school.getDirectorName().isBlank()) {
+                    school.setDirectorName(u.getName());
+                }
+            });
+        }
+
+        // 2. Check if directorId is already mapped to another school
         if (school.getDirectorId() != null) {
             Optional<School> existingByDirectorId = schoolRepository.findByDirectorId(school.getDirectorId());
             if (existingByDirectorId.isPresent()) {
@@ -1293,7 +1334,7 @@ public class AcademicService {
             }
         }
 
-        // 2. Check if directorEmail is already mapped to another school
+        // 3. Check if directorEmail is already mapped to another school
         if (school.getDirectorEmail() != null && !school.getDirectorEmail().isBlank()) {
             String cleanEmail = school.getDirectorEmail().trim();
             Optional<School> existingByEmail = schoolRepository.findByDirectorEmailIgnoreCase(cleanEmail);
@@ -1308,23 +1349,26 @@ public class AcademicService {
 
         existing.setCode(school.getCode());
         existing.setName(school.getName());
-        existing.setDirector(school.getDirector());
-        existing.setDirectorEmail(school.getDirectorEmail());
+        existing.setEstYear(school.getEstYear());
+
+        // Update director / dean info
         existing.setDirectorId(school.getDirectorId());
         existing.setDirectorName(school.getDirectorName());
-        existing.setDean(school.getDean());
-        existing.setDeanEmail(school.getDeanEmail());
-        existing.setEstYear(school.getEstYear());
+        existing.setDirectorEmail(school.getDirectorEmail());
 
         School updated = schoolRepository.save(existing);
 
-        if (updated.getDirectorEmail() != null && !updated.getDirectorEmail().isBlank()) {
-            String cleanEmail = updated.getDirectorEmail().trim();
-            userRepository.findByEmail(cleanEmail).ifPresent(u -> {
-                u.setSchoolId(updated.getId());
-                userRepository.save(u);
-            });
+        Optional<User> updateDirUserOpt = Optional.empty();
+        if (updated.getDirectorId() != null) {
+            updateDirUserOpt = userRepository.findById(updated.getDirectorId());
         }
+        if (updateDirUserOpt.isEmpty() && updated.getDirectorEmail() != null && !updated.getDirectorEmail().isBlank()) {
+            updateDirUserOpt = userRepository.findByEmail(updated.getDirectorEmail().trim());
+        }
+        updateDirUserOpt.ifPresent(u -> {
+            u.setSchoolId(updated.getId());
+            userRepository.save(u);
+        });
 
         if (auditLogService != null) {
             auditLogService.recordSuccess(
@@ -1340,6 +1384,53 @@ public class AcademicService {
 
         log.debug("[AcademicService] School updated successfully for id: " + updated.getId());
         return updated;
+    }
+
+    @Transactional
+    public void deleteSchool(String id) {
+        log.debug("[AcademicService] deleteSchool called | id: " + id);
+        CurrentUserScope scope = getScope();
+        if (scope != null && !scope.isIqac()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Only IQAC administrators can delete schools.");
+        }
+
+        School existing = schoolRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "School not found: " + id));
+
+        existing.setDeletedAt(ZonedDateTime.now());
+        String deletedBy = (scope != null && scope.getEmail() != null) ? scope.getEmail() : (scope != null ? scope.getUsername() : "SYSTEM");
+        existing.setDeletedBy(deletedBy);
+
+        schoolRepository.save(existing);
+
+        // Deactivate active organizational assignments for this school
+        if (userOrganizationalAssignmentRepository != null) {
+            List<com.dypiu.nba.entity.UserOrganizationalAssignment> assignments = userOrganizationalAssignmentRepository.findBySchoolIdAndIsActiveTrue(id);
+            if (assignments != null && !assignments.isEmpty()) {
+                for (com.dypiu.nba.entity.UserOrganizationalAssignment a : assignments) {
+                    a.setIsActive(false);
+                }
+                userOrganizationalAssignmentRepository.saveAll(assignments);
+            }
+        }
+
+        if (academicLookupCacheService != null) {
+            academicLookupCacheService.evictDepartmentCache();
+        }
+
+        if (auditLogService != null) {
+            auditLogService.recordSuccess(
+                    com.dypiu.nba.audit.AuditAction.DELETE,
+                    com.dypiu.nba.audit.ResourceType.SCHOOL,
+                    id,
+                    null,
+                    "DELETED",
+                    "Soft-deleted School " + existing.getName(),
+                    java.util.Map.of("code", existing.getCode() != null ? existing.getCode() : "", "name", existing.getName() != null ? existing.getName() : "")
+            );
+        }
+
+        log.debug("[AcademicService] Soft-deleted school with id: " + id);
     }
 
     // --- Departments ---
