@@ -7,6 +7,7 @@ import com.dypiu.nba.repository.ProgrammeBatchRepository;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -298,5 +299,95 @@ public class OutcomeExcelImportServiceTest {
         verify(outcomeService, times(1)).savePOs(eq("batch-cse-2024"), any());
         verify(outcomeService, times(1)).savePSOs(eq("batch-cse-2024"), any());
         verify(academicLookupCacheService, times(1)).evictProgrammeBatchCache();
+    }
+
+    @Test
+    @DisplayName("Should generate template with 2 sheets for ALL, 1 sheet for PO, and 1 sheet for PSO")
+    void testGenerateTemplateScopes() throws Exception {
+        byte[] allBytes = importService.generateTemplate("batch-cse-2024", "ALL");
+        try (Workbook wb = WorkbookFactory.create(new java.io.ByteArrayInputStream(allBytes))) {
+            assertEquals(2, wb.getNumberOfSheets());
+            assertEquals("PO and Competency", wb.getSheetAt(0).getSheetName());
+            assertEquals("PSO and Competency", wb.getSheetAt(1).getSheetName());
+        }
+
+        byte[] poBytes = importService.generateTemplate("batch-cse-2024", "PO");
+        try (Workbook wb = WorkbookFactory.create(new java.io.ByteArrayInputStream(poBytes))) {
+            assertEquals(1, wb.getNumberOfSheets());
+            assertEquals("PO and Competency", wb.getSheetAt(0).getSheetName());
+        }
+
+        byte[] psoBytes = importService.generateTemplate("batch-cse-2024", "PSO");
+        try (Workbook wb = WorkbookFactory.create(new java.io.ByteArrayInputStream(psoBytes))) {
+            assertEquals(1, wb.getNumberOfSheets());
+            assertEquals("PSO and Competency", wb.getSheetAt(0).getSheetName());
+        }
+    }
+
+    @Test
+    @DisplayName("Should parse 2-sheet workbook in ALL scope (Sheet 1 = PO, Sheet 2 = PSO)")
+    void testPreviewTwoSheetWorkbook() throws Exception {
+        byte[] bytes;
+        try (Workbook wb = new XSSFWorkbook(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+            Sheet poSheet = wb.createSheet("PO and Competency");
+            Row poH = poSheet.createRow(0);
+            poH.createCell(0).setCellValue("Programme Outcomes *");
+            poH.createCell(1).setCellValue("Competency *");
+            Row poR1 = poSheet.createRow(1);
+            poR1.createCell(0).setCellValue("Engineering Knowledge");
+            poR1.createCell(1).setCellValue("Mathematics competence");
+            Row poR2 = poSheet.createRow(2);
+            poR2.createCell(0).setCellValue("");
+            poR2.createCell(1).setCellValue("Physics competence");
+
+            Sheet psoSheet = wb.createSheet("PSO and Competency");
+            Row psoH = psoSheet.createRow(0);
+            psoH.createCell(0).setCellValue("Programme Specific Outcomes *");
+            psoH.createCell(1).setCellValue("Competency *");
+            Row psoR1 = psoSheet.createRow(1);
+            psoR1.createCell(0).setCellValue("Software Engineering Principles");
+            psoR1.createCell(1).setCellValue("Design architecture");
+
+            wb.write(out);
+            bytes = out.toByteArray();
+        }
+
+        MockMultipartFile file = new MockMultipartFile("file", "two_sheets.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", bytes);
+        OutcomeImportPreviewDto preview = importService.previewImport("batch-cse-2024", file, "ALL");
+
+        assertNotNull(preview);
+        assertTrue(preview.isValid());
+        assertEquals(1, preview.getTotalPOs());
+        assertEquals(1, preview.getTotalPSOs());
+        assertEquals("PO1", preview.getItems().get(0).getCode());
+        assertEquals("PO", preview.getItems().get(0).getCategory());
+        assertEquals("PSO1", preview.getItems().get(1).getCode());
+        assertEquals("PSO", preview.getItems().get(1).getCategory());
+        assertEquals(3, preview.getTotalCompetencies());
+        assertEquals(2, preview.getSheetNames().size());
+    }
+
+    @Test
+    @DisplayName("Should enforce scope isolation during commit")
+    void testCommitImportScopeIsolation() {
+        List<OutcomeImportItemDto> items = new ArrayList<>();
+        items.add(OutcomeImportItemDto.builder()
+                .category("PO")
+                .statement("Apply fundamental engineering principles")
+                .target(new BigDecimal("2.50"))
+                .competencies(new ArrayList<>(List.of(OutcomeCompetencyImportDto.builder().statement("Comp 1").build())))
+                .build());
+
+        OutcomeImportCommitRequestDto request = OutcomeImportCommitRequestDto.builder()
+                .items(items)
+                .scope("PO")
+                .build();
+
+        reset(outcomeService);
+        OutcomeImportResultDto result = importService.commitImport("batch-cse-2024", request, "PO");
+
+        assertTrue(result.isSuccess());
+        verify(outcomeService, times(1)).savePOs(eq("batch-cse-2024"), any());
+        verify(outcomeService, never()).savePSOs(eq("batch-cse-2024"), any());
     }
 }
