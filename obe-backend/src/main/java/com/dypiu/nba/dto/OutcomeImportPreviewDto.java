@@ -23,6 +23,10 @@ public class OutcomeImportPreviewDto {
     private int validCount;
     private int warningCount;
     private int errorCount;
+    private String scope; // "ALL", "PO", "PSO"
+
+    @Builder.Default
+    private List<String> sheetNames = new ArrayList<>();
 
     @Builder.Default
     private List<OutcomeImportItemDto> items = new ArrayList<>();

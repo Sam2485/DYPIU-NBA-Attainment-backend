@@ -22,6 +22,7 @@ public class OutcomeImportItemDto {
     @Builder.Default
     private BigDecimal target = new BigDecimal("2.50");
     private String detectionRule;    // "EXPLICIT_PREFIX", "SECTION_HEADER", "NUMBERING_RESET", "NUMBER_GT_12", "SEQUENTIAL_NUMBER", "DEFAULT_SECTION"
+    private String sheetName;
 
     @Builder.Default
     private List<OutcomeCompetencyImportDto> competencies = new ArrayList<>();

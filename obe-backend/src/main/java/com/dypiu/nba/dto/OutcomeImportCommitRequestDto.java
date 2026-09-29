@@ -12,6 +12,7 @@ import java.util.List;
 @AllArgsConstructor
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class OutcomeImportCommitRequestDto {
+    private String scope; // "ALL", "PO", "PSO"
     @Builder.Default
     private List<OutcomeImportItemDto> items = new ArrayList<>();
 }
