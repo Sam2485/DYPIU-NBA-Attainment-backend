@@ -69,7 +69,7 @@ public class OutcomeController {
                 .build());
     }
 
-    @GetMapping("/master-courses/{masterCourseId}/cos")
+    @GetMapping({"/master-courses/{masterCourseId}/cos", "/courses/{masterCourseId}/cos"})
     public ResponseEntity<ApiResponse<List<CourseOutcome>>> getCOs(@PathVariable String masterCourseId) {
         return ResponseEntity.ok(ApiResponse.<List<CourseOutcome>>builder()
                 .success(true)
@@ -77,7 +77,7 @@ public class OutcomeController {
                 .build());
     }
 
-    @RequestMapping(value = "/master-courses/{masterCourseId}/cos", method = {RequestMethod.POST, RequestMethod.PUT})
+    @RequestMapping(value = {"/master-courses/{masterCourseId}/cos", "/courses/{masterCourseId}/cos"}, method = {RequestMethod.POST, RequestMethod.PUT})
     public ResponseEntity<ApiResponse<List<CourseOutcome>>> saveCOs(@PathVariable String masterCourseId, @RequestBody List<CourseOutcome> cos) {
         return ResponseEntity.ok(ApiResponse.<List<CourseOutcome>>builder()
                 .success(true)

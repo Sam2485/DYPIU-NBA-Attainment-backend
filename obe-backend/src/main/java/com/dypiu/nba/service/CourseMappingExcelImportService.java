@@ -942,7 +942,10 @@ public class CourseMappingExcelImportService {
                 currentOutcomeIdx++;
                 String extractedCode = extractOutcomeCode(colA, prefix, currentOutcomeIdx);
                 currentOutcomeCode = extractedCode;
-                currentOutcomeStatement = colA.replaceFirst("^\\s*\\d+[.):\\-\\s]+", "").trim();
+                currentOutcomeStatement = colA.replaceFirst("^(?i)(?:PO|PSO)?\\s*\\d+[.):\\-\\s]+", "").trim();
+                if (currentOutcomeStatement.isBlank()) {
+                    currentOutcomeStatement = colA.trim();
+                }
                 currentOutcomeRow = r + 1;
                 currentCompetencies.clear();
                 res.outcomesCount++;
@@ -978,10 +981,12 @@ public class CourseMappingExcelImportService {
 
                 if (currentPreviewItem != null) {
                     int cIdx = currentPreviewItem.getCompetencies().size() + 1;
+                    String cleanCompStmt = colB.replaceFirst("^(?i)(?:PO|PSO)?\\s*\\d+\\.\\d+[.):\\-\\s]+", "").trim();
+                    if (cleanCompStmt.isBlank()) cleanCompStmt = colB.trim();
                     currentPreviewItem.getCompetencies().add(CourseMappingImportPreviewDto.CompetencyMappingPreviewItem.builder()
                             .id("comp-" + currentOutcomeCode.toLowerCase() + "-" + cIdx)
                             .code(currentOutcomeCode + "." + cIdx)
-                            .statement(colB)
+                            .statement(cleanCompStmt)
                             .keywordsByCo(new LinkedHashMap<>(compRef.keywordsByCo))
                             .build());
                 }

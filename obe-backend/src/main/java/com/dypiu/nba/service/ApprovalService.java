@@ -802,7 +802,11 @@ public class ApprovalService {
     public ProgrammeBatchApprovalInboxDto getPendingApprovalsByProgrammeBatch(String programmeBatchId) {
         log.debug("[ApprovalService] getPendingApprovalsByProgrammeBatch called | programmeBatchId: " + programmeBatchId);
         if (programmeBatchId == null || programmeBatchId.isBlank()) {
-            throw new BadRequestException("programmeBatchId is required.");
+            return ProgrammeBatchApprovalInboxDto.builder()
+                    .totalPendingItems(0)
+                    .totalProgrammeBatchCourses(0)
+                    .courses(Collections.emptyList())
+                    .build();
         }
 
         ProgrammeBatch batch = programmeBatchRepository.findById(programmeBatchId)
@@ -839,7 +843,7 @@ public class ApprovalService {
                 String code = pbc.getEffectiveCourseCode() != null ? pbc.getEffectiveCourseCode() : "";
                 String name = pbc.getEffectiveCourseName() != null ? pbc.getEffectiveCourseName() : "";
 
-                ApprovalRequest latestReq = requests.stream().max(Comparator.comparing(ApprovalRequest::getSubmittedAt, Comparator.nullsFirst(Comparator.naturalOrder()))).orElse(requests.get(0));
+                ApprovalRequest latestReq = requests.stream().max(LATEST_APPROVAL_COMPARATOR).orElse(requests.get(0));
                 String submitterName = latestReq.getSubmittedBy() != null ? latestReq.getSubmittedBy() : (pbc.getCourseCoordinatorName() != null ? pbc.getCourseCoordinatorName() : "Course Coordinator");
                 String submitterEmail = pbc.getAssignedFaculty();
                 Long submitterId = pbc.getCourseCoordinatorId();
@@ -873,7 +877,11 @@ public class ApprovalService {
     public ProgrammeBatchApprovalInboxDto getReviewedApprovalsByProgrammeBatch(String programmeBatchId) {
         log.debug("[ApprovalService] getReviewedApprovalsByProgrammeBatch called | programmeBatchId: " + programmeBatchId);
         if (programmeBatchId == null || programmeBatchId.isBlank()) {
-            throw new BadRequestException("programmeBatchId is required.");
+            return ProgrammeBatchApprovalInboxDto.builder()
+                    .totalReviewedItems(0)
+                    .totalProgrammeBatchCourses(0)
+                    .courses(Collections.emptyList())
+                    .build();
         }
 
         ProgrammeBatch batch = programmeBatchRepository.findById(programmeBatchId)
@@ -917,7 +925,7 @@ public class ApprovalService {
                 String code = pbc.getEffectiveCourseCode() != null ? pbc.getEffectiveCourseCode() : "";
                 String name = pbc.getEffectiveCourseName() != null ? pbc.getEffectiveCourseName() : "";
 
-                ApprovalRequest latestReq = requests.stream().max(Comparator.comparing(ApprovalRequest::getUpdatedAt, Comparator.nullsFirst(Comparator.naturalOrder()))).orElse(requests.get(0));
+                ApprovalRequest latestReq = requests.stream().max(LATEST_APPROVAL_COMPARATOR).orElse(requests.get(0));
 
                 courseCards.add(CourseApprovalCardDto.builder()
                         .programmeBatchCourseId(pbc.getId())
