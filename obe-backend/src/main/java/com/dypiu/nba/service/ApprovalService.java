@@ -195,10 +195,32 @@ public class ApprovalService {
         }
     }
 
+    public boolean isCourseLevelApprovalType(ApprovalType type) {
+        if (type == null) return false;
+        return type == ApprovalType.CO_DEFINITION
+                || type == ApprovalType.CO_TARGETS
+                || type == ApprovalType.COURSE_OUTCOMES_TARGETS
+                || type == ApprovalType.ATTAINMENT_CONFIGURATION
+                || type == ApprovalType.ATTAINMENT_SETTINGS
+                || type == ApprovalType.COURSE_ATR
+                || type == ApprovalType.COURSE_OFFERING
+                || type == ApprovalType.OTHER;
+    }
+
     private void preventSelfApproval(ApprovalRequest req) {
         if (req == null || req.getSubmittedBy() == null || req.getSubmittedBy().isBlank()) return;
         CurrentUserScope scope = getScope();
         if (scope == null || scope.isIqac()) return;
+
+        // Option B: Dual-Role Exemption
+        // If a user has Programme Coordinator authority and is reviewing course-level submissions
+        // (COs, Targets, Attainment Settings, Course ATR) for which they are also the Course Coordinator / submitter,
+        // exempt them from self-approval restrictions so they can approve or request revision.
+        if (scope.isProgrammeCoordinator() && isCourseLevelApprovalType(req.getType())) {
+            log.info("[ApprovalService] Dual-role exemption applied: Programme Coordinator {} permitted to self-approve course-level request {} (type: {}, submittedBy: {})",
+                    scope.getEmail() != null ? scope.getEmail() : scope.getUsername(), req.getId(), req.getType(), req.getSubmittedBy());
+            return;
+        }
 
         String submitter = req.getSubmittedBy().trim().toLowerCase();
         String userEmail = scope.getEmail() != null ? scope.getEmail().trim().toLowerCase() : "";
