@@ -52,6 +52,9 @@ public class CourseMappingImportPreviewDto {
     private List<String> expectedCoCodes = new ArrayList<>();
 
     @Builder.Default
+    private Map<String, String> coCodeMapping = new LinkedHashMap<>(); // e.g. "CO1" -> "EM321.1"
+
+    @Builder.Default
     private List<String> errors = new ArrayList<>();
 
     @Builder.Default
@@ -72,4 +75,38 @@ public class CourseMappingImportPreviewDto {
 
     @Builder.Default
     private List<com.dypiu.nba.entity.CoPsoMapping> psoMappings = new ArrayList<>();
+
+    // Rich outcome & competency preview items for UI inspection (like HOD PO/PSO inspect)
+    @Builder.Default
+    private List<OutcomeMappingPreviewItem> items = new ArrayList<>();
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class OutcomeMappingPreviewItem {
+        private String id;
+        private String category; // "PO" or "PSO"
+        private String code; // "PO1", "PO2", "PSO1"
+        private String statement;
+        private int rowNumber;
+        @Builder.Default
+        private List<CompetencyMappingPreviewItem> competencies = new ArrayList<>();
+        @Builder.Default
+        private Map<String, Integer> mappingStrengths = new LinkedHashMap<>(); // CO1 -> 3, CO2 -> 2
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class CompetencyMappingPreviewItem {
+        private String id;
+        private String code; // "PO1.1", "PSO1.1"
+        private String statement;
+        @Builder.Default
+        private Map<String, List<String>> keywordsByCo = new LinkedHashMap<>(); // CO1 -> ["Modes of heat transfer"], CO2 -> [...]
+    }
 }

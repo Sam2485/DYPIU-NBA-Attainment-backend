@@ -48,10 +48,31 @@ public class CourseMappingExcelImportService {
     private final AuditLogService auditLogService;
     private final ObjectMapper objectMapper;
 
-    private static final Pattern CO_PATTERN = Pattern.compile("(?i)^CO\\s*(\\d+)$");
+    private static final Pattern CO_PATTERN = Pattern.compile("(?i)^(?:CO)?\\s*(\\d+)$");
     private static final Pattern PO_CODE_PATTERN = Pattern.compile("(?i)^(PO\\s*\\d+)");
     private static final Pattern PSO_CODE_PATTERN = Pattern.compile("(?i)^(PSO\\s*\\d+)");
     private static final Pattern NUMBERED_PREFIX_PATTERN = Pattern.compile("^\\s*(\\d+)[.):\\-\\s]+");
+
+    private static final Comparator<String> NATURAL_CODE_COMPARATOR = (c1, c2) -> {
+        if (c1 == null && c2 == null) return 0;
+        if (c1 == null) return -1;
+        if (c2 == null) return 1;
+        String[] parts1 = c1.split("(?<=\\D)(?=\\d)|(?<=\\d)(?=\\D)");
+        String[] parts2 = c2.split("(?<=\\D)(?=\\d)|(?<=\\d)(?=\\D)");
+        int length = Math.min(parts1.length, parts2.length);
+        for (int i = 0; i < length; i++) {
+            String p1 = parts1[i];
+            String p2 = parts2[i];
+            if (p1.matches("\\d+") && p2.matches("\\d+")) {
+                int cmp = Long.compare(Long.parseLong(p1), Long.parseLong(p2));
+                if (cmp != 0) return cmp;
+            } else {
+                int cmp = p1.compareToIgnoreCase(p2);
+                if (cmp != 0) return cmp;
+            }
+        }
+        return Integer.compare(parts1.length, parts2.length);
+    };
 
     private void enforceOfferingAccess(ProgrammeBatchCourse offering, boolean isMutation) {
         if (offering == null) return;
@@ -420,7 +441,7 @@ public class CourseMappingExcelImportService {
         ProgrammeBatch batch = (programmeBatchId != null) ? programmeBatchRepository.findById(programmeBatchId).orElse(null) : null;
 
         List<CourseOutcome> expectedCos = courseOutcomeRepository.findByProgrammeBatchCourseId(offering.getId()).stream()
-                .sorted(Comparator.comparing(CourseOutcome::getCode, String.CASE_INSENSITIVE_ORDER))
+                .sorted(Comparator.comparing(CourseOutcome::getCode, NATURAL_CODE_COMPARATOR))
                 .collect(Collectors.toList());
 
         List<ProgrammeOutcome> expectedPos = (programmeBatchId != null)
@@ -490,49 +511,32 @@ public class CourseMappingExcelImportService {
             Map<String, Map<String, Object>> combinedMatrix = new LinkedHashMap<>();
             List<CoPoMapping> poMappings = new ArrayList<>();
             List<CoPsoMapping> psoMappings = new ArrayList<>();
+            List<CourseMappingImportPreviewDto.OutcomeMappingPreviewItem> allItems = new ArrayList<>();
 
             int totalParsedCompetencies = 0;
             int totalKeywords = 0;
             int totalMappings = 0;
 
             // 1. Parse PO Sheet
+            ParsedSheetResult poResult = null;
             if (parsePo && poSheet != null) {
-                ParsedSheetResult poResult = parseSheet(poSheet, false, expectedCos, expectedPos, Collections.emptyList());
+                poResult = parseSheet(poSheet, false, expectedCos, expectedPos, Collections.emptyList());
                 detectedCoCodes = poResult.detectedCoCodes;
                 poKwStore = poResult.keywordsStore;
                 totalParsedCompetencies += poResult.competenciesCount;
                 totalKeywords += poResult.keywordsCount;
                 preview.setSheetPoCount(poResult.outcomesCount);
-
-                for (Map.Entry<String, Map<String, Integer>> coEntry : poResult.matrixLevels.entrySet()) {
-                    String coCode = coEntry.getKey();
-                    combinedMatrix.computeIfAbsent(coCode, k -> new LinkedHashMap<>());
-                    for (Map.Entry<String, Integer> outcomeEntry : coEntry.getValue().entrySet()) {
-                        String poCode = outcomeEntry.getKey();
-                        Integer level = outcomeEntry.getValue();
-                        combinedMatrix.get(coCode).put(poCode, level != null && level > 0 ? level : "-");
-
-                        if (level != null && level > 0) {
-                            String coId = findCoIdByCode(expectedCos, coCode);
-                            if (coId != null) {
-                                poMappings.add(CoPoMapping.builder()
-                                        .courseOutcomeId(coId)
-                                        .poCode(poCode)
-                                        .mappingLevel(level)
-                                        .build());
-                                totalMappings++;
-                            }
-                        }
-                    }
+                if (poResult.previewItems != null) {
+                    allItems.addAll(poResult.previewItems);
                 }
-
                 preview.getErrors().addAll(poResult.errors);
                 preview.getWarnings().addAll(poResult.warnings);
             }
 
             // 2. Parse PSO Sheet
+            ParsedSheetResult psoResult = null;
             if (parsePso && psoSheet != null) {
-                ParsedSheetResult psoResult = parseSheet(psoSheet, true, expectedCos, Collections.emptyList(), expectedPsos);
+                psoResult = parseSheet(psoSheet, true, expectedCos, Collections.emptyList(), expectedPsos);
                 if (detectedCoCodes.isEmpty()) {
                     detectedCoCodes = psoResult.detectedCoCodes;
                 }
@@ -540,31 +544,122 @@ public class CourseMappingExcelImportService {
                 totalParsedCompetencies += psoResult.competenciesCount;
                 totalKeywords += psoResult.keywordsCount;
                 preview.setSheetPsoCount(psoResult.outcomesCount);
+                if (psoResult.previewItems != null) {
+                    allItems.addAll(psoResult.previewItems);
+                }
+                preview.getErrors().addAll(psoResult.errors);
+                preview.getWarnings().addAll(psoResult.warnings);
+            }
 
-                for (Map.Entry<String, Map<String, Integer>> coEntry : psoResult.matrixLevels.entrySet()) {
-                    String coCode = coEntry.getKey();
-                    combinedMatrix.computeIfAbsent(coCode, k -> new LinkedHashMap<>());
-                    for (Map.Entry<String, Integer> outcomeEntry : coEntry.getValue().entrySet()) {
-                        String psoCode = outcomeEntry.getKey();
-                        Integer level = outcomeEntry.getValue();
-                        combinedMatrix.get(coCode).put(psoCode, level != null && level > 0 ? level : "-");
+            // Synthesize effective COs if course offering does not have COs configured in DB yet
+            List<CourseOutcome> effectiveCos = new ArrayList<>(expectedCos);
+            if (effectiveCos.isEmpty() && !detectedCoCodes.isEmpty()) {
+                for (int i = 0; i < detectedCoCodes.size(); i++) {
+                    String code = detectedCoCodes.get(i);
+                    effectiveCos.add(CourseOutcome.builder()
+                            .id("auto-co-" + (i + 1))
+                            .programmeBatchCourseId(offering.getId())
+                            .code(code)
+                            .statement("Course Outcome " + (i + 1) + " for " + (offering.getCourseCode() != null ? offering.getCourseCode() : "course"))
+                            .build());
+                }
+                preview.setExpectedCoCount(effectiveCos.size());
+                preview.setExpectedCoCodes(effectiveCos.stream().map(CourseOutcome::getCode).collect(Collectors.toList()));
+            }
 
-                        if (level != null && level > 0) {
-                            String coId = findCoIdByCode(expectedCos, coCode);
-                            if (coId != null) {
-                                psoMappings.add(CoPsoMapping.builder()
-                                        .courseOutcomeId(coId)
-                                        .psoCode(psoCode)
-                                        .mappingLevel(level)
-                                        .build());
-                                totalMappings++;
+            // Build 1-to-1 mapping between sheet CO codes (CO1..COn) and course's actual COs (e.g. EM321.1..EM321.n)
+            Map<String, CourseOutcome> sheetToCourseCoMap = new LinkedHashMap<>();
+            Map<String, String> coCodeMapping = new LinkedHashMap<>();
+            for (int i = 0; i < detectedCoCodes.size(); i++) {
+                String sheetCode = detectedCoCodes.get(i);
+                CourseOutcome target = null;
+                // 1. Exact match
+                for (CourseOutcome co : effectiveCos) {
+                    if (co.getCode() != null && co.getCode().equalsIgnoreCase(sheetCode)) {
+                        target = co;
+                        break;
+                    }
+                }
+                // 2. Trailing number match (e.g. CO1 has number 1, EM321.1 has number 1)
+                if (target == null) {
+                    Integer sheetNum = extractCoNumber(sheetCode);
+                    if (sheetNum != null) {
+                        for (CourseOutcome co : effectiveCos) {
+                            if (sheetNum.equals(extractCoNumber(co.getCode()))) {
+                                target = co;
+                                break;
                             }
                         }
                     }
                 }
+                // 3. Positional fallback (index i matches effectiveCos.get(i))
+                if (target == null && i < effectiveCos.size()) {
+                    target = effectiveCos.get(i);
+                }
 
-                preview.getErrors().addAll(psoResult.errors);
-                preview.getWarnings().addAll(psoResult.warnings);
+                if (target != null) {
+                    sheetToCourseCoMap.put(sheetCode, target);
+                    coCodeMapping.put(sheetCode, target.getCode());
+                }
+            }
+            preview.setCoCodeMapping(coCodeMapping);
+
+            // Process PO matrix levels
+            if (poResult != null) {
+                for (Map.Entry<String, Map<String, Integer>> coEntry : poResult.matrixLevels.entrySet()) {
+                    String sheetCode = coEntry.getKey();
+                    CourseOutcome targetCo = sheetToCourseCoMap.get(sheetCode);
+                    String courseCoCode = (targetCo != null) ? targetCo.getCode() : sheetCode;
+                    String coId = (targetCo != null) ? targetCo.getId() : findCoIdByCode(effectiveCos, sheetCode);
+
+                    combinedMatrix.computeIfAbsent(courseCoCode, k -> new LinkedHashMap<>());
+                    combinedMatrix.computeIfAbsent(sheetCode, k -> new LinkedHashMap<>());
+
+                    for (Map.Entry<String, Integer> outcomeEntry : coEntry.getValue().entrySet()) {
+                        String poCode = outcomeEntry.getKey();
+                        Integer level = outcomeEntry.getValue();
+                        combinedMatrix.get(courseCoCode).put(poCode, level != null && level > 0 ? level : "-");
+                        combinedMatrix.get(sheetCode).put(poCode, level != null && level > 0 ? level : "-");
+
+                        if (level != null && level > 0 && coId != null) {
+                            poMappings.add(CoPoMapping.builder()
+                                    .courseOutcomeId(coId)
+                                    .poCode(poCode)
+                                    .mappingLevel(level)
+                                    .build());
+                            totalMappings++;
+                        }
+                    }
+                }
+            }
+
+            // Process PSO matrix levels
+            if (psoResult != null) {
+                for (Map.Entry<String, Map<String, Integer>> coEntry : psoResult.matrixLevels.entrySet()) {
+                    String sheetCode = coEntry.getKey();
+                    CourseOutcome targetCo = sheetToCourseCoMap.get(sheetCode);
+                    String courseCoCode = (targetCo != null) ? targetCo.getCode() : sheetCode;
+                    String coId = (targetCo != null) ? targetCo.getId() : findCoIdByCode(effectiveCos, sheetCode);
+
+                    combinedMatrix.computeIfAbsent(courseCoCode, k -> new LinkedHashMap<>());
+                    combinedMatrix.computeIfAbsent(sheetCode, k -> new LinkedHashMap<>());
+
+                    for (Map.Entry<String, Integer> outcomeEntry : coEntry.getValue().entrySet()) {
+                        String psoCode = outcomeEntry.getKey();
+                        Integer level = outcomeEntry.getValue();
+                        combinedMatrix.get(courseCoCode).put(psoCode, level != null && level > 0 ? level : "-");
+                        combinedMatrix.get(sheetCode).put(psoCode, level != null && level > 0 ? level : "-");
+
+                        if (level != null && level > 0 && coId != null) {
+                            psoMappings.add(CoPsoMapping.builder()
+                                    .courseOutcomeId(coId)
+                                    .psoCode(psoCode)
+                                    .mappingLevel(level)
+                                    .build());
+                            totalMappings++;
+                        }
+                    }
+                }
             }
 
             preview.setDetectedCoCodes(detectedCoCodes);
@@ -573,21 +668,13 @@ public class CourseMappingExcelImportService {
             preview.setTotalKeywordsExtracted(totalKeywords);
             preview.setTotalMappingsFound(totalMappings);
 
-            // Validation Verifications
-            boolean cosMatch = !expectedCos.isEmpty() && expectedCos.size() == detectedCoCodes.size();
-            if (cosMatch) {
-                for (int i = 0; i < expectedCos.size(); i++) {
-                    if (!expectedCos.get(i).getCode().equalsIgnoreCase(detectedCoCodes.get(i))) {
-                        cosMatch = false;
-                        break;
-                    }
-                }
-            }
+            // Validation Verifications: COs match if counts match (even when names differ like CO1 vs EM321.1)
+            boolean cosMatch = expectedCos.isEmpty() || expectedCos.size() == detectedCoCodes.size();
             preview.setCosMatch(cosMatch);
             if (!cosMatch && !expectedCos.isEmpty()) {
-                preview.getErrors().add("Course Outcomes mismatch: Course expects " + expectedCos.size() + " COs ("
+                preview.getErrors().add("Course Outcomes count mismatch: Course defines " + expectedCos.size() + " COs ("
                         + expectedCos.stream().map(CourseOutcome::getCode).collect(Collectors.joining(", ")) + ") but sheet defines "
-                        + detectedCoCodes.size() + " (" + String.join(", ", detectedCoCodes) + ").");
+                        + detectedCoCodes.size() + " CO columns (" + String.join(", ", detectedCoCodes) + ").");
             }
 
             boolean posMatch = !parsePo || preview.getSheetPoCount() == expectedPos.size() || expectedPos.isEmpty();
@@ -604,11 +691,64 @@ public class CourseMappingExcelImportService {
 
             preview.setCompetenciesMatch(totalExpectedComps == 0 || totalParsedCompetencies > 0);
 
-            preview.setPoKeywordsStore(poKwStore);
-            preview.setPsoKeywordsStore(psoKwStore);
+            // Enrich keywords stores: save under BOTH sheetCode (CO1) AND actual course CO code (EM321.1)
+            Map<String, Object> enrichedPoKwStore = new LinkedHashMap<>();
+            for (Map.Entry<String, Object> entry : poKwStore.entrySet()) {
+                String sheetCode = entry.getKey();
+                enrichedPoKwStore.put(sheetCode, entry.getValue());
+                CourseOutcome targetCo = sheetToCourseCoMap.get(sheetCode);
+                if (targetCo != null && !targetCo.getCode().equalsIgnoreCase(sheetCode)) {
+                    enrichedPoKwStore.put(targetCo.getCode(), entry.getValue());
+                }
+            }
+
+            Map<String, Object> enrichedPsoKwStore = new LinkedHashMap<>();
+            for (Map.Entry<String, Object> entry : psoKwStore.entrySet()) {
+                String sheetCode = entry.getKey();
+                enrichedPsoKwStore.put(sheetCode, entry.getValue());
+                CourseOutcome targetCo = sheetToCourseCoMap.get(sheetCode);
+                if (targetCo != null && !targetCo.getCode().equalsIgnoreCase(sheetCode)) {
+                    enrichedPsoKwStore.put(targetCo.getCode(), entry.getValue());
+                }
+            }
+
+            // Also enrich previewItems mapping strengths and keywords per CO with course CO codes
+            for (CourseMappingImportPreviewDto.OutcomeMappingPreviewItem item : allItems) {
+                if (item.getMappingStrengths() != null) {
+                    Map<String, Integer> additionalStrengths = new LinkedHashMap<>();
+                    for (Map.Entry<String, Integer> e : item.getMappingStrengths().entrySet()) {
+                        String sheetCode = e.getKey();
+                        CourseOutcome targetCo = sheetToCourseCoMap.get(sheetCode);
+                        if (targetCo != null && !targetCo.getCode().equalsIgnoreCase(sheetCode)) {
+                            additionalStrengths.put(targetCo.getCode(), e.getValue());
+                        }
+                    }
+                    item.getMappingStrengths().putAll(additionalStrengths);
+                }
+
+                if (item.getCompetencies() != null) {
+                    for (CourseMappingImportPreviewDto.CompetencyMappingPreviewItem comp : item.getCompetencies()) {
+                        if (comp.getKeywordsByCo() != null) {
+                            Map<String, List<String>> additionalKws = new LinkedHashMap<>();
+                            for (Map.Entry<String, List<String>> e : comp.getKeywordsByCo().entrySet()) {
+                                String sheetCode = e.getKey();
+                                CourseOutcome targetCo = sheetToCourseCoMap.get(sheetCode);
+                                if (targetCo != null && !targetCo.getCode().equalsIgnoreCase(sheetCode)) {
+                                    additionalKws.put(targetCo.getCode(), e.getValue());
+                                }
+                            }
+                            comp.getKeywordsByCo().putAll(additionalKws);
+                        }
+                    }
+                }
+            }
+
+            preview.setPoKeywordsStore(enrichedPoKwStore);
+            preview.setPsoKeywordsStore(enrichedPsoKwStore);
             preview.setMatrix(combinedMatrix);
             preview.setPoMappings(poMappings);
             preview.setPsoMappings(psoMappings);
+            preview.setItems(allItems);
 
             preview.setValid(preview.getErrors().isEmpty());
             return preview;
@@ -622,11 +762,36 @@ public class CourseMappingExcelImportService {
     }
 
     private String findCoIdByCode(List<CourseOutcome> cos, String code) {
-        if (code == null) return null;
+        if (code == null || cos == null || cos.isEmpty()) return null;
+        String cleanCode = code.trim();
         for (CourseOutcome co : cos) {
-            if (co.getCode() != null && co.getCode().equalsIgnoreCase(code.trim())) {
+            if (co.getCode() != null && co.getCode().equalsIgnoreCase(cleanCode)) {
                 return co.getId();
             }
+        }
+        Integer num = extractCoNumber(cleanCode);
+        if (num != null) {
+            for (CourseOutcome co : cos) {
+                Integer coNum = extractCoNumber(co.getCode());
+                if (num.equals(coNum)) {
+                    return co.getId();
+                }
+            }
+            int idx = num - 1;
+            if (idx >= 0 && idx < cos.size()) {
+                return cos.get(idx).getId();
+            }
+        }
+        return null;
+    }
+
+    private Integer extractCoNumber(String code) {
+        if (code == null) return null;
+        Matcher m = Pattern.compile("(\\d+)$").matcher(code.trim());
+        if (m.find()) {
+            try {
+                return Integer.parseInt(m.group(1));
+            } catch (Exception ignored) {}
         }
         return null;
     }
@@ -650,6 +815,7 @@ public class CourseMappingExcelImportService {
         int keywordsCount = 0;
         Map<String, Object> keywordsStore = new LinkedHashMap<>(); // CO -> Outcome -> List<List<String>>
         Map<String, Map<String, Integer>> matrixLevels = new LinkedHashMap<>(); // CO -> Outcome -> level
+        List<CourseMappingImportPreviewDto.OutcomeMappingPreviewItem> previewItems = new ArrayList<>();
         List<String> errors = new ArrayList<>();
         List<String> warnings = new ArrayList<>();
     }
@@ -676,12 +842,14 @@ public class CourseMappingExcelImportService {
         Set<String> seenCoCodes = new HashSet<>();
 
         DataFormatter df = new DataFormatter();
+        FormulaEvaluator evaluator = sheet.getWorkbook().getCreationHelper().createFormulaEvaluator();
+
         for (int c = 2; c < r1.getLastCellNum(); c++) {
             Cell cell = r1.getCell(c);
             String val = df.formatCellValue(cell).trim();
             Matcher m = CO_PATTERN.matcher(val);
             if (m.matches()) {
-                String coCode = m.group(1).toUpperCase();
+                String coCode = "CO" + m.group(1);
                 if (!seenCoCodes.contains(coCode)) {
                     seenCoCodes.add(coCode);
                     coCols.add(new CoColRef(coCode, c));
@@ -706,7 +874,10 @@ public class CourseMappingExcelImportService {
         // 2. Parse outcome blocks
         int currentOutcomeIdx = 0;
         String currentOutcomeCode = null;
+        String currentOutcomeStatement = null;
+        int currentOutcomeRow = 0;
         List<CompetencyRowRef> currentCompetencies = new ArrayList<>();
+        CourseMappingImportPreviewDto.OutcomeMappingPreviewItem currentPreviewItem = null;
         String prefix = isPso ? "PSO" : "PO";
 
         for (int r = 2; r <= sheet.getLastRowNum(); r++) {
@@ -725,15 +896,13 @@ public class CourseMappingExcelImportService {
                     // Try indicator col first
                     CoColRef indRef = findColRef(indicatorCols, co.code);
                     if (indRef != null) {
-                        String sVal = df.formatCellValue(row.getCell(indRef.colIndex)).trim();
-                        level = parseStrengthLevel(sVal);
+                        level = parseStrengthFromCell(row.getCell(indRef.colIndex), evaluator);
                     }
-                    if (level == null) {
-                        String sVal = df.formatCellValue(row.getCell(co.colIndex)).trim();
-                        level = parseStrengthLevel(sVal);
+                    if (level == null || level == 0) {
+                        level = parseStrengthFromCell(row.getCell(co.colIndex), evaluator);
                     }
 
-                    if (level == null) {
+                    if (level == null || level == 0) {
                         // Compute dynamically from mapped competencies
                         int mapped = 0;
                         for (CompetencyRowRef comp : currentCompetencies) {
@@ -742,7 +911,7 @@ public class CourseMappingExcelImportService {
                         }
                         if (!currentCompetencies.isEmpty()) {
                             int pct = (mapped * 100) / currentCompetencies.size();
-                            level = (pct >= 75) ? 3 : (pct >= 50 ? 2 : (pct > 0 ? 1 : 0));
+                            level = (pct >= 66) ? 3 : (pct >= 33 ? 2 : (pct > 0 ? 1 : 0));
                         } else {
                             level = 0;
                         }
@@ -750,6 +919,9 @@ public class CourseMappingExcelImportService {
 
                     if (currentOutcomeCode != null) {
                         res.matrixLevels.get(co.code).put(currentOutcomeCode, level);
+                        if (currentPreviewItem != null) {
+                            currentPreviewItem.getMappingStrengths().put(co.code, level);
+                        }
                     }
                 }
                 continue;
@@ -761,14 +933,27 @@ public class CourseMappingExcelImportService {
 
             // Outcome header check in Col A
             if (!colA.isBlank()) {
+                if (currentPreviewItem != null) {
+                    res.previewItems.add(currentPreviewItem);
+                }
                 // Save previous outcome's competencies into keywordsStore
                 commitOutcomeCompetencies(res, currentOutcomeCode, currentCompetencies);
 
                 currentOutcomeIdx++;
                 String extractedCode = extractOutcomeCode(colA, prefix, currentOutcomeIdx);
                 currentOutcomeCode = extractedCode;
+                currentOutcomeStatement = colA.replaceFirst("^\\s*\\d+[.):\\-\\s]+", "").trim();
+                currentOutcomeRow = r + 1;
                 currentCompetencies.clear();
                 res.outcomesCount++;
+
+                currentPreviewItem = CourseMappingImportPreviewDto.OutcomeMappingPreviewItem.builder()
+                        .id(prefix.toLowerCase() + "-" + currentOutcomeCode.toLowerCase())
+                        .category(prefix)
+                        .code(currentOutcomeCode)
+                        .statement(currentOutcomeStatement)
+                        .rowNumber(currentOutcomeRow)
+                        .build();
             }
 
             // Competency row check
@@ -790,12 +975,25 @@ public class CourseMappingExcelImportService {
                     }
                 }
                 currentCompetencies.add(compRef);
+
+                if (currentPreviewItem != null) {
+                    int cIdx = currentPreviewItem.getCompetencies().size() + 1;
+                    currentPreviewItem.getCompetencies().add(CourseMappingImportPreviewDto.CompetencyMappingPreviewItem.builder()
+                            .id("comp-" + currentOutcomeCode.toLowerCase() + "-" + cIdx)
+                            .code(currentOutcomeCode + "." + cIdx)
+                            .statement(colB)
+                            .keywordsByCo(new LinkedHashMap<>(compRef.keywordsByCo))
+                            .build());
+                }
             }
         }
 
         // Commit trailing outcome
         if (currentOutcomeCode != null && !currentCompetencies.isEmpty()) {
             commitOutcomeCompetencies(res, currentOutcomeCode, currentCompetencies);
+        }
+        if (currentPreviewItem != null) {
+            res.previewItems.add(currentPreviewItem);
         }
 
         return res;
@@ -833,6 +1031,29 @@ public class CourseMappingExcelImportService {
             return PSO_CODE_PATTERN.matcher(text);
         }
         return PO_CODE_PATTERN.matcher(text);
+    }
+
+    private Integer parseStrengthFromCell(Cell cell, FormulaEvaluator evaluator) {
+        if (cell == null) return null;
+        try {
+            if (cell.getCellType() == CellType.FORMULA && evaluator != null) {
+                CellValue cv = evaluator.evaluate(cell);
+                if (cv != null) {
+                    if (cv.getCellType() == CellType.NUMERIC) {
+                        int v = (int) Math.round(cv.getNumberValue());
+                        return (v >= 1 && v <= 3) ? v : 0;
+                    } else if (cv.getCellType() == CellType.STRING) {
+                        return parseStrengthLevel(cv.getStringValue());
+                    }
+                }
+            } else if (cell.getCellType() == CellType.NUMERIC) {
+                int v = (int) Math.round(cell.getNumericCellValue());
+                return (v >= 1 && v <= 3) ? v : 0;
+            } else {
+                return parseStrengthLevel(cell.getStringCellValue());
+            }
+        } catch (Exception ignored) {}
+        return null;
     }
 
     private Integer parseStrengthLevel(String s) {
@@ -934,6 +1155,62 @@ public class CourseMappingExcelImportService {
         }
 
         List<CourseOutcome> cos = courseOutcomeRepository.findByProgrammeBatchCourseId(offering.getId());
+        if (cos.isEmpty() && request != null) {
+            Set<String> neededCoCodes = new LinkedHashSet<>();
+            if (request.getPoKeywordsStore() != null) neededCoCodes.addAll(request.getPoKeywordsStore().keySet());
+            if (request.getPsoKeywordsStore() != null) neededCoCodes.addAll(request.getPsoKeywordsStore().keySet());
+            if (request.getPoMappings() != null) {
+                for (CoPoMapping m : request.getPoMappings()) {
+                    if (m.getCourseOutcomeId() != null && m.getCourseOutcomeId().startsWith("auto-co-")) {
+                        String numStr = m.getCourseOutcomeId().replace("auto-co-", "");
+                        neededCoCodes.add("CO" + numStr);
+                    }
+                }
+            }
+            if (neededCoCodes.isEmpty()) {
+                for (int i = 1; i <= 5; i++) neededCoCodes.add("CO" + i);
+            }
+            int idx = 1;
+            List<CourseOutcome> newCos = new ArrayList<>();
+            for (String code : neededCoCodes) {
+                CourseOutcome co = CourseOutcome.builder()
+                        .id("co-" + UUID.randomUUID().toString().substring(0, 8))
+                        .programmeBatchCourseId(offering.getId())
+                        .code(code)
+                        .statement("Course Outcome " + idx + " for " + (offering.getCourseCode() != null ? offering.getCourseCode() : "course"))
+                        .build();
+                newCos.add(co);
+                idx++;
+            }
+            cos = courseOutcomeRepository.saveAll(newCos);
+        }
+
+        // Remap temporary auto-co- IDs
+        if (request != null && request.getPoMappings() != null) {
+            for (CoPoMapping m : request.getPoMappings()) {
+                if (m.getCourseOutcomeId() != null && m.getCourseOutcomeId().startsWith("auto-co-")) {
+                    try {
+                        int cIdx = Integer.parseInt(m.getCourseOutcomeId().replace("auto-co-", "")) - 1;
+                        if (cIdx >= 0 && cIdx < cos.size()) {
+                            m.setCourseOutcomeId(cos.get(cIdx).getId());
+                        }
+                    } catch (Exception ignored) {}
+                }
+            }
+        }
+        if (request != null && request.getPsoMappings() != null) {
+            for (CoPsoMapping m : request.getPsoMappings()) {
+                if (m.getCourseOutcomeId() != null && m.getCourseOutcomeId().startsWith("auto-co-")) {
+                    try {
+                        int cIdx = Integer.parseInt(m.getCourseOutcomeId().replace("auto-co-", "")) - 1;
+                        if (cIdx >= 0 && cIdx < cos.size()) {
+                            m.setCourseOutcomeId(cos.get(cIdx).getId());
+                        }
+                    } catch (Exception ignored) {}
+                }
+            }
+        }
+
         List<String> coIds = cos.stream().map(CourseOutcome::getId).collect(Collectors.toList());
 
         // 3. Save PO Mappings
