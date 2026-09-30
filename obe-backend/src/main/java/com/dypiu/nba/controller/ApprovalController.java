@@ -56,10 +56,21 @@ public class ApprovalController {
     @GetMapping("/reviewed")
     public ResponseEntity<ApiResponse<com.dypiu.nba.dto.ProgrammeBatchApprovalInboxDto>> getReviewedApprovals(
             @RequestParam(required = false) String programmeBatchId) {
+        if (programmeBatchId == null || programmeBatchId.isBlank()) {
+            return ResponseEntity.ok(ApiResponse.<com.dypiu.nba.dto.ProgrammeBatchApprovalInboxDto>builder()
+                    .success(true)
+                    .message("Reviewed approvals fetched successfully")
+                    .data(com.dypiu.nba.dto.ProgrammeBatchApprovalInboxDto.builder()
+                            .totalReviewedItems(0)
+                            .totalProgrammeBatchCourses(0)
+                            .courses(java.util.Collections.emptyList())
+                            .build())
+                    .build());
+        }
         return ResponseEntity.ok(ApiResponse.<com.dypiu.nba.dto.ProgrammeBatchApprovalInboxDto>builder()
                 .success(true)
                 .message("Reviewed approvals fetched successfully")
-                .data(approvalService.getReviewedApprovalsByProgrammeBatch(programmeBatchId))
+                .data(approvalService.getReviewedApprovalsByProgrammeBatch(programmeBatchId.trim()))
                 .build());
     }
 
