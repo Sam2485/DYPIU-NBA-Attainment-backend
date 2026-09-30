@@ -659,8 +659,9 @@ public class ApprovalWorkflowSecurityTest {
     // =========================================================================
 
     @Test
-    @DisplayName("18. Self-approval is blocked -> 403 Forbidden")
-    void testSelfApproval_IsBlocked() {
+    @DisplayName("18. Dual-role exemption (Option B) allows PC course self-approval; non-exempt self-approval blocked -> 403 Forbidden")
+    void testSelfApproval_DualRoleExemptionAndBlock() {
+        // Dual-role exemption (Option B): Programme Coordinator can approve course-level requests they submitted as Course Coordinator
         setAuthenticatedUser(pcA);
 
         ApprovalRequest reqA = approvalRequestRepository.save(ApprovalRequest.builder()
@@ -676,8 +677,28 @@ public class ApprovalWorkflowSecurityTest {
                 .submittedBy(pcA.getEmail())
                 .build());
 
+        var response = approvalController.approveRequest(reqA.getId(), null);
+        assertNotNull(response.getBody());
+        assertTrue(response.getBody().isSuccess());
+        assertEquals("APPROVED", response.getBody().getData().getStatus());
+
+        // Non-exempt self-approval is still blocked: HOD cannot self-approve their own course allocation
+        setAuthenticatedUser(hodA);
+
+        ApprovalRequest reqHod = approvalRequestRepository.save(ApprovalRequest.builder()
+                .id("app-self-hod-" + System.nanoTime())
+                .type(ApprovalType.COURSE_ALLOCATION)
+                .title("Course Allocation Dept A")
+                .resourceId(progA.getId())
+                .schoolId(schoolA.getId())
+                .departmentId(deptA.getId())
+                .masterProgrammeId(progA.getId())
+                .status(ApprovalStatus.PENDING)
+                .submittedBy(hodA.getEmail())
+                .build());
+
         ResponseStatusException ex = assertThrows(ResponseStatusException.class, () ->
-                approvalController.approveRequest(reqA.getId(), null));
+                approvalController.approveRequest(reqHod.getId(), null));
         assertEquals(HttpStatus.FORBIDDEN, ex.getStatusCode());
     }
 

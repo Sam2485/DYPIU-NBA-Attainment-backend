@@ -41,6 +41,7 @@ public class AcademicController {
     private final com.dypiu.nba.repository.ProgrammeBatchCourseRepository programmeBatchCourseRepository;
     private final com.dypiu.nba.service.CourseExcelImportService courseExcelImportService;
     private final com.dypiu.nba.service.OutcomeExcelImportService outcomeExcelImportService;
+    private final com.dypiu.nba.service.CourseMappingExcelImportService courseMappingExcelImportService;
 
 
     // --- Users by Role ---
@@ -1190,6 +1191,57 @@ public class AcademicController {
                 .success(true)
                 .message("MasterCourse mappings saved for offering")
                 .data(outcomeService.saveMappingsByOffering(offeringId, dto))
+                .build());
+    }
+
+    @GetMapping("/programme-batch-courses/{offeringId}/mapping-excel/template")
+    public ResponseEntity<byte[]> downloadMappingExcelTemplate(
+            @PathVariable String offeringId,
+            @RequestParam(required = false, defaultValue = "ALL") String scope,
+            @RequestParam(required = false, defaultValue = "false") boolean sample) {
+        byte[] bytes = courseMappingExcelImportService.generateTemplate(offeringId, scope, sample);
+        String filename = "course_mapping_template_" + scope.toLowerCase() + (sample ? "_sample" : "") + ".xlsx";
+        return ResponseEntity.ok()
+                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
+                .contentType(org.springframework.http.MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .body(bytes);
+    }
+
+    @PostMapping(value = "/programme-batch-courses/{offeringId}/mapping-excel/preview", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<ApiResponse<com.dypiu.nba.dto.CourseMappingImportPreviewDto>> previewMappingExcel(
+            @PathVariable String offeringId,
+            @RequestParam("file") org.springframework.web.multipart.MultipartFile file,
+            @RequestParam(required = false, defaultValue = "ALL") String scope) {
+        com.dypiu.nba.dto.CourseMappingImportPreviewDto preview = courseMappingExcelImportService.previewImport(offeringId, file, scope);
+        return ResponseEntity.ok(ApiResponse.<com.dypiu.nba.dto.CourseMappingImportPreviewDto>builder()
+                .success(true)
+                .message("Excel mapping inspected successfully.")
+                .data(preview)
+                .build());
+    }
+
+    @PostMapping(value = "/programme-batch-courses/{offeringId}/mapping-excel/import", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<ApiResponse<com.dypiu.nba.dto.CourseMappingImportResultDto>> commitMappingExcelMultipart(
+            @PathVariable String offeringId,
+            @RequestParam("file") org.springframework.web.multipart.MultipartFile file,
+            @RequestParam(required = false, defaultValue = "ALL") String scope) {
+        com.dypiu.nba.dto.CourseMappingImportResultDto result = courseMappingExcelImportService.commitImport(offeringId, file, scope);
+        return ResponseEntity.ok(ApiResponse.<com.dypiu.nba.dto.CourseMappingImportResultDto>builder()
+                .success(true)
+                .message("CO-PO/PSO Mapping Matrix imported successfully.")
+                .data(result)
+                .build());
+    }
+
+    @PostMapping(value = "/programme-batch-courses/{offeringId}/mapping-excel/import", consumes = org.springframework.http.MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<ApiResponse<com.dypiu.nba.dto.CourseMappingImportResultDto>> commitMappingExcelJson(
+            @PathVariable String offeringId,
+            @RequestBody com.dypiu.nba.dto.CourseMappingImportCommitRequestDto request) {
+        com.dypiu.nba.dto.CourseMappingImportResultDto result = courseMappingExcelImportService.commitImport(offeringId, request);
+        return ResponseEntity.ok(ApiResponse.<com.dypiu.nba.dto.CourseMappingImportResultDto>builder()
+                .success(true)
+                .message("CO-PO/PSO Mapping Matrix imported successfully.")
+                .data(result)
                 .build());
     }
 
