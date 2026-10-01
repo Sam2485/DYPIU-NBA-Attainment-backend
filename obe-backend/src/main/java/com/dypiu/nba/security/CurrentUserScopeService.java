@@ -14,6 +14,7 @@ import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.security.Principal;
+import java.util.List;
 
 /**
  * Centralized backend service to securely resolve the authenticated user's organizational scope.
@@ -31,6 +32,15 @@ public class CurrentUserScopeService {
     private static final String REQUEST_USER_ATTRIBUTE = "CACHED_CURRENT_USER_ENTITY";
 
     private final UserRepository userRepository;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.dypiu.nba.repository.UserOrganizationalAssignmentRepository userOrganizationalAssignmentRepository;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.dypiu.nba.repository.MasterProgrammeRepository masterProgrammeRepository;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.dypiu.nba.repository.ProgrammeBatchRepository programmeBatchRepository;
 
     /**
      * Resolves the CurrentUserScope from the active Spring SecurityContext.
@@ -149,6 +159,70 @@ public class CurrentUserScopeService {
             String activeProg = (String) attrs.getAttribute("ACTIVE_PROG_OVERRIDE", RequestAttributes.SCOPE_REQUEST);
             if (activeProg != null && !activeProg.isBlank()) {
                 effectiveMasterProgrammeId = activeProg;
+            }
+        }
+
+        // Dynamically resolve assigned masterProgrammeId if role is PROGRAMME_COORDINATOR and scope is missing
+        if (effectiveRole == com.dypiu.nba.entity.UserRole.PROGRAMME_COORDINATOR && (effectiveMasterProgrammeId == null || effectiveMasterProgrammeId.isBlank())) {
+            // 1. Try finding from user_organizational_assignments
+            if (userOrganizationalAssignmentRepository != null && user.getId() != null) {
+                List<com.dypiu.nba.entity.UserOrganizationalAssignment> assignments =
+                        userOrganizationalAssignmentRepository.findByUserIdAndIsActiveTrue(user.getId());
+                if (assignments != null) {
+                    for (com.dypiu.nba.entity.UserOrganizationalAssignment a : assignments) {
+                        if (a.getMasterProgrammeId() != null && !a.getMasterProgrammeId().isBlank()) {
+                            String r = a.getRole();
+                            if (r != null && (r.equalsIgnoreCase("PROGRAMME_COORDINATOR") || r.equalsIgnoreCase("PC"))) {
+                                effectiveMasterProgrammeId = a.getMasterProgrammeId();
+                                if (effectiveDepartmentId == null) effectiveDepartmentId = a.getDepartmentId();
+                                if (effectiveSchoolId == null) effectiveSchoolId = a.getSchoolId();
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 2. Try finding from programme batches where user is coordinator
+            if ((effectiveMasterProgrammeId == null || effectiveMasterProgrammeId.isBlank()) && programmeBatchRepository != null) {
+                if (user.getEmail() != null && !user.getEmail().isBlank()) {
+                    List<com.dypiu.nba.entity.ProgrammeBatch> batches = programmeBatchRepository.findByCoordinatorEmailIgnoreCaseAndDeletedAtIsNull(user.getEmail().trim());
+                    if (batches != null && !batches.isEmpty()) {
+                        for (com.dypiu.nba.entity.ProgrammeBatch b : batches) {
+                            if (b.getMasterProgrammeId() != null && !b.getMasterProgrammeId().isBlank()) {
+                                effectiveMasterProgrammeId = b.getMasterProgrammeId();
+                                break;
+                            }
+                        }
+                    }
+                }
+                if ((effectiveMasterProgrammeId == null || effectiveMasterProgrammeId.isBlank()) && user.getId() != null) {
+                    List<com.dypiu.nba.entity.ProgrammeBatch> batches = programmeBatchRepository.findByCoordinatorIdAndDeletedAtIsNull(user.getId());
+                    if (batches != null && !batches.isEmpty()) {
+                        for (com.dypiu.nba.entity.ProgrammeBatch b : batches) {
+                            if (b.getMasterProgrammeId() != null && !b.getMasterProgrammeId().isBlank()) {
+                                effectiveMasterProgrammeId = b.getMasterProgrammeId();
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 3. Try finding from master programmes where user is coordinator
+            if ((effectiveMasterProgrammeId == null || effectiveMasterProgrammeId.isBlank()) && masterProgrammeRepository != null) {
+                if (user.getEmail() != null && !user.getEmail().isBlank()) {
+                    List<com.dypiu.nba.entity.MasterProgramme> progs = masterProgrammeRepository.findByDeletedAtIsNull();
+                    if (progs != null) {
+                        for (com.dypiu.nba.entity.MasterProgramme p : progs) {
+                            if (p.getCoordinatorEmail() != null && p.getCoordinatorEmail().trim().equalsIgnoreCase(user.getEmail().trim())) {
+                                effectiveMasterProgrammeId = p.getId();
+                                if (effectiveDepartmentId == null) effectiveDepartmentId = p.getDepartmentId();
+                                break;
+                            }
+                        }
+                    }
+                }
             }
         }
 

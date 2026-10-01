@@ -3867,7 +3867,9 @@ public class AcademicService {
     public Map<String, Object> assignHodCoordinator(Map<String, Object> payload) {
         String progId = payload != null && payload.get("masterProgrammeId") != null
                 ? payload.get("masterProgrammeId").toString()
-                : (payload != null && payload.get("id") != null ? payload.get("id").toString() : null);
+                : (payload != null && payload.get("programmeId") != null
+                ? payload.get("programmeId").toString()
+                : (payload != null && payload.get("id") != null ? payload.get("id").toString() : null));
         String name = payload != null && payload.get("coordinatorName") != null
                 ? payload.get("coordinatorName").toString()
                 : (payload != null && payload.get("coordinator") != null ? payload.get("coordinator").toString() : "");
@@ -3882,6 +3884,48 @@ public class AcademicService {
                 p.setCoordinator(name);
                 p.setCoordinatorEmail(email);
                 saveProgramme(p);
+
+                // Synchronize coordinator user's organizational scope
+                if (email != null && !email.isBlank()) {
+                    String cleanEmail = email.trim();
+                    userRepository.findByUsernameIgnoreCaseOrEmailIgnoreCase(cleanEmail, cleanEmail)
+                            .or(() -> userRepository.findByEmail(cleanEmail))
+                            .ifPresent(u -> {
+                                boolean userUpdated = false;
+                                if (u.getMasterProgrammeId() == null || u.getMasterProgrammeId().isBlank()) {
+                                    u.setMasterProgrammeId(progId);
+                                    userUpdated = true;
+                                }
+                                List<String> roleList = new ArrayList<>(u.getRoleList());
+                                if (!roleList.contains("PROGRAMME_COORDINATOR") && !roleList.contains("PC")) {
+                                    roleList.add("PROGRAMME_COORDINATOR");
+                                    u.setRoleList(roleList);
+                                    userUpdated = true;
+                                }
+                                if (userUpdated) {
+                                    userRepository.save(u);
+                                }
+
+                                if (userOrganizationalAssignmentRepository != null) {
+                                    String schoolId = p.getDepartmentId() != null
+                                            ? departmentRepository.findById(p.getDepartmentId()).map(Department::getSchoolId).orElse(null)
+                                            : null;
+                                    List<com.dypiu.nba.entity.UserOrganizationalAssignment> existing =
+                                            userOrganizationalAssignmentRepository.findMatchingAssignments(u.getId(), "PROGRAMME_COORDINATOR", schoolId, p.getDepartmentId(), progId);
+                                    if (existing == null || existing.isEmpty()) {
+                                        com.dypiu.nba.entity.UserOrganizationalAssignment newAssign = com.dypiu.nba.entity.UserOrganizationalAssignment.builder()
+                                                .userId(u.getId())
+                                                .role("PROGRAMME_COORDINATOR")
+                                                .schoolId(schoolId)
+                                                .departmentId(p.getDepartmentId())
+                                                .masterProgrammeId(progId)
+                                                .isActive(true)
+                                                .build();
+                                        userOrganizationalAssignmentRepository.save(newAssign);
+                                    }
+                                }
+                            });
+                }
             }
         }
         Map<String, Object> res = new LinkedHashMap<>();

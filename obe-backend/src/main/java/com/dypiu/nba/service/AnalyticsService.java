@@ -64,6 +64,9 @@ public class AnalyticsService {
     private final BatchLifecycleService batchLifecycleService;
     private final StudentRepository studentRepository;
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.dypiu.nba.repository.UserOrganizationalAssignmentRepository userOrganizationalAssignmentRepository;
+
     // ==========================================
     // 1. KPI ENDPOINT
     // ==========================================
@@ -4391,11 +4394,24 @@ public class AnalyticsService {
                     effectiveSchoolId = userScope.getSchoolId();
                 }
             } else if (userScope.isProgrammeCoordinator()) {
-                String allowedProg = userScope.getRequiredMasterProgrammeId();
-                if (effectiveMasterProgrammeId != null && !effectiveMasterProgrammeId.equalsIgnoreCase(allowedProg)) {
-                    throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Unauthorized programme scope");
+                Set<String> accessibleProgs = getAccessibleMasterProgrammeIds(userScope);
+                if (accessibleProgs.isEmpty() && !userScope.hasProgrammeScope()) {
+                    throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                            "Access denied: Authenticated user '" + (userScope.getEmail() != null ? userScope.getEmail() : userScope.getUsername()) + "' has no assigned programme scope.");
                 }
-                effectiveMasterProgrammeId = allowedProg;
+
+                if (effectiveMasterProgrammeId != null && !effectiveMasterProgrammeId.isBlank()) {
+                    boolean isAuthorized = accessibleProgs.contains(effectiveMasterProgrammeId)
+                            || (userScope.hasProgrammeScope() && effectiveMasterProgrammeId.equalsIgnoreCase(userScope.getMasterProgrammeId()));
+                    if (!isAuthorized) {
+                        throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Unauthorized programme scope");
+                    }
+                } else if (!accessibleProgs.isEmpty()) {
+                    effectiveMasterProgrammeId = accessibleProgs.iterator().next();
+                } else {
+                    effectiveMasterProgrammeId = userScope.getRequiredMasterProgrammeId();
+                }
+
                 if (userScope.hasDepartmentScope()) {
                     effectiveDepartmentId = userScope.getDepartmentId();
                 }
@@ -4406,6 +4422,71 @@ public class AnalyticsService {
         }
 
         return new ResolvedScope(effectiveSchoolId, effectiveDepartmentId, effectiveMasterProgrammeId, effectiveProgrammeBatchId);
+    }
+
+    private Set<String> getAccessibleMasterProgrammeIds(CurrentUserScope userScope) {
+        Set<String> progIds = new LinkedHashSet<>();
+        if (userScope == null) return progIds;
+
+        // 1. Direct scope from user / JWT if present
+        if (userScope.hasProgrammeScope()) {
+            progIds.add(userScope.getMasterProgrammeId());
+        }
+
+        // 2. Check organizational assignments if available
+        if (userScope.getUserId() != null && userOrganizationalAssignmentRepository != null) {
+            List<com.dypiu.nba.entity.UserOrganizationalAssignment> assignments =
+                    userOrganizationalAssignmentRepository.findByUserIdAndIsActiveTrue(userScope.getUserId());
+            if (assignments != null) {
+                for (com.dypiu.nba.entity.UserOrganizationalAssignment a : assignments) {
+                    if (a.getMasterProgrammeId() != null && !a.getMasterProgrammeId().isBlank()) {
+                        String r = a.getRole();
+                        if (r != null && (r.equalsIgnoreCase("PROGRAMME_COORDINATOR") || r.equalsIgnoreCase("PC"))) {
+                            progIds.add(a.getMasterProgrammeId());
+                        }
+                    }
+                }
+            }
+        }
+
+        // 3. Check batches where user is coordinator by email or id
+        String email = userScope.getEmail();
+        if (email != null && !email.isBlank()) {
+            List<ProgrammeBatch> batches = programmeBatchRepository.findByCoordinatorEmailIgnoreCaseAndDeletedAtIsNull(email.trim());
+            if (batches != null) {
+                for (ProgrammeBatch b : batches) {
+                    if (b.getMasterProgrammeId() != null && !b.getMasterProgrammeId().isBlank()) {
+                        progIds.add(b.getMasterProgrammeId());
+                    }
+                }
+            }
+        }
+        if (userScope.getUserId() != null) {
+            List<ProgrammeBatch> batchesById = programmeBatchRepository.findByCoordinatorIdAndDeletedAtIsNull(userScope.getUserId());
+            if (batchesById != null) {
+                for (ProgrammeBatch b : batchesById) {
+                    if (b.getMasterProgrammeId() != null && !b.getMasterProgrammeId().isBlank()) {
+                        progIds.add(b.getMasterProgrammeId());
+                    }
+                }
+            }
+        }
+
+        // 4. Check master programmes where user is coordinator by email or name
+        if (email != null && !email.isBlank()) {
+            List<MasterProgramme> progs = masterProgrammeRepository.findByDeletedAtIsNull();
+            if (progs != null) {
+                for (MasterProgramme p : progs) {
+                    if (p.getCoordinatorEmail() != null && p.getCoordinatorEmail().trim().equalsIgnoreCase(email.trim())) {
+                        progIds.add(p.getId());
+                    } else if (userScope.getName() != null && p.getCoordinator() != null && p.getCoordinator().trim().equalsIgnoreCase(userScope.getName().trim())) {
+                        progIds.add(p.getId());
+                    }
+                }
+            }
+        }
+
+        return progIds;
     }
 
     private List<ProgrammeBatch> getBatchesInScope(ResolvedScope scope) {

@@ -488,9 +488,17 @@ public class AuthService {
                         || (user.getMasterProgrammeId() != null && user.getMasterProgrammeId().equals(b.getMasterProgrammeId())))
                 .findFirst().orElse(null);
 
+        List<com.dypiu.nba.entity.MasterProgramme> allProgs = masterProgrammeRepository.findAll();
+        com.dypiu.nba.entity.MasterProgramme matchedProg = allProgs.stream()
+                .filter(p -> p.getDeletedAt() == null && (
+                        (p.getCoordinatorEmail() != null && p.getCoordinatorEmail().equalsIgnoreCase(user.getEmail()))
+                        || (p.getCoordinator() != null && p.getCoordinator().equalsIgnoreCase(user.getName()))
+                        || (user.getMasterProgrammeId() != null && user.getMasterProgrammeId().equals(p.getId()))))
+                .findFirst().orElse(null);
+
         boolean isPcEligible = hasExplicitRoles
                 ? (explicitRoles.contains("PROGRAMME_COORDINATOR") || explicitRoles.contains("PC"))
-                : (user.getRole() == UserRole.PROGRAMME_COORDINATOR || matchedBatch != null);
+                : (user.getRole() == UserRole.PROGRAMME_COORDINATOR || matchedBatch != null || matchedProg != null);
 
         List<com.dypiu.nba.entity.ProgrammeBatchCourse> courses = programmeBatchCourseRepository.findAll();
         int assignedCount = (int) courses.stream().filter(c -> c.getDeletedAt() == null && (
@@ -650,8 +658,8 @@ public class AuthService {
             // 4. PROGRAMME_COORDINATOR Profile (Max 1)
             if (isPcEligible) {
                 String pBatchId = matchedBatch != null ? matchedBatch.getId() : null;
-                String pBatchName = matchedBatch != null ? matchedBatch.getName() : null;
-                String mProgId = matchedBatch != null ? matchedBatch.getMasterProgrammeId() : user.getMasterProgrammeId();
+                String pBatchName = matchedBatch != null ? matchedBatch.getName() : (matchedProg != null ? matchedProg.getName() : null);
+                String mProgId = matchedBatch != null ? matchedBatch.getMasterProgrammeId() : (matchedProg != null ? matchedProg.getId() : user.getMasterProgrammeId());
                 String dId = user.getDepartmentId();
                 if (mProgId != null) {
                     dId = masterProgrammeRepository.findById(mProgId)
@@ -779,6 +787,32 @@ public class AuthService {
             departmentId = user.getDepartmentId();
             if (masterProgrammeId == null) {
                 masterProgrammeId = user.getMasterProgrammeId();
+            }
+        }
+
+        if (("PROGRAMME_COORDINATOR".equalsIgnoreCase(targetRole) || "PC".equalsIgnoreCase(targetRole)) && (masterProgrammeId == null || masterProgrammeId.isBlank())) {
+            if (user.getMasterProgrammeId() != null && !user.getMasterProgrammeId().isBlank()) {
+                masterProgrammeId = user.getMasterProgrammeId();
+            } else if (user.getEmail() != null) {
+                List<com.dypiu.nba.entity.ProgrammeBatch> batches = programmeBatchRepository.findByCoordinatorEmailIgnoreCase(user.getEmail());
+                if (batches != null && !batches.isEmpty()) {
+                    for (com.dypiu.nba.entity.ProgrammeBatch b : batches) {
+                        if (b.getMasterProgrammeId() != null && !b.getMasterProgrammeId().isBlank()) {
+                            masterProgrammeId = b.getMasterProgrammeId();
+                            break;
+                        }
+                    }
+                }
+                if (masterProgrammeId == null || masterProgrammeId.isBlank()) {
+                    List<com.dypiu.nba.entity.MasterProgramme> progs = masterProgrammeRepository.findAll();
+                    for (com.dypiu.nba.entity.MasterProgramme p : progs) {
+                        if (p.getDeletedAt() == null && p.getCoordinatorEmail() != null && p.getCoordinatorEmail().trim().equalsIgnoreCase(user.getEmail().trim())) {
+                            masterProgrammeId = p.getId();
+                            if (departmentId == null) departmentId = p.getDepartmentId();
+                            break;
+                        }
+                    }
+                }
             }
         }
 
