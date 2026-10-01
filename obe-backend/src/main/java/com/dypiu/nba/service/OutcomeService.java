@@ -861,6 +861,9 @@ public class OutcomeService {
                 .filter(c -> !processedIds.contains(c.getId()))
                 .collect(Collectors.toList());
         if (!toDelete.isEmpty()) {
+            List<String> toDeleteIds = toDelete.stream().map(CourseOutcome::getId).collect(Collectors.toList());
+            coPoMappingRepository.deleteByCourseOutcomeIdIn(toDeleteIds);
+            coPsoMappingRepository.deleteByCourseOutcomeIdIn(toDeleteIds);
             coRepository.deleteAll(toDelete);
         }
 
