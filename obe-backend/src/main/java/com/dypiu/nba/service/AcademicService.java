@@ -458,7 +458,7 @@ public class AcademicService {
             List<ProgrammeBatch> batches = pIds.isEmpty() ? Collections.emptyList() : programmeBatchRepository.findByMasterProgrammeIdIn(pIds);
             Set<String> bIds = batches.stream().map(ProgrammeBatch::getId).collect(Collectors.toSet());
             offerings = bIds.isEmpty() ? Collections.emptyList() : programmeBatchCourseRepository.findByProgrammeBatchIdInAndDeletedAtIsNull(bIds);
-        } else if (scope != null && scope.isDirector()) {
+        } else if (scope != null && (scope.isDirector() || scope.isSchoolProgrammeCoordinator())) {
             List<Department> depts = departmentRepository.findBySchoolId(scope.getRequiredSchoolId());
             List<String> dIds = depts.stream().map(Department::getId).toList();
             List<MasterProgramme> progs = dIds.isEmpty() ? Collections.emptyList() : masterProgrammeRepository.findByDepartmentIdInAndDeletedAtIsNull(dIds);
@@ -466,7 +466,7 @@ public class AcademicService {
             List<ProgrammeBatch> batches = pIds.isEmpty() ? Collections.emptyList() : programmeBatchRepository.findByMasterProgrammeIdIn(pIds);
             Set<String> bIds = batches.stream().map(ProgrammeBatch::getId).collect(Collectors.toSet());
             offerings = bIds.isEmpty() ? Collections.emptyList() : programmeBatchCourseRepository.findByProgrammeBatchIdInAndDeletedAtIsNull(bIds);
-        } else if (scope != null && scope.isIqac()) {
+        } else if (scope != null && (scope.isIqac() || scope.isTrustee())) {
             offerings = programmeBatchCourseRepository.findByDeletedAtIsNull();
         } else {
             offerings = (programmeBatchId != null && !programmeBatchId.isBlank()) ? programmeBatchCourseRepository.findByProgrammeBatchIdAndDeletedAtIsNull(programmeBatchId) : programmeBatchCourseRepository.findByDeletedAtIsNull();
@@ -1602,7 +1602,7 @@ public class AcademicService {
         }
 
         // Apply organizational scope isolation for Director, HOD, and MasterProgramme Coordinator
-        if (scope != null && scope.isDirector()) {
+        if (scope != null && (scope.isDirector() || scope.isSchoolProgrammeCoordinator())) {
             String schoolId = scope.getRequiredSchoolId();
             users = users.stream()
                     .filter(u -> u.getSchoolId() != null && u.getSchoolId().equalsIgnoreCase(schoolId))
@@ -2464,7 +2464,7 @@ public class AcademicService {
         CurrentUserScope scope = getScope();
 
         // 1. Validate requested filters against the user's scope
-        if (scope != null && !scope.isIqac()) {
+        if (scope != null && !scope.isIqac() && !scope.isTrustee()) {
             if (departmentId != null && !departmentId.isBlank()) {
                 requestScopeAuthorizer.assertRequestedDepartment(departmentId);
             }
@@ -2517,7 +2517,7 @@ public class AcademicService {
                         }
                     }
                 }
-            } else if (scope.isDirector()) {
+            } else if (scope.isDirector() || scope.isSchoolProgrammeCoordinator()) {
                 if (targetDepartmentId == null) {
                     List<Department> depts = departmentRepository.findBySchoolId(scope.getRequiredSchoolId());
                     List<String> deptIds = depts.stream().map(Department::getId).toList();
@@ -2950,10 +2950,10 @@ public class AcademicService {
                 .filter(c -> c.getDeletedAt() == null)
                 .map(this::enrichOffering)
                 .toList();
-        if (scope == null || scope.isIqac()) {
+        if (scope == null || scope.isIqac() || scope.isTrustee()) {
             return all;
         }
-        if (scope.isDirector()) {
+        if (scope.isDirector() || scope.isSchoolProgrammeCoordinator()) {
             List<Department> depts = departmentRepository.findBySchoolId(scope.getRequiredSchoolId());
             List<String> deptIds = depts.stream().map(Department::getId).toList();
             List<MasterProgramme> progs = deptIds.isEmpty() ? Collections.emptyList() : masterProgrammeRepository.findByDepartmentIdInAndDeletedAtIsNull(deptIds);
