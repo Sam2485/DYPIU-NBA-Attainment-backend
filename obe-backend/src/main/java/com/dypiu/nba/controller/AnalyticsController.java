@@ -17,7 +17,7 @@ import java.util.List;
 @RestController
 @RequestMapping({"/analytics", "/api/v1/analytics"})
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyRole('IQAC', 'SUPER_ADMIN', 'DIRECTOR', 'HOD', 'PROGRAMME_COORDINATOR', 'FACULTY', 'COURSE_COORDINATOR', 'ADMIN')")
+@PreAuthorize("hasAnyRole('IQAC', 'TRUSTEE', 'SUPER_ADMIN', 'DIRECTOR', 'SCHOOL_PROGRAMME_COORDINATOR', 'HOD', 'PROGRAMME_COORDINATOR', 'FACULTY', 'COURSE_COORDINATOR', 'ADMIN')")
 public class AnalyticsController {
 
     private final AnalyticsService analyticsService;

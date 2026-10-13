@@ -256,6 +256,12 @@ public class CurrentUserScopeService {
         if (clean.equals("IQAC") || clean.equals("ADMIN")) {
             return com.dypiu.nba.entity.UserRole.IQAC;
         }
+        if (clean.equals("TRUSTEE") || clean.equals("TRUSTY")) {
+            return com.dypiu.nba.entity.UserRole.TRUSTEE;
+        }
+        if (clean.equals("SCHOOL_PROGRAMME_COORDINATOR") || clean.equals("SCHOOL_COORDINATOR") || clean.equals("SCHOOL PROGRAMME COORDINATOR")) {
+            return com.dypiu.nba.entity.UserRole.SCHOOL_PROGRAMME_COORDINATOR;
+        }
         try {
             return com.dypiu.nba.entity.UserRole.valueOf(clean);
         } catch (Exception e) {

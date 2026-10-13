@@ -154,7 +154,7 @@ public class ReportAccessService {
     public void validateProgrammeAccess(User user, String masterProgrammeId) {
         log.debug("[ReportAccessService] validateProgrammeAccess called | user: " + (user != null ? user.getEmail() : "null") + " | masterProgrammeId: " + masterProgrammeId);
         if (user == null || masterProgrammeId == null) return;
-        if (user.getRole() == UserRole.IQAC) return;
+        if (user.getRole() == UserRole.IQAC || user.getRole() == UserRole.TRUSTEE) return;
 
         MasterProgramme prog = masterProgrammeRepository.findById(masterProgrammeId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Programme not found: " + masterProgrammeId));
@@ -191,7 +191,7 @@ public class ReportAccessService {
             return;
         }
 
-        if (user.getRole() == UserRole.DIRECTOR) {
+        if (user.getRole() == UserRole.DIRECTOR || user.getRole() == UserRole.SCHOOL_PROGRAMME_COORDINATOR) {
             if (user.getSchoolId() != null && dept != null && !user.getSchoolId().equals(dept.getSchoolId())) {
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Programme is outside your school scope.");
             }
@@ -202,7 +202,7 @@ public class ReportAccessService {
     public void validateBatchAccess(User user, String programmeBatchId) {
         log.debug("[ReportAccessService] validateBatchAccess called | user: " + (user != null ? user.getEmail() : "null") + " | programmeBatchId: " + programmeBatchId);
         if (user == null || programmeBatchId == null) return;
-        if (user.getRole() == UserRole.IQAC) return;
+        if (user.getRole() == UserRole.IQAC || user.getRole() == UserRole.TRUSTEE) return;
 
         ProgrammeBatch batch = programmeBatchRepository.findById(programmeBatchId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Batch not found: " + programmeBatchId));
@@ -231,7 +231,7 @@ public class ReportAccessService {
     public void validateCourseOfferingAccess(User user, String programmeBatchCourseId) {
         log.debug("[ReportAccessService] validateCourseOfferingAccess called | user: " + (user != null ? user.getEmail() : "null") + " | programmeBatchCourseId: " + programmeBatchCourseId);
         if (user == null || programmeBatchCourseId == null) return;
-        if (user.getRole() == UserRole.IQAC) return;
+        if (user.getRole() == UserRole.IQAC || user.getRole() == UserRole.TRUSTEE) return;
 
         ProgrammeBatchCourse offering = programmeBatchCourseRepository.findById(programmeBatchCourseId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Course Offering not found: " + programmeBatchCourseId));
@@ -293,7 +293,7 @@ public class ReportAccessService {
     public void validateCourseCoordinatorAccess(User user, String programmeBatchCourseId) {
         log.debug("[ReportAccessService] validateCourseCoordinatorAccess called | user: " + (user != null ? user.getEmail() : "null") + " | programmeBatchCourseId: " + programmeBatchCourseId);
         if (user == null || programmeBatchCourseId == null) return;
-        if (user.getRole() == UserRole.IQAC || user.getRole() == UserRole.DIRECTOR || user.getRole() == UserRole.HOD || user.getRole() == UserRole.PROGRAMME_COORDINATOR) {
+        if (user.getRole() == UserRole.IQAC || user.getRole() == UserRole.TRUSTEE || user.getRole() == UserRole.DIRECTOR || user.getRole() == UserRole.SCHOOL_PROGRAMME_COORDINATOR || user.getRole() == UserRole.HOD || user.getRole() == UserRole.PROGRAMME_COORDINATOR) {
             validateCourseOfferingAccess(user, programmeBatchCourseId);
             return;
         }
@@ -317,7 +317,7 @@ public class ReportAccessService {
     public void validateCourseAccess(User user, String masterCourseId) {
         log.debug("[ReportAccessService] validateCourseAccess called | user: " + (user != null ? user.getEmail() : "null") + " | masterCourseId: " + masterCourseId);
         if (user == null || masterCourseId == null) return;
-        if (user.getRole() == UserRole.IQAC) return;
+        if (user.getRole() == UserRole.IQAC || user.getRole() == UserRole.TRUSTEE) return;
 
         ProgrammeBatchCourse course = programmeBatchCourseRepository.findById(masterCourseId).orElse(null);
         if (course != null) {
@@ -372,11 +372,11 @@ public class ReportAccessService {
         List<ProgrammeBatch> allowedBatches = new ArrayList<>();
         List<ProgrammeBatchCourse> allowedOfferings = new ArrayList<>();
 
-        if (user == null || user.getRole() == UserRole.IQAC) {
+        if (user == null || user.getRole() == UserRole.IQAC || user.getRole() == UserRole.TRUSTEE) {
             allowedProgrammes = masterProgrammeRepository.findAll();
             allowedBatches = programmeBatchRepository.findAll();
             allowedOfferings = programmeBatchCourseRepository.findAll();
-        } else if (user.getRole() == UserRole.DIRECTOR) {
+        } else if (user.getRole() == UserRole.DIRECTOR || user.getRole() == UserRole.SCHOOL_PROGRAMME_COORDINATOR) {
             if (user.getSchoolId() != null) {
                 List<Department> depts = departmentRepository.findBySchoolId(user.getSchoolId());
                 Set<String> deptIds = depts.stream().map(Department::getId).collect(Collectors.toSet());

@@ -31,7 +31,7 @@ public class RequestScopeAuthorizer {
         if (blank(schoolId)) return;
         CurrentUserScope scope = currentUserScopeService.getCurrentUserScope();
         if (global(scope)) return;
-        if ((scope.isDirector() || scope.isHod() || scope.isProgrammeCoordinator() || scope.isFaculty())
+        if ((scope.isDirector() || scope.isSchoolProgrammeCoordinator() || scope.isHod() || scope.isProgrammeCoordinator() || scope.isFaculty())
                 && scope.hasSchoolScope()
                 && !scope.getRequiredSchoolId().equalsIgnoreCase(schoolId.trim())) {
             forbidden("school", schoolId);
@@ -195,7 +195,7 @@ public class RequestScopeAuthorizer {
     }
 
     private boolean global(CurrentUserScope scope) {
-        return scope == null || scope.isIqac();
+        return scope == null || scope.isIqac() || scope.isTrustee();
     }
 
     private boolean blank(String value) {

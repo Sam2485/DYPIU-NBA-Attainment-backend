@@ -282,7 +282,7 @@ public class DashboardController {
             if (effectiveProgId != null && !effectiveProgId.isBlank()) {
                 targetProgId = effectiveProgId.trim();
             }
-        } else if (scope.isDirector()) {
+        } else if (scope.isDirector() || scope.isSchoolProgrammeCoordinator()) {
             if (effectiveProgId != null && !effectiveProgId.isBlank()) {
                 targetProgId = effectiveProgId.trim();
             }
@@ -323,7 +323,7 @@ public class DashboardController {
             if (prog.getDepartmentId() != null && !prog.getDepartmentId().equals(scope.getRequiredDepartmentId())) {
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: MasterProgramme does not belong to your assigned department.");
             }
-        } else if (scope.isDirector()) {
+        } else if (scope.isDirector() || scope.isSchoolProgrammeCoordinator()) {
             if (prog.getDepartmentId() != null) {
                 Department dept = departmentRepository.findById(prog.getDepartmentId()).orElse(null);
                 if (dept != null && dept.getSchoolId() != null && !dept.getSchoolId().equals(scope.getRequiredSchoolId())) {

@@ -18,7 +18,7 @@ import java.security.Principal;
 @RestController
 @RequestMapping({"/emmu", "/api/v1/emmu", "/api/v1/analytics/emmu"})
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyRole('IQAC', 'SUPER_ADMIN', 'DIRECTOR', 'HOD', 'PROGRAMME_COORDINATOR', 'FACULTY', 'COURSE_COORDINATOR', 'ADMIN')")
+@PreAuthorize("hasAnyRole('IQAC', 'TRUSTEE', 'SUPER_ADMIN', 'DIRECTOR', 'SCHOOL_PROGRAMME_COORDINATOR', 'HOD', 'PROGRAMME_COORDINATOR', 'FACULTY', 'COURSE_COORDINATOR', 'ADMIN')")
 public class EmmuController {
 
     private final EmmuEvidenceService emmuEvidenceService;

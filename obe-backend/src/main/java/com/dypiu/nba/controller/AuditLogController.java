@@ -28,8 +28,8 @@ public class AuditLogController {
 
     private void enforceIqac(Principal principal) {
         CurrentUserScope scope = currentUserScopeService.getCurrentUserScope(principal);
-        if (scope == null || !scope.isIqac()) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Audit logs can only be viewed by IQAC.");
+        if (scope == null || (!scope.isIqac() && !scope.isTrustee())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Audit logs can only be viewed by IQAC or Trustee.");
         }
     }
 
