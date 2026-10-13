@@ -615,10 +615,10 @@ public class UserController {
                         .masterProgrammeId(progId)
                         .build());
             }
-        } else if ("IQAC".equalsIgnoreCase(roleStr)) {
+        } else if ("IQAC".equalsIgnoreCase(roleStr) || "TRUSTEE".equalsIgnoreCase(roleStr)) {
             assignmentService.addAssignment(user.getId(), AssignmentRequestDto.builder()
-                    .role("IQAC")
-                    .schoolId(null)
+                    .role(roleStr.toUpperCase())
+                    .schoolId(user.getSchoolId())
                     .departmentId(null)
                     .masterProgrammeId(null)
                     .build());
