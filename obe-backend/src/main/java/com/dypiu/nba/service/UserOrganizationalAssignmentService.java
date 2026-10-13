@@ -218,10 +218,12 @@ public class UserOrganizationalAssignmentService {
         List<UserOrganizationalAssignment> assignments = assignmentRepository.findByUserIdAndIsActiveTrue(user.getId());
         Set<String> rolesSet = new LinkedHashSet<>();
 
-        // If user already had explicit IQAC role, preserve it
+        // If user already had explicit IQAC or TRUSTEE role, preserve it
         for (String r : user.getRoleList()) {
             if ("IQAC".equalsIgnoreCase(r)) {
                 rolesSet.add("IQAC");
+            } else if ("TRUSTEE".equalsIgnoreCase(r) || "TRUSTY".equalsIgnoreCase(r)) {
+                rolesSet.add("TRUSTEE");
             }
         }
 
@@ -261,7 +263,7 @@ public class UserOrganizationalAssignmentService {
             if (user.getMasterProgrammeId() == null || assignments.stream().noneMatch(a -> Objects.equals(a.getMasterProgrammeId(), user.getMasterProgrammeId()))) {
                 user.setMasterProgrammeId(first.getMasterProgrammeId());
             }
-        } else if (user.getRole() != UserRole.IQAC && !rolesSet.contains("IQAC")) {
+        } else if (user.getRole() != UserRole.IQAC && user.getRole() != UserRole.TRUSTEE && !rolesSet.contains("IQAC") && !rolesSet.contains("TRUSTEE")) {
             user.setSchoolId(null);
             user.setDepartmentId(null);
             user.setMasterProgrammeId(null);
@@ -356,6 +358,10 @@ public class UserOrganizationalAssignmentService {
             role = "DIRECTOR";
         } else if (rawRole.equals("IQAC")) {
             role = "IQAC";
+        } else if (rawRole.equals("TRUSTEE") || rawRole.equals("TRUSTY")) {
+            role = "TRUSTEE";
+        } else if (rawRole.equals("SCHOOL_PROGRAMME_COORDINATOR") || rawRole.equals("SCHOOL_COORDINATOR") || rawRole.equals("SCHOOL PROGRAMME COORDINATOR")) {
+            role = "SCHOOL_PROGRAMME_COORDINATOR";
         } else {
             role = rawRole;
         }
@@ -383,16 +389,16 @@ public class UserOrganizationalAssignmentService {
         String progId = req.getMasterProgrammeId() != null && !req.getMasterProgrammeId().isBlank() ? req.getMasterProgrammeId().trim() : null;
 
         // Role-specific scoping rules (Requirements 2, 7, 8, 14, 17)
-        if ("IQAC".equals(role)) {
-            // IQAC is institution-wide, schoolId is optional
-            return new ValidatedScope("IQAC", schoolId, null, null);
+        if ("IQAC".equals(role) || "TRUSTEE".equals(role)) {
+            // IQAC and TRUSTEE are institution-wide, schoolId is optional
+            return new ValidatedScope(role, schoolId, null, null);
         }
 
-        if ("DIRECTOR".equals(role)) {
+        if ("DIRECTOR".equals(role) || "SCHOOL_PROGRAMME_COORDINATOR".equals(role)) {
             if (schoolId == null) {
-                throw new BadRequestException("School is required for Director assignment.");
+                throw new BadRequestException("School is required for " + ("DIRECTOR".equals(role) ? "Director" : "School Programme Coordinator") + " assignment.");
             }
-            return new ValidatedScope("DIRECTOR", schoolId, null, null);
+            return new ValidatedScope(role, schoolId, null, null);
         }
 
         if ("HOD".equals(role)) {

@@ -89,7 +89,7 @@ public class AcademicService {
     private void enforceSchoolScope(String schoolId) {
         CurrentUserScope scope = getScope();
         if (scope == null || scope.isIqac()) return;
-        if (scope.isDirector() || scope.isHod() || scope.isProgrammeCoordinator()) {
+        if (scope.isDirector() || scope.isSchoolProgrammeCoordinator() || scope.isHod() || scope.isProgrammeCoordinator()) {
             String requiredSchoolId = scope.getRequiredSchoolId();
             if (schoolId != null && !schoolId.equals(requiredSchoolId)) {
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Resource is outside your assigned school scope.");
@@ -125,7 +125,7 @@ public class AcademicService {
             }
             return;
         }
-        if (scope.isDirector()) {
+        if (scope.isDirector() || scope.isSchoolProgrammeCoordinator()) {
             if (departmentId != null) {
                 Department dept = departmentRepository.findById(departmentId).orElse(null);
                 if (dept != null && dept.getSchoolId() != null && !dept.getSchoolId().equals(scope.getRequiredSchoolId())) {
@@ -1440,7 +1440,7 @@ public class AcademicService {
         if (scope == null || scope.isIqac()) {
             return departmentRepository.findAll();
         }
-        if (scope.isDirector()) {
+        if (scope.isDirector() || scope.isSchoolProgrammeCoordinator()) {
             return departmentRepository.findBySchoolId(scope.getRequiredSchoolId());
         }
         if (scope.isHod()) {
@@ -1469,7 +1469,7 @@ public class AcademicService {
         CurrentUserScope scope = getScope();
         if (scope != null && !scope.isIqac()) {
             enforceSchoolScope(schoolId);
-            if (scope.isDirector()) {
+            if (scope.isDirector() || scope.isSchoolProgrammeCoordinator()) {
                 return departmentRepository.findBySchoolId(scope.getRequiredSchoolId());
             }
             if (scope.isHod() || scope.isProgrammeCoordinator() || scope.isFaculty()) {
@@ -2117,7 +2117,7 @@ public class AcademicService {
     public List<MasterProgramme> getAllProgrammes() {
         log.debug("[AcademicService] getAllProgrammes called");
         CurrentUserScope scope = getScope();
-        if (scope != null && scope.isDirector()) {
+        if (scope != null && (scope.isDirector() || scope.isSchoolProgrammeCoordinator())) {
             return getProgrammesBySchool(scope.getRequiredSchoolId());
         }
         if (scope != null && scope.isHod()) {
@@ -2225,7 +2225,7 @@ public class AcademicService {
             return getAllProgrammes();
         }
         CurrentUserScope scope = getScope();
-        if (scope != null && scope.isDirector()) {
+        if (scope != null && (scope.isDirector() || scope.isSchoolProgrammeCoordinator())) {
             String dirSchoolId = scope.getRequiredSchoolId();
             if (schoolId != null && !schoolId.isBlank() && !schoolId.trim().equalsIgnoreCase(dirSchoolId)) {
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: You cannot view programmes of a different school.");
@@ -3503,7 +3503,7 @@ public class AcademicService {
         } else if (scope != null && scope.isHod()) {
             assignedProgrammes = getAllProgrammes();
             assignedProgrammes.forEach(this::enrichProgrammeCoordinator);
-        } else if (scope != null && scope.isDirector()) {
+        } else if (scope != null && (scope.isDirector() || scope.isSchoolProgrammeCoordinator())) {
             assignedProgrammes = getProgrammesBySchool(scope.getRequiredSchoolId());
             assignedProgrammes.forEach(this::enrichProgrammeCoordinator);
         }

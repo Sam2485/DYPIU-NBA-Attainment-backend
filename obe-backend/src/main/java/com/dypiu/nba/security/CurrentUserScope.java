@@ -71,6 +71,14 @@ public final class CurrentUserScope implements Serializable {
         return role == UserRole.IQAC;
     }
 
+    public boolean isTrustee() {
+        return role == UserRole.TRUSTEE;
+    }
+
+    public boolean isSchoolProgrammeCoordinator() {
+        return role == UserRole.SCHOOL_PROGRAMME_COORDINATOR;
+    }
+
     /**
      * Retrieves the mandatory schoolId for the authenticated user.
      * Throws a 403 Forbidden ResponseStatusException if schoolId is missing or empty.

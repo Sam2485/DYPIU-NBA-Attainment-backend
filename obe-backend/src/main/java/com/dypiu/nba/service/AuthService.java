@@ -455,6 +455,14 @@ public class AuthService {
                 ? explicitRoles.contains("IQAC")
                 : (user.getRole() == UserRole.IQAC);
 
+        boolean isTrusteeEligible = hasExplicitRoles
+                ? (explicitRoles.contains("TRUSTEE") || explicitRoles.contains("TRUSTY"))
+                : (user.getRole() == UserRole.TRUSTEE);
+
+        boolean isSpcEligible = hasExplicitRoles
+                ? (explicitRoles.contains("SCHOOL_PROGRAMME_COORDINATOR") || explicitRoles.contains("SCHOOL_COORDINATOR"))
+                : (user.getRole() == UserRole.SCHOOL_PROGRAMME_COORDINATOR);
+
         // Check contextual DB matches if not explicitly restricted
         List<com.dypiu.nba.entity.School> allSchools = schoolRepository.findAll();
         com.dypiu.nba.entity.School matchedSchool = allSchools.stream()
@@ -527,6 +535,20 @@ public class AuthService {
                     .build());
         }
 
+        // 1b. TRUSTEE Profile (Max 1)
+        if (isTrusteeEligible) {
+            boolean isCur = "TRUSTEE".equalsIgnoreCase(activeRole);
+            profiles.add(UserProfileRoleDto.builder()
+                    .role("TRUSTEE")
+                    .roleCode("TRUSTEE")
+                    .title("Trustee / Board Member")
+                    .displayName("Trustee")
+                    .description("Institution-wide governance and observation")
+                    .isActive(isCur)
+                    .isCurrent(isCur)
+                    .build());
+        }
+
         List<com.dypiu.nba.entity.UserOrganizationalAssignment> orgAssignments = 
                 userOrganizationalAssignmentRepository != null 
                         ? userOrganizationalAssignmentRepository.findByUserIdAndIsActiveTrue(user.getId()) 
@@ -535,7 +557,33 @@ public class AuthService {
         if (!orgAssignments.isEmpty()) {
             for (com.dypiu.nba.entity.UserOrganizationalAssignment a : orgAssignments) {
                 String role = a.getRole().toUpperCase();
-                if ("DIRECTOR".equals(role)) {
+                if ("TRUSTEE".equals(role) || "TRUSTY".equals(role)) {
+                    boolean isCur = "TRUSTEE".equalsIgnoreCase(activeRole);
+                    profiles.add(UserProfileRoleDto.builder()
+                            .role("TRUSTEE")
+                            .roleCode("TRUSTEE")
+                            .title("Trustee / Board Member")
+                            .displayName("Trustee")
+                            .description("Institution-wide governance and observation")
+                            .isActive(isCur)
+                            .isCurrent(isCur)
+                            .build());
+                } else if ("SCHOOL_PROGRAMME_COORDINATOR".equals(role) || "SCHOOL_COORDINATOR".equals(role)) {
+                    com.dypiu.nba.entity.School s = a.getSchoolId() != null ? schoolRepository.findById(a.getSchoolId()).orElse(null) : null;
+                    String sName = s != null ? s.getName() : a.getSchoolId();
+                    boolean isCur = "SCHOOL_PROGRAMME_COORDINATOR".equalsIgnoreCase(activeRole) && Objects.equals(user.getSchoolId(), a.getSchoolId());
+                    profiles.add(UserProfileRoleDto.builder()
+                            .role("SCHOOL_PROGRAMME_COORDINATOR")
+                            .roleCode("SCHOOL_PROGRAMME_COORDINATOR")
+                            .title("School Programme Coordinator")
+                            .displayName(sName != null ? "School Programme Coordinator (" + sName + ")" : "School Programme Coordinator")
+                            .description("School-wide academic programme coordination & observation" + (sName != null ? " for " + sName : ""))
+                            .schoolId(a.getSchoolId())
+                            .schoolName(sName)
+                            .isActive(isCur)
+                            .isCurrent(isCur)
+                            .build());
+                } else if ("DIRECTOR".equals(role)) {
                     com.dypiu.nba.entity.School s = a.getSchoolId() != null ? schoolRepository.findById(a.getSchoolId()).orElse(null) : null;
                     String sName = s != null ? s.getName() : a.getSchoolId();
                     boolean isCur = "DIRECTOR".equalsIgnoreCase(activeRole) && Objects.equals(user.getSchoolId(), a.getSchoolId());
@@ -617,6 +665,24 @@ public class AuthService {
             }
         } else {
             // Legacy discovery fallback
+            // 1c. SCHOOL_PROGRAMME_COORDINATOR Profile (Max 1)
+            if (isSpcEligible) {
+                String sId = matchedSchool != null ? matchedSchool.getId() : user.getSchoolId();
+                String sName = matchedSchool != null ? matchedSchool.getName() : null;
+                boolean isCur = "SCHOOL_PROGRAMME_COORDINATOR".equalsIgnoreCase(activeRole);
+                profiles.add(UserProfileRoleDto.builder()
+                        .role("SCHOOL_PROGRAMME_COORDINATOR")
+                        .roleCode("SCHOOL_PROGRAMME_COORDINATOR")
+                        .title("School Programme Coordinator")
+                        .displayName(sName != null ? "School Programme Coordinator (" + sName + ")" : "School Programme Coordinator")
+                        .description("School-wide academic programme coordination & observation" + (sName != null ? " for " + sName : ""))
+                        .schoolId(sId)
+                        .schoolName(sName)
+                        .isActive(isCur)
+                        .isCurrent(isCur)
+                        .build());
+            }
+
             // 2. DIRECTOR Profile (Max 1)
             if (isDirectorEligible) {
                 String sId = matchedSchool != null ? matchedSchool.getId() : user.getSchoolId();
@@ -779,10 +845,13 @@ public class AuthService {
             }
         }
 
-        // If DIRECTOR or IQAC, department and programme should be null to avoid cross-school bleed
-        if ("DIRECTOR".equalsIgnoreCase(targetRole) || "IQAC".equalsIgnoreCase(targetRole)) {
+        // If DIRECTOR, IQAC, TRUSTEE, or SCHOOL_PROGRAMME_COORDINATOR, department and programme should be null to avoid cross-school bleed
+        if ("DIRECTOR".equalsIgnoreCase(targetRole) || "IQAC".equalsIgnoreCase(targetRole) || "TRUSTEE".equalsIgnoreCase(targetRole) || "SCHOOL_PROGRAMME_COORDINATOR".equalsIgnoreCase(targetRole)) {
             departmentId = null;
             masterProgrammeId = null;
+        }
+        if ("TRUSTEE".equalsIgnoreCase(targetRole) || "IQAC".equalsIgnoreCase(targetRole)) {
+            schoolId = null;
         } else if (departmentId == null && schoolId != null && schoolId.equalsIgnoreCase(user.getSchoolId())) {
             departmentId = user.getDepartmentId();
             if (masterProgrammeId == null) {
