@@ -341,6 +341,18 @@ public class UserOrganizationalAssignmentService {
 
     private record ValidatedScope(String role, String schoolId, String departmentId, String masterProgrammeId) {}
 
+    private boolean isInstitutionPlaceholder(String s) {
+        if (s == null) return true;
+        String val = s.trim();
+        return val.equalsIgnoreCase("Institution-wide")
+                || val.equalsIgnoreCase("INSTITUTION")
+                || val.equalsIgnoreCase("None")
+                || val.equalsIgnoreCase("All Schools")
+                || val.equalsIgnoreCase("ALL_SCHOOLS")
+                || val.equalsIgnoreCase("—")
+                || val.equalsIgnoreCase("-");
+    }
+
     private ValidatedScope validateAndResolveScope(AssignmentRequestDto req) {
         if (req == null || req.getRole() == null || req.getRole().isBlank()) {
             throw new BadRequestException("Role is required for organizational assignment.");
@@ -367,8 +379,40 @@ public class UserOrganizationalAssignmentService {
         }
 
         String schoolId = req.getSchoolId() != null && !req.getSchoolId().isBlank() ? req.getSchoolId().trim() : null;
+        if (isInstitutionPlaceholder(schoolId)) {
+            schoolId = null;
+        }
         if (schoolId == null && req.getSchoolName() != null && !req.getSchoolName().isBlank()) {
-            schoolId = req.getSchoolName().trim();
+            String sName = req.getSchoolName().trim();
+            if (!isInstitutionPlaceholder(sName)) {
+                schoolId = sName;
+            }
+        }
+
+        String deptId = req.getDepartmentId() != null && !req.getDepartmentId().isBlank() ? req.getDepartmentId().trim() : null;
+        String progId = req.getMasterProgrammeId() != null && !req.getMasterProgrammeId().isBlank() ? req.getMasterProgrammeId().trim() : null;
+
+        // Role-specific scoping rules (Requirements 2, 7, 8, 14, 17)
+        if ("IQAC".equals(role) || "TRUSTEE".equals(role)) {
+            // IQAC and TRUSTEE are institution-wide, schoolId is optional
+            if (schoolId != null) {
+                if (isInstitutionPlaceholder(schoolId)) {
+                    schoolId = null;
+                } else if (!schoolRepository.existsById(schoolId)) {
+                    final String targetSchoolId = schoolId;
+                    Optional<School> matched = schoolRepository.findAll().stream()
+                            .filter(s -> (s.getId() != null && s.getId().equalsIgnoreCase(targetSchoolId))
+                                    || (s.getCode() != null && s.getCode().equalsIgnoreCase(targetSchoolId))
+                                    || (s.getName() != null && s.getName().equalsIgnoreCase(targetSchoolId)))
+                            .findFirst();
+                    if (matched.isPresent()) {
+                        schoolId = matched.get().getId();
+                    } else {
+                        schoolId = null;
+                    }
+                }
+            }
+            return new ValidatedScope(role, schoolId, null, null);
         }
 
         if (schoolId != null && !schoolRepository.existsById(schoolId)) {
@@ -383,15 +427,6 @@ public class UserOrganizationalAssignmentService {
             } else {
                 throw new BadRequestException("Invalid School ID: " + schoolId);
             }
-        }
-
-        String deptId = req.getDepartmentId() != null && !req.getDepartmentId().isBlank() ? req.getDepartmentId().trim() : null;
-        String progId = req.getMasterProgrammeId() != null && !req.getMasterProgrammeId().isBlank() ? req.getMasterProgrammeId().trim() : null;
-
-        // Role-specific scoping rules (Requirements 2, 7, 8, 14, 17)
-        if ("IQAC".equals(role) || "TRUSTEE".equals(role)) {
-            // IQAC and TRUSTEE are institution-wide, schoolId is optional
-            return new ValidatedScope(role, schoolId, null, null);
         }
 
         if ("DIRECTOR".equals(role) || "SCHOOL_PROGRAMME_COORDINATOR".equals(role)) {

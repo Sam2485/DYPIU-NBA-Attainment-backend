@@ -571,8 +571,18 @@ public class UserController {
             for (Object item : list) {
                 if (item instanceof Map<?, ?> map) {
                     String role = map.get("role") != null ? map.get("role").toString() : (user.getRole() != null ? user.getRole().name() : "FACULTY");
-                    String schoolId = map.get("schoolId") != null ? map.get("schoolId").toString() : (map.get("schoolName") != null ? map.get("schoolName").toString() : null);
-                    String schoolName = map.get("schoolName") != null ? map.get("schoolName").toString() : null;
+                    String rawSchoolId = map.get("schoolId") != null ? map.get("schoolId").toString().trim() : null;
+                    String rawSchoolName = map.get("schoolName") != null ? map.get("schoolName").toString().trim() : null;
+                    String schoolId = rawSchoolId;
+                    if (schoolId != null && (schoolId.equalsIgnoreCase("Institution-wide") || schoolId.equalsIgnoreCase("INSTITUTION") || schoolId.equalsIgnoreCase("None"))) {
+                        schoolId = null;
+                    }
+                    if (schoolId == null && rawSchoolName != null && !rawSchoolName.isBlank()) {
+                        if (!rawSchoolName.equalsIgnoreCase("Institution-wide") && !rawSchoolName.equalsIgnoreCase("INSTITUTION") && !rawSchoolName.equalsIgnoreCase("None")) {
+                            schoolId = rawSchoolName;
+                        }
+                    }
+                    String schoolName = rawSchoolName != null && !rawSchoolName.equalsIgnoreCase("Institution-wide") && !rawSchoolName.equalsIgnoreCase("INSTITUTION") && !rawSchoolName.equalsIgnoreCase("None") ? rawSchoolName : null;
                     String departmentId = map.get("departmentId") != null ? map.get("departmentId").toString() : null;
                     String masterProgrammeId = map.get("masterProgrammeId") != null ? map.get("masterProgrammeId").toString() : null;
 
@@ -592,14 +602,27 @@ public class UserController {
         List<String> schoolIdsList = new ArrayList<>();
         if (body.containsKey("schools") && body.get("schools") instanceof List<?> list) {
             for (Object s : list) {
-                if (s != null && !s.toString().isBlank()) schoolIdsList.add(s.toString().trim());
+                if (s != null && !s.toString().isBlank()) {
+                    String sid = s.toString().trim();
+                    if (!sid.equalsIgnoreCase("Institution-wide") && !sid.equalsIgnoreCase("INSTITUTION") && !sid.equalsIgnoreCase("None")) {
+                        schoolIdsList.add(sid);
+                    }
+                }
             }
         } else if (body.containsKey("schoolIds") && body.get("schoolIds") instanceof List<?> list) {
             for (Object s : list) {
-                if (s != null && !s.toString().isBlank()) schoolIdsList.add(s.toString().trim());
+                if (s != null && !s.toString().isBlank()) {
+                    String sid = s.toString().trim();
+                    if (!sid.equalsIgnoreCase("Institution-wide") && !sid.equalsIgnoreCase("INSTITUTION") && !sid.equalsIgnoreCase("None")) {
+                        schoolIdsList.add(sid);
+                    }
+                }
             }
         } else if (body.get("schoolId") != null && !body.get("schoolId").toString().isBlank()) {
-            schoolIdsList.add(body.get("schoolId").toString().trim());
+            String sid = body.get("schoolId").toString().trim();
+            if (!sid.equalsIgnoreCase("Institution-wide") && !sid.equalsIgnoreCase("INSTITUTION") && !sid.equalsIgnoreCase("None")) {
+                schoolIdsList.add(sid);
+            }
         }
 
         String roleStr = body.get("role") != null ? body.get("role").toString() : (user.getRole() != null ? user.getRole().name() : "FACULTY");
