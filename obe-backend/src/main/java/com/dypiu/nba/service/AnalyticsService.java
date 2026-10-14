@@ -5014,7 +5014,7 @@ public class AnalyticsService {
 
     private void enforceCourseOfferingAccess(ProgrammeBatchCourse offering, ProgrammeBatch batch) {
         CurrentUserScope userScope = currentUserScopeService.getCurrentUserScope();
-        if (userScope == null || userScope.isIqac()) {
+        if (userScope == null || userScope.isIqac() || userScope.isTrustee()) {
             return;
         }
         if (userScope.isFaculty()) {
