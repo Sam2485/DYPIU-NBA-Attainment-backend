@@ -88,7 +88,7 @@ public class AcademicService {
 
     private void enforceSchoolScope(String schoolId) {
         CurrentUserScope scope = getScope();
-        if (scope == null || scope.isIqac()) return;
+        if (scope == null || scope.isIqac() || scope.isTrustee()) return;
         if (scope.isDirector() || scope.isSchoolProgrammeCoordinator() || scope.isHod() || scope.isProgrammeCoordinator()) {
             String requiredSchoolId = scope.getRequiredSchoolId();
             if (schoolId != null && !schoolId.equals(requiredSchoolId)) {
@@ -99,7 +99,7 @@ public class AcademicService {
 
     private void enforceDepartmentScope(String departmentId) {
         CurrentUserScope scope = getScope();
-        if (scope == null || scope.isIqac()) return;
+        if (scope == null || scope.isIqac() || scope.isTrustee()) return;
         if (scope.isHod()) {
             if (departmentId != null && scope.getEmail() != null && !scope.getEmail().isBlank()) {
                 List<Department> hodDepts = departmentRepository.findByHodEmailIgnoreCase(scope.getEmail().trim());
@@ -137,7 +137,7 @@ public class AcademicService {
 
     private void enforceProgrammeScope(String masterProgrammeId) {
         CurrentUserScope scope = getScope();
-        if (scope == null || scope.isIqac()) return;
+        if (scope == null || scope.isIqac() || scope.isTrustee()) return;
         if (masterProgrammeId == null || masterProgrammeId.isBlank()) return;
 
         if (scope.isProgrammeCoordinator()) {
@@ -177,7 +177,7 @@ public class AcademicService {
 
     public void enforceBatchScope(String programmeBatchId) {
         CurrentUserScope scope = getScope();
-        if (scope == null || scope.isIqac()) return;
+        if (scope == null || scope.isIqac() || scope.isTrustee()) return;
         if (programmeBatchId == null || programmeBatchId.isBlank()) return;
         ProgrammeBatch batch = programmeBatchRepository.findById(programmeBatchId)
                 .or(() -> programmeBatchRepository.findFirstByNameIgnoreCaseAndDeletedAtIsNull(programmeBatchId.trim()))
@@ -201,7 +201,7 @@ public class AcademicService {
 
     private void enforceCourseScope(String courseOfferingOrId) {
         CurrentUserScope scope = getScope();
-        if (scope == null || scope.isIqac()) return;
+        if (scope == null || scope.isIqac() || scope.isTrustee()) return;
         if (courseOfferingOrId == null || courseOfferingOrId.isBlank()) return;
 
         ProgrammeBatchCourse pbc = programmeBatchCourseRepository.findById(courseOfferingOrId.trim()).orElse(null);
@@ -231,7 +231,7 @@ public class AcademicService {
 
     private void enforceProgrammeBatchCourseScope(String offeringId) {
         CurrentUserScope scope = getScope();
-        if (scope == null || scope.isIqac()) return;
+        if (scope == null || scope.isIqac() || scope.isTrustee()) return;
         if (offeringId == null || offeringId.isBlank()) return;
 
         ProgrammeBatchCourse offering = programmeBatchCourseRepository.findById(offeringId)
@@ -1177,7 +1177,7 @@ public class AcademicService {
     @Transactional(readOnly = true)
     public List<School> getAllSchools() {
         CurrentUserScope scope = getScope();
-        if (scope == null || scope.isIqac()) {
+        if (scope == null || scope.isIqac() || scope.isTrustee()) {
             return schoolRepository.findAll();
         }
         if (scope.hasSchoolScope()) {
@@ -1437,7 +1437,7 @@ public class AcademicService {
     @Transactional(readOnly = true)
     public List<Department> getAllDepartments() {
         CurrentUserScope scope = getScope();
-        if (scope == null || scope.isIqac()) {
+        if (scope == null || scope.isIqac() || scope.isTrustee()) {
             return departmentRepository.findAll();
         }
         if (scope.isDirector() || scope.isSchoolProgrammeCoordinator()) {
@@ -1467,7 +1467,7 @@ public class AcademicService {
     @Transactional(readOnly = true)
     public List<Department> getDepartmentsBySchool(String schoolId) {
         CurrentUserScope scope = getScope();
-        if (scope != null && !scope.isIqac()) {
+        if (scope != null && !scope.isIqac() && !scope.isTrustee()) {
             enforceSchoolScope(schoolId);
             if (scope.isDirector() || scope.isSchoolProgrammeCoordinator()) {
                 return departmentRepository.findBySchoolId(scope.getRequiredSchoolId());
