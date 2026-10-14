@@ -30,4 +30,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
     @org.springframework.data.jpa.repository.Modifying
     @org.springframework.data.jpa.repository.Query(value = "UPDATE users SET is_active = true WHERE id = :id", nativeQuery = true)
     int reactivateUserById(@org.springframework.data.repository.query.Param("id") Long id);
+
+    @org.springframework.data.jpa.repository.Query("SELECT u FROM User u WHERE LOWER(u.name) LIKE :query OR LOWER(u.email) LIKE :query OR LOWER(u.username) LIKE :query")
+    List<User> searchUsers(@org.springframework.data.repository.query.Param("query") String query);
 }

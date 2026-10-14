@@ -36,6 +36,8 @@ public class ApprovalService {
     private final CourseOutcomeRepository coRepository;
     private final CurrentUserScopeService currentUserScopeService;
     private final AuditLogService auditLogService;
+    private final NotificationService notificationService;
+    private final UserRepository userRepository;
 
     private boolean isSameApprovalCategory(ApprovalType a, ApprovalType b) {
         if (a == b) return true;
@@ -532,6 +534,8 @@ public class ApprovalService {
                 .comments("Submitted for review")
                 .build());
 
+        sendWorkflowNotification(saved, "SUBMITTED", null, saved.getSubmittedBy());
+
         return saved;
     }
 
@@ -594,6 +598,8 @@ public class ApprovalService {
             }
         }
 
+        sendWorkflowNotification(updated, "APPROVED", null, actor.actorName());
+
         return updated;
     }
 
@@ -626,7 +632,77 @@ public class ApprovalService {
                 .comments(remarks)
                 .build());
 
+        sendWorkflowNotification(updated, "REVISION_REQUESTED", remarks, actor.actorName());
+
         return updated;
+    }
+
+    private void sendWorkflowNotification(ApprovalRequest req, String action, String remarks, String actorName) {
+        if (notificationService == null || userRepository == null || req == null) return;
+        try {
+            if ("APPROVED".equalsIgnoreCase(action) || "REVISION_REQUESTED".equalsIgnoreCase(action)) {
+                String submittedBy = req.getSubmittedBy();
+                if (submittedBy != null && !submittedBy.isBlank()) {
+                    User submitter = userRepository.findByEmailIgnoreCase(submittedBy.trim())
+                            .or(() -> userRepository.findByUsernameIgnoreCase(submittedBy.trim()))
+                            .orElse(null);
+                    if (submitter != null) {
+                        String title = "APPROVED".equalsIgnoreCase(action)
+                                ? "Approved: " + (req.getTitle() != null ? req.getTitle() : req.getType().name())
+                                : "Revision Requested: " + (req.getTitle() != null ? req.getTitle() : req.getType().name());
+                        String msg = "APPROVED".equalsIgnoreCase(action)
+                                ? "Your approval request has been approved by " + (actorName != null ? actorName : "Reviewer") + "."
+                                : "Revision requested by " + (actorName != null ? actorName : "Reviewer") + ". Remarks: " + (remarks != null ? remarks : "Please revise and resubmit.");
+                        String idempotencyKey = "APPROVAL_" + action + "_" + req.getId() + "_" + (req.getUpdatedAt() != null ? req.getUpdatedAt().toEpochSecond() : System.currentTimeMillis());
+                        String deepLink = "/hod/approvals";
+                        if (req.getType() == ApprovalType.COURSE_ATR || req.getType() == ApprovalType.COURSE_OUTCOMES_TARGETS) {
+                            deepLink = "/coordinator/review";
+                        }
+                        notificationService.createNotification(
+                                submitter.getId(),
+                                title,
+                                msg,
+                                req.getType() != null ? req.getType().name() : "APPROVAL",
+                                "APPROVAL_REQUEST",
+                                req.getId(),
+                                deepLink,
+                                idempotencyKey
+                        );
+                    }
+                }
+            } else if ("SUBMITTED".equalsIgnoreCase(action)) {
+                User reviewer = null;
+                if (req.getDepartmentId() != null && departmentRepository != null) {
+                    Department dept = departmentRepository.findById(req.getDepartmentId()).orElse(null);
+                    if (dept != null && dept.getHodEmail() != null) {
+                        reviewer = userRepository.findByEmailIgnoreCase(dept.getHodEmail().trim()).orElse(null);
+                    }
+                }
+                if (reviewer == null && req.getSchoolId() != null && schoolRepository != null) {
+                    School school = schoolRepository.findById(req.getSchoolId()).orElse(null);
+                    if (school != null && school.getDirectorEmail() != null) {
+                        reviewer = userRepository.findByEmailIgnoreCase(school.getDirectorEmail().trim()).orElse(null);
+                    }
+                }
+                if (reviewer != null) {
+                    String title = "Pending Review: " + (req.getTitle() != null ? req.getTitle() : req.getType().name());
+                    String msg = "A submission is awaiting your review from " + (actorName != null ? actorName : "Coordinator") + ".";
+                    String idempotencyKey = "APPROVAL_SUBMIT_" + req.getId() + "_" + (req.getSubmittedAt() != null ? req.getSubmittedAt().toEpochSecond() : System.currentTimeMillis());
+                    notificationService.createNotification(
+                            reviewer.getId(),
+                            title,
+                            msg,
+                            req.getType() != null ? req.getType().name() : "APPROVAL",
+                            "APPROVAL_REQUEST",
+                            req.getId(),
+                            "/hod/approvals",
+                            idempotencyKey
+                    );
+                }
+            }
+        } catch (Exception e) {
+            log.warn("[ApprovalService] Failed to generate notification: {}", e.getMessage());
+        }
     }
 
     @Transactional(readOnly = true)
