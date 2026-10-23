@@ -64,10 +64,12 @@ public class EmailServiceTest {
     }
 
     @Test
-    @DisplayName("Password Reset Dispatch: sendPasswordResetEmail builds MIME message and reaches JavaMailSender")
+    @DisplayName("Password Reset Dispatch: sendPasswordResetEmail builds MIME message with /obe subpath and reaches JavaMailSender")
     void testSendPasswordResetEmailDispatchesCorrectly() {
         MimeMessage mimeMessage = new MimeMessage(Session.getInstance(new Properties()));
         when(mailSender.createMimeMessage()).thenReturn(mimeMessage);
+
+        org.springframework.test.util.ReflectionTestUtils.setField(emailService, "frontendUrl", "  https://pbas.dypiu.ac.in   ");
 
         String recipientEmail = "faculty.member@dypiu.ac.in";
         String recipientName = "Prof. Alan Turing";
