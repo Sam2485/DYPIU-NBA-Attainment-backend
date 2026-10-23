@@ -1642,6 +1642,7 @@ public class AcademicService {
                             .username(u.getUsername())
                             .name(u.getName() != null && !u.getName().isBlank() ? u.getName() : (u.getUsername() != null ? u.getUsername() : "User " + u.getId()))
                             .email(resolvedEmail)
+                            .employeeId(u.getEmployeeId())
                             .role(u.getRole() != null
                                     ? u.getRole().name()
                                     : UserRole.FACULTY.name())

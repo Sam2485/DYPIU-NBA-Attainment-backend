@@ -22,6 +22,7 @@ public class UserDto {
     private String username;
     private String name;
     private String email;
+    private String employeeId;
     private String role;
     private String schoolId;
     private String departmentId;

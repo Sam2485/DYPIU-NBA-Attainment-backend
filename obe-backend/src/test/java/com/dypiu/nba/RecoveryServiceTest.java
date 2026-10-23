@@ -128,5 +128,18 @@ public class RecoveryServiceTest {
         assertThat(summary.getProgrammesCount()).isGreaterThanOrEqualTo(1);
         assertThat(summary.getBatchesCount()).isGreaterThanOrEqualTo(1);
         assertThat(summary.getCoursesCount()).isGreaterThanOrEqualTo(1);
+
+        // 7. Test Permanent Deletion (Purge)
+        recoveryService.permanentlyDeleteItem("COURSE", savedCourse.getId(), "Test permanent deletion of course");
+        List<DeletedItemDto> remainingCourses = recoveryService.getDeletedItems("COURSE", null, null, null);
+        assertThat(remainingCourses).extracting(DeletedItemDto::getId).doesNotContain(savedCourse.getId());
+
+        recoveryService.permanentlyDeleteItem("BATCH", savedBatch.getId(), "Test permanent deletion of batch");
+        List<DeletedItemDto> remainingBatches = recoveryService.getDeletedItems("BATCH", null, null, null);
+        assertThat(remainingBatches).extracting(DeletedItemDto::getId).doesNotContain(savedBatch.getId());
+
+        recoveryService.permanentlyDeleteItem("PROGRAMME", savedProg.getId(), "Test permanent deletion of programme");
+        List<DeletedItemDto> remainingProgrammes = recoveryService.getDeletedItems("PROGRAMME", null, null, null);
+        assertThat(remainingProgrammes).extracting(DeletedItemDto::getId).doesNotContain(savedProg.getId());
     }
 }

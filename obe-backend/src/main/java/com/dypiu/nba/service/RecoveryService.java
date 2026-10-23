@@ -4,13 +4,16 @@ import com.dypiu.nba.audit.AuditAction;
 import com.dypiu.nba.audit.ResourceType;
 import com.dypiu.nba.dto.DeletedItemDto;
 import com.dypiu.nba.dto.RecoverySummaryDto;
+import com.dypiu.nba.entity.Conversation;
 import com.dypiu.nba.entity.MasterProgramme;
 import com.dypiu.nba.entity.ProgrammeBatch;
 import com.dypiu.nba.entity.ProgrammeBatchCourse;
 import com.dypiu.nba.entity.User;
+import com.dypiu.nba.repository.ConversationRepository;
 import com.dypiu.nba.repository.MasterProgrammeRepository;
 import com.dypiu.nba.repository.ProgrammeBatchCourseRepository;
 import com.dypiu.nba.repository.ProgrammeBatchRepository;
+import com.dypiu.nba.repository.SchoolRepository;
 import com.dypiu.nba.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -32,6 +35,8 @@ public class RecoveryService {
     private final ProgrammeBatchRepository programmeBatchRepository;
     private final ProgrammeBatchCourseRepository programmeBatchCourseRepository;
     private final UserRepository userRepository;
+    private final SchoolRepository schoolRepository;
+    private final ConversationRepository conversationRepository;
     private final AcademicLookupCacheService academicLookupCacheService;
     private final AuditLogService auditLogService;
 
@@ -348,6 +353,135 @@ public class RecoveryService {
 
             default:
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unsupported resource type for recovery: " + resourceType);
+        }
+    }
+
+    @Transactional
+    public void permanentlyDeleteItem(String resourceType, String id, String reason) {
+        if (resourceType == null || id == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Resource type and item ID must not be null.");
+        }
+
+        String type = resourceType.trim().toUpperCase();
+        String auditReason = (reason != null && !reason.isBlank()) ? reason.trim() : "Permanently purged from trash by IQAC";
+
+        switch (type) {
+            case "PROGRAMME":
+            case "MASTER_PROGRAMME": {
+                MasterProgramme prog = masterProgrammeRepository.findTrashProgrammeById(id)
+                        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Deleted programme not found with ID: " + id));
+
+                masterProgrammeRepository.deleteById(id);
+                academicLookupCacheService.evictMasterProgrammeCache();
+                academicLookupCacheService.evictProgrammeBatchCache();
+                academicLookupCacheService.evictCourseCache();
+
+                auditLogService.record(
+                        AuditAction.DELETE,
+                        ResourceType.MASTER_PROGRAMME,
+                        id,
+                        "DELETED",
+                        "PERMANENTLY_PURGED",
+                        auditReason,
+                        Map.of("id", id, "name", prog.getName(), "code", prog.getDegreeAwarded() != null ? prog.getDegreeAwarded() : ""),
+                        true
+                );
+                break;
+            }
+
+            case "BATCH":
+            case "PROGRAMME_BATCH": {
+                ProgrammeBatch batch = programmeBatchRepository.findTrashBatchById(id)
+                        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Deleted batch not found with ID: " + id));
+
+                programmeBatchRepository.deleteById(id);
+                academicLookupCacheService.evictProgrammeBatchCache();
+                academicLookupCacheService.evictCourseCache();
+
+                auditLogService.record(
+                        AuditAction.DELETE,
+                        ResourceType.PROGRAMME_BATCH,
+                        id,
+                        "DELETED",
+                        "PERMANENTLY_PURGED",
+                        auditReason,
+                        Map.of("id", id, "name", batch.getName(), "masterProgrammeId", batch.getMasterProgrammeId() != null ? batch.getMasterProgrammeId() : ""),
+                        true
+                );
+                break;
+            }
+
+            case "COURSE":
+            case "PROGRAMME_BATCH_COURSE": {
+                ProgrammeBatchCourse course = programmeBatchCourseRepository.findTrashCourseById(id)
+                        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Deleted course offering not found with ID: " + id));
+
+                programmeBatchCourseRepository.deleteById(id);
+                academicLookupCacheService.evictCourseCache();
+
+                auditLogService.record(
+                        AuditAction.DELETE,
+                        ResourceType.PROGRAMME_BATCH_COURSE,
+                        id,
+                        "DELETED",
+                        "PERMANENTLY_PURGED",
+                        auditReason,
+                        Map.of("id", id, "name", course.getName() != null ? course.getName() : "", "code", course.getCode() != null ? course.getCode() : ""),
+                        true
+                );
+                break;
+            }
+
+            case "USER": {
+                Long userId;
+                try {
+                    userId = Long.parseLong(id);
+                } catch (NumberFormatException e) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid user ID: " + id);
+                }
+
+                User user = userRepository.findDeactivatedUserById(userId)
+                        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Deactivated user not found with ID: " + id));
+
+                // Clean director references in schools
+                schoolRepository.findAll().forEach(s -> {
+                    if (s.getDirectorId() != null && s.getDirectorId().equals(userId)) {
+                        s.setDirectorId(null);
+                        s.setDirectorName(null);
+                        s.setDirectorEmail(null);
+                        schoolRepository.save(s);
+                    }
+                });
+
+                // Clean conversation/messenger references if conversationRepository is present
+                if (conversationRepository != null) {
+                    try {
+                        List<Conversation> convs = conversationRepository.findUserConversations(userId);
+                        if (!convs.isEmpty()) {
+                            conversationRepository.deleteAll(convs);
+                        }
+                    } catch (Exception e) {
+                        log.warn("Failed to clean conversations for user {}", userId, e);
+                    }
+                }
+
+                userRepository.delete(user);
+
+                auditLogService.record(
+                        AuditAction.DELETE,
+                        ResourceType.USER,
+                        id,
+                        "INACTIVE",
+                        "PERMANENTLY_PURGED",
+                        auditReason,
+                        Map.of("id", userId, "username", user.getUsername(), "email", user.getEmail()),
+                        true
+                );
+                break;
+            }
+
+            default:
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unsupported resource type for permanent deletion: " + resourceType);
         }
     }
 }
