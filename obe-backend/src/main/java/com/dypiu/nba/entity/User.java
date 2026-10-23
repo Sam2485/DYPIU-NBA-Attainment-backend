@@ -55,6 +55,9 @@ public class User {
     @Column(name = "assigned_roles", columnDefinition = "TEXT")
     private String assignedRoles;
 
+    @Column(name = "employee_id", length = 50)
+    private String employeeId;
+
     @Builder.Default
     @Column(name = "is_active", nullable = false)
     private Boolean isActive = true;

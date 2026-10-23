@@ -82,4 +82,22 @@ public class RecoveryController {
                 .data(restored)
                 .build());
     }
+
+    @DeleteMapping("/{resourceType}/{id}/permanent")
+    public ResponseEntity<ApiResponse<Void>> permanentlyDeleteItem(
+            @PathVariable String resourceType,
+            @PathVariable String id,
+            @RequestBody(required = false) RestoreItemRequestDto request,
+            Principal principal) {
+
+        enforceIqac(principal);
+
+        String reason = (request != null) ? request.getReason() : null;
+        recoveryService.permanentlyDeleteItem(resourceType, id, reason);
+
+        return ResponseEntity.ok(ApiResponse.<Void>builder()
+                .success(true)
+                .message("Successfully permanently deleted " + resourceType + " with ID '" + id + "'")
+                .build());
+    }
 }

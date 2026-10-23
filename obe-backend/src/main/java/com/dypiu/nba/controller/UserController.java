@@ -94,6 +94,29 @@ public class UserController {
                 .build());
     }
 
+    @PutMapping("/me")
+    public ResponseEntity<ApiResponse<UserDto>> updateMe(@RequestBody Map<String, Object> body, java.security.Principal principal) {
+        User user = currentUserScopeService.getCurrentUser();
+        if (user == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User not authenticated.");
+        }
+        if (body.containsKey("name") && body.get("name") != null && !body.get("name").toString().isBlank()) {
+            user.setName(body.get("name").toString().trim());
+        }
+        if (body.containsKey("employeeId")) {
+            user.setEmployeeId(body.get("employeeId") != null ? body.get("employeeId").toString().trim() : null);
+        }
+        User saved = userRepository.save(user);
+        List<UserOrganizationalAssignmentDto> assignments = assignmentService != null
+                ? assignmentService.getAssignmentsForUser(saved.getId())
+                : Collections.emptyList();
+        return ResponseEntity.ok(ApiResponse.<UserDto>builder()
+                .success(true)
+                .message("Profile updated successfully.")
+                .data(toEnrichedDto(saved, assignments))
+                .build());
+    }
+
     @GetMapping("/me/roles")
     public ResponseEntity<ApiResponse<com.dypiu.nba.dto.UserRolesResponseDto>> getMyRoles(java.security.Principal principal) {
         return ResponseEntity.ok(ApiResponse.<com.dypiu.nba.dto.UserRolesResponseDto>builder()
@@ -340,6 +363,9 @@ public class UserController {
         user.setSchoolId(finalSchoolId);
         user.setDepartmentId(finalDeptId);
         user.setMasterProgrammeId(finalProgId);
+        if (body.containsKey("employeeId")) {
+            user.setEmployeeId(body.get("employeeId") != null ? body.get("employeeId").toString().trim() : null);
+        }
 
         User saved = userRepository.save(user);
         if (auditLogService != null) {
@@ -775,7 +801,10 @@ public class UserController {
                 schoolIdToName.put(a.getSchoolId(), a.getSchoolName() != null ? a.getSchoolName() : a.getSchoolId());
             }
         }
-        if (schoolIdToName.isEmpty() && user.getSchoolId() != null) {
+        if (user.getSchoolId() != null && !schoolIdToName.containsKey(user.getSchoolId())) {
+            String sName = schoolRepository.findById(user.getSchoolId()).map(School::getName).orElse(user.getSchoolId());
+            schoolIdToName.put(user.getSchoolId(), sName);
+        } else if (schoolIdToName.isEmpty() && user.getSchoolId() != null) {
             String sName = schoolRepository.findById(user.getSchoolId()).map(School::getName).orElse(user.getSchoolId());
             schoolIdToName.put(user.getSchoolId(), sName);
         }
@@ -796,6 +825,7 @@ public class UserController {
                 .username(user.getUsername())
                 .name(user.getName())
                 .email(user.getEmail())
+                .employeeId(user.getEmployeeId())
                 .role(user.getRole() != null ? user.getRole().name() : "FACULTY")
                 .roles(new ArrayList<>(allRoles))
                 .schoolId(user.getSchoolId())
