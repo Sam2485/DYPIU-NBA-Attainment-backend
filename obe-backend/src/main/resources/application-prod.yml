@@ -68,7 +68,7 @@ app:
   mail:
     from: ${APP_MAIL_FROM:DYPIU OBE System <raj.shaikh.7709@gmail.com>}
   frontend:
-    url: ${APP_FRONTEND_URL:https://pbas.dypiu.ac.in}
+    url: ${APP_FRONTEND_URL:https://pbas.dypiu.ac.in/obe}
   jwt:
     secret: ${JWT_SECRET} # Fail-fast: required in production
     expiration-ms: ${JWT_EXPIRATION_MS:86400000}

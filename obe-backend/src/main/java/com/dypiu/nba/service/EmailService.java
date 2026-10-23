@@ -45,7 +45,12 @@ public class EmailService {
         }
 
         try {
-            String baseUrl = frontendUrl != null && !frontendUrl.isBlank() ? frontendUrl.replaceAll("/+$", "") : "http://localhost:5173";
+            String baseUrl = frontendUrl != null && !frontendUrl.isBlank()
+                    ? frontendUrl.trim().replaceAll("/+$", "")
+                    : "http://localhost:5173";
+            if (baseUrl.contains("pbas.dypiu.ac.in") && !baseUrl.endsWith("/obe")) {
+                baseUrl = baseUrl + "/obe";
+            }
             String resetLink = baseUrl + "/reset-password?token=" + rawToken;
 
             MimeMessage message = mailSender.createMimeMessage();
