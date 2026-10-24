@@ -46,6 +46,8 @@ public class UserController {
     private final AuditLogService auditLogService;
     private final AuthService authService;
     private final UserOrganizationalAssignmentService assignmentService;
+    private final com.dypiu.nba.security.TokenRevocationService tokenRevocationService;
+    private final com.dypiu.nba.repository.AuditLogRepository auditLogRepository;
 
     private CurrentUserScope getScope() {
         try {
@@ -123,6 +125,145 @@ public class UserController {
                 .success(true)
                 .message("User roles and profiles retrieved successfully")
                 .data(authService.getAvailableRoles(principal))
+                .build());
+    }
+
+    @PutMapping("/me/password")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> changePassword(
+            @RequestBody Map<String, String> body,
+            java.security.Principal principal) {
+        User user = currentUserScopeService.getCurrentUser();
+        if (user == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User not authenticated.");
+        }
+        String currentPassword = body.get("currentPassword");
+        String newPassword = body.get("newPassword");
+
+        if (currentPassword == null || currentPassword.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Current password is required.");
+        }
+        if (newPassword == null || newPassword.isBlank() || newPassword.trim().length() < 6) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "New password must be at least 6 characters in length.");
+        }
+        if (!passwordEncoder.matches(currentPassword, user.getPasswordHash())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Current password does not match.");
+        }
+
+        user.setPasswordHash(passwordEncoder.encode(newPassword.trim()));
+        userRepository.save(user);
+
+        if (tokenRevocationService != null) {
+            tokenRevocationService.revokeAllUserTokens(user.getUsername());
+        }
+
+        try {
+            auditLogService.record(
+                    com.dypiu.nba.audit.AuditAction.UPDATE,
+                    com.dypiu.nba.audit.ResourceType.USER,
+                    user.getId().toString(),
+                    null,
+                    "PASSWORD_CHANGED",
+                    "User successfully changed their account password",
+                    Map.of("username", user.getUsername()),
+                    true
+            );
+        } catch (Exception ignored) {}
+
+        return ResponseEntity.ok(ApiResponse.<Map<String, Object>>builder()
+                .success(true)
+                .message("Password changed successfully.")
+                .data(Map.of("changed", true))
+                .build());
+    }
+
+    @GetMapping("/me/sessions")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getMySessions(
+            jakarta.servlet.http.HttpServletRequest request,
+            java.security.Principal principal) {
+        User user = currentUserScopeService.getCurrentUser();
+        if (user == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User not authenticated.");
+        }
+
+        String ip = request.getHeader("X-Forwarded-For");
+        if (ip == null || ip.isBlank() || "unknown".equalsIgnoreCase(ip)) {
+            ip = request.getRemoteAddr();
+        } else if (ip.contains(",")) {
+            ip = ip.split(",")[0].trim();
+        }
+
+        String userAgent = request.getHeader("User-Agent");
+        String browser = "Browser";
+        String os = "Device";
+        if (userAgent != null) {
+            if (userAgent.contains("Edg")) browser = "Microsoft Edge";
+            else if (userAgent.contains("Chrome")) browser = "Google Chrome";
+            else if (userAgent.contains("Safari") && !userAgent.contains("Chrome")) browser = "Apple Safari";
+            else if (userAgent.contains("Firefox")) browser = "Mozilla Firefox";
+
+            if (userAgent.contains("Mac OS") || userAgent.contains("Macintosh")) os = "macOS";
+            else if (userAgent.contains("Windows")) os = "Windows";
+            else if (userAgent.contains("iPhone") || userAgent.contains("iPad")) os = "iOS";
+            else if (userAgent.contains("Android")) os = "Android";
+            else if (userAgent.contains("Linux")) os = "Linux";
+        }
+
+        Map<String, Object> currentSession = new LinkedHashMap<>();
+        currentSession.put("ipAddress", ip != null && !ip.isBlank() ? ip : "127.0.0.1");
+        currentSession.put("browser", browser);
+        currentSession.put("os", os);
+        currentSession.put("userAgent", userAgent != null ? userAgent : "Unknown");
+        currentSession.put("isCurrent", true);
+        currentSession.put("status", "Active Now");
+        currentSession.put("loginTime", java.time.ZonedDateTime.now().toString());
+
+        List<Map<String, Object>> recentActivity = new ArrayList<>();
+        if (auditLogRepository != null) {
+            List<com.dypiu.nba.entity.AuditLog> logs = auditLogRepository.findByActorIdOrderByCreatedAtDesc(user.getId().toString());
+            if (logs != null) {
+                logs.stream()
+                        .filter(l -> l.getAction() == com.dypiu.nba.audit.AuditAction.LOGIN)
+                        .limit(5)
+                        .forEach(l -> {
+                            Map<String, Object> item = new LinkedHashMap<>();
+                            item.put("id", l.getId());
+                            item.put("timestamp", l.getCreatedAt() != null ? l.getCreatedAt().toString() : "");
+                            item.put("remarks", l.getRemarks() != null ? l.getRemarks() : "Login");
+                            item.put("status", l.getNewStatus() != null ? l.getNewStatus() : "SUCCESS");
+                            recentActivity.add(item);
+                        });
+            }
+        }
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("currentSession", currentSession);
+        result.put("recentLogins", recentActivity);
+        result.put("activeSessionCount", 1);
+
+        return ResponseEntity.ok(ApiResponse.<Map<String, Object>>builder()
+                .success(true)
+                .message("Session activity retrieved successfully.")
+                .data(result)
+                .build());
+    }
+
+    @PostMapping("/me/sessions/logout-other")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> logoutOtherSessions(
+            jakarta.servlet.http.HttpServletRequest request,
+            java.security.Principal principal) {
+        User user = currentUserScopeService.getCurrentUser();
+        if (user == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User not authenticated.");
+        }
+
+        if (tokenRevocationService != null) {
+            tokenRevocationService.revokeAllUserTokens(user.getUsername());
+        }
+
+        return ResponseEntity.ok(ApiResponse.<Map<String, Object>>builder()
+                .success(true)
+                .message("All other active sessions have been signed out.")
+                .data(Map.of("loggedOutOthers", true))
                 .build());
     }
 

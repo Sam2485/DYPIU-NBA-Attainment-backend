@@ -88,6 +88,21 @@ public class AuthService {
             throw new BadCredentialsException("Invalid email/username or password");
         }
 
+        try {
+            auditLogService.record(
+                    com.dypiu.nba.audit.AuditAction.LOGIN,
+                    com.dypiu.nba.audit.ResourceType.USER,
+                    user.getId().toString(),
+                    null,
+                    "SUCCESS",
+                    "User logged in successfully",
+                    java.util.Map.of("username", user.getUsername(), "role", user.getRole().name()),
+                    true
+            );
+        } catch (Exception e) {
+            log.warn("[AuthService] Could not write audit log for login: {}", e.getMessage());
+        }
+
         return buildAuthResponse(user);
     }
 
