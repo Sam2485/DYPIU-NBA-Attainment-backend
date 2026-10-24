@@ -58,7 +58,7 @@ public class AuthService {
             .maximumSize(10_000)
             .build();
 
-    @Transactional(readOnly = true)
+    @Transactional
     public AuthResponse login(LoginRequest request) {
         log.debug("[AuthService] login called");
         String rawIdentifier = request.getUsername() != null ? request.getUsername() : request.getEmail();
@@ -89,14 +89,20 @@ public class AuthService {
         }
 
         try {
-            auditLogService.record(
+            auditLogService.recordEvent(
                     com.dypiu.nba.audit.AuditAction.LOGIN,
                     com.dypiu.nba.audit.ResourceType.USER,
                     user.getId().toString(),
+                    user.getId().toString(),
+                    user.getRole() != null ? user.getRole().name() : "USER",
+                    user.getName() != null ? user.getName() : user.getUsername(),
+                    user.getEmail() != null ? user.getEmail() : "unknown",
+                    null,
+                    null,
                     null,
                     "SUCCESS",
                     "User logged in successfully",
-                    java.util.Map.of("username", user.getUsername(), "role", user.getRole().name()),
+                    java.util.Map.of("username", user.getUsername(), "role", user.getRole() != null ? user.getRole().name() : "USER"),
                     true
             );
         } catch (Exception e) {

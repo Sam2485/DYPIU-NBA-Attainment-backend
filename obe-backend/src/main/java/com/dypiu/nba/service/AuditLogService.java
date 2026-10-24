@@ -43,7 +43,7 @@ public class AuditLogService {
             "token", "accesstoken", "refreshtoken", "authorization", "secret", "privatekey"
     );
 
-    @Transactional(propagation = Propagation.REQUIRED)
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public AuditLog record(AuditAction action, ResourceType resourceType, String resourceId,
                            String oldStatus, String newStatus, String remarks,
                            Object metadata, boolean success) {
@@ -72,7 +72,7 @@ public class AuditLogService {
         return auditLogRepository.save(logEntry);
     }
 
-    @Transactional(propagation = Propagation.REQUIRED)
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public AuditLog recordEvent(AuditAction action, ResourceType resourceType, String resourceId,
                                 String actorId, String actorRole, String actorName, String actorEmail,
                                 String ipAddress, String userAgent,
